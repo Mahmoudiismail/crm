@@ -38,3 +38,4 @@ jobs:
         with:
           name: cognito-cli-windows
           path: dist/cognito-cli.exe
+          retention-days: 1
