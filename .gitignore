@@ -1,0 +1,4 @@
+target/*
+crm_tool.*
+*.csv
+.git/

@@ -1,0 +1,50 @@
+services:
+  # ── Dev container (for coding, building, debugging) ──
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: crm-rust-dev
+    volumes:
+      - .:/workspace
+      - cargo-registry:/root/.cargo/registry
+      - cargo-git:/root/.cargo/git
+      - target-cache:/workspace/target
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+    command: sleep infinity
+
+  # ── One-shot: build Windows .exe ──
+  build-windows:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    volumes:
+      - .:/workspace
+      - cargo-registry:/root/.cargo/registry
+      - cargo-git:/root/.cargo/git
+      - target-cache:/workspace/target
+    working_dir: /workspace
+    command: >
+      bash -c "
+        echo '══════════════════════════════════════════'
+        echo ' Building Windows .exe'
+        echo '══════════════════════════════════════════'
+        cargo build --release --target x86_64-pc-windows-gnu 2>&1
+        STATUS=$$?
+        if [ $$STATUS -eq 0 ]; then
+          cp target/x86_64-pc-windows-gnu/release/crm_tool.exe /workspace/crm_tool.exe
+          echo ''
+          echo '✓ Windows binary: ./crm_tool.exe'
+          ls -lh /workspace/crm_tool.exe
+        else
+          echo '✗ Build failed'
+          exit 1
+        fi
+      "
+
+volumes:
+  cargo-registry:
+  cargo-git:
+  target-cache:

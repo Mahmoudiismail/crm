@@ -1,0 +1,45 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "cargo check",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["check"],
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "cargo build debug (windows)",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["build", "--target", "x86_64-pc-windows-gnu"],
+      "group": "build",
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "cargo build release (windows)",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["build", "--release", "--target", "x86_64-pc-windows-gnu"],
+      "group": "build",
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "cargo clippy",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["clippy", "--target", "x86_64-pc-windows-gnu", "--", "-W", "clippy::all"],
+      "group": "build",
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "cargo test",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["test"],
+      "group": "test",
+      "problemMatcher": ["$rustc"]
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+[package]
+name = "crm_tool"
+version = "1.1.0"
+edition = "2021"
+authors = ["CRM Tool"]
+description = "CLI CRM Tool with AWS Cognito SRP authentication"
+
+[[bin]]
+name = "crm_tool"
+path = "src/main.rs"
+
+[dependencies]
+# Async runtime — only the features we actually use
+tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "macros", "fs", "io-util"] }
+# HTTP client — rustls for Windows TLS, streaming for CSV download
+reqwest = { version = "0.13", default-features = false, features = ["json", "stream", "rustls", "query"] }
+# CLI parsing
+clap = { version = "4", features = ["derive"] }
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Error handling
+anyhow = "1"
+# Logging — minimal features
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "registry", "smallvec"] }
+tracing-appender = "0.2"
+# Date/time
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
+# Async utilities — only what we use (StreamExt, join_all)
+futures-util = { version = "0.3", default-features = false, features = ["alloc"] }
+# SRP big integer math
+num-bigint = "0.4"
+# Cryptography
+sha2 = "0.10"
+hmac = "0.12"
+hex = { version = "0.4", default-features = false, features = ["std"] }
+rand = "0.9"
+base64 = { version = "0.22", default-features = false, features = ["std"] }
+# URL decoding for CSV filenames
+urlencoding = "2"
+
+[profile.release]
+opt-level = "z"       # optimize for size
+lto = true             # link-time optimization
+strip = true           # strip debug info + symbols
+codegen-units = 1      # maximize optimization across crate
+panic = "abort"        # smaller than unwinding

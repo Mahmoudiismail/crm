@@ -1,0 +1,38 @@
+# ─────────────────────────────────────────────────────────────
+# Development container: Rust + Windows cross-compilation
+# ─────────────────────────────────────────────────────────────
+FROM rust:1.86-bookworm
+
+# Install dev tools + Windows cross-compilation toolchain
+RUN apt-get update && apt-get install -y \
+    # Windows cross-compile
+    gcc-mingw-w64-x86-64 \
+    g++-mingw-w64-x86-64 \
+    # Dev/debug tools
+    gdb \
+    lldb \
+    musl-tools \
+    pkg-config \
+    libssl-dev \
+    git \
+    curl \
+    jq \
+    # Editor support
+    && rm -rf /var/lib/apt/lists/*
+
+# Add targets
+RUN rustup target add x86_64-pc-windows-gnu \
+    && rustup component add rust-src rust-analyzer clippy rustfmt
+
+# Configure mingw linker for Windows target
+RUN mkdir -p /root/.cargo \
+    && printf '[target.x86_64-pc-windows-gnu]\nlinker = "x86_64-w64-mingw32-gcc"\n' \
+       > /root/.cargo/config.toml
+
+# Pre-install cargo tools for dev
+RUN cargo install cargo-watch 2>/dev/null || true
+
+WORKDIR /workspace
+
+# Keep container alive for dev
+CMD ["sleep", "infinity"]
