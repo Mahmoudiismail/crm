@@ -7,11 +7,25 @@ use tracing::{debug, info};
 
 /// Download a CSV file from a signed URL.
 /// - Extracts filename from the URL path (URL-decoded).
-/// - Streams to the current working directory.
+/// - Saves to the provided `target_dir` (creating it if missing).
 /// - 60-second timeout.
-pub async fn download_csv(client: &reqwest::Client, url: &str, report_key: &str) -> Result<String> {
+pub async fn download_csv(
+    client: &reqwest::Client,
+    url: &str,
+    report_key: &str,
+    target_dir: &Path,
+) -> Result<String> {
     let filename = extract_filename(url)?;
-    info!("[{}] Downloading CSV: {} → {}", report_key, url, filename);
+    let dest_path = target_dir.join(&filename);
+    info!(
+        "[{}] Downloading CSV: {} → {:?}",
+        report_key, url, dest_path
+    );
+
+    // Ensure the directory exists
+    tokio::fs::create_dir_all(target_dir)
+        .await
+        .with_context(|| format!("Failed to create download directory: {:?}", target_dir))?;
 
     let resp = client
         .get(url)
@@ -30,10 +44,9 @@ pub async fn download_csv(client: &reqwest::Client, url: &str, report_key: &str)
     let content_length = resp.content_length();
     debug!("[{}] Content-Length: {:?}", report_key, content_length);
 
-    let dest = Path::new(&filename);
-    let mut file = tokio::fs::File::create(&dest)
+    let mut file = tokio::fs::File::create(&dest_path)
         .await
-        .with_context(|| format!("Failed to create file: {}", filename))?;
+        .with_context(|| format!("Failed to create file: {:?}", dest_path))?;
 
     let mut stream = resp.bytes_stream();
     let mut downloaded: u64 = 0;

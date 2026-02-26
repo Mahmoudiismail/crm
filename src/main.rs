@@ -31,6 +31,17 @@ use crate::services::fetcher;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // ── Single Instance Check ──
+    // Bind to a fixed local port (e.g., 14592) to ensure only one instance runs.
+    // If bind fails, another instance is likely running.
+    let _instance_lock = match std::net::TcpListener::bind("127.0.0.1:14592") {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("Application is already running (or port 14592 is busy): {}", e);
+            std::process::exit(0); // Exit silently/gracefully as requested
+        }
+    };
+
     // Parse CLI first
     let args = CliArgs::parse();
 
@@ -142,7 +153,13 @@ impl ApplicationHandler for App {
                     });
                 } else if &event.id == logs_id {
                     info!("Opening logs.");
-                    let _ = open::that("crm_tool.log");
+                    // Open log file relative to executable
+                    if let Ok(exe_path) = std::env::current_exe() {
+                        if let Some(exe_dir) = exe_path.parent() {
+                            let log_path = exe_dir.join("crm_tool.log");
+                            let _ = open::that(log_path);
+                        }
+                    }
                 }
             }
         }
@@ -283,9 +300,20 @@ async fn run_once(args: CliArgs) -> Result<()> {
         if urls.is_empty() {
             info!("No CSV URLs found in report results");
         } else {
-            info!("Found {} CSV URL(s) to download", urls.len());
+            // Determine download directory: <exe_dir>/download
+            let exe_path = std::env::current_exe()?;
+            let exe_dir = exe_path
+                .parent()
+                .unwrap_or_else(|| std::path::Path::new("."));
+            let download_dir = exe_dir.join("download");
+
+            info!(
+                "Found {} CSV URL(s) to download. Target dir: {:?}",
+                urls.len(),
+                download_dir
+            );
             for (key, url) in &urls {
-                match downloader::download_csv(&client, url, key).await {
+                match downloader::download_csv(&client, url, key, &download_dir).await {
                     Ok(filename) => info!("Downloaded: {}", filename),
                     Err(e) => error!("Failed to download CSV for {}: {:#}", key, e),
                 }
@@ -320,15 +348,20 @@ fn build_client(config: &AppConfig) -> Result<reqwest::Client> {
 }
 
 fn setup_logging() -> Result<()> {
-    // File appender — DEBUG level
-    let file_appender = tracing_appender::rolling::never(".", "crm_tool.log");
-    let (non_blocking_file, _guard) = tracing_appender::non_blocking(file_appender);
+    // Determine log directory (same as executable directory)
+    let exe_path = std::env::current_exe()?;
+    let exe_dir = exe_path
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."));
 
-    // We need to keep the guard alive.
-    std::mem::forget(_guard);
+    // File appender — DEBUG level
+    // Using a blocking writer (no non_blocking wrapper) to ensure immediate writes
+    // and avoid missing logs if the application crashes or exits abruptly.
+    // For a desktop tool, the I/O overhead is negligible.
+    let file_appender = tracing_appender::rolling::never(exe_dir, "crm_tool.log");
 
     let file_layer = fmt::layer()
-        .with_writer(non_blocking_file)
+        .with_writer(file_appender)
         .with_ansi(false)
         .with_target(true)
         .with_thread_ids(true)
