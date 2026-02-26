@@ -9,11 +9,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
-use chrono::Timelike;
 use chrono::Utc;
 use chrono_tz::Africa::Cairo;
 use clap::Parser;
-use muda::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
+use muda::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
@@ -114,7 +113,11 @@ impl ApplicationHandler for App {
         {
             Ok(icon) => {
                 self.tray_icon = Some(icon);
-                self.menu_items = Some((quit_i.id(), run_now_i.id(), logs_i.id()));
+                self.menu_items = Some((
+                    quit_i.id().clone(),
+                    run_now_i.id().clone(),
+                    logs_i.id().clone(),
+                ));
                 info!("Tray icon initialized.");
             }
             Err(e) => error!("Failed to build tray icon: {}", e),
@@ -125,19 +128,19 @@ impl ApplicationHandler for App {
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         // Poll for events
-        if let Some((quit_id, run_id, logs_id)) = self.menu_items {
+        if let Some((quit_id, run_id, logs_id)) = &self.menu_items {
             if let Ok(event) = muda::MenuEvent::receiver().try_recv() {
-                if event.id == quit_id {
+                if &event.id == quit_id {
                     info!("Exit requested from menu.");
                     event_loop.exit();
-                } else if event.id == run_id {
+                } else if &event.id == run_id {
                     info!("Manual run requested.");
                     let args = self.args.clone();
                     let is_running = self.is_running.clone();
                     tokio::spawn(async move {
                         run_fetcher_safe(args, is_running).await;
                     });
-                } else if event.id == logs_id {
+                } else if &event.id == logs_id {
                     info!("Opening logs.");
                     let _ = open::that("crm_tool.log");
                 }
