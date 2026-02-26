@@ -1,0 +1,68 @@
+name: Build and Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Windows Binary
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get Version
+        id: get_version
+        run: |
+          VERSION=$(grep '^version =' Cargo.toml | head -n 1 | awk -F '"' '{print $2}')
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "Detected version: $VERSION"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          load: true
+          tags: crm-tool-builder:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Extract Binary
+        run: |
+          CONTAINER_ID=$(docker create crm-tool-builder:latest)
+          docker cp "$CONTAINER_ID:/output/crm_tool.exe" ./crm_tool.exe
+          docker rm "$CONTAINER_ID"
+          ls -lh crm_tool.exe
+
+      - name: Install Zip
+        run: sudo apt-get update && sudo apt-get install -y zip
+
+      - name: Create Zip Archive
+        run: zip crm_tool.zip crm_tool.exe
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ env.VERSION }}
+          name: Release v${{ env.VERSION }}
+          draft: false
+          prerelease: false
+          files: crm_tool.zip
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: crm_tool_v${{ env.VERSION }}
+          path: crm_tool.zip
+          retention-days: 3

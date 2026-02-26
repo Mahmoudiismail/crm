@@ -1,11 +1,12 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
+use chrono_tz::Africa::Cairo;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::Path;
 use tracing::{debug, info};
 
-use crate::cli::CliArgs;
+use crate::interface::cli::CliArgs;
 
 /// All configuration fields — mirrors the JSON config file.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,6 +43,8 @@ pub struct AppConfig {
     pub app_timezone_plus_minutes: String,
     #[serde(default)]
     pub base_url: String,
+    #[serde(default)]
+    pub scheduled_time: String,
 
     // Token / auth cache
     #[serde(default)]
@@ -79,6 +82,7 @@ impl Default for AppConfig {
             application_id: "83921976-97dd-4679-9b36-ee936ecf50d1".into(),
             app_timezone_plus_minutes: "180".into(),
             base_url: "https://crm.fakeeh.care/medi-crm/vault/v1/task".into(),
+            scheduled_time: "01:00".into(),
             access_token: String::new(),
             access_token_expiry: String::new(),
             id_token: String::new(),
@@ -119,8 +123,8 @@ impl AppConfig {
             }
         }
 
-        let cfg: AppConfig = serde_json::from_value(file_value)
-            .context("Failed to deserialize merged config")?;
+        let cfg: AppConfig =
+            serde_json::from_value(file_value).context("Failed to deserialize merged config")?;
         Ok(cfg)
     }
 
@@ -163,8 +167,11 @@ impl AppConfig {
 
         // Finalize to_date: if still empty, default to today
         if self.to_date.is_empty() {
-            self.to_date = Utc::now().format("%Y-%m-%d").to_string();
-            debug!("to_date defaulted to today: {}", self.to_date);
+            self.to_date = Utc::now()
+                .with_timezone(&Cairo)
+                .format("%Y-%m-%d")
+                .to_string();
+            debug!("to_date defaulted to today (Cairo): {}", self.to_date);
         }
 
         // Finalize calls_from_date: if empty, fall back to from_date

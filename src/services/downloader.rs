@@ -11,10 +11,7 @@ use tracing::{debug, info};
 /// - 60-second timeout.
 pub async fn download_csv(client: &reqwest::Client, url: &str, report_key: &str) -> Result<String> {
     let filename = extract_filename(url)?;
-    info!(
-        "[{}] Downloading CSV: {} → {}",
-        report_key, url, filename
-    );
+    info!("[{}] Downloading CSV: {} → {}", report_key, url, filename);
 
     let resp = client
         .get(url)
@@ -27,19 +24,11 @@ pub async fn download_csv(client: &reqwest::Client, url: &str, report_key: &str)
     let status = resp.status();
     if !status.is_success() {
         let body = resp.text().await.unwrap_or_default();
-        anyhow::bail!(
-            "[{}] Download HTTP {}: {}",
-            report_key,
-            status,
-            body
-        );
+        anyhow::bail!("[{}] Download HTTP {}: {}", report_key, status, body);
     }
 
     let content_length = resp.content_length();
-    debug!(
-        "[{}] Content-Length: {:?}",
-        report_key, content_length
-    );
+    debug!("[{}] Content-Length: {:?}", report_key, content_length);
 
     let dest = Path::new(&filename);
     let mut file = tokio::fs::File::create(&dest)
@@ -72,10 +61,7 @@ fn extract_filename(url: &str) -> Result<String> {
         url
     };
 
-    let filename = path
-        .rsplit('/')
-        .next()
-        .unwrap_or("download.csv");
+    let filename = path.rsplit('/').next().unwrap_or("download.csv");
 
     let decoded = urlencoding::decode(filename)
         .with_context(|| format!("Failed to URL-decode filename: {}", filename))?;

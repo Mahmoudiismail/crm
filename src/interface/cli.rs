@@ -1,7 +1,7 @@
 use clap::{Parser, ValueEnum};
 
 /// CRM Tool — CLI for fetching CRM reports via AWS Cognito authentication
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[command(name = "crm_tool", version, about, long_about = None)]
 pub struct CliArgs {
     /// Path to JSON config file

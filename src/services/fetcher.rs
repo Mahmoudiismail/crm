@@ -4,8 +4,8 @@ use futures_util::future::join_all;
 use serde_json::Value;
 use tracing::{debug, error, info};
 
-use crate::cli::ReportType;
-use crate::config::AppConfig;
+use crate::core::config::AppConfig;
+use crate::interface::cli::ReportType;
 
 // ──────────────────────────────────────────────────────────────
 // Report definitions
@@ -123,10 +123,7 @@ pub async fn fetch_reports(
                         Ok(v) => (key, v),
                         Err(e) => {
                             error!("Call log batch {}-{} failed: {}", batch_from, batch_to, e);
-                            (
-                                key,
-                                serde_json::json!({"error": format!("{}", e)}),
-                            )
+                            (key, serde_json::json!({"error": format!("{}", e)}))
                         }
                     }
                 }));
@@ -235,10 +232,7 @@ async fn fetch_single(
         query.push((k.as_str(), v.as_str()));
     }
 
-    info!(
-        "Fetching {} [{} to {}]...",
-        endpoint, from_date, to_date
-    );
+    info!("Fetching {} [{} to {}]...", endpoint, from_date, to_date);
 
     let resp = client
         .get(&url)
@@ -261,20 +255,18 @@ async fn fetch_single(
         .await
         .with_context(|| format!("Failed to read response body from {}", endpoint))?;
 
-    debug!("Response from {} — status: {}, headers: {}", endpoint, status, headers);
+    debug!(
+        "Response from {} — status: {}, headers: {}",
+        endpoint, status, headers
+    );
     debug!("Response body from {}: {}", endpoint, body);
 
     if !status.is_success() {
-        anyhow::bail!(
-            "{} returned HTTP {}: {}",
-            endpoint,
-            status,
-            body
-        );
+        anyhow::bail!("{} returned HTTP {}: {}", endpoint, status, body);
     }
 
-    let parsed: Value = serde_json::from_str(&body)
-        .with_context(|| format!("Invalid JSON from {}", endpoint))?;
+    let parsed: Value =
+        serde_json::from_str(&body).with_context(|| format!("Invalid JSON from {}", endpoint))?;
     Ok(parsed)
 }
 
@@ -309,11 +301,9 @@ pub fn split_monthly(from: &str, to: &str) -> Result<Vec<(String, String)>> {
 
         // Move to 1st of next month
         if cursor.month() == 12 {
-            cursor = NaiveDate::from_ymd_opt(cursor.year() + 1, 1, 1)
-                .unwrap_or(end);
+            cursor = NaiveDate::from_ymd_opt(cursor.year() + 1, 1, 1).unwrap_or(end);
         } else {
-            cursor = NaiveDate::from_ymd_opt(cursor.year(), cursor.month() + 1, 1)
-                .unwrap_or(end);
+            cursor = NaiveDate::from_ymd_opt(cursor.year(), cursor.month() + 1, 1).unwrap_or(end);
         }
     }
 
@@ -398,7 +388,13 @@ mod tests {
 
     #[test]
     fn test_last_day_feb() {
-        assert_eq!(last_day_of_month(2024, 2), NaiveDate::from_ymd_opt(2024, 2, 29).unwrap());
-        assert_eq!(last_day_of_month(2025, 2), NaiveDate::from_ymd_opt(2025, 2, 28).unwrap());
+        assert_eq!(
+            last_day_of_month(2024, 2),
+            NaiveDate::from_ymd_opt(2024, 2, 29).unwrap()
+        );
+        assert_eq!(
+            last_day_of_month(2025, 2),
+            NaiveDate::from_ymd_opt(2025, 2, 28).unwrap()
+        );
     }
 }
