@@ -401,4 +401,11 @@ mod tests {
         assert_eq!(last_day_of_month(2024, 2), NaiveDate::from_ymd_opt(2024, 2, 29).unwrap());
         assert_eq!(last_day_of_month(2025, 2), NaiveDate::from_ymd_opt(2025, 2, 28).unwrap());
     }
+
+    #[test]
+    fn test_split_monthly_error() {
+        let result = split_monthly("2026-02-01", "2026-01-01");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("is after to_date"));
+    }
 }
