@@ -142,7 +142,13 @@ impl ApplicationHandler for App {
                     });
                 } else if &event.id == logs_id {
                     info!("Opening logs.");
-                    let _ = open::that("crm_tool.log");
+                    // Open log file relative to executable
+                    if let Ok(exe_path) = std::env::current_exe() {
+                        if let Some(exe_dir) = exe_path.parent() {
+                            let log_path = exe_dir.join("crm_tool.log");
+                            let _ = open::that(log_path);
+                        }
+                    }
                 }
             }
         }
@@ -331,15 +337,20 @@ fn build_client(config: &AppConfig) -> Result<reqwest::Client> {
 }
 
 fn setup_logging() -> Result<()> {
-    // File appender — DEBUG level
-    let file_appender = tracing_appender::rolling::never(".", "crm_tool.log");
-    let (non_blocking_file, _guard) = tracing_appender::non_blocking(file_appender);
+    // Determine log directory (same as executable directory)
+    let exe_path = std::env::current_exe()?;
+    let exe_dir = exe_path
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."));
 
-    // We need to keep the guard alive.
-    std::mem::forget(_guard);
+    // File appender — DEBUG level
+    // Using a blocking writer (no non_blocking wrapper) to ensure immediate writes
+    // and avoid missing logs if the application crashes or exits abruptly.
+    // For a desktop tool, the I/O overhead is negligible.
+    let file_appender = tracing_appender::rolling::never(exe_dir, "crm_tool.log");
 
     let file_layer = fmt::layer()
-        .with_writer(non_blocking_file)
+        .with_writer(file_appender)
         .with_ansi(false)
         .with_target(true)
         .with_thread_ids(true)
