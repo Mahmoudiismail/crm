@@ -283,9 +283,20 @@ async fn run_once(args: CliArgs) -> Result<()> {
         if urls.is_empty() {
             info!("No CSV URLs found in report results");
         } else {
-            info!("Found {} CSV URL(s) to download", urls.len());
+            // Determine download directory: <exe_dir>/download
+            let exe_path = std::env::current_exe()?;
+            let exe_dir = exe_path
+                .parent()
+                .unwrap_or_else(|| std::path::Path::new("."));
+            let download_dir = exe_dir.join("download");
+
+            info!(
+                "Found {} CSV URL(s) to download. Target dir: {:?}",
+                urls.len(),
+                download_dir
+            );
             for (key, url) in &urls {
-                match downloader::download_csv(&client, url, key).await {
+                match downloader::download_csv(&client, url, key, &download_dir).await {
                     Ok(filename) => info!("Downloaded: {}", filename),
                     Err(e) => error!("Failed to download CSV for {}: {:#}", key, e),
                 }
