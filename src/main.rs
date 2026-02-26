@@ -31,6 +31,17 @@ use crate::services::fetcher;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // ── Single Instance Check ──
+    // Bind to a fixed local port (e.g., 14592) to ensure only one instance runs.
+    // If bind fails, another instance is likely running.
+    let _instance_lock = match std::net::TcpListener::bind("127.0.0.1:14592") {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("Application is already running (or port 14592 is busy): {}", e);
+            std::process::exit(0); // Exit silently/gracefully as requested
+        }
+    };
+
     // Parse CLI first
     let args = CliArgs::parse();
 
