@@ -9,33 +9,20 @@ permissions:
 jobs:
   build:
     name: Build Windows Binary
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64 zip
-
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: x86_64-pc-windows-gnu
-
-      - name: Configure Cargo for Windows
-        run: |
-          mkdir -p ~/.cargo
-          cat <<EOF > ~/.cargo/config.toml
-          [target.x86_64-pc-windows-gnu]
-          linker = "x86_64-w64-mingw32-gcc"
-          ar = "x86_64-w64-mingw32-gcc-ar"
-          EOF
+          targets: x86_64-pc-windows-msvc
 
       - name: Get Version
         id: get_version
+        shell: bash
         run: |
           VERSION=$(grep '^version =' Cargo.toml | head -n 1 | awk -F '"' '{print $2}')
           echo "VERSION=$VERSION" >> $GITHUB_ENV
@@ -53,13 +40,12 @@ jobs:
             ${{ runner.os }}-cargo-
 
       - name: Build Windows Binary
-        run: cargo build --release --target x86_64-pc-windows-gnu
+        run: cargo build --release
 
       - name: Prepare Artifact
+        shell: pwsh
         run: |
-          cp target/x86_64-pc-windows-gnu/release/crm_tool.exe ./crm_tool.exe
-          ls -lh crm_tool.exe
-          zip crm_tool.zip crm_tool.exe
+          Compress-Archive -Path target/release/crm_tool.exe -DestinationPath crm_tool.zip
 
       - name: Create GitHub Release
         id: create_release
