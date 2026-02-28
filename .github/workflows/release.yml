@@ -41,6 +41,8 @@ jobs:
         uses: swatinem/rust-cache@v2
 
       - name: Build Windows Binary
+        env:
+          XWIN_ACCEPT_LICENSE: 1
         run: cargo xwin build --release --target x86_64-pc-windows-msvc
 
       - name: Prepare Artifact
