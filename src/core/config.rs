@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
-use chrono::Utc;
-use chrono_tz::Africa::Cairo;
+use chrono::Local;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::Path;
@@ -167,11 +166,10 @@ impl AppConfig {
 
         // Finalize to_date: if still empty, default to today
         if self.to_date.is_empty() {
-            self.to_date = Utc::now()
-                .with_timezone(&Cairo)
+            self.to_date = Local::now()
                 .format("%Y-%m-%d")
                 .to_string();
-            debug!("to_date defaulted to today (Cairo): {}", self.to_date);
+            debug!("to_date defaulted to today (Local): {}", self.to_date);
         }
 
         // Finalize calls_from_date: if empty, fall back to from_date
