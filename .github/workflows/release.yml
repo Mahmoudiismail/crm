@@ -9,7 +9,7 @@ permissions:
 jobs:
   build:
     name: Build Windows Binary
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
       - name: Checkout code
@@ -20,15 +20,6 @@ jobs:
         with:
           targets: x86_64-pc-windows-msvc
 
-      - name: Install Required Dependencies
-        run: sudo apt-get update && sudo apt-get install -y llvm nasm
-
-      - name: Install cargo-binstall
-        uses: cargo-bins/cargo-binstall@main
-
-      - name: Install cargo-xwin
-        run: cargo binstall cargo-xwin -y
-
       - name: Get Version
         id: get_version
         shell: bash
@@ -38,18 +29,23 @@ jobs:
           echo "Detected version: $VERSION"
 
       - name: Cache dependencies
-        uses: swatinem/rust-cache@v2
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
 
       - name: Build Windows Binary
-        env:
-          XWIN_ACCEPT_LICENSE: 1
-        run: cargo xwin build --release --target x86_64-pc-windows-msvc
+        run: cargo build --release
 
       - name: Prepare Artifact
-        shell: bash
+        shell: pwsh
         run: |
-          # The binary will be in target/x86_64-pc-windows-msvc/release/
-          zip -j crm_tool.zip target/x86_64-pc-windows-msvc/release/crm_tool.exe
+          Compress-Archive -Path target/release/crm_tool.exe -DestinationPath crm_tool.zip
 
       - name: Create GitHub Release
         id: create_release
@@ -63,3 +59,10 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: crm_tool_v${{ env.VERSION }}
+          path: crm_tool.zip
+          retention-days: 3
