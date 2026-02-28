@@ -56,6 +56,11 @@ pub struct AppConfig {
     pub refresh_token: String,
     #[serde(default)]
     pub token_timestamp: String,
+
+    #[serde(skip)]
+    pub dynamic_to_date: bool,
+    #[serde(skip)]
+    pub dynamic_calls_from_date: bool,
 }
 
 fn default_true() -> bool {
@@ -87,6 +92,8 @@ impl Default for AppConfig {
             id_token: String::new(),
             refresh_token: String::new(),
             token_timestamp: String::new(),
+            dynamic_to_date: false,
+            dynamic_calls_from_date: false,
         }
     }
 }
@@ -169,12 +176,14 @@ impl AppConfig {
             self.to_date = Local::now()
                 .format("%Y-%m-%d")
                 .to_string();
+            self.dynamic_to_date = true;
             debug!("to_date defaulted to today (Local): {}", self.to_date);
         }
 
         // Finalize calls_from_date: if empty, fall back to from_date
         if self.calls_from_date.is_empty() {
             self.calls_from_date = self.from_date.clone();
+            self.dynamic_calls_from_date = true;
             debug!(
                 "calls_from_date defaulted to from_date: {}",
                 self.calls_from_date
@@ -200,6 +209,15 @@ impl AppConfig {
                     map.remove(*key);
                 }
                 debug!("Stripped secret fields from config (remember_secrets=false)");
+            }
+        }
+
+        if let Value::Object(ref mut map) = value {
+            if self.dynamic_to_date {
+                map.remove("to_date");
+            }
+            if self.dynamic_calls_from_date {
+                map.remove("calls_from_date");
             }
         }
 
