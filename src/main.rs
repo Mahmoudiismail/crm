@@ -9,8 +9,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
-use chrono::Utc;
-use chrono_tz::Africa::Cairo;
+use chrono::Local;
 use clap::Parser;
 use muda::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
@@ -201,7 +200,7 @@ async fn scheduler_loop(args: CliArgs, is_running: Arc<AtomicBool>) {
             }
         };
 
-        let now_cairo = Utc::now().with_timezone(&Cairo);
+        let now_local = Local::now();
 
         // Parse scheduled time (HH:MM)
         let scheduled_time =
@@ -217,19 +216,19 @@ async fn scheduler_loop(args: CliArgs, is_running: Arc<AtomicBool>) {
             };
 
         // Determine next run time
-        let today_schedule = now_cairo
+        let today_schedule = now_local
             .date_naive()
             .and_time(scheduled_time)
-            .and_local_timezone(Cairo)
+            .and_local_timezone(Local)
             .unwrap();
 
-        let next_run = if today_schedule > now_cairo {
+        let next_run = if today_schedule > now_local {
             today_schedule
         } else {
             today_schedule + chrono::Duration::days(1)
         };
 
-        let duration = (next_run - now_cairo)
+        let duration = (next_run - now_local)
             .to_std()
             .unwrap_or(Duration::from_secs(60));
         info!("Next scheduled run at {} (in {:?})", next_run, duration);
@@ -275,7 +274,7 @@ async fn run_once(args: CliArgs) -> Result<()> {
     info!("Config loaded from {}", config_path);
     info!("Region: {}, Pool: {}", config.region, config.user_pool_id);
 
-    // Note: to_date is now defaulted to Egypt time in config.rs
+    // Note: to_date is now defaulted to local time in config.rs
     info!(
         "Fetching reports for {} to {}",
         config.from_date, config.to_date
