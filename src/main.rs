@@ -87,7 +87,7 @@ async fn main() -> Result<()> {
 
 struct App {
     tray_icon: Option<TrayIcon>,
-    menu_items: Option<(muda::MenuId, muda::MenuId, muda::MenuId)>,
+    menu_items: Option<(muda::MenuId, muda::MenuId, muda::MenuId, muda::MenuId)>,
     args: CliArgs,
     is_running: Arc<AtomicBool>,
 }
@@ -101,11 +101,13 @@ impl ApplicationHandler for App {
         // Initialize Tray Icon here
         let menu = Menu::new();
         let run_now_i = MenuItem::new("Run Fetcher Now", true, None);
+        let run_tickets_i = MenuItem::new("Run Fetcher (Tickets Only)", true, None);
         let logs_i = MenuItem::new("View Logs", true, None);
         let quit_i = MenuItem::new("Exit", true, None);
 
-        let items: [&dyn IsMenuItem; 4] = [
+        let items: [&dyn IsMenuItem; 5] = [
             &run_now_i,
+            &run_tickets_i,
             &logs_i,
             &PredefinedMenuItem::separator(),
             &quit_i,
@@ -126,6 +128,7 @@ impl ApplicationHandler for App {
                 self.menu_items = Some((
                     quit_i.id().clone(),
                     run_now_i.id().clone(),
+                    run_tickets_i.id().clone(),
                     logs_i.id().clone(),
                 ));
                 info!("Tray icon initialized.");
@@ -138,7 +141,7 @@ impl ApplicationHandler for App {
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         // Poll for events
-        if let Some((quit_id, run_id, logs_id)) = &self.menu_items {
+        if let Some((quit_id, run_id, run_tickets_id, logs_id)) = &self.menu_items {
             if let Ok(event) = muda::MenuEvent::receiver().try_recv() {
                 if &event.id == quit_id {
                     info!("Exit requested from menu.");
@@ -146,6 +149,14 @@ impl ApplicationHandler for App {
                 } else if &event.id == run_id {
                     info!("Manual run requested.");
                     let args = self.args.clone();
+                    let is_running = self.is_running.clone();
+                    tokio::spawn(async move {
+                        run_fetcher_safe(args, is_running).await;
+                    });
+                } else if &event.id == run_tickets_id {
+                    info!("Manual run (Tickets Only) requested.");
+                    let mut args = self.args.clone();
+                    args.report = crate::interface::cli::ReportType::Tickets;
                     let is_running = self.is_running.clone();
                     tokio::spawn(async move {
                         run_fetcher_safe(args, is_running).await;
