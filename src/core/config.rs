@@ -234,14 +234,7 @@ impl AppConfig {
 fn strip_nulls(value: &mut Value) {
     match value {
         Value::Object(map) => {
-            let keys_to_remove: Vec<String> = map
-                .iter()
-                .filter(|(_, v)| v.is_null())
-                .map(|(k, _)| k.clone())
-                .collect();
-            for k in keys_to_remove {
-                map.remove(&k);
-            }
+            map.retain(|_, v| !v.is_null());
             for (_, v) in map.iter_mut() {
                 strip_nulls(v);
             }
