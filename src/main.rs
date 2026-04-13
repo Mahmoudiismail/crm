@@ -36,7 +36,10 @@ async fn main() -> Result<()> {
     let _instance_lock = match std::net::TcpListener::bind("127.0.0.1:14592") {
         Ok(l) => l,
         Err(e) => {
-            eprintln!("Application is already running (or port 14592 is busy): {}", e);
+            eprintln!(
+                "Application is already running (or port 14592 is busy): {}",
+                e
+            );
             std::process::exit(0); // Exit silently/gracefully as requested
         }
     };

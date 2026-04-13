@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use chrono::{Datelike, NaiveDate};
 use futures_util::future::join_all;
 use serde_json::Value;
+use std::sync::Arc;
 use tracing::{debug, error, info};
 
 use crate::core::config::AppConfig;
@@ -14,25 +15,25 @@ use crate::interface::cli::ReportType;
 struct ReportDef {
     key: &'static str,
     endpoint: &'static str,
-    extra_params: Vec<(&'static str, &'static str)>,
+    extra_params: &'static [(&'static str, &'static str)],
 }
 
-fn report_defs() -> Vec<ReportDef> {
-    vec![
+fn report_defs() -> &'static [ReportDef] {
+    &[
         ReportDef {
             key: "tickets",
             endpoint: "download-ticket-data",
-            extra_params: vec![("type", "ticket_report")],
+            extra_params: &[("type", "ticket_report")],
         },
         ReportDef {
             key: "calls",
             endpoint: "download-call-log-data",
-            extra_params: vec![],
+            extra_params: &[],
         },
         ReportDef {
             key: "leads",
             endpoint: "download-lead-data",
-            extra_params: vec![("type", "lead_report")],
+            extra_params: &[("type", "lead_report")],
         },
     ]
 }
@@ -73,10 +74,20 @@ pub async fn fetch_reports(
     // Build task list
     let mut handles: Vec<tokio::task::JoinHandle<(String, Value)>> = Vec::new();
 
+    let token_arc = Arc::new(token.to_string());
+    let base_url_arc = Arc::new(config.base_url.clone());
+    let email_arc = Arc::new(config.email.clone());
+    let account_id_arc = Arc::new(config.account_id.clone());
+    let application_id_arc = Arc::new(config.application_id.clone());
+    let tz_arc = Arc::new(config.app_timezone_plus_minutes.clone());
+
     for def in defs {
         if !should_fetch(def.key) {
             continue;
         }
+
+        let endpoint = def.endpoint;
+        let extra = def.extra_params;
 
         if def.key == "calls" {
             // Call logs: split into monthly batches
@@ -90,18 +101,12 @@ pub async fn fetch_reports(
 
             for (batch_from, batch_to) in batches {
                 let client = client.clone();
-                let token = token.to_string();
-                let base_url = config.base_url.clone();
-                let email = config.email.clone();
-                let account_id = config.account_id.clone();
-                let application_id = config.application_id.clone();
-                let tz = config.app_timezone_plus_minutes.clone();
-                let endpoint = def.endpoint.to_string();
-                let extra: Vec<(String, String)> = def
-                    .extra_params
-                    .iter()
-                    .map(|(k, v)| (k.to_string(), v.to_string()))
-                    .collect();
+                let token = Arc::clone(&token_arc);
+                let base_url = Arc::clone(&base_url_arc);
+                let email = Arc::clone(&email_arc);
+                let account_id = Arc::clone(&account_id_arc);
+                let application_id = Arc::clone(&application_id_arc);
+                let tz = Arc::clone(&tz_arc);
 
                 handles.push(tokio::spawn(async move {
                     let key = format!("calls_{}_{}", batch_from, batch_to);
@@ -109,14 +114,14 @@ pub async fn fetch_reports(
                         &client,
                         &token,
                         &base_url,
-                        &endpoint,
+                        endpoint,
                         &email,
                         &batch_from,
                         &batch_to,
                         &account_id,
                         &application_id,
                         &tz,
-                        &extra,
+                        extra,
                     )
                     .await;
                     match result {
@@ -131,45 +136,36 @@ pub async fn fetch_reports(
         } else {
             // Tickets / Leads: single request
             let client = client.clone();
-            let token = token.to_string();
-            let base_url = config.base_url.clone();
-            let email = config.email.clone();
+            let token = Arc::clone(&token_arc);
+            let base_url = Arc::clone(&base_url_arc);
+            let email = Arc::clone(&email_arc);
             let from_date = config.from_date.clone();
             let to_date = config.to_date.clone();
-            let account_id = config.account_id.clone();
-            let application_id = config.application_id.clone();
-            let tz = config.app_timezone_plus_minutes.clone();
-            let endpoint = def.endpoint.to_string();
+            let account_id = Arc::clone(&account_id_arc);
+            let application_id = Arc::clone(&application_id_arc);
+            let tz = Arc::clone(&tz_arc);
             let key = def.key.to_string();
-            let extra: Vec<(String, String)> = def
-                .extra_params
-                .iter()
-                .map(|(k, v)| (k.to_string(), v.to_string()))
-                .collect();
 
             handles.push(tokio::spawn(async move {
                 let result = fetch_single(
                     &client,
                     &token,
                     &base_url,
-                    &endpoint,
+                    endpoint,
                     &email,
                     &from_date,
                     &to_date,
                     &account_id,
                     &application_id,
                     &tz,
-                    &extra,
+                    extra,
                 )
                 .await;
                 match result {
                     Ok(v) => (key, v),
                     Err(e) => {
                         error!("Report '{}' failed: {}", endpoint, e);
-                        (
-                            key.to_string(),
-                            serde_json::json!({"error": format!("{}", e)}),
-                        )
+                        (key, serde_json::json!({"error": format!("{}", e)}))
                     }
                 }
             }));
@@ -219,7 +215,7 @@ async fn fetch_single(
     account_id: &str,
     application_id: &str,
     tz: &str,
-    extra_params: &[(String, String)],
+    extra_params: &[(&str, &str)],
 ) -> Result<Value> {
     let url = format!("{}/{}", base_url.trim_end_matches('/'), endpoint);
 
@@ -229,7 +225,7 @@ async fn fetch_single(
         ("email", email),
     ];
     for (k, v) in extra_params {
-        query.push((k.as_str(), v.as_str()));
+        query.push((*k, *v));
     }
 
     info!("Fetching {} [{} to {}]...", endpoint, from_date, to_date);

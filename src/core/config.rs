@@ -173,9 +173,7 @@ impl AppConfig {
 
         // Finalize to_date: if still empty, default to today
         if self.to_date.is_empty() {
-            self.to_date = Local::now()
-                .format("%Y-%m-%d")
-                .to_string();
+            self.to_date = Local::now().format("%Y-%m-%d").to_string();
             self.dynamic_to_date = true;
             debug!("to_date defaulted to today (Local): {}", self.to_date);
         }
