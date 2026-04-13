@@ -48,10 +48,13 @@ async fn main() -> Result<()> {
     let args = CliArgs::parse();
 
     // Set up logging
-    if let Err(e) = setup_logging() {
-        eprintln!("Failed to set up logging: {}", e);
-        std::process::exit(1);
-    }
+    let _log_guard = match setup_logging() {
+        Ok(guard) => guard,
+        Err(e) => {
+            eprintln!("Failed to set up logging: {}", e);
+            std::process::exit(1);
+        }
+    };
 
     info!("==================================================");
     info!("CRM TOOL - Starting in Tray Mode");
@@ -360,7 +363,7 @@ fn build_client(config: &AppConfig) -> Result<reqwest::Client> {
     Ok(client)
 }
 
-fn setup_logging() -> Result<()> {
+fn setup_logging() -> Result<tracing_appender::non_blocking::WorkerGuard> {
     // Determine log directory (same as executable directory)
     let exe_path = std::env::current_exe()?;
     let exe_dir = exe_path
@@ -368,13 +371,13 @@ fn setup_logging() -> Result<()> {
         .unwrap_or_else(|| std::path::Path::new("."));
 
     // File appender — DEBUG level
-    // Using a blocking writer (no non_blocking wrapper) to ensure immediate writes
-    // and avoid missing logs if the application crashes or exits abruptly.
-    // For a desktop tool, the I/O overhead is negligible.
+    // We use a non-blocking writer for optimal performance.
+    // The returned guard MUST be kept alive in `main` to ensure logs are flushed on exit.
     let file_appender = tracing_appender::rolling::never(exe_dir, "crm_tool.log");
+    let (non_blocking_file, guard) = tracing_appender::non_blocking(file_appender);
 
     let file_layer = fmt::layer()
-        .with_writer(file_appender)
+        .with_writer(non_blocking_file)
         .with_ansi(false)
         .with_target(true)
         .with_thread_ids(true)
@@ -392,5 +395,5 @@ fn setup_logging() -> Result<()> {
         .with(stdout_layer)
         .init();
 
-    Ok(())
+    Ok(guard)
 }
