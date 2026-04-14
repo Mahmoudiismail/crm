@@ -5,7 +5,7 @@ The application now uses two config files:
 - `runner_config.json` (runner behavior, task storage, GUI host/port)
 - `config.json` (CRM auth/report settings and token cache)
 
-No CLI runtime overrides are required.
+Runner behavior is config-driven. CRM executable behavior is controlled via CLI args.
 
 ## 1) Runner Config (`runner_config.json`)
 
@@ -17,6 +17,7 @@ Implementation: `src/runner/config.rs`
 - `gui_port`: GUI bind port (default `8787`)
 - `poll_interval_seconds`: scheduler tick interval (default `30`)
 - `crm_config_path`: path to CRM config file (default `config.json`)
+- `crm_executable_path`: crm executable file/path used by runner (default `crm.exe` on Windows, `crm` on non-Windows)
 - `allow_shell_tasks`: allow `shell_command` tasks (default `false`)
 - `shell_timeout_seconds`: max runtime per shell task (default `300`)
 - `min_task_interval_seconds`: clamp for repeat task minimum interval (default `5`)
@@ -30,8 +31,6 @@ Implementation: `src/runner/config.rs`
 - `repetition`: `once` or `repeat`
 - `frequency_seconds`: interval used when `repetition=repeat`
 - `next_run_at`: RFC3339 timestamp, empty means run immediately
-- `skip_login`: pass-through for CRM task authentication behavior
-- `output`: optional JSON output path for CRM fetch task
 - `kind`: tagged task payload
   - `crm_fetch` with `report` (`all`, `tickets`, `calls`, `leads`, `none`)
   - `shell_command` with `command`
@@ -46,10 +45,20 @@ When tasks are created/updated through the runner GUI CRUD endpoints:
 - `name` is required
 - `next_run_at` must be empty or valid RFC3339
 - for `repetition=repeat`, `frequency_seconds` is clamped to at least `min_task_interval_seconds`
-- `output` is trimmed and empty values are converted to `null`
 - `shell_command.command` must be non-empty
 
 `id` uniqueness is enforced across all tasks. Updates preserve `last_run_at` and `last_status` when these fields are not explicitly provided.
+
+### Runner -> CRM invocation contract
+
+For each `crm_fetch` task, runner executes external CRM binary with args:
+
+- `--config <crm_config_path>`
+- `--report <all|tickets|calls|leads|none>`
+
+CRM execution always requires login.
+
+Runner resolves relative `crm_config_path` and `crm_executable_path` from executable directory.
 
 ### Runner config example
 
@@ -59,6 +68,7 @@ When tasks are created/updated through the runner GUI CRUD endpoints:
   "gui_port": 8787,
   "poll_interval_seconds": 30,
   "crm_config_path": "config.json",
+  "crm_executable_path": "crm",
   "allow_shell_tasks": false,
   "shell_timeout_seconds": 300,
   "min_task_interval_seconds": 5,
@@ -70,8 +80,6 @@ When tasks are created/updated through the runner GUI CRUD endpoints:
       "repetition": "repeat",
       "frequency_seconds": 86400,
       "next_run_at": "",
-      "skip_login": false,
-      "output": null,
       "kind": {
         "type": "crm_fetch",
         "report": "all"

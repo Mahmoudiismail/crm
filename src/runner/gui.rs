@@ -4,8 +4,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tracing::{error, info};
 
-use crate::crm::types::ReportType;
-use crate::runner::config::{Repetition, RunnerConfig, RunnerTask, TaskKind};
+use crate::runner::config::{Repetition, ReportType, RunnerConfig, RunnerTask, TaskKind};
 use crate::runner::engine::{create_task, delete_task, update_task};
 use crate::runner::engine::{RunnerCommand, RunnerHandle};
 
@@ -160,7 +159,7 @@ async fn route_request(method: &str, path: &str, handle: &RunnerHandle) -> Resul
     if method == "GET" && route_path == "/run-tickets" {
         handle
             .command_tx
-            .send(RunnerCommand::RunAdhocCrm(crate::crm::types::ReportType::Tickets))
+            .send(RunnerCommand::RunAdhocCrm(ReportType::Tickets))
             .await?;
         return Ok((200, "text/plain", "Triggered CRM tickets run".to_string()));
     }
@@ -304,11 +303,6 @@ fn build_task_from_query(values: &HashMap<String, String>, fallback_id: Option<S
         .map(|v| v.trim().to_string())
         .unwrap_or_default();
 
-    let output = values
-        .get("output")
-        .map(|v| v.trim().to_string())
-        .filter(|v| !v.is_empty());
-
     let task_type = values
         .get("task_type")
         .map(|v| v.to_ascii_lowercase())
@@ -331,8 +325,6 @@ fn build_task_from_query(values: &HashMap<String, String>, fallback_id: Option<S
         repetition,
         frequency_seconds,
         next_run_at,
-        skip_login: parse_checkbox(values, "skip_login"),
-        output,
         kind,
         last_run_at: String::new(),
         last_status: String::new(),
@@ -348,11 +340,6 @@ fn render_task_form(title: &str, action: &str, submit_label: &str, task: Option<
         .map(|t| t.frequency_seconds.to_string())
         .unwrap_or_else(|| "3600".to_string());
     let next_run_at = task.map(|t| t.next_run_at.as_str()).unwrap_or_default();
-    let skip_login = task.map(|t| t.skip_login).unwrap_or(false);
-    let output = task
-        .and_then(|t| t.output.as_ref())
-        .map(|v| v.as_str())
-        .unwrap_or_default();
 
     let (task_type, report, command) = match task.map(|t| &t.kind) {
         Some(TaskKind::ShellCommand { command }) => ("shell_command", "all", command.as_str()),
@@ -371,7 +358,7 @@ fn render_task_form(title: &str, action: &str, submit_label: &str, task: Option<
     };
 
     format!(
-        "<!doctype html><html><head><meta charset='utf-8'><title>{}</title></head><body><h1>{}</h1><p><a href='/'>Back</a></p><form method='get' action='{}'><p><label>ID: <input type='text' name='id' value='{}'></label></p><p><label>Name: <input type='text' name='name' value='{}'></label></p><p><label>Enabled: <input type='checkbox' name='enabled' value='on' {}></label></p><p><label>Repetition: <select name='repetition'><option value='once' {}>once</option><option value='repeat' {}>repeat</option></select></label></p><p><label>Frequency Seconds: <input type='number' name='frequency_seconds' min='0' value='{}'></label></p><p><label>Next Run At (RFC3339): <input type='text' name='next_run_at' value='{}'></label></p><p><label>Skip Login: <input type='checkbox' name='skip_login' value='on' {}></label></p><p><label>Output Path: <input type='text' name='output' value='{}'></label></p><p><label>Task Type: <select name='task_type'><option value='crm_fetch' {}>crm_fetch</option><option value='shell_command' {}>shell_command</option></select></label></p><p><label>CRM Report: <select name='report'><option value='all' {}>all</option><option value='tickets' {}>tickets</option><option value='calls' {}>calls</option><option value='leads' {}>leads</option><option value='none' {}>none</option></select></label></p><p><label>Shell Command: <input type='text' name='command' value='{}'></label></p><p><button type='submit'>{}</button></p></form></body></html>",
+        "<!doctype html><html><head><meta charset='utf-8'><title>{}</title></head><body><h1>{}</h1><p><a href='/'>Back</a></p><form method='get' action='{}'><p><label>ID: <input type='text' name='id' value='{}'></label></p><p><label>Name: <input type='text' name='name' value='{}'></label></p><p><label>Enabled: <input type='checkbox' name='enabled' value='on' {}></label></p><p><label>Repetition: <select name='repetition'><option value='once' {}>once</option><option value='repeat' {}>repeat</option></select></label></p><p><label>Frequency Seconds: <input type='number' name='frequency_seconds' min='0' value='{}'></label></p><p><label>Next Run At (RFC3339): <input type='text' name='next_run_at' value='{}'></label></p><p><label>Task Type: <select name='task_type'><option value='crm_fetch' {}>crm_fetch</option><option value='shell_command' {}>shell_command</option></select></label></p><p><label>CRM Report: <select name='report'><option value='all' {}>all</option><option value='tickets' {}>tickets</option><option value='calls' {}>calls</option><option value='leads' {}>leads</option><option value='none' {}>none</option></select></label></p><p><label>Shell Command: <input type='text' name='command' value='{}'></label></p><p><button type='submit'>{}</button></p></form></body></html>",
         escape_html(title),
         escape_html(title),
         action,
@@ -382,8 +369,6 @@ fn render_task_form(title: &str, action: &str, submit_label: &str, task: Option<
         if matches!(repetition, Repetition::Repeat) { "selected" } else { "" },
         escape_html(&frequency_seconds),
         escape_html(next_run_at),
-        if skip_login { "checked" } else { "" },
-        escape_html(output),
         if task_type == "crm_fetch" { "selected" } else { "" },
         if task_type == "shell_command" { "selected" } else { "" },
         if report == "all" { "selected" } else { "" },

@@ -13,15 +13,13 @@ use types::ReportType;
 pub async fn run_once(
 	crm_config_path: &str,
 	report: ReportType,
-	skip_login: bool,
-	output: Option<String>,
 ) -> Result<()> {
 	let mut config = AppConfig::load(crm_config_path)?;
 	config.finalize_runtime_fields();
 
 	let client = build_client(&config)?;
 
-	let token = auth::ensure_authenticated(&mut config, &client, skip_login).await?;
+	let token = auth::ensure_authenticated(&mut config, &client, false).await?;
 	config.save(crm_config_path)?;
 
 	let results = fetcher::fetch_reports(&config, &client, &token, report).await?;
@@ -32,18 +30,14 @@ pub async fn run_once(
 		let exe_dir = exe_path
 			.parent()
 			.unwrap_or_else(|| std::path::Path::new("."));
-		let download_dir = exe_dir.join("download");
+		let download_dir = exe_dir.join("Downloads");
+		std::fs::create_dir_all(&download_dir)?;
 
 		for (key, url) in &urls {
 			if let Err(e) = downloader::download_csv(&client, url, key, &download_dir).await {
 				error!("Download failed for {}: {:#}", key, e);
 			}
 		}
-	}
-
-	if let Some(output_path) = output {
-		let pretty = serde_json::to_string_pretty(&results)?;
-		std::fs::write(output_path, pretty)?;
 	}
 
 	config.save(crm_config_path)?;

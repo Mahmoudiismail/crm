@@ -21,7 +21,7 @@ Key startup messages indicate:
 3. Task scheduler executes due tasks and updates `last_status`.
 4. Authentication either reuses valid token or logs successful fresh login.
 5. Fetch tasks complete with expected endpoints.
-6. CSV files appear in `<exe_dir>/download`.
+6. CSV files appear in `<exe_dir>/Downloads`.
 
 ## Common Failure Scenarios
 
@@ -48,7 +48,7 @@ Check:
 Check:
 
 - URL validity and expiry
-- write permissions in executable/download directory
+- write permissions in executable/Downloads directory
 - network timeout conditions
 
 ### 4) Tasks not triggering
@@ -59,6 +59,8 @@ Check:
 - task `next_run_at` format (RFC3339) or empty for immediate run
 - `repetition`/`frequency_seconds` values
 - `poll_interval_seconds`
+
+For `crm_fetch` tasks, verify `crm_executable_path` and `crm_config_path` in `runner_config.json` are correct.
 
 ### 5) Runner GUI unavailable
 
@@ -89,11 +91,25 @@ Check:
 
 Use `GET /tasks` to confirm persisted task state after edits.
 
+### 8) Runner cannot execute CRM
+
+Check:
+
+- `crm_executable_path` points to valid `crm` binary (or default sibling executable)
+- execution permission for `crm` binary
+- runner timeout (`shell_timeout_seconds`) is sufficient
+- `crm` command works manually with same args
+
+Manual check example:
+
+- `crm --config <path> --report tickets`
+- `crm --config <path> --report none`
+
 ## Safe Recovery Steps
 
 1. Stop app.
 2. Backup `runner_config.json`, `config.json`, `runner.log`, and `crm.log`.
-3. Clear token fields in CRM config (or disable `skip_login` on relevant task).
+3. Clear token fields in CRM config if you need a full re-authentication.
 4. Restart and validate auth + fetch flow.
 
 ## Release Validation (Minimal)

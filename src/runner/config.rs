@@ -2,8 +2,6 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::crm::types::ReportType;
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunnerConfig {
     #[serde(default = "default_gui_host")]
@@ -14,6 +12,8 @@ pub struct RunnerConfig {
     pub poll_interval_seconds: u64,
     #[serde(default = "default_crm_config_path")]
     pub crm_config_path: String,
+    #[serde(default = "default_crm_executable_path")]
+    pub crm_executable_path: String,
     #[serde(default = "default_allow_shell_tasks")]
     pub allow_shell_tasks: bool,
     #[serde(default = "default_shell_timeout")]
@@ -39,10 +39,6 @@ pub struct RunnerTask {
     #[serde(default)]
     pub next_run_at: String,
     #[serde(default)]
-    pub skip_login: bool,
-    #[serde(default)]
-    pub output: Option<String>,
-    #[serde(default)]
     pub kind: TaskKind,
     #[serde(default)]
     pub last_run_at: String,
@@ -65,6 +61,34 @@ pub enum TaskKind {
     ShellCommand { command: String },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ReportType {
+    All,
+    Tickets,
+    Calls,
+    Leads,
+    None,
+}
+
+impl ReportType {
+    pub fn as_arg(self) -> &'static str {
+        match self {
+            Self::All => "all",
+            Self::Tickets => "tickets",
+            Self::Calls => "calls",
+            Self::Leads => "leads",
+            Self::None => "none",
+        }
+    }
+}
+
+impl Default for ReportType {
+    fn default() -> Self {
+        Self::All
+    }
+}
+
 impl Default for TaskKind {
     fn default() -> Self {
         Self::CrmFetch {
@@ -80,6 +104,7 @@ impl Default for RunnerConfig {
             gui_port: default_gui_port(),
             poll_interval_seconds: default_poll_interval(),
             crm_config_path: default_crm_config_path(),
+            crm_executable_path: default_crm_executable_path(),
             allow_shell_tasks: default_allow_shell_tasks(),
             shell_timeout_seconds: default_shell_timeout(),
             min_task_interval_seconds: default_min_task_interval(),
@@ -90,8 +115,6 @@ impl Default for RunnerConfig {
                 repetition: Repetition::Repeat,
                 frequency_seconds: 24 * 60 * 60,
                 next_run_at: String::new(),
-                skip_login: false,
-                output: None,
                 kind: TaskKind::CrmFetch {
                     report: ReportType::All,
                 },
@@ -153,6 +176,14 @@ fn default_poll_interval() -> u64 {
 
 fn default_crm_config_path() -> String {
     "config.json".to_string()
+}
+
+fn default_crm_executable_path() -> String {
+    if cfg!(target_os = "windows") {
+        "crm.exe".to_string()
+    } else {
+        "crm".to_string()
+    }
 }
 
 fn default_allow_shell_tasks() -> bool {

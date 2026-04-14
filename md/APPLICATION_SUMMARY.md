@@ -9,12 +9,12 @@ This project ships two Rust executables:
 
 Together they:
 
-- Runs a `runner` layer for scheduling and task execution.
-- Authenticates to AWS Cognito using SRP.
-- Fetches CRM report payloads (tickets, calls, leads).
-- Extracts signed download URLs from response JSON.
-- Downloads CSV files to a local folder.
-- Runs automatically on task schedule and manually from tray + GUI.
+- Run a `runner` layer for scheduling and task execution.
+- Authenticate to AWS Cognito using SRP.
+- Fetch CRM report payloads (tickets, calls, leads).
+- Extract signed download URLs from response JSON.
+- Download CSV files to a local folder.
+- Run automatically on task schedule and manually from tray + GUI.
 
 ## Runtime Style
 
@@ -27,19 +27,28 @@ Together they:
 
 ## Main Workflow (runner)
 
-1. Load `runner_config.json`.
-2. Start scheduler loop and runner GUI server.
-3. Run tasks from runner config (`crm_fetch` and optional shell commands).
-4. For CRM tasks, load CRM config, authenticate, fetch, and download.
-5. Persist task run metadata (`next_run_at`, `last_status`, `last_run_at`).
+1. Load/create `runner_config.json` under executable directory.
+2. Ensure CRM `config.json` exists under executable directory.
+3. Start scheduler loop and runner GUI server.
+4. Run tasks from runner config (`crm_fetch` and optional shell commands).
+5. For CRM tasks, invoke external `crm` executable with CLI args.
+6. Persist task run metadata (`next_run_at`, `last_status`, `last_run_at`).
 
 ## Main Workflow (crm)
 
-1. Load `config.json`.
-2. Authenticate via Cognito SRP.
-3. Fetch all CRM reports.
-4. Download CSV artifacts when enabled.
-5. Exit process.
+1. Parse runtime CLI args.
+2. Resolve/create `config.json` under executable directory (or provided path).
+3. Authenticate via Cognito SRP.
+4. Fetch requested report set.
+5. Download CSV artifacts when enabled.
+6. Exit process.
+
+Supported CRM args:
+
+- `--report all|tickets|calls|leads|none`
+- `--config <path>`
+
+CRM always performs login.
 
 ## Scheduler + Manual Triggers
 
@@ -53,8 +62,7 @@ Together they:
 
 - `runner.log` for runner executable.
 - `crm.log` for crm executable.
-- `download/*.csv` in executable directory.
-- Optional JSON output path per task (`task.output`).
+- `Downloads/*.csv` in executable directory.
 
 ## Modules
 

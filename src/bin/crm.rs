@@ -5,20 +5,108 @@ use tracing::info;
 use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
-const CRM_CONFIG_PATH: &str = "config.json";
-
 #[tokio::main]
 async fn main() -> Result<()> {
     let _log_guard = setup_logging()?;
+
+    let options = parse_args()?;
+    let config_path = resolve_config_path(options.config.as_deref());
 
     info!("==================================================");
     info!("CRM - One-shot run started");
     info!("==================================================");
 
-    crm::run_once(CRM_CONFIG_PATH, ReportType::All, false, None).await?;
+    crm::run_once(&config_path, options.report).await?;
 
     info!("CRM - One-shot run completed successfully");
     Ok(())
+}
+
+#[derive(Default)]
+struct CrmCliOptions {
+    report: ReportType,
+    config: Option<String>,
+}
+
+fn parse_args() -> Result<CrmCliOptions> {
+    let mut options = CrmCliOptions {
+        report: ReportType::All,
+        ..Default::default()
+    };
+
+    let mut args = std::env::args().skip(1);
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--report" => {
+                let value = args
+                    .next()
+                    .ok_or_else(|| anyhow::anyhow!("Missing value for --report"))?;
+                options.report = parse_report(&value)?;
+            }
+            "--config" => {
+                let value = args
+                    .next()
+                    .ok_or_else(|| anyhow::anyhow!("Missing value for --config"))?;
+                options.config = Some(value);
+            }
+            "--help" | "-h" => {
+                print_help();
+                std::process::exit(0);
+            }
+            other => {
+                return Err(anyhow::anyhow!(
+                    "Unknown argument '{}'. Use --help to see supported options.",
+                    other
+                ));
+            }
+        }
+    }
+
+    Ok(options)
+}
+
+fn parse_report(value: &str) -> Result<ReportType> {
+    match value.to_ascii_lowercase().as_str() {
+        "all" => Ok(ReportType::All),
+        "tickets" => Ok(ReportType::Tickets),
+        "calls" => Ok(ReportType::Calls),
+        "leads" => Ok(ReportType::Leads),
+        "none" => Ok(ReportType::None),
+        _ => Err(anyhow::anyhow!(
+            "Invalid report '{}' (expected: all|tickets|calls|leads|none)",
+            value
+        )),
+    }
+}
+
+fn resolve_config_path(config_arg: Option<&str>) -> String {
+    match config_arg {
+        Some(path) => {
+            let p = std::path::PathBuf::from(path);
+            if p.is_absolute() {
+                p.to_string_lossy().to_string()
+            } else {
+                executable_dir().join(p).to_string_lossy().to_string()
+            }
+        }
+        None => executable_dir()
+            .join("config.json")
+            .to_string_lossy()
+            .to_string(),
+    }
+}
+
+fn executable_dir() -> std::path::PathBuf {
+    std::env::current_exe()
+        .ok()
+        .and_then(|path| path.parent().map(|p| p.to_path_buf()))
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+}
+
+fn print_help() {
+    eprintln!(
+        "crm usage:\n  --report <all|tickets|calls|leads|none>\n  --config <path>"
+    );
 }
 
 fn setup_logging() -> Result<tracing_appender::non_blocking::WorkerGuard> {

@@ -28,5 +28,6 @@ This folder is the full rebuild and operations reference for the CRM Tool codeba
 - CRM one-shot execution entrypoint lives in `src/bin/crm.rs`.
 - Shared modules are exported from `src/lib.rs`.
 - CRM domain logic lives in `src/crm/*` (via module paths to current implementation files).
-- No command-line runtime arguments are used for normal operation.
+- Runner triggers CRM work by invoking external `crm` executable.
+- `crm` supports CLI args for runtime behavior (`--report`, `--config`).
 - All runnable tasks are stored in `runner_config.json`.

@@ -6,10 +6,7 @@ use chrono::{DateTime, Utc};
 use tokio::sync::{mpsc, Mutex};
 use tracing::{error, info};
 
-use crate::crm;
-use crate::crm::types::ReportType;
-
-use super::config::{Repetition, RunnerConfig, RunnerTask, TaskKind};
+use super::config::{Repetition, ReportType, RunnerConfig, RunnerTask, TaskKind};
 
 #[derive(Debug, Clone)]
 pub enum RunnerCommand {
@@ -30,6 +27,7 @@ pub struct RunnerStatus {
 #[derive(Debug, Clone)]
 struct ExecutionPolicy {
     crm_config_path: String,
+    crm_executable_path: String,
     allow_shell_tasks: bool,
     shell_timeout_seconds: u64,
     min_task_interval_seconds: u64,
@@ -214,8 +212,6 @@ async fn run_adhoc_crm(path: &str, report: ReportType, status: &Arc<Mutex<Runner
         repetition: Repetition::Once,
         frequency_seconds: 0,
         next_run_at: String::new(),
-        skip_login: false,
-        output: None,
         kind: TaskKind::CrmFetch { report },
         last_run_at: String::new(),
         last_status: String::new(),
@@ -267,15 +263,6 @@ fn normalize_and_validate_task(task: &mut RunnerTask, cfg: &RunnerConfig) -> Res
             .max(cfg.min_task_interval_seconds.max(1));
     }
 
-    if let Some(output) = task.output.as_mut() {
-        let trimmed = output.trim().to_string();
-        if trimmed.is_empty() {
-            task.output = None;
-        } else {
-            *output = trimmed;
-        }
-    }
-
     match &mut task.kind {
         TaskKind::CrmFetch { .. } => {}
         TaskKind::ShellCommand { command } => {
@@ -313,6 +300,7 @@ fn update_next_run(task: &mut RunnerTask, now: DateTime<Utc>, min_task_interval_
 fn policy_from_config(cfg: &RunnerConfig) -> ExecutionPolicy {
     ExecutionPolicy {
         crm_config_path: cfg.crm_config_path.clone(),
+        crm_executable_path: cfg.crm_executable_path.clone(),
         allow_shell_tasks: cfg.allow_shell_tasks,
         shell_timeout_seconds: cfg.shell_timeout_seconds.max(1),
         min_task_interval_seconds: cfg.min_task_interval_seconds.max(1),
@@ -332,10 +320,13 @@ async fn run_task(task: &mut RunnerTask, policy: &ExecutionPolicy, status: &Arc<
     }
 
     let result = match &task.kind {
-        TaskKind::CrmFetch { report } => {
-            crm::run_once(&policy.crm_config_path, *report, task.skip_login, task.output.clone())
-                .await
-        }
+        TaskKind::CrmFetch { report } => run_crm_command(
+            &policy.crm_executable_path,
+            &policy.crm_config_path,
+            *report,
+            policy.shell_timeout_seconds,
+        )
+        .await,
         TaskKind::ShellCommand { command } => {
             if !policy.allow_shell_tasks {
                 Err(anyhow::anyhow!("shell_command tasks are disabled by runner config"))
@@ -357,6 +348,111 @@ async fn run_task(task: &mut RunnerTask, policy: &ExecutionPolicy, status: &Arc<
     let mut st = status.lock().await;
     st.last_run_at = Utc::now().to_rfc3339();
     st.currently_running = false;
+}
+
+async fn run_crm_command(
+    executable_path: &str,
+    config_path: &str,
+    report: ReportType,
+    timeout_seconds: u64,
+) -> Result<()> {
+    let resolved_executable = resolve_crm_executable(executable_path);
+    let resolved_config_path = resolve_relative_to_exe_dir(config_path);
+
+    let mut command = tokio::process::Command::new(&resolved_executable);
+    command.arg("--config").arg(&resolved_config_path);
+    command.arg("--report").arg(report.as_arg());
+
+    let output = tokio::time::timeout(Duration::from_secs(timeout_seconds.max(1)), command.output())
+        .await
+        .with_context(|| {
+            format!(
+                "crm command timed out after {}s ({})",
+                timeout_seconds,
+                resolved_executable.display()
+            )
+        })??;
+
+    if !output.status.success() {
+        let stdout_excerpt = excerpt_utf8(&output.stdout);
+        let stderr_excerpt = excerpt_utf8(&output.stderr);
+        return Err(anyhow::anyhow!(
+            "crm command failed ({}) with status {:?}; stderr: {}; stdout: {}",
+            resolved_executable.display(),
+            output.status.code(),
+            stderr_excerpt,
+            stdout_excerpt
+        ));
+    }
+
+    Ok(())
+}
+
+fn resolve_crm_executable(configured: &str) -> std::path::PathBuf {
+    let configured = configured.trim();
+    let configured_name = if configured.is_empty() {
+        default_crm_binary_name().to_string()
+    } else {
+        configured.to_string()
+    };
+
+    let configured_path = std::path::PathBuf::from(&configured_name);
+    if configured_path.is_absolute() {
+        return configured_path;
+    }
+
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(exe_dir) = exe.parent() {
+            let sibling = exe_dir.join(&configured_name);
+            if sibling.exists() {
+                return sibling;
+            }
+
+            if configured.is_empty() {
+                let default_sibling = exe_dir.join(default_crm_binary_name());
+                if default_sibling.exists() {
+                    return default_sibling;
+                }
+            }
+        }
+    }
+
+    configured_path
+}
+
+fn resolve_relative_to_exe_dir(path: &str) -> std::path::PathBuf {
+    let p = std::path::PathBuf::from(path);
+    if p.is_absolute() {
+        return p;
+    }
+
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(exe_dir) = exe.parent() {
+            return exe_dir.join(p);
+        }
+    }
+
+    p
+}
+
+fn default_crm_binary_name() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "crm.exe"
+    } else {
+        "crm"
+    }
+}
+
+fn excerpt_utf8(bytes: &[u8]) -> String {
+    const MAX: usize = 400;
+    let text = String::from_utf8_lossy(bytes).replace('\n', " ").replace('\r', " ");
+    if text.len() > MAX {
+        format!("{}...", &text[..MAX])
+    } else if text.is_empty() {
+        "<empty>".to_string()
+    } else {
+        text
+    }
 }
 
 async fn run_shell_command(command: &str, shell_timeout_seconds: u64) -> Result<()> {

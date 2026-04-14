@@ -28,7 +28,7 @@ Behavior:
 ## File Placement
 
 - Path is provided by caller.
-- In main workflow, target is `<exe_dir>/download`.
+- In main workflow, target is `<exe_dir>/Downloads`.
 
 ## Error Conditions
 

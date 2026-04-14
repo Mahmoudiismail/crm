@@ -33,11 +33,17 @@ Behavior:
 - Sleep for `poll_interval_seconds` (minimum 5s in engine loop).
 - Find due tasks using `next_run_at` and enabled flag.
 - Execute tasks one-by-one.
+- For `crm_fetch`, invoke external `crm` executable with CLI args (`--config`, `--report`).
 - Update task state:
 	- `last_run_at`
 	- `last_status`
 	- `next_run_at` for repeat tasks
 	- `enabled=false` for one-time tasks after run
+
+At startup, runner ensures config files exist under executable directory:
+
+- `runner_config.json` via runner config loader.
+- `config.json` by invoking `crm --config <path> --report none` when missing.
 
 ## Run Serialization
 

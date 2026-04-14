@@ -29,6 +29,9 @@ src/
 - Runner/tray application startup and shutdown.
 - Single-instance lock.
 - Logging initialization.
+- Resolves config paths under executable directory.
+- Ensures `runner_config.json` exists (auto-created with defaults).
+- Ensures CRM `config.json` exists by invoking external `crm` with `--config <path> --report none` when missing.
 - Tray icon/menu setup and event handling.
 - Starts runner scheduler engine.
 - Starts runner GUI server on configured host/port.
@@ -37,7 +40,8 @@ src/
 
 - CRM one-shot executable entrypoint.
 - Logging initialization.
-- Executes one full CRM fetch cycle then exits.
+- Accepts runtime arguments (`--report`, `--config`).
+- Executes one CRM cycle then exits.
 
 ### `src/lib.rs`
 
@@ -46,15 +50,18 @@ src/
 ### `src/runner/config.rs`
 
 - Runner configuration loading/saving.
+- Runner-local report enum for `crm_fetch` tasks.
 - Task definitions (`crm_fetch`, `shell_command`).
 - Repetition/frequency scheduling fields.
+- External CRM executable path configuration.
 
 ### `src/runner/engine.rs`
 
 - Scheduler polling loop.
 - Immediate/manual task triggers.
 - Task execution and task metadata updates.
-- CRM task execution bridge.
+- CRM task execution by launching external `crm` executable with CLI args.
+- Timeout and failure handling for child process execution.
 
 ### `src/runner/gui.rs`
 
@@ -68,7 +75,8 @@ src/
 - `config`: CRM configuration and token persistence.
 - `fetcher`: report API requests and monthly batching.
 - `downloader`: CSV stream download.
-- `mod.rs`: shared `run_once` API used by both `crm` and runner engine tasks.
+- CSV files are written under `<crm_exe_dir>/Downloads`.
+- `mod.rs`: shared `run_once` API used by `crm` executable.
 
 ## Concurrency Design
 

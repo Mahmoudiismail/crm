@@ -8,12 +8,10 @@ Implementation: `src/crm/auth.rs`
 
 Decision tree:
 
-1. `skip_login == true`:
-   - use `id_token` if available,
-   - else `access_token`,
-   - else fail.
-2. If cached token and `access_token_expiry` are valid -> reuse token.
-3. Else perform fresh SRP login.
+1. If cached token and `access_token_expiry` are valid -> reuse token.
+2. Else perform fresh SRP login.
+
+Current runtime policy: CRM execution always requires login flow (no user-facing skip-login option).
 
 ## Cognito SRP Sequence
 
@@ -94,7 +92,6 @@ On success:
 
 ## Error Cases
 
-- Missing cache token while `--skip_login` enabled.
 - Cognito HTTP failure.
 - Missing challenge fields.
 - Invalid SRP math state (`u == 0`, `A mod N == 0`, `B mod N == 0`).
