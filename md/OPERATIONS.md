@@ -67,6 +67,15 @@ Check:
 - firewall/local bind restrictions
 - logs for GUI bind failures
 
+### 6) Shell task blocked or timing out
+
+Check:
+
+- `allow_shell_tasks` in `runner_config.json`
+- `shell_timeout_seconds` value
+- `last_status` and runner `last_error` for timeout details
+- command correctness under `bash -lc`
+
 ## Safe Recovery Steps
 
 1. Stop app.

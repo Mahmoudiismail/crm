@@ -14,6 +14,12 @@ pub struct RunnerConfig {
     pub poll_interval_seconds: u64,
     #[serde(default = "default_crm_config_path")]
     pub crm_config_path: String,
+    #[serde(default = "default_allow_shell_tasks")]
+    pub allow_shell_tasks: bool,
+    #[serde(default = "default_shell_timeout")]
+    pub shell_timeout_seconds: u64,
+    #[serde(default = "default_min_task_interval")]
+    pub min_task_interval_seconds: u64,
     #[serde(default)]
     pub tasks: Vec<RunnerTask>,
 }
@@ -74,6 +80,9 @@ impl Default for RunnerConfig {
             gui_port: default_gui_port(),
             poll_interval_seconds: default_poll_interval(),
             crm_config_path: default_crm_config_path(),
+            allow_shell_tasks: default_allow_shell_tasks(),
+            shell_timeout_seconds: default_shell_timeout(),
+            min_task_interval_seconds: default_min_task_interval(),
             tasks: vec![RunnerTask {
                 id: "daily_all_reports".to_string(),
                 name: "Daily CRM Fetch (All Reports)".to_string(),
@@ -144,6 +153,18 @@ fn default_poll_interval() -> u64 {
 
 fn default_crm_config_path() -> String {
     "config.json".to_string()
+}
+
+fn default_allow_shell_tasks() -> bool {
+    false
+}
+
+fn default_shell_timeout() -> u64 {
+    300
+}
+
+fn default_min_task_interval() -> u64 {
+    5
 }
 
 fn default_true() -> bool {

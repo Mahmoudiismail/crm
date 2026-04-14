@@ -17,6 +17,9 @@ Implementation: `src/runner/config.rs`
 - `gui_port`: GUI bind port (default `8787`)
 - `poll_interval_seconds`: scheduler tick interval (default `30`)
 - `crm_config_path`: path to CRM config file (default `config.json`)
+- `allow_shell_tasks`: allow `shell_command` tasks (default `false`)
+- `shell_timeout_seconds`: max runtime per shell task (default `300`)
+- `min_task_interval_seconds`: clamp for repeat task minimum interval (default `5`)
 - `tasks`: list of runnable task definitions
 
 ### Task fields
@@ -43,6 +46,9 @@ Implementation: `src/runner/config.rs`
   "gui_port": 8787,
   "poll_interval_seconds": 30,
   "crm_config_path": "config.json",
+  "allow_shell_tasks": false,
+  "shell_timeout_seconds": 300,
+  "min_task_interval_seconds": 5,
   "tasks": [
     {
       "id": "daily_all_reports",

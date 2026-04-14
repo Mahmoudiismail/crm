@@ -67,20 +67,30 @@ async fn route_request(method: &str, path: &str, handle: &RunnerHandle) -> Resul
 
         let mut rows = String::new();
         for task in cfg.tasks {
+            let repetition_label = match task.repetition {
+                crate::runner::config::Repetition::Once => "once",
+                crate::runner::config::Repetition::Repeat => "repeat",
+            };
             rows.push_str(&format!(
-                "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td><a href='/run/{}'>Run</a></td></tr>",
+                "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td><a href='/run/{}'>Run</a> | <a href='/enable/{}'>Enable</a> | <a href='/disable/{}'>Disable</a></td></tr>",
                 task.id,
                 task.name,
                 task.enabled,
+                repetition_label,
+                task.frequency_seconds,
                 task.next_run_at,
                 task.last_status,
+                task.id,
+                task.id,
                 task.id
             ));
         }
 
         let html = format!(
-            "<!doctype html><html><head><meta charset='utf-8'><title>Runner GUI</title></head><body><h1>Runner GUI</h1><p>Running: {}</p><p>Last error: {}</p><p><a href='/run-all'>Run All Now</a> | <a href='/run-tickets'>Run CRM Tickets</a> | <a href='/status'>JSON Status</a></p><table border='1' cellpadding='6'><tr><th>ID</th><th>Name</th><th>Enabled</th><th>Next Run</th><th>Last Status</th><th>Action</th></tr>{}</table></body></html>",
+            "<!doctype html><html><head><meta charset='utf-8'><title>Runner GUI</title></head><body><h1>Runner GUI</h1><p>Running: {}</p><p>Last task: {}</p><p>Last run at: {}</p><p>Last error: {}</p><p><a href='/run-all'>Run All Now</a> | <a href='/run-tickets'>Run CRM Tickets</a> | <a href='/status'>JSON Status</a> | <a href='/tasks'>JSON Tasks</a></p><table border='1' cellpadding='6'><tr><th>ID</th><th>Name</th><th>Enabled</th><th>Repetition</th><th>Frequency(s)</th><th>Next Run</th><th>Last Status</th><th>Action</th></tr>{}</table></body></html>",
             status.currently_running,
+            status.last_task_id,
+            status.last_run_at,
             status.last_error,
             rows
         );
@@ -90,6 +100,12 @@ async fn route_request(method: &str, path: &str, handle: &RunnerHandle) -> Resul
     if method == "GET" && path == "/status" {
         let status = handle.status.lock().await.clone();
         let body = serde_json::to_string_pretty(&status)?;
+        return Ok((200, "application/json", body));
+    }
+
+    if method == "GET" && path == "/tasks" {
+        let cfg = RunnerConfig::load(&handle.runner_config_path)?;
+        let body = serde_json::to_string_pretty(&cfg.tasks)?;
         return Ok((200, "application/json", body));
     }
 
@@ -113,6 +129,30 @@ async fn route_request(method: &str, path: &str, handle: &RunnerHandle) -> Resul
             .send(RunnerCommand::RunTaskNow(task_id.clone()))
             .await?;
         return Ok((200, "text/plain", format!("Triggered task {}", task_id)));
+    }
+
+    if method == "GET" && path.starts_with("/enable/") {
+        let task_id = path.trim_start_matches("/enable/").to_string();
+        handle
+            .command_tx
+            .send(RunnerCommand::SetTaskEnabled {
+                task_id: task_id.clone(),
+                enabled: true,
+            })
+            .await?;
+        return Ok((200, "text/plain", format!("Enabled task {}", task_id)));
+    }
+
+    if method == "GET" && path.starts_with("/disable/") {
+        let task_id = path.trim_start_matches("/disable/").to_string();
+        handle
+            .command_tx
+            .send(RunnerCommand::SetTaskEnabled {
+                task_id: task_id.clone(),
+                enabled: false,
+            })
+            .await?;
+        return Ok((200, "text/plain", format!("Disabled task {}", task_id)));
     }
 
     Ok((404, "text/plain", "Not found".to_string()))

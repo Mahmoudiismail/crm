@@ -52,6 +52,15 @@ This prevents overlap from startup + scheduler + tray actions.
 
 - `GET /`: HTML dashboard
 - `GET /status`: runner status JSON
+- `GET /tasks`: configured tasks JSON
 - `GET /run-all`: trigger run-all
 - `GET /run-tickets`: trigger ad-hoc CRM tickets task
 - `GET /run/<task_id>`: trigger specific configured task
+- `GET /enable/<task_id>`: enable task
+- `GET /disable/<task_id>`: disable task
+
+## Safety Controls
+
+- `allow_shell_tasks=false` blocks all `shell_command` task execution.
+- `shell_timeout_seconds` terminates long-running shell tasks by timeout.
+- `min_task_interval_seconds` prevents repeat tasks from running too frequently.

@@ -33,6 +33,7 @@
 - Task execution supports `repetition` (`once` or `repeat`) and `frequency_seconds`.
 - Tray and GUI can trigger run-all, tickets-only CRM, or specific task by id.
 - Atomic run guard prevents overlapping task execution.
+- Shell tasks are controlled by runner safety policy (`allow_shell_tasks`, timeout, min interval).
 
 ## Primary Outputs
 

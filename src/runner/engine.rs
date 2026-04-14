@@ -16,12 +16,23 @@ pub enum RunnerCommand {
     RunAllNow,
     RunTaskNow(String),
     RunAdhocCrm(ReportType),
+    SetTaskEnabled { task_id: String, enabled: bool },
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct RunnerStatus {
     pub currently_running: bool,
     pub last_error: String,
+    pub last_task_id: String,
+    pub last_run_at: String,
+}
+
+#[derive(Debug, Clone)]
+struct ExecutionPolicy {
+    crm_config_path: String,
+    allow_shell_tasks: bool,
+    shell_timeout_seconds: u64,
+    min_task_interval_seconds: u64,
 }
 
 #[derive(Clone)]
@@ -36,6 +47,8 @@ pub fn start_scheduler(runner_config_path: String) -> RunnerHandle {
     let status = Arc::new(Mutex::new(RunnerStatus {
         currently_running: false,
         last_error: String::new(),
+        last_task_id: String::new(),
+        last_run_at: String::new(),
     }));
 
     let status_bg = status.clone();
@@ -84,17 +97,21 @@ async fn handle_command(path: &str, cmd: RunnerCommand, status: &Arc<Mutex<Runne
         RunnerCommand::RunAllNow => run_all_tasks_now(path, status).await,
         RunnerCommand::RunTaskNow(task_id) => run_task_by_id(path, &task_id, status).await,
         RunnerCommand::RunAdhocCrm(report) => run_adhoc_crm(path, report, status).await,
+        RunnerCommand::SetTaskEnabled { task_id, enabled } => {
+            set_task_enabled(path, &task_id, enabled).await
+        }
     }
 }
 
 pub async fn run_due_tasks(path: &str, status: &Arc<Mutex<RunnerStatus>>) -> Result<()> {
     let mut cfg = RunnerConfig::load(path)?;
     let now = Utc::now();
+    let policy = policy_from_config(&cfg);
 
     for task in &mut cfg.tasks {
         if task.due_now(now) {
-            run_task(task, &cfg.crm_config_path, status).await;
-            update_next_run(task, now);
+            run_task(task, &policy, status).await;
+            update_next_run(task, now, policy.min_task_interval_seconds);
         }
     }
 
@@ -105,10 +122,11 @@ pub async fn run_due_tasks(path: &str, status: &Arc<Mutex<RunnerStatus>>) -> Res
 async fn run_all_tasks_now(path: &str, status: &Arc<Mutex<RunnerStatus>>) -> Result<()> {
     let mut cfg = RunnerConfig::load(path)?;
     let now = Utc::now();
+    let policy = policy_from_config(&cfg);
     for task in &mut cfg.tasks {
         if task.enabled {
-            run_task(task, &cfg.crm_config_path, status).await;
-            update_next_run(task, now);
+            run_task(task, &policy, status).await;
+            update_next_run(task, now, policy.min_task_interval_seconds);
         }
     }
     cfg.save(path)?;
@@ -118,10 +136,11 @@ async fn run_all_tasks_now(path: &str, status: &Arc<Mutex<RunnerStatus>>) -> Res
 async fn run_task_by_id(path: &str, task_id: &str, status: &Arc<Mutex<RunnerStatus>>) -> Result<()> {
     let mut cfg = RunnerConfig::load(path)?;
     let now = Utc::now();
+    let policy = policy_from_config(&cfg);
 
     if let Some(task) = cfg.tasks.iter_mut().find(|t| t.id == task_id) {
-        run_task(task, &cfg.crm_config_path, status).await;
-        update_next_run(task, now);
+        run_task(task, &policy, status).await;
+        update_next_run(task, now, policy.min_task_interval_seconds);
         cfg.save(path)?;
         return Ok(());
     }
@@ -131,6 +150,7 @@ async fn run_task_by_id(path: &str, task_id: &str, status: &Arc<Mutex<RunnerStat
 
 async fn run_adhoc_crm(path: &str, report: ReportType, status: &Arc<Mutex<RunnerStatus>>) -> Result<()> {
     let cfg = RunnerConfig::load(path)?;
+    let policy = policy_from_config(&cfg);
     let mut task = RunnerTask {
         id: "adhoc_crm".to_string(),
         name: "Adhoc CRM Run".to_string(),
@@ -145,11 +165,24 @@ async fn run_adhoc_crm(path: &str, report: ReportType, status: &Arc<Mutex<Runner
         last_status: String::new(),
     };
 
-    run_task(&mut task, &cfg.crm_config_path, status).await;
+    run_task(&mut task, &policy, status).await;
     Ok(())
 }
 
-fn update_next_run(task: &mut RunnerTask, now: DateTime<Utc>) {
+async fn set_task_enabled(path: &str, task_id: &str, enabled: bool) -> Result<()> {
+    let mut cfg = RunnerConfig::load(path)?;
+    if let Some(task) = cfg.tasks.iter_mut().find(|t| t.id == task_id) {
+        task.enabled = enabled;
+        if enabled && task.next_run_at.is_empty() {
+            task.next_run_at = Utc::now().to_rfc3339();
+        }
+        cfg.save(path)?;
+        return Ok(());
+    }
+    Err(anyhow::anyhow!("Task '{}' not found", task_id))
+}
+
+fn update_next_run(task: &mut RunnerTask, now: DateTime<Utc>, min_task_interval_seconds: u64) {
     task.last_run_at = now.to_rfc3339();
     match task.repetition {
         Repetition::Once => {
@@ -157,13 +190,23 @@ fn update_next_run(task: &mut RunnerTask, now: DateTime<Utc>) {
             task.next_run_at = String::new();
         }
         Repetition::Repeat => {
-            let next = now + chrono::TimeDelta::seconds(task.frequency_seconds as i64);
+            let effective_frequency = task.frequency_seconds.max(min_task_interval_seconds.max(1));
+            let next = now + chrono::TimeDelta::seconds(effective_frequency as i64);
             task.next_run_at = next.to_rfc3339();
         }
     }
 }
 
-async fn run_task(task: &mut RunnerTask, crm_config_path: &str, status: &Arc<Mutex<RunnerStatus>>) {
+fn policy_from_config(cfg: &RunnerConfig) -> ExecutionPolicy {
+    ExecutionPolicy {
+        crm_config_path: cfg.crm_config_path.clone(),
+        allow_shell_tasks: cfg.allow_shell_tasks,
+        shell_timeout_seconds: cfg.shell_timeout_seconds.max(1),
+        min_task_interval_seconds: cfg.min_task_interval_seconds.max(1),
+    }
+}
+
+async fn run_task(task: &mut RunnerTask, policy: &ExecutionPolicy, status: &Arc<Mutex<RunnerStatus>>) {
     {
         let mut st = status.lock().await;
         if st.currently_running {
@@ -172,11 +215,18 @@ async fn run_task(task: &mut RunnerTask, crm_config_path: &str, status: &Arc<Mut
         }
         st.currently_running = true;
         st.last_error.clear();
+        st.last_task_id = task.id.clone();
     }
 
     let result = match &task.kind {
-        TaskKind::CrmFetch { report } => run_crm_fetch(crm_config_path, *report, task.skip_login, task.output.clone()).await,
-        TaskKind::ShellCommand { command } => run_shell_command(command).await,
+        TaskKind::CrmFetch { report } => run_crm_fetch(&policy.crm_config_path, *report, task.skip_login, task.output.clone()).await,
+        TaskKind::ShellCommand { command } => {
+            if !policy.allow_shell_tasks {
+                Err(anyhow::anyhow!("shell_command tasks are disabled by runner config"))
+            } else {
+                run_shell_command(command, policy.shell_timeout_seconds).await
+            }
+        }
     };
 
     match result {
@@ -189,16 +239,25 @@ async fn run_task(task: &mut RunnerTask, crm_config_path: &str, status: &Arc<Mut
     }
 
     let mut st = status.lock().await;
+    st.last_run_at = Utc::now().to_rfc3339();
     st.currently_running = false;
 }
 
-async fn run_shell_command(command: &str) -> Result<()> {
-    let output = tokio::process::Command::new("bash")
-        .arg("-lc")
-        .arg(command)
-        .output()
-        .await
-        .with_context(|| format!("Failed to run command: {}", command))?;
+async fn run_shell_command(command: &str, shell_timeout_seconds: u64) -> Result<()> {
+    let output = tokio::time::timeout(
+        Duration::from_secs(shell_timeout_seconds.max(1)),
+        tokio::process::Command::new("bash")
+            .arg("-lc")
+            .arg(command)
+            .output(),
+    )
+    .await
+    .with_context(|| {
+        format!(
+            "Command timed out after {}s: {}",
+            shell_timeout_seconds, command
+        )
+    })??;
 
     if !output.status.success() {
         return Err(anyhow::anyhow!(
