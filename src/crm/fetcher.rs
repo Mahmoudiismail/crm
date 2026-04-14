@@ -5,8 +5,8 @@ use serde_json::Value;
 use std::sync::Arc;
 use tracing::{debug, error, info};
 
-use crate::core::config::AppConfig;
-use crate::interface::cli::ReportType;
+use crate::crm::config::AppConfig;
+use crate::crm::types::ReportType;
 
 // ──────────────────────────────────────────────────────────────
 // Report definitions

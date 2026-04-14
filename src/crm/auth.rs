@@ -7,7 +7,7 @@ use rand::RngCore;
 use sha2::{Digest, Sha256};
 use tracing::{debug, info};
 
-use crate::core::config::AppConfig;
+use crate::crm::config::AppConfig;
 
 type HmacSha256 = Hmac<Sha256>;
 

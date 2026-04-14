@@ -1,96 +1,105 @@
-# Configuration Reference
+# Configuration
 
-## Config File Location
+The application now uses two config files:
 
-Default: `config.json` in the current working directory.
-Override with `--config <path>`.
+- `runner_config.json` (runner behavior, task storage, GUI host/port)
+- `config.json` (CRM auth/report settings and token cache)
 
-## Default Configuration
+No CLI runtime overrides are required.
+
+## 1) Runner Config (`runner_config.json`)
+
+Implementation: `src/runner/config.rs`
+
+### Top-level fields
+
+- `gui_host`: GUI bind host (default `127.0.0.1`)
+- `gui_port`: GUI bind port (default `8787`)
+- `poll_interval_seconds`: scheduler tick interval (default `30`)
+- `crm_config_path`: path to CRM config file (default `config.json`)
+- `tasks`: list of runnable task definitions
+
+### Task fields
+
+- `id`: unique task id
+- `name`: display name
+- `enabled`: whether task is active
+- `repetition`: `once` or `repeat`
+- `frequency_seconds`: interval used when `repetition=repeat`
+- `next_run_at`: RFC3339 timestamp, empty means run immediately
+- `skip_login`: pass-through for CRM task authentication behavior
+- `output`: optional JSON output path for CRM fetch task
+- `kind`: tagged task payload
+  - `crm_fetch` with `report` (`all`, `tickets`, `calls`, `leads`, `none`)
+  - `shell_command` with `command`
+- `last_run_at`: last run timestamp
+- `last_status`: last run result message
+
+### Runner config example
 
 ```json
 {
-  "region": "ap-south-1",
-  "user_pool_id": "ap-south-1_wjZE70ShT",
-  "client_id": "i7g0t35boqicb1tdc4rgthk6",
-  "username": "+201155520811",
-  "password": "Thb@1234",
-  "no_verify_ssl": true,
-  "remember_secrets": true,
-  "email": "Mahmoud_iismail@rayacx.com",
-  "from_date": "2025-01-01",
-  "calls_from_date": "2026-02-01",
-  "to_date": "",
-  "download_csv": true,
-  "account_id": "233b5ff5-8aff-4445-815b-39d7916a1d46",
-  "application_id": "83921976-97dd-4679-9b36-ee936ecf50d1",
-  "app_timezone_plus_minutes": "180",
-  "base_url": "https://crm.fakeeh.care/medi-crm/vault/v1/task"
+  "gui_host": "127.0.0.1",
+  "gui_port": 8787,
+  "poll_interval_seconds": 30,
+  "crm_config_path": "config.json",
+  "tasks": [
+    {
+      "id": "daily_all_reports",
+      "name": "Daily CRM Fetch (All Reports)",
+      "enabled": true,
+      "repetition": "repeat",
+      "frequency_seconds": 86400,
+      "next_run_at": "",
+      "skip_login": false,
+      "output": null,
+      "kind": {
+        "type": "crm_fetch",
+        "report": "all"
+      },
+      "last_run_at": "",
+      "last_status": ""
+    }
+  ]
 }
 ```
 
-## Field Reference
+## 2) CRM Config (`config.json`)
 
-| Field                     | Type   | Description                                   |
-|---------------------------|--------|-----------------------------------------------|
-| `region`                  | String | AWS region for Cognito                        |
-| `user_pool_id`            | String | Cognito User Pool ID                          |
-| `client_id`               | String | Cognito App Client ID                         |
-| `username`                | String | Cognito username (phone number)               |
-| `password`                | String | Cognito password (secret)                     |
-| `no_verify_ssl`           | bool   | Disable TLS certificate verification          |
-| `remember_secrets`        | bool   | Persist secrets to config file                |
-| `email`                   | String | Email for CRM report requests                 |
-| `from_date`               | String | Start date for tickets/leads (YYYY-MM-DD)     |
-| `calls_from_date`         | String | Start date for call logs (YYYY-MM-DD)         |
-| `to_date`                 | String | End date (YYYY-MM-DD), empty = today          |
-| `download_csv`            | bool   | Auto-download CSV files from report URLs      |
-| `account_id`              | String | CRM account identifier                        |
-| `application_id`          | String | CRM application identifier                    |
-| `app_timezone_plus_minutes` | String | Timezone offset in minutes                  |
-| `base_url`                | String | CRM API base URL                              |
+Implementation: `src/crm/config.rs`
 
-### Token Fields (auto-managed)
+### Authentication fields
 
-| Field                  | Type   | Description                        |
-|------------------------|--------|------------------------------------|
-| `access_token`         | String | JWT access token                   |
-| `access_token_expiry`  | String | Token expiry (ISO 8601 UTC)        |
-| `id_token`             | String | JWT ID token                       |
-| `refresh_token`        | String | Refresh token                      |
-| `token_timestamp`      | String | When token was obtained (ISO 8601) |
-
-## Precedence Rules
-
-```
-CLI Arguments  >  Config File  >  Built-in Defaults
-```
-
-## Special Behaviors
-
-### `to_date`
-- If empty after all merging, defaults to **today's date**
-
-### `calls_from_date`
-- If empty after all merging, defaults to `from_date`
-
-### `remember_secrets = false`
-Before saving, these fields are **removed** from the config file:
+- `region`
+- `user_pool_id`
+- `client_id`
+- `username`
 - `password`
+- `no_verify_ssl`
+- `remember_secrets`
+
+### Report request fields
+
+- `email`
+- `from_date`
+- `calls_from_date`
+- `to_date`
+- `download_csv`
+- `account_id`
+- `application_id`
+- `app_timezone_plus_minutes`
+- `base_url`
+
+### Token cache fields
+
 - `access_token`
 - `access_token_expiry`
 - `id_token`
 - `refresh_token`
 - `token_timestamp`
 
-### Null Stripping
-All `null` JSON values are removed before saving.
+### CRM runtime behavior
 
-## Config Lifecycle
-
-```
-1. Load config.json (or create with defaults)
-2. Merge missing keys from defaults
-3. Apply CLI overrides
-4. Run tool (may update tokens)
-5. Save config back to disk
-```
+- Empty `to_date` is finalized to local current date.
+- Empty `calls_from_date` falls back to `from_date`.
+- If `remember_secrets=false`, secret/token fields are removed before saving.

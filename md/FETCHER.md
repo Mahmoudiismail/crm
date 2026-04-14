@@ -1,128 +1,78 @@
-# Report Fetching
+# Fetcher Service
 
-## Endpoints
+Implementation: `src/crm/fetcher.rs`
 
-| Report   | Endpoint                 | Extra Query Params      |
-|----------|--------------------------|-------------------------|
-| tickets  | `download-ticket-data`   | `type=ticket_report`    |
-| calls    | `download-call-log-data` | *(none)*                |
-| leads    | `download-lead-data`     | `type=lead_report`      |
+## Overview
 
-## Common Query Parameters
+Fetcher retrieves report metadata JSON from CRM endpoints using the Cognito bearer token.
 
-All requests include:
-- `from_date` — Start date
-- `to_date` — End date
-- `email` — User email
+## Report Definitions
 
-## Request Headers
+- `tickets` -> endpoint `download-ticket-data` + `type=ticket_report`
+- `calls` -> endpoint `download-call-log-data`
+- `leads` -> endpoint `download-lead-data` + `type=lead_report`
 
-```
-account_id: <from config>
-app-timezone-plus-minutes: <from config>
-application_id: <from config>
-auth-type: cognito
-authorization: Bearer <token>
-content-type: application/json
-accept: */*
-```
+## Selection Logic
 
-## Report Selection
+Based on `ReportType`:
 
-| `--report` | Reports fetched              |
-|------------|------------------------------|
-| `all`      | tickets, calls, leads        |
-| `tickets`  | tickets only                 |
-| `calls`    | call logs only               |
-| `leads`    | leads only                   |
-| `none`     | no reports (skip fetching)   |
+- `All`: fetch all
+- `Tickets`: only tickets
+- `Calls`: only calls
+- `Leads`: only leads
+- `None`: return empty object immediately
 
-## Call Log Monthly Batching
+## Request Metadata
 
-Call logs are split into monthly batches to avoid API timeouts and large responses.
+Query parameters:
 
-### Algorithm
+- `from_date`
+- `to_date`
+- `email`
+- plus report-specific extras
 
-```
-Input: calls_from_date, to_date
-Output: [(month_start, month_end), ...]
+Headers:
 
-cursor = calls_from_date
-while cursor <= to_date:
-    month_end = last_day_of_month(cursor)
-    batch_end = min(month_end, to_date)
-    emit (cursor, batch_end)
-    cursor = first_day_of_next_month(cursor)
-```
+- `account_id`
+- `app-timezone-plus-minutes`
+- `application_id`
+- `auth-type: cognito`
+- `authorization: Bearer <token>`
+- `content-type: application/json`
+- `accept: */*`
 
-### Example
+## Calls Monthly Batching
 
-`2026-01-01` to `2026-03-15` produces:
-1. `2026-01-01` → `2026-01-31`
-2. `2026-02-01` → `2026-02-28`
-3. `2026-03-01` → `2026-03-15`
+`split_monthly(from, to)` breaks large call windows into monthly segments.
 
-### Edge Cases
+Example:
 
-- **Leap year**: Feb 2024 → `2024-02-29`
-- **Single day range**: `2026-01-15` to `2026-01-15` → 1 batch
-- **Same month**: `2026-03-05` to `2026-03-20` → 1 batch
+- Input: `2026-01-01` to `2026-03-15`
+- Output batches:
+  - `2026-01-01`..`2026-01-31`
+  - `2026-02-01`..`2026-02-28`
+  - `2026-03-01`..`2026-03-15`
 
 ## Concurrency
 
-All report requests run concurrently:
-- Each report type is a `tokio::spawn` task
-- All call log batches are individual concurrent tasks
-- Results collected via `futures::join_all`
+- Each report or call batch runs in its own `tokio::spawn` task.
+- Completion is coordinated with `join_all`.
+- Partial failures do not block other tasks.
 
-```
-┌─ Tickets request ──────────────────────┐
-├─ Leads request ────────────────────────┤  All concurrent
-├─ Calls batch 1 (Jan) ─────────────────┤
-├─ Calls batch 2 (Feb) ─────────────────┤
-└─ Calls batch 3 (Mar) ─────────────────┘
-```
+## Result Shape
 
-## API Response Shape
+- Non-call reports stored as direct object values under keys.
+- Calls aggregated into a `calls` array.
+- Failed tasks contribute `{"error": "..."}` payloads.
 
-```json
-{
-  "statusCode": 200,
-  "message": "success",
-  "data": {
-    "url": "https://crm.fakeeh.care/crm-files/...",
-    "progress": ["..."]
-  },
-  "error": false
-}
-```
+## URL Extraction
 
-## Output Format
+`extract_urls(results)` scans payloads for `data.url` and returns `(report_key, url)` tuples for downloader usage.
 
-```json
-{
-  "tickets": { "statusCode": 200, "data": { "url": "..." } },
-  "calls": [
-    { "statusCode": 200, "data": { "url": "..." } },
-    { "statusCode": 200, "data": { "url": "..." } }
-  ],
-  "leads": { "statusCode": 200, "data": { "url": "..." } }
-}
-```
+## Test Coverage
 
-Call logs are always an array (one entry per monthly batch).
+Unit tests validate:
 
-## Error Handling
-
-- Per-report errors don't abort other reports
-- Errors stored as: `{"error": "error message"}`
-- Task join errors are logged and skipped
-
-## CSV Download
-
-When `download_csv = true`:
-1. Extract `data.url` from each report response
-2. URL-decode the filename from the URL path
-3. Stream download with `accept-encoding: identity`
-4. Save to current working directory
-5. 60-second timeout per download
+- monthly split correctness,
+- leap-year handling,
+- month-end logic.

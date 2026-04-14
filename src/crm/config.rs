@@ -5,8 +5,6 @@ use serde_json::Value;
 use std::path::Path;
 use tracing::{debug, info};
 
-use crate::interface::cli::CliArgs;
-
 /// All configuration fields — mirrors the JSON config file.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
@@ -134,43 +132,8 @@ impl AppConfig {
         Ok(cfg)
     }
 
-    /// Apply CLI overrides. CLI args take precedence over config values.
-    pub fn apply_cli_overrides(&mut self, args: &CliArgs) {
-        if let Some(ref v) = args.region {
-            self.region = v.clone();
-        }
-        if let Some(ref v) = args.user_pool_id {
-            self.user_pool_id = v.clone();
-        }
-        if let Some(ref v) = args.client_id {
-            self.client_id = v.clone();
-        }
-        if let Some(ref v) = args.username {
-            self.username = v.clone();
-        }
-        if let Some(ref v) = args.password {
-            self.password = v.clone();
-        }
-        if let Some(ref v) = args.email {
-            self.email = v.clone();
-        }
-        if let Some(ref v) = args.from_date {
-            self.from_date = v.clone();
-        }
-        if let Some(ref v) = args.calls_from_date {
-            self.calls_from_date = v.clone();
-        }
-        if let Some(ref v) = args.to_date {
-            self.to_date = v.clone();
-        }
-        if let Some(v) = args.remember_secrets {
-            self.remember_secrets = v;
-        }
-        // --no-verify-ssl flag
-        if args.no_verify_ssl {
-            self.no_verify_ssl = true;
-        }
-
+    /// Finalize runtime-derived fields after loading config.
+    pub fn finalize_runtime_fields(&mut self) {
         // Finalize to_date: if still empty, default to today
         if self.to_date.is_empty() {
             self.to_date = Local::now().format("%Y-%m-%d").to_string();
