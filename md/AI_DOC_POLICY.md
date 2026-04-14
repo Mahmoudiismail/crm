@@ -17,7 +17,9 @@ When a file changes, update docs as follows:
 - `src/crm/*` -> `ARCHITECTURE.md`, `CONFIG.md`, `AUTH_FLOW.md`, `FETCHER.md`, `DOWNLOADER.md`, `OPERATIONS.md`
 - `Cargo.toml` / dependency changes -> `BUILD_AND_RUN.md`, `DOCKER.md`, `APPLICATION_SUMMARY.md`
 - `.github/workflows/*` -> `BUILD_AND_RUN.md`, `OPERATIONS.md`
+- `.devcontainer/*` -> `DOCKER.md`, `BUILD_AND_RUN.md`
 - `Dockerfile*`, scripts -> `DOCKER.md`, `BUILD_AND_RUN.md`
+- `AGENTS.md` -> `README.md`, `AI_DOC_POLICY.md`
 
 ## Rule 3: Command-Level Discipline
 
@@ -44,6 +46,7 @@ Before commit, run a manual checklist:
 
 - [ ] Code changed?
 - [ ] Matching docs updated in `md/`?
+- [ ] `AGENTS.md` read before making agent-authored changes?
 - [ ] Examples still valid?
 - [ ] New config fields documented?
 - [ ] New CLI flags documented?

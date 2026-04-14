@@ -1,6 +1,6 @@
 # Agent Instructions for This Repository
 
-All AI coding agents must follow these rules.
+All AI coding agents must read this file before starting work in this repository and follow these rules.
 
 ## Documentation Is Mandatory
 

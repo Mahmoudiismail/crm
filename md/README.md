@@ -2,24 +2,29 @@
 
 This folder is the full rebuild and operations reference for the CRM Tool codebase.
 
+## Agent Entry Point
+
+All AI coding agents must read repository-root `AGENTS.md` before making changes. That file requires agents to keep this `md/` documentation set updated in the same change as code, config, dependency, or script edits.
+
 ## Read Order
 
-1. `APPLICATION_SUMMARY.md`
-2. `ARCHITECTURE.md`
-3. `BUILD_AND_RUN.md`
-4. `CONFIG.md`
-5. `AUTH_FLOW.md`
-6. `FETCHER.md`
-7. `DOWNLOADER.md`
-8. `SCHEDULER_TRAY.md`
-9. `DOCKER.md`
-10. `OPERATIONS.md`
-11. `AI_DOC_POLICY.md`
+1. `AGENTS.md`
+2. `APPLICATION_SUMMARY.md`
+3. `ARCHITECTURE.md`
+4. `BUILD_AND_RUN.md`
+5. `CONFIG.md`
+6. `AUTH_FLOW.md`
+7. `FETCHER.md`
+8. `DOWNLOADER.md`
+9. `SCHEDULER_TRAY.md`
+10. `DOCKER.md`
+11. `OPERATIONS.md`
+12. `AI_DOC_POLICY.md`
 
 ## Documentation Rules
 
 - Treat these docs as source-controlled system design.
-- Any behavior change in `src/`, runtime scripts, or `Cargo.toml` must update relevant docs in this folder.
+- Any behavior change in `src/`, runtime scripts, `.devcontainer/`, or `Cargo.toml` must update relevant docs in this folder.
 - If docs and code conflict, update docs immediately in the same change.
 
 ## Current Runtime Model

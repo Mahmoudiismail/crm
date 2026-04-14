@@ -40,6 +40,10 @@ CRM CLI arguments:
 
 CRM always performs login when running.
 
+## Devcontainer Workspace
+
+When opened through VS Code dev containers, `.devcontainer/devcontainer.json` attaches to the `dev` compose service and installs the project editor extensions: Rust Analyzer, CodeLLDB, crates, Even Better TOML, and OpenAI ChatGPT. This affects only the developer workspace; build and runtime commands remain the same as the local commands above.
+
 ## Windows Cross-Compile
 
 ```bash

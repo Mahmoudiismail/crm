@@ -10,6 +10,8 @@
 
 ## Dev Container
 
+The VS Code devcontainer configuration lives in `.devcontainer/devcontainer.json` and uses the `dev` service from `docker-compose.yml`. It installs the Rust/editor extension set used by the project, including `rust-lang.rust-analyzer`, `vadimcn.vscode-lldb`, `serayuzgur.crates`, `tamasfe.even-better-toml`, and `openai.chatgpt`.
+
 Start persistent dev environment:
 
 ```bash
