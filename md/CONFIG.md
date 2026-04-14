@@ -38,6 +38,19 @@ Implementation: `src/runner/config.rs`
 - `last_run_at`: last run timestamp
 - `last_status`: last run result message
 
+### Task validation and normalization
+
+When tasks are created/updated through the runner GUI CRUD endpoints:
+
+- `id` is required and must contain only letters, numbers, `-`, `_`
+- `name` is required
+- `next_run_at` must be empty or valid RFC3339
+- for `repetition=repeat`, `frequency_seconds` is clamped to at least `min_task_interval_seconds`
+- `output` is trimmed and empty values are converted to `null`
+- `shell_command.command` must be non-empty
+
+`id` uniqueness is enforced across all tasks. Updates preserve `last_run_at` and `last_status` when these fields are not explicitly provided.
+
 ### Runner config example
 
 ```json

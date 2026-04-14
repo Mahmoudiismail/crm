@@ -103,6 +103,62 @@ async fn handle_command(path: &str, cmd: RunnerCommand, status: &Arc<Mutex<Runne
     }
 }
 
+pub async fn create_task(path: &str, mut task: RunnerTask) -> Result<()> {
+    let mut cfg = RunnerConfig::load(path)?;
+    normalize_and_validate_task(&mut task, &cfg)?;
+
+    if cfg.tasks.iter().any(|t| t.id == task.id) {
+        return Err(anyhow::anyhow!("Task '{}' already exists", task.id));
+    }
+
+    cfg.tasks.push(task);
+    cfg.save(path)?;
+    Ok(())
+}
+
+pub async fn update_task(path: &str, task_id: &str, mut task: RunnerTask) -> Result<()> {
+    let mut cfg = RunnerConfig::load(path)?;
+    let Some(existing_idx) = cfg.tasks.iter().position(|t| t.id == task_id) else {
+        return Err(anyhow::anyhow!("Task '{}' not found", task_id));
+    };
+
+    if task.id.trim().is_empty() {
+        task.id = task_id.to_string();
+    }
+    normalize_and_validate_task(&mut task, &cfg)?;
+
+    if cfg
+        .tasks
+        .iter()
+        .enumerate()
+        .any(|(idx, t)| idx != existing_idx && t.id == task.id)
+    {
+        return Err(anyhow::anyhow!("Task '{}' already exists", task.id));
+    }
+
+    if task.last_run_at.is_empty() {
+        task.last_run_at = cfg.tasks[existing_idx].last_run_at.clone();
+    }
+    if task.last_status.is_empty() {
+        task.last_status = cfg.tasks[existing_idx].last_status.clone();
+    }
+
+    cfg.tasks[existing_idx] = task;
+    cfg.save(path)?;
+    Ok(())
+}
+
+pub async fn delete_task(path: &str, task_id: &str) -> Result<()> {
+    let mut cfg = RunnerConfig::load(path)?;
+    let initial_len = cfg.tasks.len();
+    cfg.tasks.retain(|t| t.id != task_id);
+    if cfg.tasks.len() == initial_len {
+        return Err(anyhow::anyhow!("Task '{}' not found", task_id));
+    }
+    cfg.save(path)?;
+    Ok(())
+}
+
 pub async fn run_due_tasks(path: &str, status: &Arc<Mutex<RunnerStatus>>) -> Result<()> {
     let mut cfg = RunnerConfig::load(path)?;
     let now = Utc::now();
@@ -180,6 +236,63 @@ async fn set_task_enabled(path: &str, task_id: &str, enabled: bool) -> Result<()
         return Ok(());
     }
     Err(anyhow::anyhow!("Task '{}' not found", task_id))
+}
+
+fn normalize_and_validate_task(task: &mut RunnerTask, cfg: &RunnerConfig) -> Result<()> {
+    task.id = task.id.trim().to_string();
+    task.name = task.name.trim().to_string();
+    task.next_run_at = task.next_run_at.trim().to_string();
+
+    if task.id.is_empty() {
+        return Err(anyhow::anyhow!("Task id is required"));
+    }
+    if !is_valid_task_id(&task.id) {
+        return Err(anyhow::anyhow!(
+            "Invalid task id '{}'. Use letters, numbers, '-' or '_'",
+            task.id
+        ));
+    }
+    if task.name.is_empty() {
+        return Err(anyhow::anyhow!("Task name is required"));
+    }
+
+    if !task.next_run_at.is_empty() {
+        DateTime::parse_from_rfc3339(&task.next_run_at)
+            .with_context(|| format!("Invalid next_run_at timestamp '{}'. Use RFC3339", task.next_run_at))?;
+    }
+
+    if matches!(task.repetition, Repetition::Repeat) {
+        task.frequency_seconds = task
+            .frequency_seconds
+            .max(cfg.min_task_interval_seconds.max(1));
+    }
+
+    if let Some(output) = task.output.as_mut() {
+        let trimmed = output.trim().to_string();
+        if trimmed.is_empty() {
+            task.output = None;
+        } else {
+            *output = trimmed;
+        }
+    }
+
+    match &mut task.kind {
+        TaskKind::CrmFetch { .. } => {}
+        TaskKind::ShellCommand { command } => {
+            *command = command.trim().to_string();
+            if command.is_empty() {
+                return Err(anyhow::anyhow!("shell_command requires a non-empty command"));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn is_valid_task_id(value: &str) -> bool {
+    value
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_')
 }
 
 fn update_next_run(task: &mut RunnerTask, now: DateTime<Utc>, min_task_interval_seconds: u64) {

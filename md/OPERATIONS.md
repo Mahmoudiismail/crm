@@ -76,6 +76,18 @@ Check:
 - `last_status` and runner `last_error` for timeout details
 - command correctness under `bash -lc`
 
+### 7) Task create/update fails from GUI
+
+Check:
+
+- task `id` format (letters/numbers/`-`/`_` only)
+- `id` uniqueness (no duplicate IDs)
+- non-empty task `name`
+- valid RFC3339 `next_run_at` when provided
+- non-empty shell command for `shell_command` tasks
+
+Use `GET /tasks` to confirm persisted task state after edits.
+
 ## Safe Recovery Steps
 
 1. Stop app.

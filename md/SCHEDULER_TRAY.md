@@ -53,11 +53,18 @@ This prevents overlap from startup + scheduler + tray actions.
 - `GET /`: HTML dashboard
 - `GET /status`: runner status JSON
 - `GET /tasks`: configured tasks JSON
+- `GET /new-task`: create-task HTML form
+- `GET /edit/<task_id>`: edit-task HTML form
+- `GET /create?...`: create task from query-string fields
+- `GET /update/<task_id>?...`: update task from query-string fields
+- `GET /delete/<task_id>`: delete task
 - `GET /run-all`: trigger run-all
 - `GET /run-tickets`: trigger ad-hoc CRM tickets task
 - `GET /run/<task_id>`: trigger specific configured task
 - `GET /enable/<task_id>`: enable task
 - `GET /disable/<task_id>`: disable task
+
+CRUD operations persist directly to `runner_config.json` and return validation errors immediately when payload values are invalid.
 
 ## Safety Controls
 
