@@ -42,7 +42,7 @@ jobs:
 
       - name: Prepare artifact zip
         shell: pwsh
-        run: Compress-Archive -Path target/release/crm_tool.exe -DestinationPath crm_tool.zip
+        run: Compress-Archive -Path target/release/runner.exe,target/release/crm.exe -DestinationPath crm_windows.zip
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
@@ -51,7 +51,7 @@ jobs:
           name: Release v${{ env.VERSION }}
           draft: false
           prerelease: false
-          files: crm_tool.zip
+          files: crm_windows.zip
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

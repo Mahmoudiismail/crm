@@ -2,7 +2,8 @@
 
 ## Logs
 
-- Primary log file: `<exe_dir>/crm_tool.log`
+- Primary runner log file: `<exe_dir>/runner.log`
+- Primary crm one-shot log file: `<exe_dir>/crm.log`
 - Stdout logs at INFO level.
 
 Key startup messages indicate:
@@ -91,7 +92,7 @@ Use `GET /tasks` to confirm persisted task state after edits.
 ## Safe Recovery Steps
 
 1. Stop app.
-2. Backup `runner_config.json`, `config.json`, and `crm_tool.log`.
+2. Backup `runner_config.json`, `config.json`, `runner.log`, and `crm.log`.
 3. Clear token fields in CRM config (or disable `skip_login` on relevant task).
 4. Restart and validate auth + fetch flow.
 

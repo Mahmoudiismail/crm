@@ -38,10 +38,10 @@ jobs:
 
       - name: Prepare artifact zip
         shell: pwsh
-        run: Compress-Archive -Path target/release/crm_tool.exe -DestinationPath crm_tool.zip
+        run: Compress-Archive -Path target/release/runner.exe,target/release/crm.exe -DestinationPath crm_windows.zip
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: crm_tool_windows
-          path: crm_tool.zip
+          name: crm_windows_binaries
+          path: crm_windows.zip

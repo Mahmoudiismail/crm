@@ -37,7 +37,8 @@ docker compose run --rm build-windows
 
 Expected binary:
 
-- `/workspace/crm_tool.exe`
+- `/workspace/runner.exe`
+- `/workspace/crm.exe`
 
 ## Scripted Build
 

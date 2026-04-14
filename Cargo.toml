@@ -4,10 +4,15 @@ version = "1.1.0"
 edition = "2021"
 authors = ["CRM Tool"]
 description = "Runner + CRM tool with tray scheduler, configurable tasks, and Cognito authentication"
+autobins = false
 
 [[bin]]
-name = "crm_tool"
-path = "src/main.rs"
+name = "runner"
+path = "src/bin/runner.rs"
+
+[[bin]]
+name = "crm"
+path = "src/bin/crm.rs"
 
 [dependencies]
 # Async runtime — only the features we actually use

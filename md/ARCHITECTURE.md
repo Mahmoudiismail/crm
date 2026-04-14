@@ -4,7 +4,10 @@
 
 ```text
 src/
-├── main.rs
+├── lib.rs
+├── bin/
+│   ├── runner.rs
+│   └── crm.rs
 ├── crm/
 │   ├── auth.rs
 │   ├── config.rs
@@ -21,14 +24,24 @@ src/
 
 ## Responsibilities
 
-### `src/main.rs`
+### `src/bin/runner.rs`
 
-- Application startup and shutdown.
+- Runner/tray application startup and shutdown.
 - Single-instance lock.
 - Logging initialization.
 - Tray icon/menu setup and event handling.
 - Starts runner scheduler engine.
 - Starts runner GUI server on configured host/port.
+
+### `src/bin/crm.rs`
+
+- CRM one-shot executable entrypoint.
+- Logging initialization.
+- Executes one full CRM fetch cycle then exits.
+
+### `src/lib.rs`
+
+- Exposes shared modules for both executables.
 
 ### `src/runner/config.rs`
 
@@ -55,6 +68,7 @@ src/
 - `config`: CRM configuration and token persistence.
 - `fetcher`: report API requests and monthly batching.
 - `downloader`: CSV stream download.
+- `mod.rs`: shared `run_once` API used by both `crm` and runner engine tasks.
 
 ## Concurrency Design
 

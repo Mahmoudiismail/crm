@@ -19,10 +19,11 @@ WORKDIR /app
 # Copy manifests first for better layer caching
 COPY Cargo.toml Cargo.lock* ./
 
-# Create a dummy main.rs to pre-build dependencies
-RUN mkdir -p src && \
-    echo 'fn main() { println!("dummy"); }' > src/main.rs && \
-    echo '' > src/lib.rs && \
+# Create dummy lib/bin files to pre-build dependencies
+RUN mkdir -p src/bin && \
+    echo 'pub mod crm; pub mod runner;' > src/lib.rs && \
+    echo 'fn main() { println!("runner dummy"); }' > src/bin/runner.rs && \
+    echo 'fn main() { println!("crm dummy"); }' > src/bin/crm.rs && \
     cargo build --release --target x86_64-pc-windows-gnu 2>/dev/null || true && \
     rm -rf src
 
@@ -37,7 +38,8 @@ FROM debian:bookworm-slim AS output
 
 WORKDIR /output
 
-COPY --from=builder /app/target/x86_64-pc-windows-gnu/release/crm_tool.exe ./crm_tool.exe
+COPY --from=builder /app/target/x86_64-pc-windows-gnu/release/runner.exe ./runner.exe
+COPY --from=builder /app/target/x86_64-pc-windows-gnu/release/crm.exe ./crm.exe
 
 # Default: just list the output
 CMD ["ls", "-la", "/output/"]

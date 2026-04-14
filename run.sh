@@ -2,11 +2,11 @@
 set -euo pipefail
 
 echo "=========================================="
-echo "CRM Tool — Build Windows .exe"
+echo "CRM Tool — Build Windows executables"
 echo "=========================================="
 echo ""
 
 docker compose run --rm build-windows
 
 echo ""
-echo "Done. Binary: ./crm_tool.exe"
+echo "Done. Binaries: ./runner.exe and ./crm.exe"

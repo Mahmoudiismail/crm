@@ -23,10 +23,13 @@ cargo build --release
 ## Run
 
 ```bash
-cargo run
+cargo run --bin runner
+cargo run --bin crm
 ```
 
-At first start, `runner_config.json` is created automatically if missing.
+- `runner` starts tray + scheduler + GUI.
+- `crm` runs one CRM cycle and exits.
+- At first runner start, `runner_config.json` is created automatically if missing.
 
 ## Windows Cross-Compile
 
@@ -37,7 +40,8 @@ cargo build --release --target x86_64-pc-windows-gnu
 
 Output binary:
 
-- `target/x86_64-pc-windows-gnu/release/crm_tool.exe`
+- `target/x86_64-pc-windows-gnu/release/runner.exe`
+- `target/x86_64-pc-windows-gnu/release/crm.exe`
 
 ## Windows-target validation in Linux dev container
 

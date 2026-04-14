@@ -1,6 +1,6 @@
 # Scheduler and Tray Runtime
 
-Primary implementation: `src/main.rs`, `src/runner/engine.rs`, `src/runner/config.rs`, `src/runner/gui.rs`
+Primary implementation: `src/bin/runner.rs`, `src/runner/engine.rs`, `src/runner/config.rs`, `src/runner/gui.rs`
 
 ## Single Instance Guard
 
@@ -24,7 +24,7 @@ Behavior:
 - On `Run All Tasks Now`: trigger all enabled tasks in runner config.
 - On `Run CRM (Tickets Only)`: trigger ad-hoc CRM fetch with report `tickets`.
 - On `Open Runner GUI`: open configured runner GUI URL.
-- On `View Logs`: open `<exe_dir>/crm_tool.log`.
+- On `View Logs`: open `<exe_dir>/runner.log`.
 - On `Exit`: stop event loop.
 
 ## Scheduler Loop

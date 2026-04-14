@@ -29,15 +29,16 @@ services:
     command: >
       bash -c "
         echo '══════════════════════════════════════════'
-        echo ' Building Windows .exe'
+        echo ' Building Windows executables'
         echo '══════════════════════════════════════════'
         cargo build --release --target x86_64-pc-windows-gnu 2>&1
         STATUS=$$?
         if [ $$STATUS -eq 0 ]; then
-          cp target/x86_64-pc-windows-gnu/release/crm_tool.exe /workspace/crm_tool.exe
+          cp target/x86_64-pc-windows-gnu/release/runner.exe /workspace/runner.exe
+          cp target/x86_64-pc-windows-gnu/release/crm.exe /workspace/crm.exe
           echo ''
-          echo '✓ Windows binary: ./crm_tool.exe'
-          ls -lh /workspace/crm_tool.exe
+          echo '✓ Windows binaries: ./runner.exe and ./crm.exe'
+          ls -lh /workspace/runner.exe /workspace/crm.exe
         else
           echo '✗ Build failed'
           exit 1

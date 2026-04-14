@@ -1,13 +1,10 @@
-#![windows_subsystem = "windows"]
-
-mod crm;
-mod runner;
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 use anyhow::Result;
+use crm_tool::runner::config::RunnerConfig;
+use crm_tool::runner::engine::{start_scheduler, RunnerCommand, RunnerHandle};
+use crm_tool::runner::gui::start_gui_server;
 use muda::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem};
-use runner::config::RunnerConfig;
-use runner::engine::{start_scheduler, RunnerCommand, RunnerHandle};
-use runner::gui::start_gui_server;
 use std::time::Duration;
 use tracing::{error, info};
 use tracing_subscriber::filter::LevelFilter;
@@ -25,7 +22,7 @@ async fn main() -> Result<()> {
     let _instance_lock = match std::net::TcpListener::bind("127.0.0.1:14592") {
         Ok(listener) => listener,
         Err(e) => {
-            eprintln!("Application already running (or port in use): {}", e);
+            eprintln!("Runner already running (or port in use): {}", e);
             std::process::exit(0);
         }
     };
@@ -39,7 +36,7 @@ async fn main() -> Result<()> {
     };
 
     info!("==================================================");
-    info!("CRM TOOL - Starting in Runner/Tray Mode");
+    info!("RUNNER - Starting tray scheduler mode");
     info!("==================================================");
 
     let runner_cfg = RunnerConfig::load(RUNNER_CONFIG_PATH)?;
@@ -98,7 +95,7 @@ impl ApplicationHandler for App {
 
         match TrayIconBuilder::new()
             .with_menu(Box::new(menu))
-            .with_tooltip("CRM Tool Runner")
+            .with_tooltip("CRM Runner")
             .with_icon(load_icon())
             .build()
         {
@@ -136,14 +133,14 @@ impl ApplicationHandler for App {
                     let tx = self.runner.command_tx.clone();
                     tokio::spawn(async move {
                         let _ = tx
-                            .send(RunnerCommand::RunAdhocCrm(crate::crm::types::ReportType::Tickets))
+                            .send(RunnerCommand::RunAdhocCrm(crm_tool::crm::types::ReportType::Tickets))
                             .await;
                     });
                 } else if &event.id == logs_id {
                     info!("Opening logs file.");
                     if let Ok(exe_path) = std::env::current_exe() {
                         if let Some(exe_dir) = exe_path.parent() {
-                            let log_path = exe_dir.join("crm_tool.log");
+                            let log_path = exe_dir.join("runner.log");
                             let _ = open::that(log_path);
                         }
                     }
@@ -177,7 +174,7 @@ fn setup_logging() -> Result<tracing_appender::non_blocking::WorkerGuard> {
         .parent()
         .unwrap_or_else(|| std::path::Path::new("."));
 
-    let file_appender = tracing_appender::rolling::never(exe_dir, "crm_tool.log");
+    let file_appender = tracing_appender::rolling::never(exe_dir, "runner.log");
     let (non_blocking_file, guard) = tracing_appender::non_blocking(file_appender);
 
     let file_layer = fmt::layer()

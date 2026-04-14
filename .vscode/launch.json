@@ -2,38 +2,21 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug CRM Tool",
+      "name": "Debug Runner (Windows target)",
       "type": "lldb",
       "request": "launch",
-      "program": "${workspaceFolder}/target/x86_64-pc-windows-gnu/debug/crm_tool.exe",
-      "args": ["--report", "none"],
+      "program": "${workspaceFolder}/target/x86_64-pc-windows-gnu/debug/runner.exe",
+      "args": [],
       "cwd": "${workspaceFolder}",
       "preLaunchTask": "cargo build debug (windows)",
       "env": {}
     },
     {
-      "name": "Debug (skip login, all reports)",
+      "name": "Debug CRM One-shot (Windows target)",
       "type": "lldb",
       "request": "launch",
-      "program": "${workspaceFolder}/target/x86_64-pc-windows-gnu/debug/crm_tool.exe",
-      "args": [
-        "--config", "config.json",
-        "--report", "all",
-        "--skip-login"
-      ],
-      "cwd": "${workspaceFolder}",
-      "preLaunchTask": "cargo build debug (windows)",
-      "env": {}
-    },
-    {
-      "name": "Debug (skip login, no report)",
-      "type": "lldb",
-      "request": "launch",
-      "program": "${workspaceFolder}/target/x86_64-pc-windows-gnu/debug/crm_tool.exe",
-      "args": [
-        "--report", "none",
-        "--skip-login"
-      ],
+      "program": "${workspaceFolder}/target/x86_64-pc-windows-gnu/debug/crm.exe",
+      "args": [],
       "cwd": "${workspaceFolder}",
       "preLaunchTask": "cargo build debug (windows)",
       "env": {}

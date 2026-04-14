@@ -24,7 +24,9 @@ This folder is the full rebuild and operations reference for the CRM Tool codeba
 
 ## Current Runtime Model
 
-- Runner orchestration lives in `src/main.rs` + `src/runner/*`.
+- Runner orchestration lives in `src/bin/runner.rs` + `src/runner/*`.
+- CRM one-shot execution entrypoint lives in `src/bin/crm.rs`.
+- Shared modules are exported from `src/lib.rs`.
 - CRM domain logic lives in `src/crm/*` (via module paths to current implementation files).
 - No command-line runtime arguments are used for normal operation.
 - All runnable tasks are stored in `runner_config.json`.
