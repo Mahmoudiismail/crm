@@ -1,12 +1,25 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
+use chrono::Utc;
 use std::collections::HashMap;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tracing::{error, info};
 
-use crate::runner::config::{Repetition, ReportType, RunnerConfig, RunnerTask, TaskKind};
+use crate::runner::config::{
+    human_datetime, next_daily_run_after, parse_rfc3339_utc, Repetition, ReportType, RunnerConfig,
+    RunnerTask, ShellCommandGroup, ShellCommandMode, ShellCommandSpec, TaskKind, TaskSchedule,
+};
 use crate::runner::engine::{create_task, delete_task, update_task};
 use crate::runner::engine::{RunnerCommand, RunnerHandle};
+
+const TAILWIND_CDN: &str =
+    "https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css";
+
+struct HttpRequest {
+    method: String,
+    path: String,
+    body: String,
+}
 
 pub fn start_gui_server(handle: RunnerHandle) {
     tokio::spawn(async move {
@@ -27,25 +40,18 @@ async fn run_server(handle: RunnerHandle) -> Result<()> {
         let handle_clone = handle.clone();
 
         tokio::spawn(async move {
-            let mut buf = vec![0u8; 8192];
-            let read = match socket.read(&mut buf).await {
-                Ok(n) => n,
-                Err(_) => return,
+            let request = match read_http_request(&mut socket).await {
+                Ok(Some(request)) => request,
+                Ok(None) | Err(_) => return,
             };
-            if read == 0 {
-                return;
-            }
 
-            let req = String::from_utf8_lossy(&buf[..read]);
-            let mut lines = req.lines();
-            let first = lines.next().unwrap_or_default();
-            let mut parts = first.split_whitespace();
-            let method = parts.next().unwrap_or_default();
-            let path = parts.next().unwrap_or("/");
-
-            let (status, content_type, body) = match route_request(method, path, &handle_clone).await {
+            let (status, content_type, body) = match route_request(&request, &handle_clone).await {
                 Ok(v) => v,
-                Err(e) => (500, "text/plain", format!("error: {}", e)),
+                Err(e) => (
+                    500,
+                    "text/html; charset=utf-8",
+                    render_error_page("Request failed", &e.to_string()),
+                ),
             };
 
             let response = format!(
@@ -62,142 +68,557 @@ async fn run_server(handle: RunnerHandle) -> Result<()> {
     }
 }
 
-async fn route_request(method: &str, path: &str, handle: &RunnerHandle) -> Result<(u16, &'static str, String)> {
-    let (route_path, query_string) = split_path_and_query(path);
-    let query = parse_query_string(query_string);
-
-    if method == "GET" && route_path == "/" {
-        let cfg = RunnerConfig::load(&handle.runner_config_path)?;
-        let status = handle.status.lock().await.clone();
-
-        let mut rows = String::new();
-        for task in cfg.tasks {
-            let repetition_label = match task.repetition {
-                crate::runner::config::Repetition::Once => "once",
-                crate::runner::config::Repetition::Repeat => "repeat",
-            };
-            rows.push_str(&format!(
-                "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td><a href='/run/{}'>Run</a> | <a href='/enable/{}'>Enable</a> | <a href='/disable/{}'>Disable</a> | <a href='/edit/{}'>Edit</a> | <a href='/delete/{}'>Delete</a></td></tr>",
-                escape_html(&task.id),
-                escape_html(&task.name),
-                task.enabled,
-                repetition_label,
-                task.frequency_seconds,
-                escape_html(&task.next_run_at),
-                escape_html(&task.last_status),
-                escape_html(&task.id),
-                escape_html(&task.id),
-                escape_html(&task.id),
-                escape_html(&task.id),
-                escape_html(&task.id)
-            ));
-        }
-
-        let html = format!(
-            "<!doctype html><html><head><meta charset='utf-8'><title>Runner GUI</title></head><body><h1>Runner GUI</h1><p>Running: {}</p><p>Last task: {}</p><p>Last run at: {}</p><p>Last error: {}</p><p><a href='/run-all'>Run All Now</a> | <a href='/run-tickets'>Run CRM Tickets</a> | <a href='/new-task'>New Task</a> | <a href='/status'>JSON Status</a> | <a href='/tasks'>JSON Tasks</a></p><table border='1' cellpadding='6'><tr><th>ID</th><th>Name</th><th>Enabled</th><th>Repetition</th><th>Frequency(s)</th><th>Next Run</th><th>Last Status</th><th>Action</th></tr>{}</table></body></html>",
-            status.currently_running,
-            escape_html(&status.last_task_id),
-            escape_html(&status.last_run_at),
-            escape_html(&status.last_error),
-            rows
-        );
-        return Ok((200, "text/html; charset=utf-8", html));
+async fn read_http_request(socket: &mut tokio::net::TcpStream) -> Result<Option<HttpRequest>> {
+    let mut buf = vec![0u8; 8192];
+    let mut read = socket.read(&mut buf).await?;
+    if read == 0 {
+        return Ok(None);
     }
 
-    if method == "GET" && route_path == "/status" {
+    let mut content_length = header_content_length(&buf[..read]).unwrap_or(0);
+    while body_len(&buf[..read]) < content_length {
+        if read == buf.len() {
+            buf.resize(buf.len() * 2, 0);
+        }
+        let n = socket.read(&mut buf[read..]).await?;
+        if n == 0 {
+            break;
+        }
+        read += n;
+        content_length = header_content_length(&buf[..read]).unwrap_or(content_length);
+    }
+
+    let req = String::from_utf8_lossy(&buf[..read]);
+    let (headers, body) = req.split_once("\r\n\r\n").unwrap_or((req.as_ref(), ""));
+    let first = headers.lines().next().unwrap_or_default();
+    let mut parts = first.split_whitespace();
+    let method = parts.next().unwrap_or_default().to_string();
+    let path = parts.next().unwrap_or("/").to_string();
+
+    Ok(Some(HttpRequest {
+        method,
+        path,
+        body: body.to_string(),
+    }))
+}
+
+fn header_content_length(bytes: &[u8]) -> Option<usize> {
+    let req = String::from_utf8_lossy(bytes);
+    req.lines().find_map(|line| {
+        let (name, value) = line.split_once(':')?;
+        if name.eq_ignore_ascii_case("content-length") {
+            value.trim().parse().ok()
+        } else {
+            None
+        }
+    })
+}
+
+fn body_len(bytes: &[u8]) -> usize {
+    bytes
+        .windows(4)
+        .position(|window| window == b"\r\n\r\n")
+        .map(|idx| bytes.len().saturating_sub(idx + 4))
+        .unwrap_or(0)
+}
+
+async fn route_request(
+    request: &HttpRequest,
+    handle: &RunnerHandle,
+) -> Result<(u16, &'static str, String)> {
+    let (route_path, query_string) = split_path_and_query(&request.path);
+    let query = parse_query_string(query_string);
+
+    if request.method == "GET" && route_path == "/" {
+        let cfg = RunnerConfig::load(&handle.runner_config_path)?;
+        let status = handle.status.lock().await.clone();
+        return Ok((
+            200,
+            "text/html; charset=utf-8",
+            render_dashboard(&cfg, &status),
+        ));
+    }
+
+    if request.method == "GET" && route_path == "/status" {
         let status = handle.status.lock().await.clone();
         let body = serde_json::to_string_pretty(&status)?;
         return Ok((200, "application/json", body));
     }
 
-    if method == "GET" && route_path == "/tasks" {
+    if request.method == "GET" && route_path == "/tasks" {
         let cfg = RunnerConfig::load(&handle.runner_config_path)?;
         let body = serde_json::to_string_pretty(&cfg.tasks)?;
         return Ok((200, "application/json", body));
     }
 
-    if method == "GET" && route_path == "/new-task" {
-        let html = render_task_form("Create Task", "/create", "Create", None);
+    if request.method == "GET" && route_path == "/new-task" {
+        let html = render_task_form("Create Task", "/create", "Create", None, None);
         return Ok((200, "text/html; charset=utf-8", html));
     }
 
-    if method == "GET" && route_path.starts_with("/edit/") {
+    if request.method == "GET" && route_path.starts_with("/edit/") {
         let task_id = route_path.trim_start_matches("/edit/");
         let cfg = RunnerConfig::load(&handle.runner_config_path)?;
         if let Some(task) = cfg.tasks.iter().find(|t| t.id == task_id) {
             let action = format!("/update/{}", escape_html(task_id));
-            let html = render_task_form("Edit Task", &action, "Update", Some(task));
+            let html = render_task_form("Edit Task", &action, "Update", Some(task), None);
             return Ok((200, "text/html; charset=utf-8", html));
         }
-        return Ok((404, "text/plain", format!("Task '{}' not found", task_id)));
+        return Ok((
+            404,
+            "text/html; charset=utf-8",
+            render_error_page("Task not found", task_id),
+        ));
     }
 
-    if method == "GET" && route_path == "/create" {
-        let task = build_task_from_query(&query, None)?;
+    if request.method == "POST" && route_path == "/create" {
+        let values = parse_query_string(&request.body);
+        let task = build_task_from_values(&values, None)?;
         create_task(&handle.runner_config_path, task).await?;
-        return Ok((200, "text/plain", "Task created. Open / to view.".to_string()));
+        return Ok((
+            200,
+            "text/html; charset=utf-8",
+            render_notice_page("Task created"),
+        ));
     }
 
-    if method == "GET" && route_path.starts_with("/update/") {
+    if request.method == "POST" && route_path.starts_with("/update/") {
         let task_id = route_path.trim_start_matches("/update/").to_string();
-        let task = build_task_from_query(&query, Some(task_id.clone()))?;
+        let values = parse_query_string(&request.body);
+        let task = build_task_from_values(&values, Some(task_id.clone()))?;
         update_task(&handle.runner_config_path, &task_id, task).await?;
-        return Ok((200, "text/plain", format!("Task '{}' updated. Open / to view.", task_id)));
+        return Ok((
+            200,
+            "text/html; charset=utf-8",
+            render_notice_page("Task updated"),
+        ));
     }
 
-    if method == "GET" && route_path.starts_with("/delete/") {
+    if request.method == "GET" && route_path == "/create" {
+        let task = build_task_from_values(&query, None)?;
+        create_task(&handle.runner_config_path, task).await?;
+        return Ok((
+            200,
+            "text/html; charset=utf-8",
+            render_notice_page("Task created"),
+        ));
+    }
+
+    if request.method == "GET" && route_path.starts_with("/update/") {
+        let task_id = route_path.trim_start_matches("/update/").to_string();
+        let task = build_task_from_values(&query, Some(task_id.clone()))?;
+        update_task(&handle.runner_config_path, &task_id, task).await?;
+        return Ok((
+            200,
+            "text/html; charset=utf-8",
+            render_notice_page("Task updated"),
+        ));
+    }
+
+    if request.method == "GET" && route_path.starts_with("/delete/") {
         let task_id = route_path.trim_start_matches("/delete/").to_string();
         delete_task(&handle.runner_config_path, &task_id).await?;
-        return Ok((200, "text/plain", format!("Task '{}' deleted. Open / to view.", task_id)));
+        return Ok((
+            200,
+            "text/html; charset=utf-8",
+            render_notice_page("Task deleted"),
+        ));
     }
 
-    if method == "GET" && route_path == "/run-all" {
+    if request.method == "GET" && route_path == "/run-all" {
         handle.command_tx.send(RunnerCommand::RunAllNow).await?;
-        return Ok((200, "text/plain", "Triggered run-all".to_string()));
+        return Ok((
+            200,
+            "text/html; charset=utf-8",
+            render_notice_page("Run-all triggered"),
+        ));
     }
 
-    if method == "GET" && route_path == "/run-tickets" {
+    if request.method == "GET" && route_path == "/run-tickets" {
         handle
             .command_tx
             .send(RunnerCommand::RunAdhocCrm(ReportType::Tickets))
             .await?;
-        return Ok((200, "text/plain", "Triggered CRM tickets run".to_string()));
+        return Ok((
+            200,
+            "text/html; charset=utf-8",
+            render_notice_page("CRM tickets run triggered"),
+        ));
     }
 
-    if method == "GET" && route_path.starts_with("/run/") {
+    if request.method == "GET" && route_path.starts_with("/run/") {
         let task_id = route_path.trim_start_matches("/run/").to_string();
         handle
             .command_tx
             .send(RunnerCommand::RunTaskNow(task_id.clone()))
             .await?;
-        return Ok((200, "text/plain", format!("Triggered task {}", task_id)));
+        return Ok((
+            200,
+            "text/html; charset=utf-8",
+            render_notice_page("Task triggered"),
+        ));
     }
 
-    if method == "GET" && route_path.starts_with("/enable/") {
+    if request.method == "GET" && route_path.starts_with("/enable/") {
         let task_id = route_path.trim_start_matches("/enable/").to_string();
         handle
             .command_tx
             .send(RunnerCommand::SetTaskEnabled {
-                task_id: task_id.clone(),
+                task_id,
                 enabled: true,
             })
             .await?;
-        return Ok((200, "text/plain", format!("Enabled task {}", task_id)));
+        return Ok((
+            200,
+            "text/html; charset=utf-8",
+            render_notice_page("Task enabled"),
+        ));
     }
 
-    if method == "GET" && route_path.starts_with("/disable/") {
+    if request.method == "GET" && route_path.starts_with("/disable/") {
         let task_id = route_path.trim_start_matches("/disable/").to_string();
         handle
             .command_tx
             .send(RunnerCommand::SetTaskEnabled {
-                task_id: task_id.clone(),
+                task_id,
                 enabled: false,
             })
             .await?;
-        return Ok((200, "text/plain", format!("Disabled task {}", task_id)));
+        return Ok((
+            200,
+            "text/html; charset=utf-8",
+            render_notice_page("Task disabled"),
+        ));
     }
 
-    Ok((404, "text/plain", "Not found".to_string()))
+    Ok((
+        404,
+        "text/html; charset=utf-8",
+        render_error_page("Not found", route_path),
+    ))
+}
+
+fn render_dashboard(cfg: &RunnerConfig, status: &crate::runner::engine::RunnerStatus) -> String {
+    let rows = cfg
+        .tasks
+        .iter()
+        .map(render_task_row)
+        .collect::<Vec<_>>()
+        .join("");
+
+    html_page(
+        "Runner GUI",
+        &format!(
+            "<div class='space-y-6'>\
+                <div class='flex flex-col md:flex-row md:items-end md:justify-between gap-4'>\
+                    <div><p class='text-sm font-semibold text-emerald-700'>Runner</p><h1 class='text-3xl font-bold text-gray-900'>Task Dashboard</h1><p class='text-gray-600 mt-2'>Schedule CRM work and shell command groups from one local control panel.</p></div>\
+                    <div class='flex flex-wrap gap-2'>\
+                        <a class='rounded bg-gray-900 text-white px-4 py-2 text-sm font-semibold' href='/run-all'>Run All Now</a>\
+                        <a class='rounded border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-800' href='/run-tickets'>Run CRM Tickets</a>\
+                        <a class='rounded bg-emerald-600 text-white px-4 py-2 text-sm font-semibold' href='/new-task'>New Task</a>\
+                    </div>\
+                </div>\
+                <div class='grid md:grid-cols-4 gap-4'>\
+                    {}\
+                </div>\
+                <div class='bg-white border border-gray-200 rounded shadow-sm overflow-hidden'>\
+                    <div class='px-5 py-4 border-b border-gray-200 flex items-center justify-between'>\
+                        <h2 class='text-lg font-semibold text-gray-900'>Tasks</h2>\
+                        <div class='text-sm'><a class='text-emerald-700 font-semibold' href='/status'>JSON Status</a><span class='text-gray-300 mx-2'>|</span><a class='text-emerald-700 font-semibold' href='/tasks'>JSON Tasks</a></div>\
+                    </div>\
+                    <div class='overflow-x-auto'>\
+                        <table class='min-w-full divide-y divide-gray-200 text-sm'>\
+                            <thead class='bg-gray-50'><tr>\
+                                <th class='px-4 py-3 text-left font-semibold text-gray-700'>Task</th>\
+                                <th class='px-4 py-3 text-left font-semibold text-gray-700'>Schedule</th>\
+                                <th class='px-4 py-3 text-left font-semibold text-gray-700'>Next Run</th>\
+                                <th class='px-4 py-3 text-left font-semibold text-gray-700'>Last Run</th>\
+                                <th class='px-4 py-3 text-left font-semibold text-gray-700'>Status</th>\
+                                <th class='px-4 py-3 text-left font-semibold text-gray-700'>Actions</th>\
+                            </tr></thead>\
+                            <tbody class='bg-white divide-y divide-gray-100'>{}</tbody>\
+                        </table>\
+                    </div>\
+                </div>\
+            </div>",
+            render_status_cards(status, cfg.tasks.len()),
+            rows
+        ),
+    )
+}
+
+fn render_status_cards(status: &crate::runner::engine::RunnerStatus, task_count: usize) -> String {
+    let running = if status.currently_running {
+        "Running"
+    } else {
+        "Idle"
+    };
+    let last_task = if status.last_task_id.is_empty() {
+        "None".to_string()
+    } else {
+        escape_html(&status.last_task_id)
+    };
+    let last_run = if status.last_run_at.is_empty() {
+        "Never".to_string()
+    } else {
+        human_datetime(&status.last_run_at)
+    };
+    let last_error = if status.last_error.is_empty() {
+        "No current error".to_string()
+    } else {
+        escape_html(&status.last_error)
+    };
+
+    format!(
+        "{}{}{}{}",
+        metric_card("State", running),
+        metric_card("Tasks", &task_count.to_string()),
+        metric_card("Last Task", &last_task),
+        metric_card(
+            "Last Run",
+            &format!(
+                "{}<span class='block text-xs text-gray-500 mt-1'>{}</span>",
+                last_run, last_error
+            )
+        )
+    )
+}
+
+fn metric_card(label: &str, value: &str) -> String {
+    format!(
+        "<div class='bg-white border border-gray-200 rounded shadow-sm p-4'><p class='text-xs uppercase tracking-wide text-gray-500 font-semibold'>{}</p><p class='mt-2 text-lg font-semibold text-gray-900 break-words'>{}</p></div>",
+        escape_html(label),
+        value
+    )
+}
+
+fn render_task_row(task: &RunnerTask) -> String {
+    let enabled_badge = if task.enabled {
+        "<span class='inline-flex rounded bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-800'>Enabled</span>"
+    } else {
+        "<span class='inline-flex rounded bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-700'>Disabled</span>"
+    };
+    let kind = match &task.kind {
+        TaskKind::CrmFetch { report } => format!("CRM {}", report.as_arg()),
+        TaskKind::ShellCommand { groups, command } => {
+            let group_count = if groups.is_empty() && !command.is_empty() {
+                1
+            } else {
+                groups.len()
+            };
+            format!(
+                "Shell, {} group{}",
+                group_count,
+                if group_count == 1 { "" } else { "s" }
+            )
+        }
+    };
+    let last_run = if task.last_run_at.is_empty() {
+        "Never".to_string()
+    } else {
+        human_datetime(&task.last_run_at)
+    };
+    let last_status = if task.last_status.is_empty() {
+        "No result yet".to_string()
+    } else {
+        escape_html(&task.last_status)
+    };
+    let id = escape_html(&task.id);
+
+    format!(
+        "<tr>\
+            <td class='px-4 py-4 align-top'><div class='font-semibold text-gray-900'>{}</div><div class='text-xs text-gray-500 mt-1'>{}</div><div class='mt-2'>{}</div></td>\
+            <td class='px-4 py-4 align-top text-gray-700'>{}</td>\
+            <td class='px-4 py-4 align-top text-gray-700'>{}</td>\
+            <td class='px-4 py-4 align-top text-gray-700'>{}</td>\
+            <td class='px-4 py-4 align-top text-gray-700 max-w-xs break-words'>{}</td>\
+            <td class='px-4 py-4 align-top'><div class='flex flex-wrap gap-2'>\
+                <a class='rounded border border-gray-300 px-3 py-1 font-semibold text-gray-800' href='/run/{}'>Run</a>\
+                <a class='rounded border border-gray-300 px-3 py-1 font-semibold text-gray-800' href='/enable/{}'>Enable</a>\
+                <a class='rounded border border-gray-300 px-3 py-1 font-semibold text-gray-800' href='/disable/{}'>Disable</a>\
+                <a class='rounded border border-gray-300 px-3 py-1 font-semibold text-gray-800' href='/edit/{}'>Edit</a>\
+                <a class='rounded border border-red-200 px-3 py-1 font-semibold text-red-700' href='/delete/{}'>Delete</a>\
+            </div></td>\
+        </tr>",
+        escape_html(&task.name),
+        id,
+        enabled_badge,
+        escape_html(&format!("{} - {}", kind, task.schedule_summary())),
+        escape_html(&task.next_run_summary()),
+        escape_html(&last_run),
+        last_status,
+        id,
+        id,
+        id,
+        id,
+        id
+    )
+}
+
+fn render_task_form(
+    title: &str,
+    action: &str,
+    submit_label: &str,
+    task: Option<&RunnerTask>,
+    error: Option<&str>,
+) -> String {
+    let id = task.map(|t| t.id.as_str()).unwrap_or_default();
+    let name = task.map(|t| t.name.as_str()).unwrap_or_default();
+    let enabled = task.map(|t| t.enabled).unwrap_or(true);
+    let schedule_text = task.map(schedules_to_text).unwrap_or_default();
+
+    let (task_type, report, command_text) = match task.map(|t| &t.kind) {
+        Some(TaskKind::ShellCommand { command, groups }) => (
+            "shell_command",
+            "all",
+            shell_groups_to_text(command, groups),
+        ),
+        Some(TaskKind::CrmFetch { report }) => (
+            "crm_fetch",
+            match report {
+                ReportType::All => "all",
+                ReportType::Tickets => "tickets",
+                ReportType::Calls => "calls",
+                ReportType::Leads => "leads",
+                ReportType::None => "none",
+            },
+            String::new(),
+        ),
+        None => ("crm_fetch", "all", String::new()),
+    };
+
+    let error_html = error
+        .map(|message| {
+            format!(
+                "<div class='rounded border border-red-200 bg-red-50 px-4 py-3 text-red-800 text-sm'>{}</div>",
+                escape_html(message)
+            )
+        })
+        .unwrap_or_default();
+
+    html_page(
+        title,
+        &format!(
+            "<div class='max-w-4xl mx-auto space-y-5'>\
+                <div><a class='text-sm font-semibold text-emerald-700' href='/'>Back to dashboard</a><h1 class='text-3xl font-bold text-gray-900 mt-3'>{}</h1></div>\
+                {}\
+                <form class='bg-white border border-gray-200 rounded shadow-sm p-5 space-y-5' method='post' action='{}'>\
+                    <div class='grid md:grid-cols-2 gap-4'>\
+                        {}\
+                        {}\
+                    </div>\
+                    <label class='flex items-center gap-2 text-sm font-semibold text-gray-800'><input type='checkbox' name='enabled' value='on' {}> Enabled</label>\
+                    <div class='grid md:grid-cols-2 gap-4'>\
+                        {}\
+                        {}\
+                    </div>\
+                    {}\
+                    {}\
+                    <button class='rounded bg-emerald-600 text-white px-4 py-2 text-sm font-semibold' type='submit'>{}</button>\
+                </form>\
+            </div>",
+            escape_html(title),
+            error_html,
+            action,
+            input_field("ID", "id", id),
+            input_field("Name", "name", name),
+            if enabled { "checked" } else { "" },
+            select_task_type(task_type),
+            select_report(report),
+            textarea_field(
+                "Schedules",
+                "schedules",
+                &schedule_text,
+                "Use lines like: interval: every 1h, daily: 09:00, 13:00, or once: 2026-04-15T09:30:00-05:00."
+            ),
+            textarea_field(
+                "Shell Commands",
+                "commands",
+                &command_text,
+                "Use @group Name sequential|parallel, then run: command or continue: command."
+            ),
+            escape_html(submit_label)
+        ),
+    )
+}
+
+fn input_field(label: &str, name: &str, value: &str) -> String {
+    format!(
+        "<label class='block'><span class='text-sm font-semibold text-gray-800'>{}</span><input class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' type='text' name='{}' value='{}'></label>",
+        escape_html(label),
+        escape_html(name),
+        escape_html(value)
+    )
+}
+
+fn textarea_field(label: &str, name: &str, value: &str, help: &str) -> String {
+    format!(
+        "<label class='block'><span class='text-sm font-semibold text-gray-800'>{}</span><textarea class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm font-mono h-40' name='{}'>{}</textarea><span class='block mt-1 text-xs text-gray-500'>{}</span></label>",
+        escape_html(label),
+        escape_html(name),
+        escape_html(value),
+        escape_html(help)
+    )
+}
+
+fn select_task_type(value: &str) -> String {
+    format!(
+        "<label class='block'><span class='text-sm font-semibold text-gray-800'>Task Type</span><select class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' name='task_type'><option value='crm_fetch' {}>CRM Fetch</option><option value='shell_command' {}>Shell Command</option></select></label>",
+        if value == "crm_fetch" { "selected" } else { "" },
+        if value == "shell_command" { "selected" } else { "" }
+    )
+}
+
+fn select_report(value: &str) -> String {
+    let option = |raw: &str, label: &str| {
+        format!(
+            "<option value='{}' {}>{}</option>",
+            raw,
+            if value == raw { "selected" } else { "" },
+            label
+        )
+    };
+    format!(
+        "<label class='block'><span class='text-sm font-semibold text-gray-800'>CRM Report</span><select class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' name='report'>{}</select></label>",
+        [
+            option("all", "All"),
+            option("tickets", "Tickets"),
+            option("calls", "Calls"),
+            option("leads", "Leads"),
+            option("none", "None"),
+        ]
+        .join("")
+    )
+}
+
+fn html_page(title: &str, content: &str) -> String {
+    format!(
+        "<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>{}</title><link rel='stylesheet' href='{}'></head><body class='bg-gray-50 text-gray-900'><main class='max-w-7xl mx-auto px-4 py-8'>{}</main></body></html>",
+        escape_html(title),
+        TAILWIND_CDN,
+        content
+    )
+}
+
+fn render_notice_page(message: &str) -> String {
+    html_page(
+        message,
+        &format!(
+            "<div class='max-w-xl mx-auto bg-white border border-gray-200 rounded shadow-sm p-6'><h1 class='text-2xl font-bold text-gray-900'>{}</h1><p class='mt-4'><a class='rounded bg-gray-900 text-white px-4 py-2 text-sm font-semibold' href='/'>Open dashboard</a></p></div>",
+            escape_html(message)
+        ),
+    )
+}
+
+fn render_error_page(title: &str, message: &str) -> String {
+    html_page(
+        title,
+        &format!(
+            "<div class='max-w-xl mx-auto bg-white border border-red-200 rounded shadow-sm p-6'><h1 class='text-2xl font-bold text-red-800'>{}</h1><p class='mt-3 text-gray-700 break-words'>{}</p><p class='mt-4'><a class='rounded bg-gray-900 text-white px-4 py-2 text-sm font-semibold' href='/'>Open dashboard</a></p></div>",
+            escape_html(title),
+            escape_html(message)
+        ),
+    )
 }
 
 fn split_path_and_query(path: &str) -> (&str, &str) {
@@ -256,12 +677,7 @@ fn url_decode(value: &str) -> String {
 fn parse_checkbox(values: &HashMap<String, String>, key: &str) -> bool {
     values
         .get(key)
-        .map(|v| {
-            matches!(
-                v.to_ascii_lowercase().as_str(),
-                "1" | "true" | "yes" | "on"
-            )
-        })
+        .map(|v| matches!(v.to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
         .unwrap_or(false)
 }
 
@@ -275,7 +691,10 @@ fn parse_report_type(raw: Option<&String>) -> ReportType {
     }
 }
 
-fn build_task_from_query(values: &HashMap<String, String>, fallback_id: Option<String>) -> Result<RunnerTask> {
+fn build_task_from_values(
+    values: &HashMap<String, String>,
+    fallback_id: Option<String>,
+) -> Result<RunnerTask> {
     let id = values
         .get("id")
         .map(|v| v.trim().to_string())
@@ -288,20 +707,16 @@ fn build_task_from_query(values: &HashMap<String, String>, fallback_id: Option<S
         .map(|v| v.trim().to_string())
         .unwrap_or_default();
 
-    let repetition = match values.get("repetition").map(|v| v.to_ascii_lowercase()) {
-        Some(v) if v == "repeat" => Repetition::Repeat,
-        _ => Repetition::Once,
-    };
-
-    let frequency_seconds = values
-        .get("frequency_seconds")
-        .and_then(|v| v.parse::<u64>().ok())
-        .unwrap_or(3600);
-
-    let next_run_at = values
-        .get("next_run_at")
-        .map(|v| v.trim().to_string())
+    let schedules = values
+        .get("schedules")
+        .map(|value| parse_schedules_text(value))
+        .transpose()?
         .unwrap_or_default();
+    let (repetition, frequency_seconds, next_run_at) = if values.contains_key("schedules") {
+        legacy_fields_from_schedules(&schedules)
+    } else {
+        legacy_fields_from_values(values)
+    };
 
     let task_type = values
         .get("task_type")
@@ -310,7 +725,13 @@ fn build_task_from_query(values: &HashMap<String, String>, fallback_id: Option<S
 
     let kind = if task_type == "shell_command" {
         TaskKind::ShellCommand {
-            command: values.get("command").cloned().unwrap_or_default(),
+            command: String::new(),
+            groups: parse_shell_groups_text(
+                values
+                    .get("commands")
+                    .map(String::as_str)
+                    .unwrap_or_default(),
+            )?,
         }
     } else {
         TaskKind::CrmFetch {
@@ -325,60 +746,297 @@ fn build_task_from_query(values: &HashMap<String, String>, fallback_id: Option<S
         repetition,
         frequency_seconds,
         next_run_at,
+        schedules,
         kind,
         last_run_at: String::new(),
         last_status: String::new(),
     })
 }
 
-fn render_task_form(title: &str, action: &str, submit_label: &str, task: Option<&RunnerTask>) -> String {
-    let id = task.map(|t| t.id.as_str()).unwrap_or_default();
-    let name = task.map(|t| t.name.as_str()).unwrap_or_default();
-    let enabled = task.map(|t| t.enabled).unwrap_or(true);
-    let repetition = task.map(|t| &t.repetition).unwrap_or(&Repetition::Once);
-    let frequency_seconds = task
-        .map(|t| t.frequency_seconds.to_string())
-        .unwrap_or_else(|| "3600".to_string());
-    let next_run_at = task.map(|t| t.next_run_at.as_str()).unwrap_or_default();
+fn legacy_fields_from_schedules(schedules: &[TaskSchedule]) -> (Repetition, u64, String) {
+    if let Some(schedule) = schedules.first() {
+        match schedule {
+            TaskSchedule::Interval {
+                every_seconds,
+                next_run_at,
+                ..
+            } => (Repetition::Repeat, *every_seconds, next_run_at.clone()),
+            TaskSchedule::Once { next_run_at, .. } => (Repetition::Once, 0, next_run_at.clone()),
+            TaskSchedule::DailyTimes { next_run_at, .. } => {
+                (Repetition::Repeat, 24 * 60 * 60, next_run_at.clone())
+            }
+        }
+    } else {
+        (Repetition::Once, 3600, String::new())
+    }
+}
 
-    let (task_type, report, command) = match task.map(|t| &t.kind) {
-        Some(TaskKind::ShellCommand { command }) => ("shell_command", "all", command.as_str()),
-        Some(TaskKind::CrmFetch { report }) => (
-            "crm_fetch",
-            match report {
-                ReportType::All => "all",
-                ReportType::Tickets => "tickets",
-                ReportType::Calls => "calls",
-                ReportType::Leads => "leads",
-                ReportType::None => "none",
-            },
-            "",
-        ),
-        None => ("crm_fetch", "all", ""),
+fn legacy_fields_from_values(values: &HashMap<String, String>) -> (Repetition, u64, String) {
+    let repetition = match values.get("repetition").map(|v| v.to_ascii_lowercase()) {
+        Some(v) if v == "repeat" => Repetition::Repeat,
+        _ => Repetition::Once,
     };
+    let frequency_seconds = values
+        .get("frequency_seconds")
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(3600);
+    let next_run_at = values
+        .get("next_run_at")
+        .map(|v| v.trim().to_string())
+        .unwrap_or_default();
+    (repetition, frequency_seconds, next_run_at)
+}
 
-    format!(
-        "<!doctype html><html><head><meta charset='utf-8'><title>{}</title></head><body><h1>{}</h1><p><a href='/'>Back</a></p><form method='get' action='{}'><p><label>ID: <input type='text' name='id' value='{}'></label></p><p><label>Name: <input type='text' name='name' value='{}'></label></p><p><label>Enabled: <input type='checkbox' name='enabled' value='on' {}></label></p><p><label>Repetition: <select name='repetition'><option value='once' {}>once</option><option value='repeat' {}>repeat</option></select></label></p><p><label>Frequency Seconds: <input type='number' name='frequency_seconds' min='0' value='{}'></label></p><p><label>Next Run At (RFC3339): <input type='text' name='next_run_at' value='{}'></label></p><p><label>Task Type: <select name='task_type'><option value='crm_fetch' {}>crm_fetch</option><option value='shell_command' {}>shell_command</option></select></label></p><p><label>CRM Report: <select name='report'><option value='all' {}>all</option><option value='tickets' {}>tickets</option><option value='calls' {}>calls</option><option value='leads' {}>leads</option><option value='none' {}>none</option></select></label></p><p><label>Shell Command: <input type='text' name='command' value='{}'></label></p><p><button type='submit'>{}</button></p></form></body></html>",
-        escape_html(title),
-        escape_html(title),
-        action,
-        escape_html(id),
-        escape_html(name),
-        if enabled { "checked" } else { "" },
-        if matches!(repetition, Repetition::Once) { "selected" } else { "" },
-        if matches!(repetition, Repetition::Repeat) { "selected" } else { "" },
-        escape_html(&frequency_seconds),
-        escape_html(next_run_at),
-        if task_type == "crm_fetch" { "selected" } else { "" },
-        if task_type == "shell_command" { "selected" } else { "" },
-        if report == "all" { "selected" } else { "" },
-        if report == "tickets" { "selected" } else { "" },
-        if report == "calls" { "selected" } else { "" },
-        if report == "leads" { "selected" } else { "" },
-        if report == "none" { "selected" } else { "" },
-        escape_html(command),
-        escape_html(submit_label)
-    )
+fn parse_schedules_text(value: &str) -> Result<Vec<TaskSchedule>> {
+    let mut schedules = Vec::new();
+    for raw_line in value.lines() {
+        let line = raw_line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let (kind, rest) = line
+            .split_once(':')
+            .with_context(|| format!("Invalid schedule '{}'. Use kind: value", line))?;
+        let kind = kind.trim().to_ascii_lowercase();
+        let rest = rest.trim();
+
+        match kind.as_str() {
+            "interval" => {
+                let rest = rest.strip_prefix("every").unwrap_or(rest).trim();
+                schedules.push(TaskSchedule::Interval {
+                    enabled: true,
+                    every_seconds: parse_duration_text(rest)?,
+                    next_run_at: Utc::now().to_rfc3339(),
+                });
+            }
+            "daily" => {
+                let times = rest
+                    .split(',')
+                    .map(|part| part.trim().to_string())
+                    .filter(|part| !part.is_empty())
+                    .collect::<Vec<_>>();
+                let next_run_at = next_daily_run_after(&times, Utc::now())?;
+                schedules.push(TaskSchedule::DailyTimes {
+                    enabled: true,
+                    times,
+                    next_run_at,
+                });
+            }
+            "once" => {
+                if !rest.is_empty() {
+                    parse_rfc3339_utc(rest)?;
+                }
+                schedules.push(TaskSchedule::Once {
+                    enabled: true,
+                    next_run_at: rest.to_string(),
+                });
+            }
+            _ => {
+                return Err(anyhow::anyhow!(
+                    "Unknown schedule '{}'. Use interval, daily, or once",
+                    kind
+                ));
+            }
+        }
+    }
+    Ok(schedules)
+}
+
+fn parse_duration_text(value: &str) -> Result<u64> {
+    let mut total = 0_u64;
+    for token in value.split_whitespace() {
+        total += parse_duration_token(token)?;
+    }
+    if total == 0 {
+        parse_duration_token(value)
+    } else {
+        Ok(total)
+    }
+}
+
+fn parse_duration_token(token: &str) -> Result<u64> {
+    let token = token.trim();
+    if token.is_empty() {
+        return Err(anyhow::anyhow!("Duration is required"));
+    }
+    if let Ok(seconds) = token.parse::<u64>() {
+        return Ok(seconds);
+    }
+
+    let split_at = token
+        .find(|ch: char| !ch.is_ascii_digit())
+        .unwrap_or(token.len());
+    let amount = token[..split_at]
+        .parse::<u64>()
+        .with_context(|| format!("Invalid duration '{}'", token))?;
+    let unit = token[split_at..].to_ascii_lowercase();
+    let multiplier = match unit.as_str() {
+        "s" | "sec" | "secs" | "second" | "seconds" => 1,
+        "m" | "min" | "mins" | "minute" | "minutes" => 60,
+        "h" | "hr" | "hrs" | "hour" | "hours" => 3_600,
+        "d" | "day" | "days" => 86_400,
+        _ => return Err(anyhow::anyhow!("Invalid duration unit '{}'", unit)),
+    };
+    Ok(amount * multiplier)
+}
+
+fn schedules_to_text(task: &RunnerTask) -> String {
+    if task.schedules.is_empty() {
+        return match task.repetition {
+            Repetition::Once => {
+                if task.next_run_at.is_empty() {
+                    "once:".to_string()
+                } else {
+                    format!("once: {}", task.next_run_at)
+                }
+            }
+            Repetition::Repeat => format!(
+                "interval: every {}",
+                compact_duration(task.frequency_seconds)
+            ),
+        };
+    }
+
+    task.schedules
+        .iter()
+        .map(|schedule| match schedule {
+            TaskSchedule::Once { next_run_at, .. } => format!("once: {}", next_run_at),
+            TaskSchedule::Interval { every_seconds, .. } => {
+                format!("interval: every {}", compact_duration(*every_seconds))
+            }
+            TaskSchedule::DailyTimes { times, .. } => format!("daily: {}", times.join(", ")),
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn compact_duration(seconds: u64) -> String {
+    if seconds % 86_400 == 0 {
+        format!("{}d", seconds / 86_400)
+    } else if seconds % 3_600 == 0 {
+        format!("{}h", seconds / 3_600)
+    } else if seconds % 60 == 0 {
+        format!("{}m", seconds / 60)
+    } else {
+        format!("{}s", seconds)
+    }
+}
+
+fn parse_shell_groups_text(value: &str) -> Result<Vec<ShellCommandGroup>> {
+    let mut groups = Vec::<ShellCommandGroup>::new();
+    let mut current: Option<ShellCommandGroup> = None;
+
+    for raw_line in value.lines() {
+        let line = raw_line.trim();
+        if line.is_empty() {
+            continue;
+        }
+
+        if let Some(rest) = line.strip_prefix("@group") {
+            if let Some(group) = current.take() {
+                groups.push(group);
+            }
+            current = Some(parse_group_header(rest.trim())?);
+            continue;
+        }
+
+        let group = current.get_or_insert_with(|| ShellCommandGroup {
+            name: "Default".to_string(),
+            mode: ShellCommandMode::Sequential,
+            commands: Vec::new(),
+        });
+
+        if let Some(command) = line.strip_prefix("run:") {
+            group.commands.push(ShellCommandSpec {
+                command: command.trim().to_string(),
+                continue_on_error: false,
+            });
+        } else if let Some(command) = line.strip_prefix("continue:") {
+            group.commands.push(ShellCommandSpec {
+                command: command.trim().to_string(),
+                continue_on_error: true,
+            });
+        } else {
+            group.commands.push(ShellCommandSpec {
+                command: line.to_string(),
+                continue_on_error: false,
+            });
+        }
+    }
+
+    if let Some(group) = current {
+        groups.push(group);
+    }
+
+    for group in &groups {
+        if group.commands.is_empty() {
+            return Err(anyhow::anyhow!(
+                "Command group '{}' has no commands",
+                group.name
+            ));
+        }
+    }
+
+    Ok(groups)
+}
+
+fn parse_group_header(value: &str) -> Result<ShellCommandGroup> {
+    let mut parts = value.split_whitespace().collect::<Vec<_>>();
+    let mode = match parts.last().map(|part| part.to_ascii_lowercase()) {
+        Some(mode) if mode == "parallel" => {
+            parts.pop();
+            ShellCommandMode::Parallel
+        }
+        Some(mode) if mode == "sequential" => {
+            parts.pop();
+            ShellCommandMode::Sequential
+        }
+        Some(_) | None => ShellCommandMode::Sequential,
+    };
+    let name = if parts.is_empty() {
+        "Default".to_string()
+    } else {
+        parts.join(" ")
+    };
+    Ok(ShellCommandGroup {
+        name,
+        mode,
+        commands: Vec::new(),
+    })
+}
+
+fn shell_groups_to_text(command: &str, groups: &[ShellCommandGroup]) -> String {
+    if groups.is_empty() {
+        return command
+            .lines()
+            .map(|line| format!("run: {}", line))
+            .collect::<Vec<_>>()
+            .join("\n");
+    }
+
+    groups
+        .iter()
+        .map(|group| {
+            let mode = match group.mode {
+                ShellCommandMode::Sequential => "sequential",
+                ShellCommandMode::Parallel => "parallel",
+            };
+            let mut lines = vec![format!("@group {} {}", group.name, mode)];
+            for command in &group.commands {
+                lines.push(format!(
+                    "{}: {}",
+                    if command.continue_on_error {
+                        "continue"
+                    } else {
+                        "run"
+                    },
+                    command.command
+                ));
+            }
+            lines.join("\n")
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n")
 }
 
 fn escape_html(value: &str) -> String {
@@ -387,4 +1045,61 @@ fn escape_html(value: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_schedule_text() {
+        let schedules = parse_schedules_text(
+            "interval: every 1h\ndaily: 09:00, 13:00\nonce: 2026-04-15T09:30:00-05:00",
+        )
+        .unwrap();
+        assert_eq!(schedules.len(), 3);
+        match &schedules[0] {
+            TaskSchedule::Interval { every_seconds, .. } => assert_eq!(*every_seconds, 3_600),
+            _ => panic!("expected interval"),
+        }
+    }
+
+    #[test]
+    fn parses_shell_command_groups() {
+        let groups = parse_shell_groups_text(
+            "@group Setup sequential\nrun: echo prepare\ncontinue: cleanup-if-present\n\n@group Reports parallel\nrun: ./fetch-a.sh\nrun: ./fetch-b.sh",
+        )
+        .unwrap();
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups[0].commands.len(), 2);
+        assert!(groups[0].commands[1].continue_on_error);
+        assert_eq!(groups[1].mode, ShellCommandMode::Parallel);
+    }
+
+    #[test]
+    fn plain_command_lines_become_default_group() {
+        let groups = parse_shell_groups_text("echo one\necho two").unwrap();
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].name, "Default");
+        assert_eq!(groups[0].commands.len(), 2);
+    }
+
+    #[test]
+    fn duration_parser_accepts_human_units() {
+        assert_eq!(parse_duration_text("1h").unwrap(), 3_600);
+        assert_eq!(parse_duration_text("1h 30m").unwrap(), 5_400);
+        assert_eq!(parse_duration_text("90").unwrap(), 90);
+    }
+
+    #[test]
+    fn human_datetime_accepts_rfc3339() {
+        let text = human_datetime(&Utc::now().to_rfc3339());
+        assert!(text.contains("local"));
+    }
+
+    #[test]
+    fn date_type_import_keeps_rfc3339_parse_available() {
+        let parsed: chrono::DateTime<Utc> = parse_rfc3339_utc("2026-04-15T09:30:00Z").unwrap();
+        assert_eq!(parsed.to_rfc3339(), "2026-04-15T09:30:00+00:00");
+    }
 }

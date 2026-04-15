@@ -52,7 +52,8 @@ src/
 - Runner configuration loading/saving.
 - Runner-local report enum for `crm_fetch` tasks.
 - Task definitions (`crm_fetch`, `shell_command`).
-- Repetition/frequency scheduling fields.
+- Legacy repetition/frequency scheduling fields and multi-schedule task definitions.
+- Shell command group definitions for sequential or parallel execution.
 - External CRM executable path configuration.
 
 ### `src/runner/engine.rs`
@@ -61,13 +62,17 @@ src/
 - Immediate/manual task triggers.
 - Task execution and task metadata updates.
 - CRM task execution by launching external `crm` executable with CLI args.
+- Multi-schedule advancement for one-time, interval, and daily local-time schedules.
+- Shell command group execution with per-command continue-on-error behavior.
 - Timeout and failure handling for child process execution.
 
 ### `src/runner/gui.rs`
 
 - Lightweight HTTP GUI server.
+- Tailwind-styled dashboard loaded from cdnjs.
 - Status endpoint.
 - Trigger endpoints: run-all, run-by-id, tickets-only.
+- POST-based create/update forms for multi-line schedules and shell command groups.
 
 ### `src/crm/*`
 
@@ -81,6 +86,7 @@ src/
 ## Concurrency Design
 
 - Runner-level status lock prevents overlapping execution cycles.
+- Shell command groups run in configured group order. Commands inside a `parallel` group are spawned concurrently and joined before the next group starts.
 - Report-level parallelism remains in fetcher (`tokio::spawn` + `join_all`).
 - Scheduler and GUI run concurrently in Tokio runtime.
 

@@ -25,14 +25,14 @@ Together they:
 - Single-instance lock via TCP bind on `127.0.0.1:14592`.
 - Async orchestration with `tokio`.
 - Non-blocking logs to file + stdout.
-- Embedded runner GUI HTTP server bound from config (`gui_host`, `gui_port`).
+- Embedded runner GUI HTTP server bound from config (`gui_host`, `gui_port`) with Tailwind CSS loaded from cdnjs.
 
 ## Main Workflow (runner)
 
 1. Load/create `runner_config.json` under executable directory.
 2. Ensure CRM `config.json` exists under executable directory.
 3. Start scheduler loop and runner GUI server.
-4. Run tasks from runner config (`crm_fetch` and optional shell commands).
+4. Run tasks from runner config (`crm_fetch` and optional shell command groups).
 5. For CRM tasks, invoke external `crm` executable with CLI args.
 6. Persist task run metadata (`next_run_at`, `last_status`, `last_run_at`).
 
@@ -55,10 +55,11 @@ CRM always performs login.
 ## Scheduler + Manual Triggers
 
 - Scheduler polls at `poll_interval_seconds` from runner config.
-- Task execution supports `repetition` (`once` or `repeat`) and `frequency_seconds`.
+- Task execution supports legacy `repetition`/`frequency_seconds` fields and the newer multi-schedule `schedules` list.
+- Schedule summaries, next-run times, and last-run times are rendered in human-readable local time in the GUI.
 - Tray and GUI can trigger run-all, tickets-only CRM, or specific task by id.
 - Atomic run guard prevents overlapping task execution.
-- Shell tasks are controlled by runner safety policy (`allow_shell_tasks`, timeout, min interval).
+- Shell tasks are controlled by runner safety policy (`allow_shell_tasks`, timeout, min interval) and can run command groups sequentially or in parallel.
 
 ## Primary Outputs
 

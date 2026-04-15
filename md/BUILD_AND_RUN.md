@@ -50,6 +50,7 @@ cargo run --bin crm
 - Both binaries resolve config files under their executable directory by default.
 - At first runner start, `runner_config.json` is auto-created if missing.
 - Runner also ensures CRM `config.json` exists if missing (by invoking `crm --config <path> --report none`).
+- The runner GUI loads Tailwind CSS from cdnjs at runtime. The scheduler and JSON endpoints still work if that stylesheet cannot be reached, but the dashboard will render without Tailwind styling.
 
 CRM CLI arguments:
 
@@ -121,6 +122,8 @@ All workflows use one shared cargo cache key strategy:
 
 1. App starts and logs initialization banner.
 2. Runner GUI starts on configured host/port.
-3. Task scheduler runs configured tasks.
-4. CRM auth/fetch/download succeeds for CRM tasks.
-5. CSV files are created under `Downloads/` beside `crm` executable.
+3. Dashboard shows human-readable schedule, next-run, and last-run values.
+4. Task scheduler runs configured legacy tasks and multi-schedule tasks.
+5. Shell command groups run sequentially or in parallel when `allow_shell_tasks=true`.
+6. CRM auth/fetch/download succeeds for CRM tasks.
+7. CSV files are created under `Downloads/` beside `crm` executable.

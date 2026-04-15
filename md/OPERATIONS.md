@@ -58,8 +58,9 @@ Check:
 Check:
 
 - task `enabled=true`
-- task `next_run_at` format (RFC3339) or empty for immediate run
-- `repetition`/`frequency_seconds` values
+- legacy task `next_run_at` format (RFC3339) or empty for immediate run
+- `schedules` entries, especially enabled state, per-schedule `next_run_at`, interval seconds, and daily `HH:MM` local times
+- legacy `repetition`/`frequency_seconds` values when `schedules` is absent or empty
 - `poll_interval_seconds`
 
 For `crm_fetch` tasks, verify `crm_executable_path` and `crm_config_path` in `runner_config.json` are correct.
@@ -80,6 +81,8 @@ Check:
 - `shell_timeout_seconds` value
 - `last_status` and runner `last_error` for timeout details
 - command correctness under `bash -lc`
+- command group `mode` (`sequential` or `parallel`)
+- per-command `continue_on_error` when a failure should not fail the group
 
 ### 7) Task create/update fails from GUI
 
@@ -89,9 +92,13 @@ Check:
 - `id` uniqueness (no duplicate IDs)
 - non-empty task `name`
 - valid RFC3339 `next_run_at` when provided
-- non-empty shell command for `shell_command` tasks
+- valid schedule editor lines, for example `interval: every 1h`, `daily: 09:00, 13:00`, or `once: 2026-04-15T09:30:00-05:00`
+- non-empty shell command text for `shell_command` tasks
+- valid command group headers such as `@group Reports parallel`
 
 Use `GET /tasks` to confirm persisted task state after edits.
+
+The GUI shows schedule, next-run, and last-run values in local human-readable time. Use `GET /tasks` when exact RFC3339 timestamps are needed for troubleshooting.
 
 ### 8) Runner cannot execute CRM
 

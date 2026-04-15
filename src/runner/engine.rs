@@ -6,7 +6,10 @@ use chrono::{DateTime, Utc};
 use tokio::sync::{mpsc, Mutex};
 use tracing::{error, info};
 
-use super::config::{Repetition, ReportType, RunnerConfig, RunnerTask, TaskKind};
+use super::config::{
+    next_daily_run_after, parse_rfc3339_utc, Repetition, ReportType, RunnerConfig, RunnerTask,
+    ShellCommandGroup, ShellCommandMode, ShellCommandSpec, TaskKind, TaskSchedule,
+};
 
 #[derive(Debug, Clone)]
 pub enum RunnerCommand {
@@ -90,7 +93,11 @@ pub fn start_scheduler(runner_config_path: String) -> RunnerHandle {
     }
 }
 
-async fn handle_command(path: &str, cmd: RunnerCommand, status: &Arc<Mutex<RunnerStatus>>) -> Result<()> {
+async fn handle_command(
+    path: &str,
+    cmd: RunnerCommand,
+    status: &Arc<Mutex<RunnerStatus>>,
+) -> Result<()> {
     match cmd {
         RunnerCommand::RunAllNow => run_all_tasks_now(path, status).await,
         RunnerCommand::RunTaskNow(task_id) => run_task_by_id(path, &task_id, status).await,
@@ -187,7 +194,11 @@ async fn run_all_tasks_now(path: &str, status: &Arc<Mutex<RunnerStatus>>) -> Res
     Ok(())
 }
 
-async fn run_task_by_id(path: &str, task_id: &str, status: &Arc<Mutex<RunnerStatus>>) -> Result<()> {
+async fn run_task_by_id(
+    path: &str,
+    task_id: &str,
+    status: &Arc<Mutex<RunnerStatus>>,
+) -> Result<()> {
     let mut cfg = RunnerConfig::load(path)?;
     let now = Utc::now();
     let policy = policy_from_config(&cfg);
@@ -202,7 +213,11 @@ async fn run_task_by_id(path: &str, task_id: &str, status: &Arc<Mutex<RunnerStat
     Err(anyhow::anyhow!("Task '{}' not found", task_id))
 }
 
-async fn run_adhoc_crm(path: &str, report: ReportType, status: &Arc<Mutex<RunnerStatus>>) -> Result<()> {
+async fn run_adhoc_crm(
+    path: &str,
+    report: ReportType,
+    status: &Arc<Mutex<RunnerStatus>>,
+) -> Result<()> {
     let cfg = RunnerConfig::load(path)?;
     let policy = policy_from_config(&cfg);
     let mut task = RunnerTask {
@@ -212,6 +227,7 @@ async fn run_adhoc_crm(path: &str, report: ReportType, status: &Arc<Mutex<Runner
         repetition: Repetition::Once,
         frequency_seconds: 0,
         next_run_at: String::new(),
+        schedules: Vec::new(),
         kind: TaskKind::CrmFetch { report },
         last_run_at: String::new(),
         last_status: String::new(),
@@ -227,6 +243,9 @@ async fn set_task_enabled(path: &str, task_id: &str, enabled: bool) -> Result<()
         task.enabled = enabled;
         if enabled && task.next_run_at.is_empty() {
             task.next_run_at = Utc::now().to_rfc3339();
+        }
+        for schedule in &mut task.schedules {
+            set_schedule_enabled(schedule, enabled);
         }
         cfg.save(path)?;
         return Ok(());
@@ -253,8 +272,12 @@ fn normalize_and_validate_task(task: &mut RunnerTask, cfg: &RunnerConfig) -> Res
     }
 
     if !task.next_run_at.is_empty() {
-        DateTime::parse_from_rfc3339(&task.next_run_at)
-            .with_context(|| format!("Invalid next_run_at timestamp '{}'. Use RFC3339", task.next_run_at))?;
+        parse_rfc3339_utc(&task.next_run_at).with_context(|| {
+            format!(
+                "Invalid next_run_at timestamp '{}'. Use RFC3339",
+                task.next_run_at
+            )
+        })?;
     }
 
     if matches!(task.repetition, Repetition::Repeat) {
@@ -263,12 +286,17 @@ fn normalize_and_validate_task(task: &mut RunnerTask, cfg: &RunnerConfig) -> Res
             .max(cfg.min_task_interval_seconds.max(1));
     }
 
+    normalize_and_validate_schedules(task, cfg.min_task_interval_seconds.max(1))?;
+
     match &mut task.kind {
         TaskKind::CrmFetch { .. } => {}
-        TaskKind::ShellCommand { command } => {
+        TaskKind::ShellCommand { command, groups } => {
             *command = command.trim().to_string();
-            if command.is_empty() {
-                return Err(anyhow::anyhow!("shell_command requires a non-empty command"));
+            normalize_shell_groups(groups);
+            if command.is_empty() && groups.is_empty() {
+                return Err(anyhow::anyhow!(
+                    "shell_command requires a non-empty command or command group"
+                ));
             }
         }
     }
@@ -284,6 +312,15 @@ fn is_valid_task_id(value: &str) -> bool {
 
 fn update_next_run(task: &mut RunnerTask, now: DateTime<Utc>, min_task_interval_seconds: u64) {
     task.last_run_at = now.to_rfc3339();
+    if !task.schedules.is_empty() {
+        for schedule in &mut task.schedules {
+            if schedule.due_now(now) {
+                advance_schedule(schedule, now, min_task_interval_seconds);
+            }
+        }
+        return;
+    }
+
     match task.repetition {
         Repetition::Once => {
             task.enabled = false;
@@ -307,7 +344,11 @@ fn policy_from_config(cfg: &RunnerConfig) -> ExecutionPolicy {
     }
 }
 
-async fn run_task(task: &mut RunnerTask, policy: &ExecutionPolicy, status: &Arc<Mutex<RunnerStatus>>) {
+async fn run_task(
+    task: &mut RunnerTask,
+    policy: &ExecutionPolicy,
+    status: &Arc<Mutex<RunnerStatus>>,
+) {
     {
         let mut st = status.lock().await;
         if st.currently_running {
@@ -320,18 +361,23 @@ async fn run_task(task: &mut RunnerTask, policy: &ExecutionPolicy, status: &Arc<
     }
 
     let result = match &task.kind {
-        TaskKind::CrmFetch { report } => run_crm_command(
-            &policy.crm_executable_path,
-            &policy.crm_config_path,
-            *report,
-            policy.shell_timeout_seconds,
-        )
-        .await,
-        TaskKind::ShellCommand { command } => {
+        TaskKind::CrmFetch { report } => {
+            run_crm_command(
+                &policy.crm_executable_path,
+                &policy.crm_config_path,
+                *report,
+                policy.shell_timeout_seconds,
+            )
+            .await
+        }
+        TaskKind::ShellCommand { command, groups } => {
             if !policy.allow_shell_tasks {
-                Err(anyhow::anyhow!("shell_command tasks are disabled by runner config"))
+                Err(anyhow::anyhow!(
+                    "shell_command tasks are disabled by runner config"
+                ))
             } else {
-                run_shell_command(command, policy.shell_timeout_seconds).await
+                let effective_groups = effective_shell_groups(command, groups);
+                run_shell_groups(&effective_groups, policy.shell_timeout_seconds).await
             }
         }
     };
@@ -363,15 +409,18 @@ async fn run_crm_command(
     command.arg("--config").arg(&resolved_config_path);
     command.arg("--report").arg(report.as_arg());
 
-    let output = tokio::time::timeout(Duration::from_secs(timeout_seconds.max(1)), command.output())
-        .await
-        .with_context(|| {
-            format!(
-                "crm command timed out after {}s ({})",
-                timeout_seconds,
-                resolved_executable.display()
-            )
-        })??;
+    let output = tokio::time::timeout(
+        Duration::from_secs(timeout_seconds.max(1)),
+        command.output(),
+    )
+    .await
+    .with_context(|| {
+        format!(
+            "crm command timed out after {}s ({})",
+            timeout_seconds,
+            resolved_executable.display()
+        )
+    })??;
 
     if !output.status.success() {
         let stdout_excerpt = excerpt_utf8(&output.stdout);
@@ -479,4 +528,306 @@ async fn run_shell_command(command: &str, shell_timeout_seconds: u64) -> Result<
         ));
     }
     Ok(())
+}
+
+fn normalize_and_validate_schedules(
+    task: &mut RunnerTask,
+    min_task_interval_seconds: u64,
+) -> Result<()> {
+    for schedule in &mut task.schedules {
+        match schedule {
+            TaskSchedule::Once { next_run_at, .. } => {
+                *next_run_at = next_run_at.trim().to_string();
+                if !next_run_at.is_empty() {
+                    parse_rfc3339_utc(next_run_at).with_context(|| {
+                        format!("Invalid once schedule '{}'. Use RFC3339", next_run_at)
+                    })?;
+                }
+            }
+            TaskSchedule::Interval {
+                every_seconds,
+                next_run_at,
+                ..
+            } => {
+                *every_seconds = (*every_seconds).max(min_task_interval_seconds);
+                *next_run_at = next_run_at.trim().to_string();
+                if !next_run_at.is_empty() {
+                    parse_rfc3339_utc(next_run_at).with_context(|| {
+                        format!(
+                            "Invalid interval next_run_at '{}'. Use RFC3339",
+                            next_run_at
+                        )
+                    })?;
+                }
+            }
+            TaskSchedule::DailyTimes {
+                times, next_run_at, ..
+            } => {
+                times.retain(|time| !time.trim().is_empty());
+                for time in times.iter_mut() {
+                    *time = time.trim().to_string();
+                    chrono::NaiveTime::parse_from_str(time, "%H:%M")
+                        .with_context(|| format!("Invalid daily time '{}'. Use HH:MM", time))?;
+                }
+                if times.is_empty() {
+                    return Err(anyhow::anyhow!(
+                        "daily_times schedule requires at least one HH:MM time"
+                    ));
+                }
+                *next_run_at = next_run_at.trim().to_string();
+                if next_run_at.is_empty() {
+                    *next_run_at = next_daily_run_after(times, Utc::now())?;
+                } else {
+                    parse_rfc3339_utc(next_run_at).with_context(|| {
+                        format!(
+                            "Invalid daily_times next_run_at '{}'. Use RFC3339",
+                            next_run_at
+                        )
+                    })?;
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn set_schedule_enabled(schedule: &mut TaskSchedule, enabled_value: bool) {
+    match schedule {
+        TaskSchedule::Once { enabled, .. }
+        | TaskSchedule::Interval { enabled, .. }
+        | TaskSchedule::DailyTimes { enabled, .. } => *enabled = enabled_value,
+    }
+}
+
+fn advance_schedule(
+    schedule: &mut TaskSchedule,
+    now: DateTime<Utc>,
+    min_task_interval_seconds: u64,
+) {
+    match schedule {
+        TaskSchedule::Once {
+            enabled,
+            next_run_at,
+        } => {
+            *enabled = false;
+            next_run_at.clear();
+        }
+        TaskSchedule::Interval {
+            every_seconds,
+            next_run_at,
+            ..
+        } => {
+            let effective_frequency = (*every_seconds).max(min_task_interval_seconds.max(1));
+            let next = now + chrono::TimeDelta::seconds(effective_frequency as i64);
+            *every_seconds = effective_frequency;
+            *next_run_at = next.to_rfc3339();
+        }
+        TaskSchedule::DailyTimes {
+            times, next_run_at, ..
+        } => match next_daily_run_after(times, now) {
+            Ok(next) => *next_run_at = next,
+            Err(e) => *next_run_at = format!("invalid: {}", e),
+        },
+    }
+}
+
+fn normalize_shell_groups(groups: &mut Vec<ShellCommandGroup>) {
+    for (index, group) in groups.iter_mut().enumerate() {
+        group.name = group.name.trim().to_string();
+        if group.name.is_empty() {
+            group.name = format!("Group {}", index + 1);
+        }
+        group
+            .commands
+            .retain(|command| !command.command.trim().is_empty());
+        for command in &mut group.commands {
+            command.command = command.command.trim().to_string();
+        }
+    }
+    groups.retain(|group| !group.commands.is_empty());
+}
+
+fn effective_shell_groups(command: &str, groups: &[ShellCommandGroup]) -> Vec<ShellCommandGroup> {
+    if !groups.is_empty() {
+        return groups.to_vec();
+    }
+
+    let command = command.trim();
+    if command.is_empty() {
+        return Vec::new();
+    }
+
+    vec![ShellCommandGroup {
+        name: "Default".to_string(),
+        mode: ShellCommandMode::Sequential,
+        commands: vec![ShellCommandSpec {
+            command: command.to_string(),
+            continue_on_error: false,
+        }],
+    }]
+}
+
+async fn run_shell_groups(groups: &[ShellCommandGroup], shell_timeout_seconds: u64) -> Result<()> {
+    for group in groups {
+        match group.mode {
+            ShellCommandMode::Sequential => {
+                run_shell_group_sequential(group, shell_timeout_seconds).await?
+            }
+            ShellCommandMode::Parallel => {
+                run_shell_group_parallel(group, shell_timeout_seconds).await?
+            }
+        }
+    }
+    Ok(())
+}
+
+async fn run_shell_group_sequential(
+    group: &ShellCommandGroup,
+    shell_timeout_seconds: u64,
+) -> Result<()> {
+    for spec in &group.commands {
+        if let Err(e) = run_shell_command(&spec.command, shell_timeout_seconds).await {
+            if !spec.continue_on_error {
+                return Err(anyhow::anyhow!("group '{}': {}", group.name, e));
+            }
+        }
+    }
+    Ok(())
+}
+
+async fn run_shell_group_parallel(
+    group: &ShellCommandGroup,
+    shell_timeout_seconds: u64,
+) -> Result<()> {
+    let handles = group
+        .commands
+        .iter()
+        .cloned()
+        .map(|spec| {
+            tokio::spawn(async move {
+                let result = run_shell_command(&spec.command, shell_timeout_seconds).await;
+                (spec, result)
+            })
+        })
+        .collect::<Vec<_>>();
+
+    let mut failures = Vec::new();
+    for handle in handles {
+        let (spec, result) = handle
+            .await
+            .context("parallel shell command task join failed")?;
+        if let Err(e) = result {
+            if !spec.continue_on_error {
+                failures.push(format!("{}: {}", spec.command, e));
+            }
+        }
+    }
+
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!(
+            "group '{}' failed: {}",
+            group.name,
+            failures.join("; ")
+        ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::runner::config::{human_duration, next_daily_run_after};
+
+    #[test]
+    fn legacy_repeat_task_is_due_without_next_run() {
+        let task = RunnerTask {
+            id: "legacy".to_string(),
+            name: "Legacy".to_string(),
+            enabled: true,
+            repetition: Repetition::Repeat,
+            frequency_seconds: 60,
+            next_run_at: String::new(),
+            schedules: Vec::new(),
+            kind: TaskKind::CrmFetch {
+                report: ReportType::All,
+            },
+            last_run_at: String::new(),
+            last_status: String::new(),
+        };
+
+        assert!(task.due_now(Utc::now()));
+    }
+
+    #[test]
+    fn human_duration_uses_largest_units() {
+        assert_eq!(human_duration(3_660), "1 hour 1 minute");
+        assert_eq!(human_duration(86_400), "1 day");
+    }
+
+    #[test]
+    fn daily_local_schedule_gets_future_next_run() {
+        let now = Utc::now();
+        let next = next_daily_run_after(&["00:00".to_string(), "23:59".to_string()], now).unwrap();
+        let next = parse_rfc3339_utc(&next).unwrap();
+        assert!(next > now);
+    }
+
+    #[tokio::test]
+    async fn sequential_group_continues_when_command_allows_error() {
+        let group = ShellCommandGroup {
+            name: "test".to_string(),
+            mode: ShellCommandMode::Sequential,
+            commands: vec![
+                ShellCommandSpec {
+                    command: "exit 8".to_string(),
+                    continue_on_error: true,
+                },
+                ShellCommandSpec {
+                    command: "echo ok".to_string(),
+                    continue_on_error: false,
+                },
+            ],
+        };
+
+        run_shell_group_sequential(&group, 5).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sequential_group_stops_on_non_continued_error() {
+        let group = ShellCommandGroup {
+            name: "test".to_string(),
+            mode: ShellCommandMode::Sequential,
+            commands: vec![ShellCommandSpec {
+                command: "exit 8".to_string(),
+                continue_on_error: false,
+            }],
+        };
+
+        assert!(run_shell_group_sequential(&group, 5).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn parallel_group_fails_only_non_continued_errors() {
+        let ignored = ShellCommandGroup {
+            name: "ignored".to_string(),
+            mode: ShellCommandMode::Parallel,
+            commands: vec![ShellCommandSpec {
+                command: "exit 8".to_string(),
+                continue_on_error: true,
+            }],
+        };
+        run_shell_group_parallel(&ignored, 5).await.unwrap();
+
+        let failed = ShellCommandGroup {
+            name: "failed".to_string(),
+            mode: ShellCommandMode::Parallel,
+            commands: vec![ShellCommandSpec {
+                command: "exit 8".to_string(),
+                continue_on_error: false,
+            }],
+        };
+        assert!(run_shell_group_parallel(&failed, 5).await.is_err());
+    }
 }

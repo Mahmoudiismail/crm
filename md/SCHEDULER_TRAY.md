@@ -31,14 +31,18 @@ Behavior:
 
 - Re-load `runner_config.json` each cycle.
 - Sleep for `poll_interval_seconds` (minimum 5s in engine loop).
-- Find due tasks using `next_run_at` and enabled flag.
+- Find due tasks using the enabled flag and either legacy `next_run_at` or the task `schedules` list.
 - Execute tasks one-by-one.
 - For `crm_fetch`, invoke external `crm` executable with CLI args (`--config`, `--report`).
+- For `shell_command`, run configured command groups in order. Groups can execute commands sequentially or in parallel.
 - Update task state:
 	- `last_run_at`
 	- `last_status`
-	- `next_run_at` for repeat tasks
-	- `enabled=false` for one-time tasks after run
+	- legacy `next_run_at` for repeat tasks
+	- per-schedule `next_run_at` for interval and daily local-time schedules
+	- `enabled=false` for one-time tasks or one-time schedules after run
+
+If multiple schedules on the same task are due in one scheduler tick, the task runs once and all due schedules advance or disable together.
 
 At startup, runner ensures config files exist under executable directory:
 
@@ -61,8 +65,10 @@ This prevents overlap from startup + scheduler + tray actions.
 - `GET /tasks`: configured tasks JSON
 - `GET /new-task`: create-task HTML form
 - `GET /edit/<task_id>`: edit-task HTML form
-- `GET /create?...`: create task from query-string fields
-- `GET /update/<task_id>?...`: update task from query-string fields
+- `POST /create`: create task from form fields, including multi-line schedule and command-group editors
+- `POST /update/<task_id>`: update task from form fields, including multi-line schedule and command-group editors
+- `GET /create?...`: legacy create task from query-string fields
+- `GET /update/<task_id>?...`: legacy update task from query-string fields
 - `GET /delete/<task_id>`: delete task
 - `GET /run-all`: trigger run-all
 - `GET /run-tickets`: trigger ad-hoc CRM tickets task
@@ -77,3 +83,4 @@ CRUD operations persist directly to `runner_config.json` and return validation e
 - `allow_shell_tasks=false` blocks all `shell_command` task execution.
 - `shell_timeout_seconds` terminates long-running shell tasks by timeout.
 - `min_task_interval_seconds` prevents repeat tasks from running too frequently.
+- `shell_command` groups use `bash -lc` for each command. A command with `continue_on_error=true` does not fail its group.
