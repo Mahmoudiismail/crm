@@ -7,6 +7,8 @@ This project ships two Rust executables:
 - `runner`: tray scheduler + GUI + task engine
 - `crm`: one-shot CRM fetch executable
 
+Release builds are optimized for maximum runtime performance through the Cargo release profile. GitHub release publishing is split by executable so `runner_windows.zip` and `crm_windows.zip` can be built and uploaded independently.
+
 Together they:
 
 - Run a `runner` layer for scheduling and task execution.

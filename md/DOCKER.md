@@ -60,6 +60,18 @@ or
 - Windows target: `x86_64-pc-windows-gnu`.
 - Linker: `x86_64-w64-mingw32-gcc`.
 
+## Release Optimization
+
+Docker and local release builds use the same `Cargo.toml` release profile:
+
+- maximum runtime optimization with `opt-level = 3`,
+- fat LTO,
+- one codegen unit,
+- stripped symbols,
+- aborting panics.
+
+The scripted Windows build still builds both executables. GitHub release publishing is split into one workflow for `runner` and one workflow for `crm`.
+
 ## Common Issues
 
 1. **Cache stale**: rebuild image with `--no-cache`.

@@ -20,6 +20,24 @@ cargo build
 cargo build --release
 ```
 
+Release builds use the `Cargo.toml` release profile tuned for maximum runtime optimization:
+
+- `opt-level = 3`
+- `lto = "fat"`
+- `codegen-units = 1`
+- `strip = "symbols"`
+- `panic = "abort"`
+- `debug = false`
+- `incremental = false`
+- `overflow-checks = false`
+
+For one optimized application binary:
+
+```bash
+cargo build --release --bin runner
+cargo build --release --bin crm
+```
+
 ## Run
 
 ```bash
@@ -71,7 +89,14 @@ GitHub Actions are split into:
 
 - `.github/workflows/ci.yml`
 - `.github/workflows/build-windows.yml`
-- `.github/workflows/release.yml`
+- `.github/workflows/release-runner.yml`
+- `.github/workflows/release-crm.yml`
+
+Release workflow behavior:
+
+- `release-runner.yml` builds `cargo build --release --bin runner` and uploads `runner_windows.zip`.
+- `release-crm.yml` builds `cargo build --release --bin crm` and uploads `crm_windows.zip`.
+- Both release workflows publish to tag `v<package version>` from `Cargo.toml` and can update the same GitHub release with separate assets.
 
 All workflows use one shared cargo cache key strategy:
 

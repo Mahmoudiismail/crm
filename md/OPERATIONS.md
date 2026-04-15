@@ -118,5 +118,13 @@ Manual check example:
 
 - `cargo check --target x86_64-pc-windows-gnu`
 - `cargo test --target x86_64-pc-windows-gnu --no-run`
+- `cargo build --release --bin runner`
+- `cargo build --release --bin crm`
 - one manual fetch run
 - verify logs and output artifacts
+
+GitHub release publishing is split by application:
+
+- Run `Release Runner` to publish `runner_windows.zip`.
+- Run `Release CRM` to publish `crm_windows.zip`.
+- Both workflows use the `v<version>` tag from `Cargo.toml`; run both when a release should contain both applications.

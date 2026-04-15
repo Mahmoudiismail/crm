@@ -72,7 +72,7 @@ impl Default for AppConfig {
             user_pool_id: "ap-south-1_wjZE70ShT".into(),
             client_id: "i7g0t35boqicb1tdc4rgthk6".into(),
             username: "+201155520811".into(),
-            password: "Thb@1234".into(),
+            password: "Dsfh@2502".into(),
             no_verify_ssl: true,
             remember_secrets: true,
             email: "Mahmoud_iismail@rayacx.com".into(),
