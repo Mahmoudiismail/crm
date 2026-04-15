@@ -542,18 +542,18 @@ fn schedule_editor_html(task: Option<&RunnerTask>) -> String {
     let rows = if let Some(task) = task {
         schedule_rows_html(task)
     } else {
-        schedule_row_html(0, "interval", "1h", "", "")
+        schedule_row_html(0, "interval", "1h", "", "", "", "")
     };
 
     format!(
         "<div class='space-y-3'>\
             <div class='flex items-center justify-between'>\
                 <span class='text-sm font-semibold text-gray-800'>Schedules</span>\
-                <button type='button' id='add-schedule-row' class='rounded border border-gray-300 bg-white px-3 py-1 text-sm font-semibold text-gray-800'>+ Add schedule</button>\
+                <button type='button' id='add-schedule-row' class='rounded border border-gray-300 bg-emerald-600 text-white px-3 py-1 text-sm font-semibold hover:bg-emerald-700'>+ Add schedule</button>\
             </div>\
             <div id='schedule-rows' class='space-y-3'>{}</div>\
             <input type='hidden' id='schedules-hidden' name='schedules' value=''>\
-            <p class='text-xs text-gray-500'>Choose interval or once date/time. Multiple schedules are supported with the + button.</p>\
+            <p class='text-xs text-gray-500'>Select one or more schedules. Supports: Interval, Once, Daily at specific times, Weekly on day, or Monthly on day.</p>\
         </div>",
         rows
     )
@@ -570,11 +570,17 @@ fn shell_command_editor_html(task: Option<&RunnerTask>) -> String {
         "<div class='space-y-3'>\
             <div class='flex items-center justify-between'>\
                 <span class='text-sm font-semibold text-gray-800'>Shell Commands</span>\
-                <button type='button' id='add-command-row' class='rounded border border-gray-300 bg-white px-3 py-1 text-sm font-semibold text-gray-800'>+ Add command</button>\
+                <button type='button' id='add-command-row' class='rounded border border-gray-300 bg-emerald-600 text-white px-3 py-1 text-sm font-semibold hover:bg-emerald-700'>+ Add command</button>\
             </div>\
             <div id='command-rows' class='space-y-3'>{}</div>\
             <input type='hidden' id='commands-hidden' name='commands' value=''>\
-            <p class='text-xs text-gray-500'>Enter one shell command per row. Commands are joined into a task group on submit.</p>\
+            <div class='text-xs text-gray-600 space-y-1'>\
+                <p><strong>Modes:</strong></p>\
+                <ul class='list-disc list-inside'>\
+                    <li><strong>Run:</strong> Halt on error (default)</li>\
+                    <li><strong>Continue:</strong> Ignore errors and proceed</li>\
+                </ul>\
+            </div>\
         </div>",
         rows
     )
@@ -592,6 +598,8 @@ fn schedule_rows_html(task: &RunnerTask) -> String {
                     &compact_duration(*every_seconds),
                     "",
                     "",
+                    "",
+                    "",
                 ));
                 index += 1;
             }
@@ -601,6 +609,8 @@ fn schedule_rows_html(task: &RunnerTask) -> String {
                     "once",
                     "1h",
                     &local_datetime_value(next_run_at),
+                    "",
+                    "",
                     "",
                 ));
                 index += 1;
@@ -612,13 +622,39 @@ fn schedule_rows_html(task: &RunnerTask) -> String {
                     "1h",
                     "",
                     &times.join(", "),
+                    "",
+                    "",
+                ));
+                index += 1;
+            }
+            TaskSchedule::Weekly { day_of_week, .. } => {
+                rows.push(schedule_row_html(
+                    index,
+                    "weekly",
+                    "1h",
+                    "",
+                    "",
+                    day_of_week,
+                    "",
+                ));
+                index += 1;
+            }
+            TaskSchedule::Monthly { day_of_month, .. } => {
+                rows.push(schedule_row_html(
+                    index,
+                    "monthly",
+                    "1h",
+                    "",
+                    "",
+                    "",
+                    &day_of_month.to_string(),
                 ));
                 index += 1;
             }
         }
     }
     if rows.is_empty() {
-        rows.push(schedule_row_html(index, "interval", "1h", "", ""));
+        rows.push(schedule_row_html(0, "interval", "1h", "", "", "", ""));
     }
     rows.join("")
 }
@@ -648,35 +684,64 @@ fn schedule_row_html(
     interval_value: &str,
     once_value: &str,
     daily_value: &str,
+    weekly_value: &str,
+    monthly_value: &str,
 ) -> String {
     let interval_hidden = if kind == "interval" { "" } else { "hidden" };
     let once_hidden = if kind == "once" { "" } else { "hidden" };
     let daily_hidden = if kind == "daily" { "" } else { "hidden" };
-    let interval_options = ["15m", "30m", "1h", "2h", "4h", "8h", "12h", "24h"]
-        .iter()
-        .map(|value| {
-            format!(
-                "<option value='{}' {}>{}</option>",
-                value,
-                if *value == interval_value {
-                    "selected"
-                } else {
-                    ""
-                },
-                value
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("");
+    let weekly_hidden = if kind == "weekly" { "" } else { "hidden" };
+    let monthly_hidden = if kind == "monthly" { "" } else { "hidden" };
+    let interval_options = [
+        "15m", "30m", "1h", "2h", "4h", "8h", "12h", "24h", "2d", "7d",
+    ]
+    .iter()
+    .map(|value| {
+        format!(
+            "<option value='{}' {}>{}</option>",
+            value,
+            if *value == interval_value {
+                "selected"
+            } else {
+                ""
+            },
+            value
+        )
+    })
+    .collect::<Vec<_>>()
+    .join("");
+
+    let days_of_week = [
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+        "Sunday",
+    ]
+    .iter()
+    .map(|day| {
+        format!(
+            "<option value='{}' {}>{}</option>",
+            day,
+            if weekly_value == *day { "selected" } else { "" },
+            day
+        )
+    })
+    .collect::<Vec<_>>()
+    .join("");
 
     format!(
-        "<div class='grid md:grid-cols-4 gap-2 p-3 border border-gray-200 rounded items-end' data-schedule-row>\
+        "<div class='grid md:grid-cols-5 gap-2 p-3 border border-gray-200 rounded items-end' data-schedule-row>\
             <label class='block'>\
                 <span class='text-xs font-semibold text-gray-700'>Type</span>\
                 <select class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm schedule-kind' name='schedule_kind_{}'>\
                     <option value='interval' {}>Interval</option>\
                     <option value='once' {}>Once</option>\
                     <option value='daily' {}>Daily</option>\
+                    <option value='weekly' {}>Weekly</option>\
+                    <option value='monthly' {}>Monthly</option>\
                 </select>\
             </label>\
             <label class='block schedule-interval {}'>\
@@ -689,8 +754,18 @@ fn schedule_row_html(
                 <input class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' type='datetime-local' name='schedule_once_at_{}' value='{}'>\
             </label>\
             <label class='block schedule-daily {}'>\
-                <span class='text-xs font-semibold text-gray-700'>Times</span>\
+                <span class='text-xs font-semibold text-gray-700'>Times (HH:MM)</span>\
                 <input class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' type='text' name='schedule_daily_at_{}' value='{}' placeholder='09:00, 13:00'>\
+            </label>\
+            <label class='block schedule-weekly {}'>\
+                <span class='text-xs font-semibold text-gray-700'>Day</span>\
+                <select class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' name='schedule_weekly_at_{}' data-weekly-day>\
+                    {}\
+                </select>\
+            </label>\
+            <label class='block schedule-monthly {}'>\
+                <span class='text-xs font-semibold text-gray-700'>Day (1-31)</span>\
+                <input class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' type='number' name='schedule_monthly_at_{}' value='{}' min='1' max='31'>\
             </label>\
             <button type='button' class='remove-schedule rounded border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700'>Remove</button>\
         </div>",
@@ -698,6 +773,8 @@ fn schedule_row_html(
         if kind == "interval" { "selected" } else { "" },
         if kind == "once" { "selected" } else { "" },
         if kind == "daily" { "selected" } else { "" },
+        if kind == "weekly" { "selected" } else { "" },
+        if kind == "monthly" { "selected" } else { "" },
         interval_hidden,
         index,
         interval_options,
@@ -706,20 +783,36 @@ fn schedule_row_html(
         escape_html(once_value),
         daily_hidden,
         index,
-        escape_html(daily_value)
+        escape_html(daily_value),
+        weekly_hidden,
+        index,
+        days_of_week,
+        monthly_hidden,
+        index,
+        escape_html(monthly_value)
     )
 }
 
-fn command_row_html(_index: usize, command: &str) -> String {
+fn command_row_html(index: usize, command: &str) -> String {
     format!(
-        "<div class='grid md:grid-cols-[1fr_auto] gap-2 items-end' data-command-row>\
-            <label class='block'>\
-                <span class='text-xs font-semibold text-gray-700'>Command</span>\
-                <input class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm command-text' type='text' value='{}'>\
-            </label>\
-            <button type='button' class='remove-command rounded border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700'>Remove</button>\
+        "<div class='grid md:grid-cols-[1fr_100px_auto] gap-2 items-center p-2 bg-gray-50 border border-gray-200 rounded' data-command-row>\
+            <div class='grid md:grid-cols-2 gap-2'>\
+                <label class='block'>\
+                    <span class='text-xs font-semibold text-gray-700'>Command</span>\
+                    <input class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm command-text' type='text' value='{}' placeholder='echo hello'>\
+                </label>\
+                <label class='block'>\
+                    <span class='text-xs font-semibold text-gray-700'>Mode</span>\
+                    <select class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm command-mode' name='command_mode_{}'>\
+                        <option value='run'>Run</option>\
+                        <option value='continue'>Continue</option>\
+                    </select>\
+                </label>\
+            </div>\
+            <button type='button' class='remove-command rounded bg-red-600 text-white px-3 py-2 text-sm font-semibold hover:bg-red-700'>Remove</button>\
         </div>",
-        escape_html(command)
+        escape_html(command),
+        index
     )
 }
 
@@ -743,6 +836,8 @@ fn form_script() -> String {
             const commandRows = document.getElementById('command-rows');\
             const schedulesHidden = document.getElementById('schedules-hidden');\
             const commandsHidden = document.getElementById('commands-hidden');\
+            const addScheduleBtn = document.getElementById('add-schedule-row');\
+            const addCommandBtn = document.getElementById('add-command-row');\
             let scheduleIndex = scheduleRows ? scheduleRows.children.length : 0;\
             let commandIndex = commandRows ? commandRows.children.length : 0;\
             function updateVisibility(row){\
@@ -750,6 +845,8 @@ fn form_script() -> String {
                 row.querySelector('.schedule-interval').classList.toggle('hidden', kind !== 'interval');\
                 row.querySelector('.schedule-once').classList.toggle('hidden', kind !== 'once');\
                 row.querySelector('.schedule-daily').classList.toggle('hidden', kind !== 'daily');\
+                row.querySelector('.schedule-weekly').classList.toggle('hidden', kind !== 'weekly');\
+                row.querySelector('.schedule-monthly').classList.toggle('hidden', kind !== 'monthly');\
             }\
             function attachScheduleEvents(row){\
                 row.querySelector('.schedule-kind').addEventListener('change', function(){ updateVisibility(row); });\
@@ -758,10 +855,11 @@ fn form_script() -> String {
             function attachCommandEvents(row){\
                 row.querySelector('.remove-command').addEventListener('click', function(){ row.remove(); });\
             }\
-            function createScheduleRow(kind, interval, once, daily){\
+            function createScheduleRow(kind, interval, once, daily, weekly, monthly){\
                 const row = document.createElement('div');\
                 row.setAttribute('data-schedule-row','');\
-                row.className = 'grid md:grid-cols-4 gap-2 p-3 border border-gray-200 rounded items-end';\
+                row.className = 'grid md:grid-cols-5 gap-2 p-3 border border-gray-200 rounded items-end';\
+                const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];\
                 row.innerHTML = `\
                     <label class='block'>\
                         <span class='text-xs font-semibold text-gray-700'>Type</span>\
@@ -769,12 +867,14 @@ fn form_script() -> String {
                             <option value='interval' ${kind === 'interval' ? 'selected' : ''}>Interval</option>\
                             <option value='once' ${kind === 'once' ? 'selected' : ''}>Once</option>\
                             <option value='daily' ${kind === 'daily' ? 'selected' : ''}>Daily</option>\
+                            <option value='weekly' ${kind === 'weekly' ? 'selected' : ''}>Weekly</option>\
+                            <option value='monthly' ${kind === 'monthly' ? 'selected' : ''}>Monthly</option>\
                         </select>\
                     </label>\
                     <label class='block schedule-interval ${kind === 'interval' ? '' : 'hidden'}'>\
                         <span class='text-xs font-semibold text-gray-700'>Interval</span>\
                         <select class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm'>\
-                            ${['15m','30m','1h','2h','4h','8h','12h','24h'].map(opt => `<option value='${opt}' ${opt === interval ? 'selected' : ''}>${opt}</option>`).join('')}\
+                            ${['15m','30m','1h','2h','4h','8h','12h','24h','2d','7d'].map(opt => `<option value='${opt}' ${opt === interval ? 'selected' : ''}>${opt}</option>`).join('')}\
                         </select>\
                     </label>\
                     <label class='block schedule-once ${kind === 'once' ? '' : 'hidden'}'>\
@@ -782,8 +882,18 @@ fn form_script() -> String {
                         <input class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' type='datetime-local' value='${once}'>\
                     </label>\
                     <label class='block schedule-daily ${kind === 'daily' ? '' : 'hidden'}'>\
-                        <span class='text-xs font-semibold text-gray-700'>Times</span>\
+                        <span class='text-xs font-semibold text-gray-700'>Times (HH:MM)</span>\
                         <input class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' type='text' value='${daily}' placeholder='09:00, 13:00'>\
+                    </label>\
+                    <label class='block schedule-weekly ${kind === 'weekly' ? '' : 'hidden'}'>\
+                        <span class='text-xs font-semibold text-gray-700'>Day</span>\
+                        <select class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' data-weekly-day>\
+                            ${daysOfWeek.map(day => `<option value='${day}' ${day === weekly ? 'selected' : ''}>${day}</option>`).join('')}\
+                        </select>\
+                    </label>\
+                    <label class='block schedule-monthly ${kind === 'monthly' ? '' : 'hidden'}'>\
+                        <span class='text-xs font-semibold text-gray-700'>Day (1-31)</span>\
+                        <input class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' type='number' value='${monthly}' min='1' max='31'>\
                     </label>\
                     <button type='button' class='remove-schedule rounded border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700'>Remove</button>\
                 `;\
@@ -792,13 +902,22 @@ fn form_script() -> String {
             function createCommandRow(command){\
                 const row = document.createElement('div');\
                 row.setAttribute('data-command-row','');\
-                row.className = 'grid md:grid-cols-[1fr_auto] gap-2 items-end';\
+                row.className = 'grid md:grid-cols-[1fr_100px_auto] gap-2 items-center p-2 bg-gray-50 border border-gray-200 rounded';\
                 row.innerHTML = `\
-                    <label class='block'>\
-                        <span class='text-xs font-semibold text-gray-700'>Command</span>\
-                        <input class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm command-text' type='text' value='${command}'>\
-                    </label>\
-                    <button type='button' class='remove-command rounded border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700'>Remove</button>\
+                    <div class='grid md:grid-cols-2 gap-2'>\
+                        <label class='block'>\
+                            <span class='text-xs font-semibold text-gray-700'>Command</span>\
+                            <input class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm command-text' type='text' value='${command}' placeholder='echo hello'>\
+                        </label>\
+                        <label class='block'>\
+                            <span class='text-xs font-semibold text-gray-700'>Mode</span>\
+                            <select class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm command-mode'>\
+                                <option value='run'>Run</option>\
+                                <option value='continue'>Continue</option>\
+                            </select>\
+                        </label>\
+                    </div>\
+                    <button type='button' class='remove-command rounded bg-red-600 text-white px-3 py-2 text-sm font-semibold hover:bg-red-700'>Remove</button>\
                 `;\
                 return row;\
             }\
@@ -808,24 +927,29 @@ fn form_script() -> String {
             if(commandRows){\
                 Array.from(commandRows.querySelectorAll('[data-command-row]')).forEach(attachCommandEvents);\
             }\
-            document.getElementById('add-schedule-row').addEventListener('click', function(){\
-                const row = createScheduleRow('interval','1h','','');\
-                scheduleRows.appendChild(row);\
-                attachScheduleEvents(row);\
-                scheduleIndex += 1;\
-            });\
-            document.getElementById('add-command-row').addEventListener('click', function(){\
-                const row = createCommandRow('');\
-                commandRows.appendChild(row);\
-                attachCommandEvents(row);\
-                commandIndex += 1;\
-            });\
+            if(addScheduleBtn && scheduleRows){\
+                addScheduleBtn.addEventListener('click', function(){\
+                    const row = createScheduleRow('interval','1h','','','','');\
+                    scheduleRows.appendChild(row);\
+                    attachScheduleEvents(row);\
+                    scheduleIndex += 1;\
+                });\
+            }\
+            if(addCommandBtn && commandRows){\
+                addCommandBtn.addEventListener('click', function(){\
+                    const row = createCommandRow('');\
+                    commandRows.appendChild(row);\
+                    attachCommandEvents(row);\
+                    commandIndex += 1;\
+                });\
+            }\
             function encodeIsoDatetime(value){\
                 if(!value) return '';\
                 const date = new Date(value);\
                 return date.toISOString();\
             }\
             function buildSchedules(){\
+                if(!scheduleRows) return '';\
                 return Array.from(scheduleRows.querySelectorAll('[data-schedule-row]')).map(function(row){\
                     const kind = row.querySelector('.schedule-kind').value;\
                     if(kind === 'interval'){\
@@ -840,12 +964,24 @@ fn form_script() -> String {
                         const value = row.querySelector('.schedule-daily input').value.trim();\
                         return value ? 'daily: ' + value : '';\
                     }\
+                    if(kind === 'weekly'){\
+                        const value = row.querySelector('[data-weekly-day]').value;\
+                        return value ? 'weekly: ' + value : '';\
+                    }\
+                    if(kind === 'monthly'){\
+                        const value = row.querySelector('.schedule-monthly input').value;\
+                        return value ? 'monthly: day ' + value : '';\
+                    }\
                     return '';\
                 }).filter(Boolean).join('\n');\
             }\
             function buildCommands(){\
+                if(!commandRows) return '';\
                 return Array.from(commandRows.querySelectorAll('[data-command-row]')).map(function(row){\
-                    return row.querySelector('.command-text').value.trim();\
+                    const command = row.querySelector('.command-text').value.trim();\
+                    const mode = row.querySelector('.command-mode').value;\
+                    if(!command) return '';\
+                    return mode === 'continue' ? 'continue: ' + command : command;\
                 }).filter(Boolean).join('\n');\
             }\
             const form = document.querySelector('form');\
@@ -1090,6 +1226,12 @@ fn legacy_fields_from_schedules(schedules: &[TaskSchedule]) -> (Repetition, u64,
             TaskSchedule::DailyTimes { next_run_at, .. } => {
                 (Repetition::Repeat, 24 * 60 * 60, next_run_at.clone())
             }
+            TaskSchedule::Weekly { next_run_at, .. } => {
+                (Repetition::Repeat, 7 * 24 * 60 * 60, next_run_at.clone())
+            }
+            TaskSchedule::Monthly { next_run_at, .. } => {
+                (Repetition::Repeat, 30 * 24 * 60 * 60, next_run_at.clone())
+            }
         }
     } else {
         (Repetition::Once, 3600, String::new())
@@ -1147,6 +1289,28 @@ fn parse_schedules_text(value: &str) -> Result<Vec<TaskSchedule>> {
                     next_run_at,
                 });
             }
+            "weekly" => {
+                schedules.push(TaskSchedule::Weekly {
+                    enabled: true,
+                    day_of_week: rest.to_string(),
+                    at_time: "09:00".to_string(),
+                    next_run_at: Utc::now().to_rfc3339(),
+                });
+            }
+            "monthly" => {
+                let day_str = rest
+                    .strip_prefix("day")
+                    .unwrap_or(rest)
+                    .trim()
+                    .parse::<u32>()
+                    .with_context(|| format!("Invalid day of month '{}'", rest))?;
+                schedules.push(TaskSchedule::Monthly {
+                    enabled: true,
+                    day_of_month: day_str.clamp(1, 31),
+                    at_time: "09:00".to_string(),
+                    next_run_at: Utc::now().to_rfc3339(),
+                });
+            }
             "once" => {
                 if !rest.is_empty() {
                     parse_rfc3339_utc(rest)?;
@@ -1158,7 +1322,7 @@ fn parse_schedules_text(value: &str) -> Result<Vec<TaskSchedule>> {
             }
             _ => {
                 return Err(anyhow::anyhow!(
-                    "Unknown schedule '{}'. Use interval, daily, or once",
+                    "Unknown schedule '{}'. Use interval, daily, weekly, monthly, or once",
                     kind
                 ));
             }

@@ -95,6 +95,26 @@ pub enum TaskSchedule {
         #[serde(default)]
         next_run_at: String,
     },
+    Weekly {
+        #[serde(default = "default_true")]
+        enabled: bool,
+        #[serde(default)]
+        day_of_week: String,
+        #[serde(default)]
+        at_time: String,
+        #[serde(default)]
+        next_run_at: String,
+    },
+    Monthly {
+        #[serde(default = "default_true")]
+        enabled: bool,
+        #[serde(default = "default_day")]
+        day_of_month: u32,
+        #[serde(default)]
+        at_time: String,
+        #[serde(default)]
+        next_run_at: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -289,7 +309,9 @@ impl TaskSchedule {
         match self {
             Self::Once { enabled, .. }
             | Self::Interval { enabled, .. }
-            | Self::DailyTimes { enabled, .. } => *enabled,
+            | Self::DailyTimes { enabled, .. }
+            | Self::Weekly { enabled, .. }
+            | Self::Monthly { enabled, .. } => *enabled,
         }
     }
 
@@ -297,7 +319,9 @@ impl TaskSchedule {
         match self {
             Self::Once { next_run_at, .. }
             | Self::Interval { next_run_at, .. }
-            | Self::DailyTimes { next_run_at, .. } => {
+            | Self::DailyTimes { next_run_at, .. }
+            | Self::Weekly { next_run_at, .. }
+            | Self::Monthly { next_run_at, .. } => {
                 if next_run_at.is_empty() {
                     None
                 } else {
@@ -335,6 +359,34 @@ impl TaskSchedule {
                 } else {
                     format!("Daily at {} local{}", times.join(", "), state)
                 }
+            }
+            Self::Weekly {
+                enabled,
+                day_of_week,
+                at_time,
+                ..
+            } => {
+                let state = if *enabled { "" } else { " (disabled)" };
+                let time_str = if at_time.is_empty() {
+                    "default".to_string()
+                } else {
+                    at_time.clone()
+                };
+                format!("Weekly on {} at {}{}", day_of_week, time_str, state)
+            }
+            Self::Monthly {
+                enabled,
+                day_of_month,
+                at_time,
+                ..
+            } => {
+                let state = if *enabled { "" } else { " (disabled)" };
+                let time_str = if at_time.is_empty() {
+                    "default".to_string()
+                } else {
+                    at_time.clone()
+                };
+                format!("Monthly on day {} at {}{}", day_of_month, time_str, state)
             }
         }
     }
@@ -483,4 +535,8 @@ fn default_true() -> bool {
 
 fn default_frequency() -> u64 {
     3600
+}
+
+fn default_day() -> u32 {
+    1
 }

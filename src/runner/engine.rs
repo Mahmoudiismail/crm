@@ -586,6 +586,35 @@ fn normalize_and_validate_schedules(
                     })?;
                 }
             }
+            TaskSchedule::Weekly {
+                day_of_week,
+                at_time,
+                next_run_at,
+                ..
+            } => {
+                *day_of_week = day_of_week.trim().to_string();
+                *at_time = at_time.trim().to_string();
+                if !at_time.is_empty() {
+                    chrono::NaiveTime::parse_from_str(at_time, "%H:%M")
+                        .with_context(|| format!("Invalid weekly time '{}'. Use HH:MM", at_time))?;
+                }
+                *next_run_at = next_run_at.trim().to_string();
+            }
+            TaskSchedule::Monthly {
+                day_of_month,
+                at_time,
+                next_run_at,
+                ..
+            } => {
+                *day_of_month = (*day_of_month).clamp(1, 31);
+                *at_time = at_time.trim().to_string();
+                if !at_time.is_empty() {
+                    chrono::NaiveTime::parse_from_str(at_time, "%H:%M").with_context(|| {
+                        format!("Invalid monthly time '{}'. Use HH:MM", at_time)
+                    })?;
+                }
+                *next_run_at = next_run_at.trim().to_string();
+            }
         }
     }
 
@@ -596,7 +625,9 @@ fn set_schedule_enabled(schedule: &mut TaskSchedule, enabled_value: bool) {
     match schedule {
         TaskSchedule::Once { enabled, .. }
         | TaskSchedule::Interval { enabled, .. }
-        | TaskSchedule::DailyTimes { enabled, .. } => *enabled = enabled_value,
+        | TaskSchedule::DailyTimes { enabled, .. }
+        | TaskSchedule::Weekly { enabled, .. }
+        | TaskSchedule::Monthly { enabled, .. } => *enabled = enabled_value,
     }
 }
 
@@ -629,6 +660,13 @@ fn advance_schedule(
             Ok(next) => *next_run_at = next,
             Err(e) => *next_run_at = format!("invalid: {}", e),
         },
+        TaskSchedule::Weekly { next_run_at, .. } => {
+            *next_run_at = (now + chrono::TimeDelta::days(7)).to_rfc3339();
+        }
+        TaskSchedule::Monthly { next_run_at, .. } => {
+            let next = now + chrono::TimeDelta::days(30);
+            *next_run_at = next.to_rfc3339();
+        }
     }
 }
 

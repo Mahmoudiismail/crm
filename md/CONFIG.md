@@ -45,6 +45,8 @@ Each `schedules` item has a `type`:
 - `once`: runs once at `next_run_at`; empty `next_run_at` means immediate.
 - `interval`: runs every `every_seconds`; `next_run_at` stores the next due time.
 - `daily_times`: runs at one or more local machine times in `times` (`HH:MM`); `next_run_at` stores the next calculated due time.
+- `weekly`: runs on a specific day of the week; `day_of_week` is day name (Monday, Tuesday, etc.), `at_time` is optional (`HH:MM` default 09:00).
+- `monthly`: runs on a specific day of the month; `day_of_month` is 1-31, `at_time` is optional (`HH:MM` default 09:00).
 
 All persisted `next_run_at` and `last_run_at` values remain RFC3339. The GUI renders these values as local human-readable time with relative text.
 
@@ -76,12 +78,19 @@ When tasks are created/updated through the runner GUI CRUD endpoints:
 daily: 09:00, 13:00, 18:30
 The GUI create/update forms now provide a simpler task editor:
 
-- schedule rows with `Interval` or `Once` options
-- an interval dropdown of common durations
+- schedule rows with `Interval`, `Once`, `Daily`, `Weekly`, or `Monthly` options
+- interval dropdown of common durations: `15m`, `30m`, `1h`, `2h`, `4h`, `8h`, `12h`, `24h`, `2d`, `7d`
 - a date/time picker for one-time schedules
+- day-of-week selector for weekly schedules
+- day-of-month selector (1-31) for monthly schedules
 - a `+ Add schedule` button for multiple entries
 
-Shell commands can be added as separate command rows in the same editor.
+Shell commands can be added as separate command rows:
+
+- `Command` input field for the shell command
+- `Mode` dropdown: `Run` (halt on error, default) or `Continue` (ignore errors and proceed)
+- a `+ Add command` button to add more commands
+- commands are automatically grouped into a single task group on form submit
 
 ### Runner -> CRM invocation contract
 
