@@ -66,7 +66,13 @@ async fn main() -> Result<()> {
 
 struct App {
     tray_icon: Option<TrayIcon>,
-    menu_items: Option<(muda::MenuId, muda::MenuId, muda::MenuId, muda::MenuId, muda::MenuId)>,
+    menu_items: Option<(
+        muda::MenuId,
+        muda::MenuId,
+        muda::MenuId,
+        muda::MenuId,
+        muda::MenuId,
+    )>,
     runner: RunnerHandle,
     runner_gui_url: String,
 }

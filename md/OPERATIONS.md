@@ -92,7 +92,7 @@ Check:
 - `id` uniqueness (no duplicate IDs)
 - non-empty task `name`
 - valid RFC3339 `next_run_at` when provided
-- valid schedule editor lines, for example `interval: every 1h`, `daily: 09:00, 13:00`, or `once: 2026-04-15T09:30:00-05:00`
+- use the runner GUI schedule editor with interval/once rows and the + button to add more schedules
 - non-empty shell command text for `shell_command` tasks
 - valid command group headers such as `@group Reports parallel`
 

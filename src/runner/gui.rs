@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use chrono::Utc;
+use chrono::{Local, Utc};
 use std::collections::HashMap;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
@@ -465,9 +465,7 @@ fn render_task_form(
     let id = task.map(|t| t.id.as_str()).unwrap_or_default();
     let name = task.map(|t| t.name.as_str()).unwrap_or_default();
     let enabled = task.map(|t| t.enabled).unwrap_or(true);
-    let schedule_text = task.map(schedules_to_text).unwrap_or_default();
-
-    let (task_type, report, command_text) = match task.map(|t| &t.kind) {
+    let (task_type, report, _command_text) = match task.map(|t| &t.kind) {
         Some(TaskKind::ShellCommand { command, groups }) => (
             "shell_command",
             "all",
@@ -496,50 +494,360 @@ fn render_task_form(
         })
         .unwrap_or_default();
 
-    html_page(
-        title,
-        &format!(
-            "<div class='max-w-4xl mx-auto space-y-5'>\
-                <div><a class='text-sm font-semibold text-emerald-700' href='/'>Back to dashboard</a><h1 class='text-3xl font-bold text-gray-900 mt-3'>{}</h1></div>\
+    let form_html = format!(
+        "<div class='max-w-4xl mx-auto space-y-5'>\
+            <div><a class='text-sm font-semibold text-emerald-700' href='/'>Back to dashboard</a><h1 class='text-3xl font-bold text-gray-900 mt-3'>{}</h1></div>\
+            {}\
+            <form class='bg-white border border-gray-200 rounded shadow-sm p-5 space-y-5' method='post' action='{}'>\
+                <div class='grid md:grid-cols-2 gap-4'>\
+                    {}\
+                    {}\
+                </div>\
+                <label class='flex items-center gap-2 text-sm font-semibold text-gray-800'><input type='checkbox' name='enabled' value='on' {}> Enabled</label>\
+                <div class='grid md:grid-cols-2 gap-4'>\
+                    {}\
+                    {}\
+                </div>\
                 {}\
-                <form class='bg-white border border-gray-200 rounded shadow-sm p-5 space-y-5' method='post' action='{}'>\
-                    <div class='grid md:grid-cols-2 gap-4'>\
-                        {}\
-                        {}\
-                    </div>\
-                    <label class='flex items-center gap-2 text-sm font-semibold text-gray-800'><input type='checkbox' name='enabled' value='on' {}> Enabled</label>\
-                    <div class='grid md:grid-cols-2 gap-4'>\
-                        {}\
-                        {}\
-                    </div>\
-                    {}\
-                    {}\
-                    <button class='rounded bg-emerald-600 text-white px-4 py-2 text-sm font-semibold' type='submit'>{}</button>\
-                </form>\
-            </div>",
-            escape_html(title),
-            error_html,
-            action,
-            input_field("ID", "id", id),
-            input_field("Name", "name", name),
-            if enabled { "checked" } else { "" },
-            select_task_type(task_type),
-            select_report(report),
-            textarea_field(
-                "Schedules",
-                "schedules",
-                &schedule_text,
-                "Use lines like: interval: every 1h, daily: 09:00, 13:00, or once: 2026-04-15T09:30:00-05:00."
-            ),
-            textarea_field(
-                "Shell Commands",
-                "commands",
-                &command_text,
-                "Use @group Name sequential|parallel, then run: command or continue: command."
-            ),
-            escape_html(submit_label)
-        ),
+                {}\
+                <button class='rounded bg-emerald-600 text-white px-4 py-2 text-sm font-semibold' type='submit'>{}</button>\
+            </form>\
+        </div>",
+        escape_html(title),
+        error_html,
+        action,
+        input_field("ID", "id", id),
+        input_field("Name", "name", name),
+        if enabled { "checked" } else { "" },
+        select_task_type(task_type),
+        select_report(report),
+        schedule_editor_html(task),
+        shell_command_editor_html(task),
+        escape_html(submit_label)
+    );
+    let page_html = form_html + &form_script();
+    html_page(title, &page_html)
+}
+
+fn schedule_editor_html(task: Option<&RunnerTask>) -> String {
+    let rows = if let Some(task) = task {
+        schedule_rows_html(task)
+    } else {
+        schedule_row_html(0, "interval", "1h", "", "")
+    };
+
+    format!(
+        "<div class='space-y-3'>\
+            <div class='flex items-center justify-between'>\
+                <span class='text-sm font-semibold text-gray-800'>Schedules</span>\
+                <button type='button' id='add-schedule-row' class='rounded border border-gray-300 bg-white px-3 py-1 text-sm font-semibold text-gray-800'>+ Add schedule</button>\
+            </div>\
+            <div id='schedule-rows' class='space-y-3'>{}</div>\
+            <input type='hidden' id='schedules-hidden' name='schedules' value=''>\
+            <p class='text-xs text-gray-500'>Choose interval or once date/time. Multiple schedules are supported with the + button.</p>\
+        </div>",
+        rows
     )
+}
+
+fn shell_command_editor_html(task: Option<&RunnerTask>) -> String {
+    let rows = if let Some(task) = task {
+        shell_command_rows_html(task)
+    } else {
+        command_row_html(0, "")
+    };
+
+    format!(
+        "<div class='space-y-3'>\
+            <div class='flex items-center justify-between'>\
+                <span class='text-sm font-semibold text-gray-800'>Shell Commands</span>\
+                <button type='button' id='add-command-row' class='rounded border border-gray-300 bg-white px-3 py-1 text-sm font-semibold text-gray-800'>+ Add command</button>\
+            </div>\
+            <div id='command-rows' class='space-y-3'>{}</div>\
+            <input type='hidden' id='commands-hidden' name='commands' value=''>\
+            <p class='text-xs text-gray-500'>Enter one shell command per row. Commands are joined into a task group on submit.</p>\
+        </div>",
+        rows
+    )
+}
+
+fn schedule_rows_html(task: &RunnerTask) -> String {
+    let mut rows = Vec::new();
+    let mut index = 0;
+    for schedule in &task.schedules {
+        match schedule {
+            TaskSchedule::Interval { every_seconds, .. } => {
+                rows.push(schedule_row_html(
+                    index,
+                    "interval",
+                    &compact_duration(*every_seconds),
+                    "",
+                    "",
+                ));
+                index += 1;
+            }
+            TaskSchedule::Once { next_run_at, .. } => {
+                rows.push(schedule_row_html(
+                    index,
+                    "once",
+                    "1h",
+                    &local_datetime_value(next_run_at),
+                    "",
+                ));
+                index += 1;
+            }
+            TaskSchedule::DailyTimes { times, .. } => {
+                rows.push(schedule_row_html(
+                    index,
+                    "daily",
+                    "1h",
+                    "",
+                    &times.join(", "),
+                ));
+                index += 1;
+            }
+        }
+    }
+    if rows.is_empty() {
+        rows.push(schedule_row_html(index, "interval", "1h", "", ""));
+    }
+    rows.join("")
+}
+
+fn shell_command_rows_html(task: &RunnerTask) -> String {
+    let (command_text, groups) = match &task.kind {
+        TaskKind::ShellCommand { command, groups } => (command.as_str(), groups.as_slice()),
+        _ => ("", &[] as &[ShellCommandGroup]),
+    };
+    let text = shell_groups_to_text(command_text, groups);
+    let rows = text
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .enumerate()
+        .map(|(index, line)| command_row_html(index, line))
+        .collect::<Vec<_>>();
+    if rows.is_empty() {
+        command_row_html(0, "")
+    } else {
+        rows.join("")
+    }
+}
+
+fn schedule_row_html(
+    index: usize,
+    kind: &str,
+    interval_value: &str,
+    once_value: &str,
+    daily_value: &str,
+) -> String {
+    let interval_hidden = if kind == "interval" { "" } else { "hidden" };
+    let once_hidden = if kind == "once" { "" } else { "hidden" };
+    let daily_hidden = if kind == "daily" { "" } else { "hidden" };
+    let interval_options = ["15m", "30m", "1h", "2h", "4h", "8h", "12h", "24h"]
+        .iter()
+        .map(|value| {
+            format!(
+                "<option value='{}' {}>{}</option>",
+                value,
+                if *value == interval_value {
+                    "selected"
+                } else {
+                    ""
+                },
+                value
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("");
+
+    format!(
+        "<div class='grid md:grid-cols-4 gap-2 p-3 border border-gray-200 rounded items-end' data-schedule-row>\
+            <label class='block'>\
+                <span class='text-xs font-semibold text-gray-700'>Type</span>\
+                <select class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm schedule-kind' name='schedule_kind_{}'>\
+                    <option value='interval' {}>Interval</option>\
+                    <option value='once' {}>Once</option>\
+                    <option value='daily' {}>Daily</option>\
+                </select>\
+            </label>\
+            <label class='block schedule-interval {}'>\
+                <span class='text-xs font-semibold text-gray-700'>Interval</span>\
+                <select class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' name='schedule_interval_{}'>{}\
+                </select>\
+            </label>\
+            <label class='block schedule-once {}'>\
+                <span class='text-xs font-semibold text-gray-700'>Date & Time</span>\
+                <input class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' type='datetime-local' name='schedule_once_at_{}' value='{}'>\
+            </label>\
+            <label class='block schedule-daily {}'>\
+                <span class='text-xs font-semibold text-gray-700'>Times</span>\
+                <input class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' type='text' name='schedule_daily_at_{}' value='{}' placeholder='09:00, 13:00'>\
+            </label>\
+            <button type='button' class='remove-schedule rounded border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700'>Remove</button>\
+        </div>",
+        index,
+        if kind == "interval" { "selected" } else { "" },
+        if kind == "once" { "selected" } else { "" },
+        if kind == "daily" { "selected" } else { "" },
+        interval_hidden,
+        index,
+        interval_options,
+        once_hidden,
+        index,
+        escape_html(once_value),
+        daily_hidden,
+        index,
+        escape_html(daily_value)
+    )
+}
+
+fn command_row_html(_index: usize, command: &str) -> String {
+    format!(
+        "<div class='grid md:grid-cols-[1fr_auto] gap-2 items-end' data-command-row>\
+            <label class='block'>\
+                <span class='text-xs font-semibold text-gray-700'>Command</span>\
+                <input class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm command-text' type='text' value='{}'>\
+            </label>\
+            <button type='button' class='remove-command rounded border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700'>Remove</button>\
+        </div>",
+        escape_html(command)
+    )
+}
+
+fn local_datetime_value(value: &str) -> String {
+    if value.is_empty() {
+        return String::new();
+    }
+    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(value) {
+        return dt
+            .with_timezone(&Local)
+            .format("%Y-%m-%dT%H:%M")
+            .to_string();
+    }
+    String::new()
+}
+
+fn form_script() -> String {
+    "<script>\
+        (function(){\
+            const scheduleRows = document.getElementById('schedule-rows');\
+            const commandRows = document.getElementById('command-rows');\
+            const schedulesHidden = document.getElementById('schedules-hidden');\
+            const commandsHidden = document.getElementById('commands-hidden');\
+            let scheduleIndex = scheduleRows ? scheduleRows.children.length : 0;\
+            let commandIndex = commandRows ? commandRows.children.length : 0;\
+            function updateVisibility(row){\
+                const kind = row.querySelector('.schedule-kind').value;\
+                row.querySelector('.schedule-interval').classList.toggle('hidden', kind !== 'interval');\
+                row.querySelector('.schedule-once').classList.toggle('hidden', kind !== 'once');\
+                row.querySelector('.schedule-daily').classList.toggle('hidden', kind !== 'daily');\
+            }\
+            function attachScheduleEvents(row){\
+                row.querySelector('.schedule-kind').addEventListener('change', function(){ updateVisibility(row); });\
+                row.querySelector('.remove-schedule').addEventListener('click', function(){ row.remove(); });\
+            }\
+            function attachCommandEvents(row){\
+                row.querySelector('.remove-command').addEventListener('click', function(){ row.remove(); });\
+            }\
+            function createScheduleRow(kind, interval, once, daily){\
+                const row = document.createElement('div');\
+                row.setAttribute('data-schedule-row','');\
+                row.className = 'grid md:grid-cols-4 gap-2 p-3 border border-gray-200 rounded items-end';\
+                row.innerHTML = `\
+                    <label class='block'>\
+                        <span class='text-xs font-semibold text-gray-700'>Type</span>\
+                        <select class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm schedule-kind'>\
+                            <option value='interval' ${kind === 'interval' ? 'selected' : ''}>Interval</option>\
+                            <option value='once' ${kind === 'once' ? 'selected' : ''}>Once</option>\
+                            <option value='daily' ${kind === 'daily' ? 'selected' : ''}>Daily</option>\
+                        </select>\
+                    </label>\
+                    <label class='block schedule-interval ${kind === 'interval' ? '' : 'hidden'}'>\
+                        <span class='text-xs font-semibold text-gray-700'>Interval</span>\
+                        <select class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm'>\
+                            ${['15m','30m','1h','2h','4h','8h','12h','24h'].map(opt => `<option value='${opt}' ${opt === interval ? 'selected' : ''}>${opt}</option>`).join('')}\
+                        </select>\
+                    </label>\
+                    <label class='block schedule-once ${kind === 'once' ? '' : 'hidden'}'>\
+                        <span class='text-xs font-semibold text-gray-700'>Date & Time</span>\
+                        <input class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' type='datetime-local' value='${once}'>\
+                    </label>\
+                    <label class='block schedule-daily ${kind === 'daily' ? '' : 'hidden'}'>\
+                        <span class='text-xs font-semibold text-gray-700'>Times</span>\
+                        <input class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' type='text' value='${daily}' placeholder='09:00, 13:00'>\
+                    </label>\
+                    <button type='button' class='remove-schedule rounded border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700'>Remove</button>\
+                `;\
+                return row;\
+            }\
+            function createCommandRow(command){\
+                const row = document.createElement('div');\
+                row.setAttribute('data-command-row','');\
+                row.className = 'grid md:grid-cols-[1fr_auto] gap-2 items-end';\
+                row.innerHTML = `\
+                    <label class='block'>\
+                        <span class='text-xs font-semibold text-gray-700'>Command</span>\
+                        <input class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm command-text' type='text' value='${command}'>\
+                    </label>\
+                    <button type='button' class='remove-command rounded border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700'>Remove</button>\
+                `;\
+                return row;\
+            }\
+            if(scheduleRows){\
+                Array.from(scheduleRows.querySelectorAll('[data-schedule-row]')).forEach(attachScheduleEvents);\
+            }\
+            if(commandRows){\
+                Array.from(commandRows.querySelectorAll('[data-command-row]')).forEach(attachCommandEvents);\
+            }\
+            document.getElementById('add-schedule-row').addEventListener('click', function(){\
+                const row = createScheduleRow('interval','1h','','');\
+                scheduleRows.appendChild(row);\
+                attachScheduleEvents(row);\
+                scheduleIndex += 1;\
+            });\
+            document.getElementById('add-command-row').addEventListener('click', function(){\
+                const row = createCommandRow('');\
+                commandRows.appendChild(row);\
+                attachCommandEvents(row);\
+                commandIndex += 1;\
+            });\
+            function encodeIsoDatetime(value){\
+                if(!value) return '';\
+                const date = new Date(value);\
+                return date.toISOString();\
+            }\
+            function buildSchedules(){\
+                return Array.from(scheduleRows.querySelectorAll('[data-schedule-row]')).map(function(row){\
+                    const kind = row.querySelector('.schedule-kind').value;\
+                    if(kind === 'interval'){\
+                        const interval = row.querySelector('.schedule-interval select').value;\
+                        return 'interval: every ' + interval;\
+                    }\
+                    if(kind === 'once'){\
+                        const value = row.querySelector('.schedule-once input').value;\
+                        return value ? 'once: ' + encodeIsoDatetime(value) : 'once:';\
+                    }\
+                    if(kind === 'daily'){\
+                        const value = row.querySelector('.schedule-daily input').value.trim();\
+                        return value ? 'daily: ' + value : '';\
+                    }\
+                    return '';\
+                }).filter(Boolean).join('\n');\
+            }\
+            function buildCommands(){\
+                return Array.from(commandRows.querySelectorAll('[data-command-row]')).map(function(row){\
+                    return row.querySelector('.command-text').value.trim();\
+                }).filter(Boolean).join('\n');\
+            }\
+            const form = document.querySelector('form');\
+            if(form){\
+                form.addEventListener('submit', function(){\
+                    schedulesHidden.value = buildSchedules();\
+                    commandsHidden.value = buildCommands();\
+                });\
+            }\
+        })();\
+    </script>".to_string()
 }
 
 fn input_field(label: &str, name: &str, value: &str) -> String {
@@ -548,16 +856,6 @@ fn input_field(label: &str, name: &str, value: &str) -> String {
         escape_html(label),
         escape_html(name),
         escape_html(value)
-    )
-}
-
-fn textarea_field(label: &str, name: &str, value: &str, help: &str) -> String {
-    format!(
-        "<label class='block'><span class='text-sm font-semibold text-gray-800'>{}</span><textarea class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm font-mono h-40' name='{}'>{}</textarea><span class='block mt-1 text-xs text-gray-500'>{}</span></label>",
-        escape_html(label),
-        escape_html(name),
-        escape_html(value),
-        escape_html(help)
     )
 }
 
@@ -878,36 +1176,6 @@ fn parse_duration_token(token: &str) -> Result<u64> {
         _ => return Err(anyhow::anyhow!("Invalid duration unit '{}'", unit)),
     };
     Ok(amount * multiplier)
-}
-
-fn schedules_to_text(task: &RunnerTask) -> String {
-    if task.schedules.is_empty() {
-        return match task.repetition {
-            Repetition::Once => {
-                if task.next_run_at.is_empty() {
-                    "once:".to_string()
-                } else {
-                    format!("once: {}", task.next_run_at)
-                }
-            }
-            Repetition::Repeat => format!(
-                "interval: every {}",
-                compact_duration(task.frequency_seconds)
-            ),
-        };
-    }
-
-    task.schedules
-        .iter()
-        .map(|schedule| match schedule {
-            TaskSchedule::Once { next_run_at, .. } => format!("once: {}", next_run_at),
-            TaskSchedule::Interval { every_seconds, .. } => {
-                format!("interval: every {}", compact_duration(*every_seconds))
-            }
-            TaskSchedule::DailyTimes { times, .. } => format!("daily: {}", times.join(", ")),
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 fn compact_duration(seconds: u64) -> String {

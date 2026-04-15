@@ -157,12 +157,7 @@ pub async fn fetch_reports(
                     extra_params: extra,
                 };
                 let result = fetch_with_signed_url_split(
-                    &client,
-                    &token,
-                    endpoint,
-                    &from_date,
-                    &to_date,
-                    &params,
+                    &client, &token, endpoint, &from_date, &to_date, &params,
                 )
                 .await;
                 match result {
@@ -230,15 +225,7 @@ async fn fetch_with_signed_url_split(
     let mut split_used = false;
 
     while let Some((batch_from, batch_to)) = pending.pop() {
-        let result = fetch_single(
-            client,
-            token,
-            endpoint,
-            &batch_from,
-            &batch_to,
-            params,
-        )
-        .await;
+        let result = fetch_single(client, token, endpoint, &batch_from, &batch_to, params).await;
 
         match result {
             Ok(value) => completed.push((batch_from, batch_to, value)),
@@ -343,10 +330,7 @@ fn is_signed_url_generation_failure(err: &anyhow::Error) -> bool {
 
 type DateRange = (String, String);
 
-fn split_range_in_half(
-    from: &str,
-    to: &str,
-) -> Result<Option<(DateRange, DateRange)>> {
+fn split_range_in_half(from: &str, to: &str) -> Result<Option<(DateRange, DateRange)>> {
     let start = NaiveDate::parse_from_str(from, "%Y-%m-%d")
         .with_context(|| format!("Invalid from_date: {}", from))?;
     let end = NaiveDate::parse_from_str(to, "%Y-%m-%d")

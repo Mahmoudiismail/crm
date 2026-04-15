@@ -65,8 +65,8 @@ This prevents overlap from startup + scheduler + tray actions.
 - `GET /tasks`: configured tasks JSON
 - `GET /new-task`: create-task HTML form
 - `GET /edit/<task_id>`: edit-task HTML form
-- `POST /create`: create task from form fields, including multi-line schedule and command-group editors
-- `POST /update/<task_id>`: update task from form fields, including multi-line schedule and command-group editors
+- `POST /create`: create task from form fields using the simplified schedule and command row editor
+- `POST /update/<task_id>`: update task from form fields using the simplified schedule and command row editor
 - `GET /create?...`: legacy create task from query-string fields
 - `GET /update/<task_id>?...`: legacy update task from query-string fields
 - `GET /delete/<task_id>`: delete task

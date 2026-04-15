@@ -73,25 +73,15 @@ When tasks are created/updated through the runner GUI CRUD endpoints:
 
 `id` uniqueness is enforced across all tasks. Updates preserve `last_run_at` and `last_status` when these fields are not explicitly provided.
 
-The GUI create/update forms accept multi-line schedule text:
-
-```text
-interval: every 1h
 daily: 09:00, 13:00, 18:30
-once: 2026-04-15T09:30:00-05:00
-```
+The GUI create/update forms now provide a simpler task editor:
 
-The GUI shell command editor accepts multi-line group text:
+- schedule rows with `Interval` or `Once` options
+- an interval dropdown of common durations
+- a date/time picker for one-time schedules
+- a `+ Add schedule` button for multiple entries
 
-```text
-@group Setup sequential
-run: echo prepare
-continue: cleanup-if-present
-
-@group Reports parallel
-run: ./fetch-a.sh
-run: ./fetch-b.sh
-```
+Shell commands can be added as separate command rows in the same editor.
 
 ### Runner -> CRM invocation contract
 

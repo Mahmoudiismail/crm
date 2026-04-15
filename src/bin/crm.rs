@@ -104,9 +104,7 @@ fn executable_dir() -> std::path::PathBuf {
 }
 
 fn print_help() {
-    eprintln!(
-        "crm usage:\n  --report <all|tickets|calls|leads|none>\n  --config <path>"
-    );
+    eprintln!("crm usage:\n  --report <all|tickets|calls|leads|none>\n  --config <path>");
 }
 
 fn setup_logging() -> Result<tracing_appender::non_blocking::WorkerGuard> {

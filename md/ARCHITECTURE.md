@@ -72,7 +72,7 @@ src/
 - Tailwind-styled dashboard loaded from cdnjs.
 - Status endpoint.
 - Trigger endpoints: run-all, run-by-id, tickets-only.
-- POST-based create/update forms for multi-line schedules and shell command groups.
+- POST-based create/update forms with simpler schedule rows and command rows.
 
 ### `src/crm/*`
 
