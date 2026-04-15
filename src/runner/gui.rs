@@ -52,7 +52,7 @@ async fn run_server(handle: RunnerHandle) -> Result<()> {
                 "HTTP/1.1 {} OK\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
                 status,
                 content_type,
-                body.as_bytes().len(),
+                body.len(),
                 body
             );
 

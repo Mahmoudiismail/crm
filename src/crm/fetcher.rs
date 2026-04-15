@@ -51,12 +51,9 @@ pub async fn fetch_reports(
 ) -> Result<Value> {
     let mut results = serde_json::Map::new();
 
-    match report_type {
-        ReportType::None => {
-            info!("Report type is 'none', skipping all fetches");
-            return Ok(Value::Object(results));
-        }
-        _ => {}
+    if report_type == ReportType::None {
+        info!("Report type is 'none', skipping all fetches");
+        return Ok(Value::Object(results));
     }
 
     let defs = report_defs();
@@ -110,18 +107,21 @@ pub async fn fetch_reports(
 
                 handles.push(tokio::spawn(async move {
                     let key = format!("calls_{}_{}", batch_from, batch_to);
+                    let params = FetchParams {
+                        base_url: &base_url,
+                        email: &email,
+                        account_id: &account_id,
+                        application_id: &application_id,
+                        tz: &tz,
+                        extra_params: extra,
+                    };
                     let result = fetch_with_signed_url_split(
                         &client,
                         &token,
-                        &base_url,
                         endpoint,
-                        &email,
                         &batch_from,
                         &batch_to,
-                        &account_id,
-                        &application_id,
-                        &tz,
-                        extra,
+                        &params,
                     )
                     .await;
                     match result {
@@ -148,18 +148,21 @@ pub async fn fetch_reports(
             let key = def.key.to_string();
 
             handles.push(tokio::spawn(async move {
+                let params = FetchParams {
+                    base_url: &base_url,
+                    email: &email,
+                    account_id: &account_id,
+                    application_id: &application_id,
+                    tz: &tz,
+                    extra_params: extra,
+                };
                 let result = fetch_with_signed_url_split(
                     &client,
                     &token,
-                    &base_url,
                     endpoint,
-                    &email,
                     &from_date,
                     &to_date,
-                    &account_id,
-                    &application_id,
-                    &tz,
-                    extra,
+                    &params,
                 )
                 .await;
                 match result {
@@ -205,18 +208,22 @@ pub async fn fetch_reports(
 // Single report fetch
 // ──────────────────────────────────────────────────────────────
 
+struct FetchParams<'a> {
+    base_url: &'a str,
+    email: &'a str,
+    account_id: &'a str,
+    application_id: &'a str,
+    tz: &'a str,
+    extra_params: &'a [(&'a str, &'a str)],
+}
+
 async fn fetch_with_signed_url_split(
     client: &reqwest::Client,
     token: &str,
-    base_url: &str,
     endpoint: &str,
-    email: &str,
     from_date: &str,
     to_date: &str,
-    account_id: &str,
-    application_id: &str,
-    tz: &str,
-    extra_params: &[(&str, &str)],
+    params: &FetchParams<'_>,
 ) -> Result<Value> {
     let mut pending = vec![(from_date.to_string(), to_date.to_string())];
     let mut completed: Vec<(String, String, Value)> = Vec::new();
@@ -226,15 +233,10 @@ async fn fetch_with_signed_url_split(
         let result = fetch_single(
             client,
             token,
-            base_url,
             endpoint,
-            email,
             &batch_from,
             &batch_to,
-            account_id,
-            application_id,
-            tz,
-            extra_params,
+            params,
         )
         .await;
 
@@ -279,24 +281,19 @@ async fn fetch_with_signed_url_split(
 async fn fetch_single(
     client: &reqwest::Client,
     token: &str,
-    base_url: &str,
     endpoint: &str,
-    email: &str,
     from_date: &str,
     to_date: &str,
-    account_id: &str,
-    application_id: &str,
-    tz: &str,
-    extra_params: &[(&str, &str)],
+    params: &FetchParams<'_>,
 ) -> Result<Value> {
-    let url = format!("{}/{}", base_url.trim_end_matches('/'), endpoint);
+    let url = format!("{}/{}", params.base_url.trim_end_matches('/'), endpoint);
 
     let mut query: Vec<(&str, &str)> = vec![
         ("from_date", from_date),
         ("to_date", to_date),
-        ("email", email),
+        ("email", params.email),
     ];
-    for (k, v) in extra_params {
+    for (k, v) in params.extra_params {
         query.push((*k, *v));
     }
 
@@ -305,9 +302,9 @@ async fn fetch_single(
     let resp = client
         .get(&url)
         .query(&query)
-        .header("account_id", account_id)
-        .header("app-timezone-plus-minutes", tz)
-        .header("application_id", application_id)
+        .header("account_id", params.account_id)
+        .header("app-timezone-plus-minutes", params.tz)
+        .header("application_id", params.application_id)
         .header("auth-type", "cognito")
         .header("authorization", format!("Bearer {}", token))
         .header("content-type", "application/json")
@@ -344,10 +341,12 @@ fn is_signed_url_generation_failure(err: &anyhow::Error) -> bool {
         .contains("failed to generate signed url")
 }
 
+type DateRange = (String, String);
+
 fn split_range_in_half(
     from: &str,
     to: &str,
-) -> Result<Option<((String, String), (String, String))>> {
+) -> Result<Option<(DateRange, DateRange)>> {
     let start = NaiveDate::parse_from_str(from, "%Y-%m-%d")
         .with_context(|| format!("Invalid from_date: {}", from))?;
     let end = NaiveDate::parse_from_str(to, "%Y-%m-%d")

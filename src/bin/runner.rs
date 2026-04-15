@@ -123,16 +123,16 @@ impl ApplicationHandler for App {
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         if let Some((quit_id, run_id, run_tickets_id, logs_id, open_gui_id)) = &self.menu_items {
             if let Ok(event) = muda::MenuEvent::receiver().try_recv() {
-                if &event.id == quit_id {
+                if event.id == *quit_id {
                     info!("Exit requested from menu.");
                     event_loop.exit();
-                } else if &event.id == run_id {
+                } else if event.id == *run_id {
                     info!("Manual run-all requested.");
                     let tx = self.runner.command_tx.clone();
                     tokio::spawn(async move {
                         let _ = tx.send(RunnerCommand::RunAllNow).await;
                     });
-                } else if &event.id == run_tickets_id {
+                } else if event.id == *run_tickets_id {
                     info!("Manual CRM tickets run requested.");
                     let tx = self.runner.command_tx.clone();
                     tokio::spawn(async move {
@@ -140,7 +140,7 @@ impl ApplicationHandler for App {
                             .send(RunnerCommand::RunAdhocCrm(ReportType::Tickets))
                             .await;
                     });
-                } else if &event.id == logs_id {
+                } else if event.id == *logs_id {
                     info!("Opening logs file.");
                     if let Ok(exe_path) = std::env::current_exe() {
                         if let Some(exe_dir) = exe_path.parent() {
@@ -148,7 +148,7 @@ impl ApplicationHandler for App {
                             let _ = open::that(log_path);
                         }
                     }
-                } else if &event.id == open_gui_id {
+                } else if event.id == *open_gui_id {
                     info!("Opening runner GUI.");
                     let _ = open::that(&self.runner_gui_url);
                 }

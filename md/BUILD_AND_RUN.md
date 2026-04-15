@@ -4,7 +4,7 @@
 
 - Rust toolchain installed.
 - Access to Cognito + CRM endpoints.
-- Valid `runner_config.json` and `config.json` values.
+- Valid `runner_config.json` and `config.json` values (with correct authentication credentials).
 
 ## Local Build
 
@@ -20,16 +20,16 @@ cargo build
 cargo build --release
 ```
 
-Release builds use the `Cargo.toml` release profile tuned for maximum runtime optimization:
+Release builds use the `Cargo.toml` release profile tuned for maximum runtime optimization and minimal file size:
 
-- `opt-level = 3`
-- `lto = "fat"`
-- `codegen-units = 1`
-- `strip = "symbols"`
-- `panic = "abort"`
-- `debug = false`
-- `incremental = false`
-- `overflow-checks = false`
+- `opt-level = 3` — maximize runtime optimization
+- `lto = "fat"` — whole-program link-time optimization
+- `codegen-units = 1` — maximize optimization across crate
+- `strip = "symbols"` — strip symbols from release binaries
+- `panic = "abort"` — smaller than unwinding
+- `debug = false` — omit debug info in release artifacts
+- `incremental = false` — keep release builds fully optimized
+- `overflow-checks = false` — disable overflow checks
 
 For one optimized application binary:
 
@@ -57,6 +57,21 @@ CRM CLI arguments:
 - `--config <path>`
 
 CRM always performs login when running.
+
+## Dependencies
+
+Dependencies are maintained at latest stable versions. Current pinned versions (as of April 2026):
+
+- `tokio` 1.52.0 — async runtime
+- `reqwest` 0.13.2 — HTTP client with rustls
+- `serde` / `serde_json` 1.0.228 / 1.0.149 — serialization
+- `chrono` / `chrono-tz` 0.4.44 / 0.10.4 — date/time
+- `tracing` / `tracing-subscriber` 0.1.44 / 0.3.23 — logging
+- `hmac` / `sha2` / `hex` / `base64` / `rand` — cryptography
+- `tray-icon` 0.22 — system tray
+- `winit` 0.30.12 — windowing (for tray integration)
+
+See `Cargo.toml` for the complete dependency list.
 
 ## Devcontainer Workspace
 

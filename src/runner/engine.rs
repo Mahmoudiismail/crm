@@ -445,7 +445,7 @@ fn default_crm_binary_name() -> &'static str {
 
 fn excerpt_utf8(bytes: &[u8]) -> String {
     const MAX: usize = 400;
-    let text = String::from_utf8_lossy(bytes).replace('\n', " ").replace('\r', " ");
+    let text = String::from_utf8_lossy(bytes).replace(['\n', '\r'], " ");
     if text.len() > MAX {
         format!("{}...", &text[..MAX])
     } else if text.is_empty() {
