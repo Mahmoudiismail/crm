@@ -1,9 +1,9 @@
 use anyhow::{bail, Context, Result};
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use chrono::{DateTime, Utc};
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use num_bigint::BigUint;
-use rand::RngCore;
+use rand::Rng;
 use sha2::{Digest, Sha256};
 use tracing::{debug, info};
 
