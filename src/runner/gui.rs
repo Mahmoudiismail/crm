@@ -135,7 +135,7 @@ async fn route_request(
         return Ok((
             200,
             "text/html; charset=utf-8",
-            render_dashboard(&cfg, &status),
+            render_dashboard(&cfg, &status, query.get("toast").map(String::as_str)),
         ));
     }
 
@@ -178,7 +178,7 @@ async fn route_request(
         return Ok((
             200,
             "text/html; charset=utf-8",
-            render_notice_page("Task created"),
+            render_redirect_to_dashboard("Task created"),
         ));
     }
 
@@ -190,7 +190,7 @@ async fn route_request(
         return Ok((
             200,
             "text/html; charset=utf-8",
-            render_notice_page("Task updated"),
+            render_redirect_to_dashboard("Task updated"),
         ));
     }
 
@@ -200,7 +200,7 @@ async fn route_request(
         return Ok((
             200,
             "text/html; charset=utf-8",
-            render_notice_page("Task created"),
+            render_redirect_to_dashboard("Task created"),
         ));
     }
 
@@ -211,7 +211,7 @@ async fn route_request(
         return Ok((
             200,
             "text/html; charset=utf-8",
-            render_notice_page("Task updated"),
+            render_redirect_to_dashboard("Task updated"),
         ));
     }
 
@@ -221,7 +221,7 @@ async fn route_request(
         return Ok((
             200,
             "text/html; charset=utf-8",
-            render_notice_page("Task deleted"),
+            render_redirect_to_dashboard("Task deleted"),
         ));
     }
 
@@ -230,7 +230,7 @@ async fn route_request(
         return Ok((
             200,
             "text/html; charset=utf-8",
-            render_notice_page("Run-all triggered"),
+            render_redirect_to_dashboard("Run-all triggered"),
         ));
     }
 
@@ -242,7 +242,7 @@ async fn route_request(
         return Ok((
             200,
             "text/html; charset=utf-8",
-            render_notice_page("CRM tickets run triggered"),
+            render_redirect_to_dashboard("CRM tickets run triggered"),
         ));
     }
 
@@ -255,7 +255,7 @@ async fn route_request(
         return Ok((
             200,
             "text/html; charset=utf-8",
-            render_notice_page("Task triggered"),
+            render_redirect_to_dashboard("Task triggered"),
         ));
     }
 
@@ -271,7 +271,7 @@ async fn route_request(
         return Ok((
             200,
             "text/html; charset=utf-8",
-            render_notice_page("Task enabled"),
+            render_redirect_to_dashboard("Task enabled"),
         ));
     }
 
@@ -287,7 +287,7 @@ async fn route_request(
         return Ok((
             200,
             "text/html; charset=utf-8",
-            render_notice_page("Task disabled"),
+            render_redirect_to_dashboard("Task disabled"),
         ));
     }
 
@@ -298,7 +298,11 @@ async fn route_request(
     ))
 }
 
-fn render_dashboard(cfg: &RunnerConfig, status: &crate::runner::engine::RunnerStatus) -> String {
+fn render_dashboard(
+    cfg: &RunnerConfig,
+    status: &crate::runner::engine::RunnerStatus,
+    toast: Option<&str>,
+) -> String {
     let rows = cfg
         .tasks
         .iter()
@@ -306,10 +310,14 @@ fn render_dashboard(cfg: &RunnerConfig, status: &crate::runner::engine::RunnerSt
         .collect::<Vec<_>>()
         .join("");
 
+    let toast_html = toast
+        .map(|message| render_toast(message))
+        .unwrap_or_default();
+
     html_page(
         "Runner GUI",
         &format!(
-            "<div class='space-y-6'>\
+            "{}<div class='space-y-6'>\
                 <div class='flex flex-col md:flex-row md:items-end md:justify-between gap-4'>\
                     <div><p class='text-sm font-semibold text-emerald-700'>Runner</p><h1 class='text-3xl font-bold text-gray-900'>Task Dashboard</h1><p class='text-gray-600 mt-2'>Schedule CRM work and shell command groups from one local control panel.</p></div>\
                     <div class='flex flex-wrap gap-2'>\
@@ -341,6 +349,7 @@ fn render_dashboard(cfg: &RunnerConfig, status: &crate::runner::engine::RunnerSt
                     </div>\
                 </div>\
             </div>",
+            toast_html,
             render_status_cards(status, cfg.tasks.len()),
             rows
         ),
@@ -898,14 +907,32 @@ fn html_page(title: &str, content: &str) -> String {
     )
 }
 
-fn render_notice_page(message: &str) -> String {
+fn render_redirect_to_dashboard(message: &str) -> String {
     html_page(
-        message,
+        "Redirecting",
         &format!(
-            "<div class='max-w-xl mx-auto bg-white border border-gray-200 rounded shadow-sm p-6'><h1 class='text-2xl font-bold text-gray-900'>{}</h1><p class='mt-4'><a class='rounded bg-gray-900 text-white px-4 py-2 text-sm font-semibold' href='/'>Open dashboard</a></p></div>",
-            escape_html(message)
+            "<div class='max-w-xl mx-auto bg-white border border-gray-200 rounded shadow-sm p-6'><h1 class='text-2xl font-bold text-gray-900'>Redirecting</h1><p class='mt-4 text-gray-700'>Returning to the dashboard...</p></div><script>const msg='{}'; window.location.replace('/?toast=' + encodeURIComponent(msg));</script>",
+            js_escape(message)
         ),
     )
+}
+
+fn render_toast(message: &str) -> String {
+    format!(
+        "<div id='runner-toast' class='fixed right-4 top-4 z-50 max-w-sm rounded border border-gray-200 bg-white px-4 py-3 shadow-lg'>\
+            <p class='text-sm font-semibold text-gray-900'>{}</p>\
+        </div><script>setTimeout(()=>{{const t=document.getElementById('runner-toast'); if(t) t.remove();}},4000);</script>",
+        escape_html(message)
+    )
+}
+
+fn js_escape(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\'', "\\'")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
 }
 
 fn render_error_page(title: &str, message: &str) -> String {

@@ -98,6 +98,8 @@ Check:
 
 Use `GET /tasks` to confirm persisted task state after edits.
 
+- Successful create/update/run/enable/disable/delete actions redirect back to the dashboard and show a toast notification.
+
 The GUI shows schedule, next-run, and last-run values in local human-readable time. Use `GET /tasks` when exact RFC3339 timestamps are needed for troubleshooting.
 
 ### 8) Runner cannot execute CRM

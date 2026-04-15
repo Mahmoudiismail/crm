@@ -41,6 +41,7 @@ async fn main() -> Result<()> {
     let runner_config_path = executable_dir().join("runner_config.json");
     let runner_config_path_str = runner_config_path.to_string_lossy().to_string();
 
+    let config_exists = runner_config_path.exists();
     let runner_cfg = RunnerConfig::load(&runner_config_path_str)?;
     ensure_crm_config_exists(&runner_cfg).await?;
 
@@ -48,9 +49,11 @@ async fn main() -> Result<()> {
     start_gui_server(runner_handle.clone());
 
     let tx = runner_handle.command_tx.clone();
-    tokio::spawn(async move {
-        let _ = tx.send(RunnerCommand::RunAllNow).await;
-    });
+    if !config_exists {
+        tokio::spawn(async move {
+            let _ = tx.send(RunnerCommand::RunAllNow).await;
+        });
+    }
 
     let event_loop = EventLoop::new()?;
     let mut app = App {

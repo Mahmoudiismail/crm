@@ -48,6 +48,7 @@ At startup, runner ensures config files exist under executable directory:
 
 - `runner_config.json` via runner config loader.
 - `config.json` by invoking `crm --config <path> --report none` when missing.
+ - If `runner_config.json` already exists, runner does not perform an immediate task run; tasks will begin on the next scheduler cycle.
 
 ## Run Serialization
 
@@ -73,6 +74,7 @@ This prevents overlap from startup + scheduler + tray actions.
 - `GET /run-all`: trigger run-all
 - `GET /run-tickets`: trigger ad-hoc CRM tickets task
 - `GET /run/<task_id>`: trigger specific configured task
+Note: action routes redirect back to the dashboard and display a toast notification on success.
 - `GET /enable/<task_id>`: enable task
 - `GET /disable/<task_id>`: disable task
 
