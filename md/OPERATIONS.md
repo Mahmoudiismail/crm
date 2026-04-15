@@ -43,6 +43,8 @@ Check:
 - date format (`YYYY-MM-DD`)
 - token validity
 
+If logs show `Failed to generate signed url`, the CRM fetcher automatically retries smaller date ranges by halving the failing range. A remaining failure after the range reaches one day means the backend cannot produce a signed URL for that single-day export.
+
 ### 3) Download errors
 
 Check:

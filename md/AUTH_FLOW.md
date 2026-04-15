@@ -13,6 +13,8 @@ Decision tree:
 
 Current runtime policy: CRM execution always requires login flow (no user-facing skip-login option).
 
+Report range splitting does not change authentication behavior. Split retries reuse the same bearer token and request headers as the original report fetch.
+
 ## Cognito SRP Sequence
 
 ### 1) Prepare SRP Values

@@ -130,3 +130,4 @@ Implementation: `src/crm/config.rs`
 - Empty `to_date` is finalized to local current date.
 - Empty `calls_from_date` falls back to `from_date`.
 - If `remember_secrets=false`, secret/token fields are removed before saving.
+- No config field is required for signed-URL failure splitting; the fetcher automatically halves a report date range when the CRM API returns `Failed to generate signed url`.

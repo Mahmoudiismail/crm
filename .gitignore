@@ -2,3 +2,4 @@ target/*
 crm_tool.*
 *.csv
 .git/
+crm.log

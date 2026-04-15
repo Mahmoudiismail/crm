@@ -73,7 +73,7 @@ src/
 
 - `auth`: token reuse + Cognito SRP sequence.
 - `config`: CRM configuration and token persistence.
-- `fetcher`: report API requests and monthly batching.
+- `fetcher`: report API requests, call-log monthly batching, and signed-URL failure range splitting.
 - `downloader`: CSV stream download.
 - CSV files are written under `<crm_exe_dir>/Downloads`.
 - `mod.rs`: shared `run_once` API used by `crm` executable.

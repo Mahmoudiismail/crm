@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use chrono::{Datelike, NaiveDate};
+use chrono::{Datelike, Duration as ChronoDuration, NaiveDate};
 use futures_util::future::join_all;
 use serde_json::Value;
 use std::sync::Arc;
@@ -110,7 +110,7 @@ pub async fn fetch_reports(
 
                 handles.push(tokio::spawn(async move {
                     let key = format!("calls_{}_{}", batch_from, batch_to);
-                    let result = fetch_single(
+                    let result = fetch_with_signed_url_split(
                         &client,
                         &token,
                         &base_url,
@@ -134,7 +134,8 @@ pub async fn fetch_reports(
                 }));
             }
         } else {
-            // Tickets / Leads: single request
+            // Tickets / Leads: try the full range first, then split if the
+            // backend refuses to generate a signed URL for a large file.
             let client = client.clone();
             let token = Arc::clone(&token_arc);
             let base_url = Arc::clone(&base_url_arc);
@@ -147,7 +148,7 @@ pub async fn fetch_reports(
             let key = def.key.to_string();
 
             handles.push(tokio::spawn(async move {
-                let result = fetch_single(
+                let result = fetch_with_signed_url_split(
                     &client,
                     &token,
                     &base_url,
@@ -203,6 +204,77 @@ pub async fn fetch_reports(
 // ──────────────────────────────────────────────────────────────
 // Single report fetch
 // ──────────────────────────────────────────────────────────────
+
+async fn fetch_with_signed_url_split(
+    client: &reqwest::Client,
+    token: &str,
+    base_url: &str,
+    endpoint: &str,
+    email: &str,
+    from_date: &str,
+    to_date: &str,
+    account_id: &str,
+    application_id: &str,
+    tz: &str,
+    extra_params: &[(&str, &str)],
+) -> Result<Value> {
+    let mut pending = vec![(from_date.to_string(), to_date.to_string())];
+    let mut completed: Vec<(String, String, Value)> = Vec::new();
+    let mut split_used = false;
+
+    while let Some((batch_from, batch_to)) = pending.pop() {
+        let result = fetch_single(
+            client,
+            token,
+            base_url,
+            endpoint,
+            email,
+            &batch_from,
+            &batch_to,
+            account_id,
+            application_id,
+            tz,
+            extra_params,
+        )
+        .await;
+
+        match result {
+            Ok(value) => completed.push((batch_from, batch_to, value)),
+            Err(err) if is_signed_url_generation_failure(&err) => {
+                if let Some((left, right)) = split_range_in_half(&batch_from, &batch_to)? {
+                    split_used = true;
+                    info!(
+                        "{} [{} to {}] failed to generate signed URL; retrying as [{} to {}] and [{} to {}]",
+                        endpoint, batch_from, batch_to, left.0, left.1, right.0, right.1
+                    );
+                    pending.push(right);
+                    pending.push(left);
+                } else {
+                    return Err(err).with_context(|| {
+                        format!(
+                            "{} failed to generate a signed URL for single-day range {}",
+                            endpoint, batch_from
+                        )
+                    });
+                }
+            }
+            Err(err) => return Err(err),
+        }
+    }
+
+    completed.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
+
+    if split_used || completed.len() > 1 {
+        Ok(Value::Array(
+            completed.into_iter().map(|(_, _, value)| value).collect(),
+        ))
+    } else {
+        completed
+            .pop()
+            .map(|(_, _, value)| value)
+            .context("No report fetch result was produced")
+    }
+}
 
 async fn fetch_single(
     client: &reqwest::Client,
@@ -266,6 +338,45 @@ async fn fetch_single(
     Ok(parsed)
 }
 
+fn is_signed_url_generation_failure(err: &anyhow::Error) -> bool {
+    err.to_string()
+        .to_ascii_lowercase()
+        .contains("failed to generate signed url")
+}
+
+fn split_range_in_half(
+    from: &str,
+    to: &str,
+) -> Result<Option<((String, String), (String, String))>> {
+    let start = NaiveDate::parse_from_str(from, "%Y-%m-%d")
+        .with_context(|| format!("Invalid from_date: {}", from))?;
+    let end = NaiveDate::parse_from_str(to, "%Y-%m-%d")
+        .with_context(|| format!("Invalid to_date: {}", to))?;
+
+    if start > end {
+        anyhow::bail!("from_date ({}) is after to_date ({})", from, to);
+    }
+
+    if start == end {
+        return Ok(None);
+    }
+
+    let days = (end - start).num_days();
+    let left_end = start + ChronoDuration::days(days / 2);
+    let right_start = left_end + ChronoDuration::days(1);
+
+    Ok(Some((
+        (
+            start.format("%Y-%m-%d").to_string(),
+            left_end.format("%Y-%m-%d").to_string(),
+        ),
+        (
+            right_start.format("%Y-%m-%d").to_string(),
+            end.format("%Y-%m-%d").to_string(),
+        ),
+    )))
+}
+
 // ──────────────────────────────────────────────────────────────
 // Monthly date splitting
 // ──────────────────────────────────────────────────────────────
@@ -327,20 +438,23 @@ pub fn extract_urls(results: &Value) -> Vec<(String, String)> {
 
     if let Value::Object(map) = results {
         for (key, val) in map {
-            if key == "calls" {
-                if let Value::Array(arr) = val {
-                    for item in arr {
-                        if let Some(url) = extract_data_url(item) {
-                            urls.push((key.clone(), url));
-                        }
-                    }
-                }
-            } else if let Some(url) = extract_data_url(val) {
-                urls.push((key.clone(), url));
-            }
+            extract_urls_for_key(key, val, &mut urls);
         }
     }
     urls
+}
+
+fn extract_urls_for_key(key: &str, val: &Value, urls: &mut Vec<(String, String)>) {
+    if let Some(url) = extract_data_url(val) {
+        urls.push((key.to_string(), url));
+        return;
+    }
+
+    if let Value::Array(arr) = val {
+        for item in arr {
+            extract_urls_for_key(key, item, urls);
+        }
+    }
 }
 
 fn extract_data_url(val: &Value) -> Option<String> {
@@ -391,6 +505,51 @@ mod tests {
         assert_eq!(
             last_day_of_month(2025, 2),
             NaiveDate::from_ymd_opt(2025, 2, 28).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_split_range_in_half_even_days() {
+        let split = split_range_in_half("2026-01-01", "2026-01-04")
+            .unwrap()
+            .unwrap();
+        assert_eq!(split.0, ("2026-01-01".into(), "2026-01-02".into()));
+        assert_eq!(split.1, ("2026-01-03".into(), "2026-01-04".into()));
+    }
+
+    #[test]
+    fn test_split_range_in_half_odd_days() {
+        let split = split_range_in_half("2026-01-01", "2026-01-05")
+            .unwrap()
+            .unwrap();
+        assert_eq!(split.0, ("2026-01-01".into(), "2026-01-03".into()));
+        assert_eq!(split.1, ("2026-01-04".into(), "2026-01-05".into()));
+    }
+
+    #[test]
+    fn test_split_range_in_half_single_day() {
+        let split = split_range_in_half("2026-01-01", "2026-01-01").unwrap();
+        assert!(split.is_none());
+    }
+
+    #[test]
+    fn test_extract_urls_from_any_report_array() {
+        let results = serde_json::json!({
+            "tickets": [
+                {"data": {"url": "https://example.com/tickets-1.csv"}},
+                {"data": {"url": "https://example.com/tickets-2.csv"}}
+            ],
+            "leads": {"data": {"url": "https://example.com/leads.csv"}}
+        });
+
+        let urls = extract_urls(&results);
+        assert_eq!(
+            urls,
+            vec![
+                ("leads".into(), "https://example.com/leads.csv".into()),
+                ("tickets".into(), "https://example.com/tickets-1.csv".into()),
+                ("tickets".into(), "https://example.com/tickets-2.csv".into()),
+            ]
         );
     }
 }
