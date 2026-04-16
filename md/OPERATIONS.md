@@ -96,11 +96,21 @@ Check:
 - non-empty shell command text for `shell_command` tasks
 - valid command group headers such as `@group Reports parallel`
 
+Note: As of the GUI improvements (see `GUI_IMPROVEMENTS_SUMMARY.md`), the `+ Add schedule` and `+ Add command` buttons now have proper event listener scoping and will reliably add new rows to the form.
+
 Use `GET /tasks` to confirm persisted task state after edits.
 
 - Successful create/update/run/enable/disable/delete actions redirect back to the dashboard and show a toast notification.
 
 The GUI shows schedule, next-run, and last-run values in local human-readable time. Use `GET /tasks` when exact RFC3339 timestamps are needed for troubleshooting.
+
+### 8) GUI button visibility issues
+
+If action buttons appear invisible or have low contrast:
+
+- Update to a version with GUI improvements applied (buttons use `bg-emerald-600` with white text)
+- Check Tailwind CSS is loading from CDN (styles will degrade gracefully if unavailable)
+- Verify browser isn't applying custom CSS extensions that might override button styling
 
 ### 8) Runner cannot execute CRM
 

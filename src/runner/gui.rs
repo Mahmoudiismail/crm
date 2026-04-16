@@ -445,7 +445,7 @@ fn render_task_row(task: &RunnerTask) -> String {
                 <a class='rounded border border-gray-300 px-3 py-1 font-semibold text-gray-800' href='/run/{}'>Run</a>\
                 <a class='rounded border border-gray-300 px-3 py-1 font-semibold text-gray-800' href='/enable/{}'>Enable</a>\
                 <a class='rounded border border-gray-300 px-3 py-1 font-semibold text-gray-800' href='/disable/{}'>Disable</a>\
-                <a class='rounded border border-gray-300 px-3 py-1 font-semibold text-gray-800' href='/edit/{}'>Edit</a>\
+<a class='rounded bg-emerald-600 text-white px-3 py-1 text-sm font-semibold hover:bg-emerald-700' href='/edit/{}'>Edit</a>"
                 <a class='rounded border border-red-200 px-3 py-1 font-semibold text-red-700' href='/delete/{}'>Delete</a>\
             </div></td>\
         </tr>",
@@ -927,21 +927,26 @@ fn form_script() -> String {
             if(commandRows){\
                 Array.from(commandRows.querySelectorAll('[data-command-row]')).forEach(attachCommandEvents);\
             }\
-            if(addScheduleBtn && scheduleRows){\
-                addScheduleBtn.addEventListener('click', function(){\
-                    const row = createScheduleRow('interval','1h','','','','');\
-                    scheduleRows.appendChild(row);\
-                    attachScheduleEvents(row);\
-                    scheduleIndex += 1;\
-                });\
-            }\
-            if(addCommandBtn && commandRows){\
-                addCommandBtn.addEventListener('click', function(){\
-                    const row = createCommandRow('');\
-                    commandRows.appendChild(row);\
-                    attachCommandEvents(row);\
-                    commandIndex += 1;\
-                });\
+if(addScheduleBtn){
+ addScheduleBtn.addEventListener('click', function(){
+ const scheduleRows = document.getElementById('schedule-rows');
+ if (!scheduleRows) return;
+ const row = createScheduleRow('interval','1h','','','','');
+ scheduleRows.appendChild(row);
+ attachScheduleEvents(row);
+ scheduleIndex += 1;
+ });
+}
+if(addCommandBtn){
+ addCommandBtn.addEventListener('click', function(){
+ const commandRows = document.getElementById('command-rows');
+ if (!commandRows) return;
+ const row = createCommandRow('');
+ commandRows.appendChild(row);
+ attachCommandEvents(row);
+ commandIndex += 1;
+ });
+}
             }\
             function encodeIsoDatetime(value){\
                 if(!value) return '';\

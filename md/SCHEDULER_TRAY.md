@@ -64,8 +64,8 @@ This prevents overlap from startup + scheduler + tray actions.
 - `GET /`: HTML dashboard
 - `GET /status`: runner status JSON
 - `GET /tasks`: configured tasks JSON
-- `GET /new-task`: create-task HTML form
-- `GET /edit/<task_id>`: edit-task HTML form
+- `GET /new-task`: create-task HTML form with multi-schedule and multi-command support
+- `GET /edit/<task_id>`: edit-task HTML form with multi-schedule and multi-command support
 - `POST /create`: create task from form fields using the simplified schedule and command row editor
 - `POST /update/<task_id>`: update task from form fields using the simplified schedule and command row editor
 - `GET /create?...`: legacy create task from query-string fields
@@ -74,9 +74,8 @@ This prevents overlap from startup + scheduler + tray actions.
 - `GET /run-all`: trigger run-all
 - `GET /run-tickets`: trigger ad-hoc CRM tickets task
 - `GET /run/<task_id>`: trigger specific configured task
-Note: action routes redirect back to the dashboard and display a toast notification on success.
-- `GET /enable/<task_id>`: enable task
-- `GET /disable/<task_id>`: disable task
+
+Note: action routes redirect back to the dashboard and display a toast notification on success. The GUI form editor supports multiple schedule types (Interval, Once, Daily at times, Weekly on day, Monthly on day) and multiple command rows with per-command error handling (Run/Continue modes).
 
 CRUD operations persist directly to `runner_config.json` and return validation errors immediately when payload values are invalid.
 
