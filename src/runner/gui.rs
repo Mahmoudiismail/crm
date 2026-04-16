@@ -13,7 +13,7 @@ use crate::runner::engine::{create_task, delete_task, update_task};
 use crate::runner::engine::{RunnerCommand, RunnerHandle};
 
 const TAILWIND_CDN: &str =
-    "https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.2/dist/index.css";
+    "https://cdn.jsdelivr.net/npm/tailwindcss@4.2.2/index.min.css";
 
 struct HttpRequest {
     method: String,
