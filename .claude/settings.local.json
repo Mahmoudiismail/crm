@@ -10,7 +10,8 @@
       "Bash(sed -n '448p' /home/mahmoud/Downloads/sites/crm-rust/src/runner/gui.rs)",
       "Bash(cargo check *)",
       "Bash(/home/mahmoud/.cargo/bin/cargo check *)",
-      "Bash(git checkout *)"
+      "Bash(git checkout *)",
+      "Bash(cargo build *)"
     ]
   }
 }
