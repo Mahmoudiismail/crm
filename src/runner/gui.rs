@@ -446,7 +446,7 @@ fn render_task_row(task: &RunnerTask) -> String {
                 <a class='rounded border border-gray-300 px-3 py-1 font-semibold text-gray-800' href='/enable/{}'>Enable</a>\
                 <a class=\"rounded border border-gray-300 px-3 py-1 font-semibold text-gray-800\" href=\"/disable/{}\">Disable</a>\\
 <a class='rounded bg-emerald-600 text-white px-3 py-1 text-sm font-semibold hover:bg-emerald-700' href='/edit/{}'>Edit</a>
-                <a class='rounded border border-red-200 px-3 py-1 font-semibold text-red-700' href='/delete/{}'>Delete</a>\
+                <a class='rounded bg-red-600 text-white px-3 py-1 text-sm font-semibold hover:bg-red-700' href='/delete/{}'>Delete</a>\
             </div></td>\
         </tr>",
         escape_html(&task.name),
