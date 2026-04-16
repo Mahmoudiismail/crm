@@ -4,7 +4,12 @@
       "Bash(grep *)",
       "Bash(git commit *)",
       "Bash(git push *)",
-      "Bash(gh pr *)"
+      "Bash(gh pr *)",
+      "Bash(python3 *)",
+      "Bash(sed -i '448s/Edit<\\\\/a>\"/Edit<\\\\/a>/' /home/mahmoud/Downloads/sites/crm-rust/src/runner/gui.rs)",
+      "Bash(sed -n '448p' /home/mahmoud/Downloads/sites/crm-rust/src/runner/gui.rs)",
+      "Bash(cargo check *)",
+      "Bash(/home/mahmoud/.cargo/bin/cargo check *)"
     ]
   }
 }
