@@ -29,18 +29,25 @@ Behavior:
 
 ## Scheduler Loop
 
-- Re-load `runner_config.json` each cycle.
-- Sleep for `poll_interval_seconds` (minimum 5s in engine loop).
-- Find due tasks using the enabled flag and either legacy `next_run_at` or the task `schedules` list.
-- Execute tasks one-by-one.
-- For `crm_fetch`, invoke external `crm` executable with CLI args (`--config`, `--report`).
-- For `shell_command`, run configured command groups in order. Groups can execute commands sequentially or in parallel.
-- Update task state:
-	- `last_run_at`
-	- `last_status`
-	- legacy `next_run_at` for repeat tasks
-	- per-schedule `next_run_at` for interval and daily local-time schedules
-	- `enabled=false` for one-time tasks or one-time schedules after run
+The runner uses **cron-based polling** to evaluate task schedules:
+
+1. **Config Reload**: Re-load `runner_config.json` each cycle.
+2. **Poll Interval**: Sleep for `poll_interval_seconds` (minimum 5s, configurable in engine loop).
+3. **Cron Evaluation**: For each enabled task, check all schedules using the `schedule_is_due()` function:
+   - **Interval**: Check if current time >= `next_run_at`
+   - **Once**: Check if current time >= `next_run_at` timestamp
+   - **Daily**: Check if current time >= calculated `next_run_at` for today's times
+   - **Weekly**: Check if current time >= calculated `next_run_at` for the target day
+   - **Monthly**: Check if current time >= calculated `next_run_at` for the target date
+4. **Task Execution**: If any schedule is due, execute the task:
+   - For `crm_fetch`, invoke external `crm` executable with CLI args (`--config`, `--report`)
+   - For `shell_command`, run configured command groups in order. Groups can execute commands sequentially or in parallel
+5. **Task State Update**:
+   - Update `last_run_at` timestamp
+   - Update `last_status` with execution result
+   - For legacy repeat tasks: update `next_run_at` based on `frequency_seconds`
+   - For cron schedules: call `advance_schedule()` to compute next execution time
+   - For one-time schedules: set `enabled=false` after execution
 
 If multiple schedules on the same task are due in one scheduler tick, the task runs once and all due schedules advance or disable together.
 

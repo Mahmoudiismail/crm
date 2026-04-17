@@ -59,14 +59,25 @@ CRM CLI arguments:
 
 CRM always performs login when running.
 
+## Scheduler Implementation
+
+The runner uses a **cron-based polling scheduler** implemented with standard chrono and Tokio:
+
+- **No external cron dependency**: The scheduler uses `DateTime` comparisons and RFC3339 timestamps
+- **Configurable poll interval**: `poll_interval_seconds` in `runner_config.json` (default 30 seconds, minimum 5)
+- **Supported schedule types**: interval, once, daily, weekly, monthly
+- **Next-run calculation**: after task execution, the `advance_schedule()` function computes the next `next_run_at` timestamp
+
+This approach provides reliability and simplicity without external job queue infrastructure.
+
 ## Dependencies
 
 Dependencies are maintained at latest stable versions. Current pinned versions (as of April 2026):
 
-- `tokio` 1.52.0 — async runtime
+- `tokio` 1.52.0 — async runtime (includes time, sync modules for scheduler polling)
 - `reqwest` 0.13.2 — HTTP client with rustls
 - `serde` / `serde_json` 1.0.228 / 1.0.149 — serialization
-- `chrono` / `chrono-tz` 0.4.44 / 0.10.4 — date/time
+- `chrono` / `chrono-tz` 0.4.44 / 0.10.4 — date/time and cron-based schedule calculations
 - `tracing` / `tracing-subscriber` 0.1.44 / 0.3.23 — logging
 - `hmac` / `sha2` / `hex` / `base64` / `rand` — cryptography
 - `tray-icon` 0.22 — system tray
