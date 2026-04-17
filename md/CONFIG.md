@@ -38,17 +38,22 @@ Implementation: `src/runner/config.rs`
 - `last_run_at`: last run timestamp
 - `last_status`: last run result message
 
-### Schedule fields
+### Schedule fields and cron-based evaluation
 
 Each `schedules` item has a `type`:
 
-- `once`: runs once at `next_run_at`; empty `next_run_at` means immediate.
-- `interval`: runs every `every_seconds`; `next_run_at` stores the next due time.
-- `daily_times`: runs at one or more local machine times in `times` (`HH:MM`); `next_run_at` stores the next calculated due time.
-- `weekly`: runs on a specific day of the week; `day_of_week` is day name (Monday, Tuesday, etc.), `at_time` is optional (`HH:MM` default 09:00).
-- `monthly`: runs on a specific day of the month; `day_of_month` is 1-31, `at_time` is optional (`HH:MM` default 09:00).
+- `once`: runs once at `next_run_at`; empty `next_run_at` means immediate. After execution, `enabled` is set to `false`.
+- `interval`: runs every `every_seconds`; `next_run_at` stores the next due time. After execution, `next_run_at` advances by `every_seconds`.
+- `daily_times`: runs at one or more local machine times in `times` (`HH:MM`); `next_run_at` stores the next calculated due time. After execution, `next_run_at` is recalculated for the next matching time.
+- `weekly`: runs on a specific day of the week; `day_of_week` is day name (Monday, Tuesday, etc.), `at_time` is optional (`HH:MM` default 09:00). After execution, `next_run_at` advances to the next week.
+- `monthly`: runs on a specific day of the month; `day_of_month` is 1-31, `at_time` is optional (`HH:MM` default 09:00). After execution, `next_run_at` advances to the next month.
 
-All persisted `next_run_at` and `last_run_at` values remain RFC3339. The GUI renders these values as local human-readable time with relative text.
+**Cron Evaluation**: The scheduler polls on `poll_interval_seconds` and checks each enabled schedule:
+- For each schedule, compare current UTC time with its `next_run_at` RFC3339 timestamp
+- If current time >= `next_run_at`, the schedule is due and the task executes
+- After task execution, the `advance_schedule()` function computes the next `next_run_at` based on schedule type
+
+All persisted `next_run_at` and `last_run_at` values remain RFC3339 UTC. The GUI renders these values as local human-readable time with relative text.
 
 ### Shell command groups
 

@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use chrono::{DateTime, Local, NaiveTime, TimeZone, Utc};
+use chrono::{DateTime, Datelike, Local, NaiveTime, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -493,6 +493,118 @@ pub fn next_daily_run_after(times: &[String], now: DateTime<Utc>) -> Result<Stri
         .ok_or_else(|| anyhow::anyhow!("daily_times schedule requires at least one HH:MM time"))
 }
 
+pub fn next_weekly_run_after(day_of_week: &str, at_time: &str, now: DateTime<Utc>) -> Result<String> {
+    let day_lower = day_of_week.trim().to_lowercase();
+    let target_weekday = match day_lower.as_str() {
+        "sunday" | "sun" | "0" => chrono::Weekday::Sun,
+        "monday" | "mon" | "1" => chrono::Weekday::Mon,
+        "tuesday" | "tue" | "2" => chrono::Weekday::Tue,
+        "wednesday" | "wed" | "3" => chrono::Weekday::Wed,
+        "thursday" | "thu" | "4" => chrono::Weekday::Thu,
+        "friday" | "fri" | "5" => chrono::Weekday::Fri,
+        "saturday" | "sat" | "6" => chrono::Weekday::Sat,
+        _ => return Err(anyhow::anyhow!(
+            "Invalid day of week '{}'. Use monday-sunday (or mon-sun, 0-6)",
+            day_of_week
+        )),
+    };
+
+    let now_local = now.with_timezone(&Local);
+    let today = now_local.date_naive();
+    let now_weekday = today.weekday();
+
+    let time = if at_time.is_empty() {
+        NaiveTime::from_hms_opt(0, 0, 0).unwrap()
+    } else {
+        NaiveTime::parse_from_str(at_time.trim(), "%H:%M")
+            .with_context(|| format!("Invalid weekly time '{}'. Use HH:MM", at_time))?
+    };
+
+    let days_until_target = (target_weekday.num_days_from_monday() as i64
+        - now_weekday.num_days_from_monday() as i64
+        + 7)
+        % 7;
+
+    let target_date = today + chrono::TimeDelta::days(days_until_target);
+    let local_dt = target_date.and_time(time);
+    let candidate = match Local.from_local_datetime(&local_dt) {
+        chrono::LocalResult::Single(dt) => dt,
+        chrono::LocalResult::Ambiguous(dt, _) => dt,
+        chrono::LocalResult::None => return Err(anyhow::anyhow!("Could not resolve weekly schedule time")),
+    }
+    .with_timezone(&Utc);
+
+    if candidate <= now {
+        let next_week = today + chrono::TimeDelta::days(7);
+        let local_dt = next_week.and_time(time);
+        let next_dt = match Local.from_local_datetime(&local_dt) {
+            chrono::LocalResult::Single(dt) => dt,
+            chrono::LocalResult::Ambiguous(dt, _) => dt,
+            chrono::LocalResult::None => return Err(anyhow::anyhow!("Could not resolve weekly schedule time")),
+        }
+        .with_timezone(&Utc);
+        Ok(next_dt.to_rfc3339())
+    } else {
+        Ok(candidate.to_rfc3339())
+    }
+}
+
+pub fn next_monthly_run_after(day_of_month: u32, at_time: &str, now: DateTime<Utc>) -> Result<String> {
+    let now_local = now.with_timezone(&Local);
+    let today = now_local.date_naive();
+    let current_year = today.year();
+    let current_month = today.month();
+
+    let time = if at_time.is_empty() {
+        NaiveTime::from_hms_opt(0, 0, 0).unwrap()
+    } else {
+        NaiveTime::parse_from_str(at_time.trim(), "%H:%M")
+            .with_context(|| format!("Invalid monthly time '{}'. Use HH:MM", at_time))?
+    };
+
+    for month_offset in 0..12 {
+        let target_month = current_month + month_offset;
+        let (year, month) = if target_month > 12 {
+            (current_year + 1, target_month - 12)
+        } else {
+            (current_year, target_month)
+        };
+
+        let day = day_of_month.min(days_in_month(year, month));
+        let date = chrono::NaiveDate::from_ymd_opt(year, month, day)
+            .with_context(|| format!("Invalid date for month {}-{}", year, month))?;
+
+        let local_dt = date.and_time(time);
+        let candidate = match Local.from_local_datetime(&local_dt) {
+            chrono::LocalResult::Single(dt) => dt,
+            chrono::LocalResult::Ambiguous(dt, _) => dt,
+            chrono::LocalResult::None => continue,
+        }
+        .with_timezone(&Utc);
+
+        if candidate > now {
+            return Ok(candidate.to_rfc3339());
+        }
+    }
+
+    Err(anyhow::anyhow!("Could not find a valid monthly schedule date"))
+}
+
+fn days_in_month(year: i32, month: u32) -> u32 {
+    match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 => {
+            if (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0) {
+                29
+            } else {
+                28
+            }
+        }
+        _ => 31,
+    }
+}
+
 fn default_gui_host() -> String {
     "127.0.0.1".to_string()
 }
@@ -545,7 +657,6 @@ fn default_day() -> u32 {
 mod tests {
     use super::*;
     use std::fs;
-    use std::path::Path;
 
     #[test]
     fn test_interval_schedule_persistence() {

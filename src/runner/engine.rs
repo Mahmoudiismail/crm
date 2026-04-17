@@ -1,5 +1,6 @@
+use std::fs;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
@@ -7,8 +8,9 @@ use tokio::sync::{mpsc, Mutex};
 use tracing::{error, info};
 
 use super::config::{
-    next_daily_run_after, parse_rfc3339_utc, Repetition, ReportType, RunnerConfig, RunnerTask,
-    ShellCommandGroup, ShellCommandMode, ShellCommandSpec, TaskKind, TaskSchedule,
+    next_daily_run_after, next_monthly_run_after, parse_rfc3339_utc,
+    Repetition, ReportType, RunnerConfig, RunnerTask, ShellCommandGroup, ShellCommandMode,
+    ShellCommandSpec, TaskKind, TaskSchedule,
 };
 
 #[derive(Debug, Clone)]
@@ -53,20 +55,29 @@ pub fn start_scheduler(runner_config_path: String) -> RunnerHandle {
     }));
 
     let status_bg = status.clone();
-    let path_bg = runner_config_path.clone();
+    let config_path = runner_config_path.clone();
 
+    // Get initial config modification time
+    let get_mod_time = |p: &str| -> Option<SystemTime> {
+        fs::metadata(p).ok()?.modified().ok()
+    };
+
+    let mut last_modified = get_mod_time(&config_path).unwrap_or(SystemTime::now());
+
+    // Main loop: handle commands and cron-based scheduling
+    let config_path_loop = config_path.clone();
+    let poll_interval = RunnerConfig::load(&config_path)
+        .map(|c| c.poll_interval_seconds.max(5))
+        .unwrap_or(30);
+
+    let tx_clone = tx.clone();
     tokio::spawn(async move {
-        info!("Runner scheduler started");
         loop {
-            let poll = RunnerConfig::load(&path_bg)
-                .map(|c| c.poll_interval_seconds)
-                .unwrap_or(30);
-
             tokio::select! {
                 maybe_cmd = rx.recv() => {
                     match maybe_cmd {
                         Some(cmd) => {
-                            if let Err(e) = handle_command(&path_bg, cmd, &status_bg).await {
+                            if let Err(e) = handle_command(&config_path_loop, cmd, &status_bg).await {
                                 error!("Runner command failed: {:#}", e);
                                 let mut st = status_bg.lock().await;
                                 st.last_error = format!("{}", e);
@@ -75,11 +86,32 @@ pub fn start_scheduler(runner_config_path: String) -> RunnerHandle {
                         None => break,
                     }
                 }
-                _ = tokio::time::sleep(Duration::from_secs(poll.max(5))) => {
-                    if let Err(e) = run_due_tasks(&path_bg, &status_bg).await {
-                        error!("Due task cycle failed: {:#}", e);
-                        let mut st = status_bg.lock().await;
-                        st.last_error = format!("{}", e);
+                _ = tokio::time::sleep(Duration::from_secs(poll_interval)) => {
+                    // Check for due tasks based on cron expressions
+                    if let Ok(cfg) = RunnerConfig::load(&config_path_loop) {
+                        let now = Utc::now();
+                        for task in &cfg.tasks {
+                            if !task.enabled {
+                                continue;
+                            }
+                            // Check if task is due based on cron schedules
+                            for schedule in &task.schedules {
+                                if schedule_is_due(schedule, now) {
+                                    info!("Cron schedule triggered for task: {}", task.id);
+                                    let _ = tx_clone.send(RunnerCommand::RunTaskNow(task.id.clone())).await;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Check for config file changes
+                    let current_modified = get_mod_time(&config_path_loop);
+                    if let Some(now_modified) = current_modified {
+                        if now_modified > last_modified {
+                            info!("Config file changed");
+                            last_modified = now_modified;
+                        }
                     }
                 }
             }
@@ -551,14 +583,9 @@ fn normalize_and_validate_schedules(
             } => {
                 *every_seconds = (*every_seconds).max(min_task_interval_seconds);
                 *next_run_at = next_run_at.trim().to_string();
-                if !next_run_at.is_empty() {
-                    parse_rfc3339_utc(next_run_at).with_context(|| {
-                        format!(
-                            "Invalid interval next_run_at '{}'. Use RFC3339",
-                            next_run_at
-                        )
-                    })?;
-                }
+                // Always compute next_run_at based on interval to ensure it reflects the current schedule
+                let next = Utc::now() + chrono::TimeDelta::seconds(*every_seconds as i64);
+                *next_run_at = next.to_rfc3339();
             }
             TaskSchedule::DailyTimes {
                 times, next_run_at, ..
@@ -613,7 +640,8 @@ fn normalize_and_validate_schedules(
                         format!("Invalid monthly time '{}'. Use HH:MM", at_time)
                     })?;
                 }
-                *next_run_at = next_run_at.trim().to_string();
+                // Compute next_run_at
+                *next_run_at = next_monthly_run_after(*day_of_month, at_time, Utc::now())?;
             }
         }
     }
@@ -772,6 +800,69 @@ async fn run_shell_group_parallel(
         ))
     }
 }
+
+fn schedule_is_due(schedule: &TaskSchedule, now: DateTime<Utc>) -> bool {
+    if !schedule.enabled() {
+        return false;
+    }
+
+    match schedule {
+        TaskSchedule::Once { next_run_at, .. } => {
+            if next_run_at.is_empty() {
+                // Run immediately
+                true
+            } else {
+                match parse_rfc3339_utc(next_run_at) {
+                    Ok(scheduled_time) => now >= scheduled_time,
+                    Err(_) => false,
+                }
+            }
+        }
+        TaskSchedule::Interval { next_run_at, .. } => {
+            if next_run_at.is_empty() {
+                true
+            } else {
+                match parse_rfc3339_utc(next_run_at) {
+                    Ok(next_time) => now >= next_time,
+                    Err(_) => false,
+                }
+            }
+        }
+        TaskSchedule::DailyTimes { next_run_at, .. } => {
+            if next_run_at.is_empty() {
+                false
+            } else {
+                match parse_rfc3339_utc(next_run_at) {
+                    Ok(next_time) => now >= next_time,
+                    Err(_) => false,
+                }
+            }
+        }
+        TaskSchedule::Weekly { next_run_at, .. } => {
+            if next_run_at.is_empty() {
+                false
+            } else {
+                match parse_rfc3339_utc(next_run_at) {
+                    Ok(next_time) => now >= next_time,
+                    Err(_) => false,
+                }
+            }
+        }
+        TaskSchedule::Monthly { next_run_at, .. } => {
+            if next_run_at.is_empty() {
+                false
+            } else {
+                match parse_rfc3339_utc(next_run_at) {
+                    Ok(next_time) => now >= next_time,
+                    Err(_) => false,
+                }
+            }
+        }
+    }
+}
+
+
+
 
 #[cfg(test)]
 mod tests {
