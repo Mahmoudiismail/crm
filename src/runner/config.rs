@@ -540,3 +540,252 @@ fn default_frequency() -> u64 {
 fn default_day() -> u32 {
     1
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::path::Path;
+
+    #[test]
+    fn test_interval_schedule_persistence() {
+        // Create a task with an interval schedule
+        let task = RunnerTask {
+            id: "test_interval".to_string(),
+            name: "Test Interval Task".to_string(),
+            enabled: true,
+            repetition: Repetition::Repeat,
+            frequency_seconds: 3600,
+            next_run_at: String::new(),
+            schedules: vec![TaskSchedule::Interval {
+                enabled: true,
+                every_seconds: 7200,
+                next_run_at: Utc::now().to_rfc3339(),
+            }],
+            kind: TaskKind::CrmFetch {
+                report: ReportType::All,
+            },
+            last_run_at: String::new(),
+            last_status: String::new(),
+        };
+
+        let cfg = RunnerConfig {
+            tasks: vec![task],
+            ..Default::default()
+        };
+
+        // Save to temp file
+        let temp_dir = std::env::temp_dir();
+        let path = temp_dir.join("test_interval_config.json");
+        cfg.save(&path.to_string_lossy()).unwrap();
+
+        // Load back
+        let loaded = RunnerConfig::load(&path.to_string_lossy()).unwrap();
+
+        // Cleanup
+        let _ = fs::remove_file(&path);
+
+        // Verify
+        assert_eq!(loaded.tasks.len(), 1);
+        let loaded_task = &loaded.tasks[0];
+        assert_eq!(loaded_task.id, "test_interval");
+        assert_eq!(loaded_task.name, "Test Interval Task");
+        assert!(loaded_task.enabled);
+        assert!(matches!(loaded_task.kind, TaskKind::CrmFetch { .. }));
+
+        // Verify interval schedule
+        assert_eq!(loaded_task.schedules.len(), 1);
+        match &loaded_task.schedules[0] {
+            TaskSchedule::Interval {
+                every_seconds,
+                enabled,
+                ..
+            } => {
+                assert_eq!(*every_seconds, 7200);
+                assert!(*enabled);
+            }
+            _ => panic!("Expected Interval schedule"),
+        }
+    }
+
+    #[test]
+    fn test_shell_command_persistence() {
+        // Create a task with shell command groups
+        let task = RunnerTask {
+            id: "test_shell".to_string(),
+            name: "Test Shell Task".to_string(),
+            enabled: true,
+            repetition: Repetition::Once,
+            frequency_seconds: 0,
+            next_run_at: String::new(),
+            schedules: vec![],
+            kind: TaskKind::ShellCommand {
+                command: String::new(),
+                groups: vec![
+                    ShellCommandGroup {
+                        name: "Backup".to_string(),
+                        mode: ShellCommandMode::Sequential,
+                        commands: vec![
+                            ShellCommandSpec {
+                                command: "tar -czf backup.tar.gz /data".to_string(),
+                                continue_on_error: false,
+                            },
+                            ShellCommandSpec {
+                                command: "echo Backup complete".to_string(),
+                                continue_on_error: true,
+                            },
+                        ],
+                    },
+                    ShellCommandGroup {
+                        name: "Cleanup".to_string(),
+                        mode: ShellCommandMode::Parallel,
+                        commands: vec![ShellCommandSpec {
+                            command: "rm -f /tmp/*.log".to_string(),
+                            continue_on_error: true,
+                        }],
+                    },
+                ],
+            },
+            last_run_at: String::new(),
+            last_status: String::new(),
+        };
+
+        let cfg = RunnerConfig {
+            tasks: vec![task],
+            ..Default::default()
+        };
+
+        // Save to temp file
+        let temp_dir = std::env::temp_dir();
+        let path = temp_dir.join("test_shell_config.json");
+        cfg.save(&path.to_string_lossy()).unwrap();
+
+        // Load back
+        let loaded = RunnerConfig::load(&path.to_string_lossy()).unwrap();
+
+        // Cleanup
+        let _ = fs::remove_file(&path);
+
+        // Verify
+        assert_eq!(loaded.tasks.len(), 1);
+        let loaded_task = &loaded.tasks[0];
+        assert_eq!(loaded_task.id, "test_shell");
+        assert_eq!(loaded_task.name, "Test Shell Task");
+
+        // Verify shell command kind
+        match &loaded_task.kind {
+            TaskKind::ShellCommand { command, groups } => {
+                assert!(command.is_empty()); // empty simple command
+                assert_eq!(groups.len(), 2);
+
+                // First group
+                assert_eq!(groups[0].name, "Backup");
+                assert_eq!(groups[0].mode, ShellCommandMode::Sequential);
+                assert_eq!(groups[0].commands.len(), 2);
+                assert_eq!(
+                    groups[0].commands[0].command,
+                    "tar -czf backup.tar.gz /data"
+                );
+                assert!(!groups[0].commands[0].continue_on_error);
+                assert!(groups[0].commands[1].continue_on_error);
+
+                // Second group
+                assert_eq!(groups[1].name, "Cleanup");
+                assert_eq!(groups[1].mode, ShellCommandMode::Parallel);
+                assert_eq!(groups[1].commands.len(), 1);
+                assert!(groups[1].commands[0].continue_on_error);
+            }
+            _ => panic!("Expected ShellCommand kind"),
+        }
+    }
+
+    #[test]
+    fn test_mixed_tasks_persistence() {
+        // Create multiple tasks with different kinds and schedules
+        let tasks = vec![
+            RunnerTask {
+                id: "crm_task".to_string(),
+                name: "CRM Fetch".to_string(),
+                enabled: true,
+                repetition: Repetition::Repeat,
+                frequency_seconds: 86400,
+                next_run_at: String::new(),
+                schedules: vec![TaskSchedule::Interval {
+                    enabled: true,
+                    every_seconds: 86400,
+                    next_run_at: Utc::now().to_rfc3339(),
+                }],
+                kind: TaskKind::CrmFetch {
+                    report: ReportType::Tickets,
+                },
+                last_run_at: String::new(),
+                last_status: String::new(),
+            },
+            RunnerTask {
+                id: "shell_task".to_string(),
+                name: "Shell Commands".to_string(),
+                enabled: false,
+                repetition: Repetition::Once,
+                frequency_seconds: 0,
+                next_run_at: String::new(),
+                schedules: vec![TaskSchedule::Once {
+                    enabled: true,
+                    next_run_at: (Utc::now() + chrono::Duration::hours(1)).to_rfc3339(),
+                }],
+                kind: TaskKind::ShellCommand {
+                    command: "echo Hello World".to_string(),
+                    groups: vec![],
+                },
+                last_run_at: String::new(),
+                last_status: String::new(),
+            },
+        ];
+
+        let cfg = RunnerConfig {
+            tasks: tasks.clone(),
+            ..Default::default()
+        };
+
+        // Save and load
+        let temp_dir = std::env::temp_dir();
+        let path = temp_dir.join("mixed_config.json");
+        cfg.save(&path.to_string_lossy()).unwrap();
+        let loaded = RunnerConfig::load(&path.to_string_lossy()).unwrap();
+
+        // Cleanup
+        let _ = fs::remove_file(&path);
+
+        // Verify both tasks
+        assert_eq!(loaded.tasks.len(), 2);
+
+        // Verify first task (CRM with interval)
+        let crm_task = &loaded.tasks[0];
+        assert_eq!(crm_task.id, "crm_task");
+        assert!(
+            matches!(crm_task.kind, TaskKind::CrmFetch { report } if report == ReportType::Tickets)
+        );
+        assert!(!crm_task.schedules.is_empty());
+        match &crm_task.schedules[0] {
+            TaskSchedule::Interval { every_seconds, .. } => {
+                assert_eq!(*every_seconds, 86400);
+            }
+            _ => panic!("Expected Interval schedule"),
+        }
+
+        // Verify second task (Shell with once)
+        let shell_task = &loaded.tasks[1];
+        assert_eq!(shell_task.id, "shell_task");
+        assert!(!shell_task.enabled);
+        match &shell_task.kind {
+            TaskKind::ShellCommand { command, groups } => {
+                assert_eq!(command, "echo Hello World");
+                assert!(groups.is_empty());
+            }
+            _ => panic!("Expected ShellCommand kind"),
+        }
+        match &shell_task.schedules[0] {
+            TaskSchedule::Once { .. } => {}
+            _ => panic!("Expected Once schedule"),
+        }
+    }
+}

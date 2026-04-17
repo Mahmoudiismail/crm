@@ -12,8 +12,7 @@ use crate::runner::config::{
 use crate::runner::engine::{create_task, delete_task, update_task};
 use crate::runner::engine::{RunnerCommand, RunnerHandle};
 
-const TAILWIND_CDN: &str =
-    "https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.2/dist/index.css";
+const TAILWIND_CDN: &str = "https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4";
 
 struct HttpRequest {
     method: String,
@@ -1041,7 +1040,7 @@ fn select_report(value: &str) -> String {
 
 fn html_page(title: &str, content: &str) -> String {
     format!(
-        "<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>{}</title><link rel='stylesheet' href='{}'></head><body class='bg-gray-50 text-gray-900'><main class='max-w-7xl mx-auto px-4 py-8'>{}</main></body></html>",
+        "<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>{}</title><script src='{}'></script></head><body class='bg-gray-50 text-gray-900'><main class='max-w-7xl mx-auto px-4 py-8'>{}</main></body></html>",
         escape_html(title),
         TAILWIND_CDN,
         content

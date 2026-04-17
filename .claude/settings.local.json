@@ -11,7 +11,8 @@
       "Bash(cargo check *)",
       "Bash(/home/mahmoud/.cargo/bin/cargo check *)",
       "Bash(git checkout *)",
-      "Bash(cargo build *)"
+      "Bash(cargo build *)",
+      "Bash(cargo test *)"
     ]
   }
 }
