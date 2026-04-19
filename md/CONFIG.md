@@ -35,6 +35,7 @@ Implementation: `src/runner/config.rs`
 - `kind`: tagged task payload
   - `crm_fetch` with `report` (`all`, `tickets`, `calls`, `leads`, `none`)
   - `shell_command` with execution `mode` and `commands`
+- `post_run_script`: path to an optional script that executes only upon a successful task completion (`.vbs`, `.txt`, `.bat`, `.cmd`, `.ps1`, or direct executable).
 - `last_run_at`: last run timestamp
 - `last_status`: last run result message
 

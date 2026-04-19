@@ -473,6 +473,7 @@ fn render_task_form(
     let id = task.map(|t| t.id.as_str()).unwrap_or_default();
     let name = task.map(|t| t.name.as_str()).unwrap_or_default();
     let enabled = task.map(|t| t.enabled).unwrap_or(true);
+    let post_run_script = task.map(|t| t.post_run_script.as_str()).unwrap_or_default();
     let (task_type, report) = match task.map(|t| &t.kind) {
         Some(TaskKind::ShellCommand { .. }) => ("shell_command", "all"),
         Some(TaskKind::CrmFetch { report }) => (
@@ -511,6 +512,11 @@ fn render_task_form(
                     {}\
                     {}\
                 </div>\
+                <label class='block mb-4'>\
+                    <span class='text-sm font-semibold text-gray-700'>Post Run Script (Optional)</span>\
+                    <input class='mt-1 block w-full rounded border border-gray-300 px-3 py-2' type='text' name='post_run_script' value='{}' placeholder='C:\\Scripts\\after_fetch.vbs'>\
+                    <p class='text-xs text-gray-500 mt-1'>Runs a script after a task successfully completes (.txt/.vbs using cscript, .ps1, .bat, etc.)</p>\
+                </label>\
                 {}\
                 {}\
                 <button class='rounded bg-emerald-600 text-white px-4 py-2 text-sm font-semibold' type='submit'>{}</button>\
@@ -524,6 +530,7 @@ fn render_task_form(
         if enabled { "checked" } else { "" },
         select_task_type(task_type),
         select_report(report),
+        escape_html(post_run_script),
         schedule_editor_html(task),
         shell_command_editor_html(task),
         escape_html(submit_label)
@@ -1019,6 +1026,11 @@ fn build_task_from_values(
         .map(|v| v.trim().to_string())
         .unwrap_or_default();
 
+    let post_run_script = values
+        .get("post_run_script")
+        .map(|v| v.trim().to_string())
+        .unwrap_or_default();
+
     let schedules = values
         .get("schedules")
         .map(|value| parse_schedules_text(value))
@@ -1066,6 +1078,7 @@ fn build_task_from_values(
         kind,
         last_run_at: String::new(),
         last_status: String::new(),
+        post_run_script,
     })
 }
 

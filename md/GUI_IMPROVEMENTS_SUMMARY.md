@@ -48,6 +48,13 @@
 - Commands are automatically grouped into a single task group on submit
 - Updated buildCommands() JavaScript to format commands with mode prefixes
 
+## New Features
+
+### Post-Run Scripts
+- **Form Field Added**: The task editor now includes an optional "Post Run Script" field.
+- **Execution Engine**: `engine.rs` now parses the script extension after a successful task completion. If specified, it runs `.vbs`/`.txt` files with `cscript.exe`, `.bat`/`.cmd` files with `cmd.exe /c`, `.ps1` files with `powershell.exe -ExecutionPolicy Bypass -File`, and executes other files directly.
+- **Error Handling**: Failures in the post-run script correctly surface in the `last_status` and `last_error` fields, clearly identifying it as a `post-run script error:` for immediate visibility.
+
 ## Code Changes
 
 ### `/workspace/src/runner/gui.rs`

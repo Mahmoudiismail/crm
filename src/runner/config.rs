@@ -46,6 +46,8 @@ pub struct RunnerTask {
     pub last_run_at: String,
     #[serde(default)]
     pub last_status: String,
+    #[serde(default)]
+    pub post_run_script: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -193,6 +195,7 @@ impl Default for RunnerConfig {
                 },
                 last_run_at: String::new(),
                 last_status: String::new(),
+                post_run_script: String::new(),
             }],
         }
     }
@@ -684,6 +687,7 @@ mod tests {
             },
             last_run_at: String::new(),
             last_status: String::new(),
+            post_run_script: String::new(),
         };
 
         let cfg = RunnerConfig {
@@ -751,6 +755,7 @@ mod tests {
             },
             last_run_at: String::new(),
             last_status: String::new(),
+            post_run_script: String::new(),
         };
 
         let cfg = RunnerConfig {
@@ -809,6 +814,7 @@ mod tests {
                 },
                 last_run_at: String::new(),
                 last_status: String::new(),
+                post_run_script: String::new(),
             },
             RunnerTask {
                 id: "shell_task".to_string(),
@@ -830,6 +836,7 @@ mod tests {
                 },
                 last_run_at: String::new(),
                 last_status: String::new(),
+                post_run_script: String::new(),
             },
         ];
 
