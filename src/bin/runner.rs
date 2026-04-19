@@ -55,6 +55,7 @@ async fn main() -> Result<()> {
         });
     }
 
+    #[cfg(target_os = "linux")]
     if let Err(e) = gtk::init() {
         error!("Failed to initialize GTK: {}", e);
     }
