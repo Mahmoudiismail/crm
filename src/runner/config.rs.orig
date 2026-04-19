@@ -938,6 +938,7 @@ mod tests {
         assert_eq!(dt.with_timezone(&Utc).year(), 2024);
         assert_eq!(dt.with_timezone(&Utc).month(), 1);
         assert_eq!(dt.with_timezone(&Utc).day(), 20);
+        assert!(dt.with_timezone(&Utc) > base_now);
 
         // 2. Same month, same day, future time
         let res = next_monthly_run_after(15, "15:00", base_now).unwrap();
@@ -956,8 +957,8 @@ mod tests {
         // 4. Past day (should wrap to next month)
         let res = next_monthly_run_after(5, "12:00", base_now).unwrap();
         let dt = DateTime::parse_from_rfc3339(&res).unwrap();
-        // The exact expected day might depend on Local timezone of CI, so we just verify it wrapped or stayed same based on offset.
-        assert!(dt.with_timezone(&Utc) > base_now);
+        assert_eq!(dt.with_timezone(&Utc).month(), 2);
+        assert_eq!(dt.with_timezone(&Utc).day(), 5);
 
         // 5. Edge case: day of month exceeds days in target month (e.g., Feb 30 -> Feb 29 in 2024)
         let res = next_monthly_run_after(31, "12:00", base_now).unwrap();
