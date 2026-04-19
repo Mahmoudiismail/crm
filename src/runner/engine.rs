@@ -260,6 +260,7 @@ async fn run_adhoc_crm(
         kind: TaskKind::CrmFetch { report },
         last_run_at: String::new(),
         last_status: String::new(),
+        post_run_script: String::new(),
     };
 
     run_task(&mut task, &policy, status).await;
@@ -420,7 +421,20 @@ async fn run_task(
     };
 
     match result {
-        Ok(_) => task.last_status = "ok".to_string(),
+        Ok(_) => {
+            if !task.post_run_script.trim().is_empty() {
+                match run_post_run_script(&task.post_run_script, policy.shell_timeout_seconds).await {
+                    Ok(_) => task.last_status = "ok".to_string(),
+                    Err(e) => {
+                        task.last_status = format!("post-run script error: {}", e);
+                        let mut st = status.lock().await;
+                        st.last_error = format!("post-run script error: {}", e);
+                    }
+                }
+            } else {
+                task.last_status = "ok".to_string();
+            }
+        }
         Err(e) => {
             task.last_status = format!("error: {}", e);
             let mut st = status.lock().await;
@@ -539,6 +553,59 @@ fn excerpt_utf8(bytes: &[u8]) -> String {
     } else {
         text
     }
+}
+
+async fn run_post_run_script(script_path: &str, timeout_seconds: u64) -> Result<()> {
+    let path = std::path::Path::new(script_path);
+    let ext = path
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_lowercase())
+        .unwrap_or_default();
+
+    let mut command = match ext.as_str() {
+        "txt" | "vbs" => {
+            let mut cmd = tokio::process::Command::new("cscript.exe");
+            cmd.arg("//NoLogo").arg(script_path);
+            cmd
+        }
+        "bat" | "cmd" => {
+            let mut cmd = tokio::process::Command::new("cmd.exe");
+            cmd.arg("/c").arg(script_path);
+            cmd
+        }
+        "ps1" => {
+            let mut cmd = tokio::process::Command::new("powershell.exe");
+            cmd.arg("-ExecutionPolicy").arg("Bypass").arg("-File").arg(script_path);
+            cmd
+        }
+        _ => tokio::process::Command::new(script_path),
+    };
+
+    let output = tokio::time::timeout(
+        Duration::from_secs(timeout_seconds.max(1)),
+        command.output(),
+    )
+    .await
+    .with_context(|| {
+        format!(
+            "post-run script timed out after {}s: {}",
+            timeout_seconds, script_path
+        )
+    })??;
+
+    if !output.status.success() {
+        let stdout_excerpt = excerpt_utf8(&output.stdout);
+        let stderr_excerpt = excerpt_utf8(&output.stderr);
+        return Err(anyhow::anyhow!(
+            "script failed ({:?}): stderr: {}; stdout: {}",
+            output.status.code(),
+            stderr_excerpt,
+            stdout_excerpt
+        ));
+    }
+
+    Ok(())
 }
 
 async fn run_shell_command(command: &str, shell_timeout_seconds: u64) -> Result<()> {
@@ -834,6 +901,7 @@ mod tests {
             },
             last_run_at: String::new(),
             last_status: String::new(),
+            post_run_script: String::new(),
         };
 
         assert!(task.due_now(Utc::now()));
