@@ -65,7 +65,7 @@ pub async fn download_csv(
     Ok(filename)
 }
 
-/// Extract a human-readable filename from a URL, URL-decoding it.
+/// Extract a human-readable filename from a URL, URL-decoding it and sanitizing to prevent path traversal.
 fn extract_filename(url: &str) -> Result<String> {
     // Parse the URL path component
     let path = if let Some(qmark) = url.find('?') {
@@ -80,10 +80,22 @@ fn extract_filename(url: &str) -> Result<String> {
         .with_context(|| format!("Failed to URL-decode filename: {}", filename))?;
 
     let name = decoded.to_string();
-    if name.is_empty() {
-        return Ok("download.csv".into());
-    }
-    Ok(name)
+
+    // Sanitize: remove any path traversal attempts.
+    // Replace Windows-style backslashes first, then use standard Path::file_name
+    // to handle OS-specific edge cases safely.
+    let safe_name = name.replace('\\', "/");
+
+    // Some path parsers might see C:cmd.exe as a file C:cmd.exe on linux but drive letter on windows.
+    // To be perfectly safe, split by ':' as well to remove any drive letters entirely if present.
+    let no_drive = safe_name.rsplit(':').next().unwrap_or(&safe_name);
+
+    let final_name = Path::new(no_drive)
+        .file_name()
+        .and_then(|f| f.to_str())
+        .unwrap_or("download.csv");
+
+    Ok(final_name.to_string())
 }
 
 #[cfg(test)]
@@ -102,5 +114,32 @@ mod tests {
         let url = "https://example.com/path/to/file.csv";
         let name = extract_filename(url).unwrap();
         assert_eq!(name, "file.csv");
+    }
+
+    #[test]
+    fn test_extract_filename_path_traversal() {
+        // Unix style
+        let url = "https://example.com/path/to/%2e%2e%2fetc%2fpasswd";
+        assert_eq!(extract_filename(url).unwrap(), "passwd");
+
+        // Windows style
+        let url = "https://example.com/path/to/%2e%2e%5c%2e%2e%5ccmd.exe";
+        assert_eq!(extract_filename(url).unwrap(), "cmd.exe");
+
+        // Absolute path Windows
+        let url = "https://example.com/path/to/C%3A%5CWindows%5CSystem32%5Ccmd.exe";
+        assert_eq!(extract_filename(url).unwrap(), "cmd.exe");
+
+        // Drive letter edge case
+        let url = "https://example.com/path/to/C%3Acmd.exe";
+        assert_eq!(extract_filename(url).unwrap(), "cmd.exe");
+
+        // Edge case: just dot
+        let url = "https://example.com/path/to/%2e";
+        assert_eq!(extract_filename(url).unwrap(), "download.csv");
+
+        // Edge case: just double dot
+        let url = "https://example.com/path/to/%2e%2e";
+        assert_eq!(extract_filename(url).unwrap(), "download.csv");
     }
 }
