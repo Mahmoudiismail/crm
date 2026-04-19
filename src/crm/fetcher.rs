@@ -381,7 +381,8 @@ pub fn split_monthly(from: &str, to: &str) -> Result<Vec<(String, String)>> {
 
     while cursor <= end {
         // End of current month
-        let month_end = last_day_of_month(cursor.year(), cursor.month());
+        let month_end = last_day_of_month(cursor.year(), cursor.month())
+            .context("Failed to calculate the last day of the month")?;
 
         let batch_end = if month_end > end { end } else { month_end };
         batches.push((
@@ -401,18 +402,9 @@ pub fn split_monthly(from: &str, to: &str) -> Result<Vec<(String, String)>> {
 }
 
 /// Return the last day of the given month.
-fn last_day_of_month(year: i32, month: u32) -> NaiveDate {
-    if month == 12 {
-        NaiveDate::from_ymd_opt(year + 1, 1, 1)
-            .unwrap()
-            .pred_opt()
-            .unwrap()
-    } else {
-        NaiveDate::from_ymd_opt(year, month + 1, 1)
-            .unwrap()
-            .pred_opt()
-            .unwrap()
-    }
+fn last_day_of_month(year: i32, month: u32) -> Option<NaiveDate> {
+    let (y, m) = if month == 12 { (year + 1, 1) } else { (year, month + 1) };
+    NaiveDate::from_ymd_opt(y, m, 1)?.pred_opt()
 }
 
 /// Extract download URLs from report results.
@@ -483,11 +475,11 @@ mod tests {
     fn test_last_day_feb() {
         assert_eq!(
             last_day_of_month(2024, 2),
-            NaiveDate::from_ymd_opt(2024, 2, 29).unwrap()
+            NaiveDate::from_ymd_opt(2024, 2, 29)
         );
         assert_eq!(
             last_day_of_month(2025, 2),
-            NaiveDate::from_ymd_opt(2025, 2, 28).unwrap()
+            NaiveDate::from_ymd_opt(2025, 2, 28)
         );
     }
 
