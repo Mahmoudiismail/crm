@@ -870,6 +870,49 @@ mod tests {
     }
 
     #[test]
+    fn test_next_daily_run_after() {
+        use chrono::TimeZone;
+
+        // Base date: 2024-01-01 12:00:00 UTC
+        let base_now = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap();
+
+        // 1. Same day, future time
+        let times = vec!["15:00".to_string()];
+        let res = next_daily_run_after(&times, base_now).unwrap();
+        let dt = DateTime::parse_from_rfc3339(&res).unwrap();
+        // It should be strictly after base_now
+        assert!(dt.with_timezone(&Utc) > base_now);
+        // Note: Timezone logic means we can't definitively check the day without knowing local tz,
+        // but it should be valid RFC3339 output.
+
+        // 2. Same day, past time (should wrap to next day)
+        let times = vec!["10:00".to_string()];
+        let res = next_daily_run_after(&times, base_now).unwrap();
+        let dt2 = DateTime::parse_from_rfc3339(&res).unwrap();
+        assert!(dt2.with_timezone(&Utc) > base_now);
+        // It should be approximately 22 hours later (24 hours minus 2 hours)
+
+        // 3. Multiple times, picks the earliest valid one
+        let times = vec!["10:00".to_string(), "15:00".to_string(), "18:00".to_string()];
+        let res = next_daily_run_after(&times, base_now).unwrap();
+        let dt3 = DateTime::parse_from_rfc3339(&res).unwrap();
+        assert!(dt3.with_timezone(&Utc) > base_now);
+        // It should pick "15:00" as it's the earliest future time
+        assert!(dt3 <= dt); // It should be equal to the 15:00 single time case
+
+        // 4. Empty times array
+        let empty_times: Vec<String> = vec![];
+        assert!(next_daily_run_after(&empty_times, base_now).is_err());
+
+        // 5. Invalid time formats
+        let invalid_times = vec!["25:00".to_string()];
+        assert!(next_daily_run_after(&invalid_times, base_now).is_err());
+
+        let invalid_format = vec!["3 PM".to_string()];
+        assert!(next_daily_run_after(&invalid_format, base_now).is_err());
+    }
+
+    #[test]
     fn test_next_weekly_run_after() {
         use chrono::TimeZone;
 
