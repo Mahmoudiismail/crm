@@ -1,9 +1,0 @@
-   Compiling crm_tool v1.1.0 (/app)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 11.74s
-     Running `target/debug/runner`
-2026-04-19T17:06:52.362147Z  INFO ==================================================
-2026-04-19T17:06:52.362190Z  INFO RUNNER - Starting tray scheduler mode
-2026-04-19T17:06:52.362213Z  INFO ==================================================
-2026-04-19T17:06:52.362980Z  INFO Runner GUI listening on http://127.0.0.1:8787
-2026-04-19T17:06:52.743820Z  WARN error setting XSETTINGS; Xft options won't reload automatically
-2026-04-19T17:06:52.892926Z  INFO Tray icon initialized.
