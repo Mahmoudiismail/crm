@@ -362,9 +362,9 @@ fn render_status_cards(status: &crate::runner::engine::RunnerStatus, task_count:
         "Idle"
     };
     let last_task = if status.last_task_id.is_empty() {
-        "None".to_string()
+        "None"
     } else {
-        escape_html(&status.last_task_id)
+        &status.last_task_id
     };
     let last_run = if status.last_run_at.is_empty() {
         "Never".to_string()
@@ -372,23 +372,22 @@ fn render_status_cards(status: &crate::runner::engine::RunnerStatus, task_count:
         human_datetime(&status.last_run_at)
     };
     let last_error = if status.last_error.is_empty() {
-        "No current error".to_string()
+        "No current error"
     } else {
-        escape_html(&status.last_error)
+        &status.last_error
     };
 
     format!(
-        "{}{}{}{}",
+        "{}{}{}<div class='bg-white border border-gray-200 rounded shadow-sm p-4'>\
+            <p class='text-xs uppercase tracking-wide text-gray-500 font-semibold'>Last Run</p>\
+            <p class='mt-2 text-lg font-semibold text-gray-900 break-words'>{}\
+                <span class='block text-xs text-gray-500 mt-1'>{}</span>\
+            </p></div>",
         metric_card("State", running),
         metric_card("Tasks", &task_count.to_string()),
-        metric_card("Last Task", &last_task),
-        metric_card(
-            "Last Run",
-            &format!(
-                "{}<span class='block text-xs text-gray-500 mt-1'>{}</span>",
-                last_run, last_error
-            )
-        )
+        metric_card("Last Task", last_task),
+        escape_html(&last_run),
+        escape_html(last_error)
     )
 }
 
@@ -396,7 +395,7 @@ fn metric_card(label: &str, value: &str) -> String {
     format!(
         "<div class='bg-white border border-gray-200 rounded shadow-sm p-4'><p class='text-xs uppercase tracking-wide text-gray-500 font-semibold'>{}</p><p class='mt-2 text-lg font-semibold text-gray-900 break-words'>{}</p></div>",
         escape_html(label),
-        value
+        escape_html(value)
     )
 }
 
@@ -1400,5 +1399,12 @@ mod tests {
     fn date_type_import_keeps_rfc3339_parse_available() {
         let parsed: chrono::DateTime<Utc> = parse_rfc3339_utc("2026-04-15T09:30:00Z").unwrap();
         assert_eq!(parsed.to_rfc3339(), "2026-04-15T09:30:00+00:00");
+    }
+
+    #[test]
+    fn metric_card_escapes_html_value() {
+        let html = metric_card("Alert", "<script>alert(1)</script>");
+        assert!(html.contains("&lt;script&gt;alert(1)&lt;/script&gt;"));
+        assert!(!html.contains("<script>"));
     }
 }
