@@ -111,11 +111,11 @@ struct AuthTokens {
 }
 
 async fn cognito_srp_login(config: &AppConfig, client: &reqwest::Client) -> Result<AuthTokens> {
-    let n = BigUint::parse_bytes(N_HEX.as_bytes(), 16).unwrap();
-    let g = BigUint::parse_bytes(G_HEX.as_bytes(), 16).unwrap();
+    let n = BigUint::parse_bytes(N_HEX.as_bytes(), 16).context("Failed to parse N_HEX")?;
+    let g = BigUint::parse_bytes(G_HEX.as_bytes(), 16).context("Failed to parse G_HEX")?;
 
     // k = H('00' + N_hex + '0' + g_hex) — matches Python warrant exactly
-    let k = compute_k();
+    let k = compute_k()?;
 
     // Generate random `a` (128 random bytes, then mod N — matches Python warrant)
     let mut a_bytes = [0u8; 128];
@@ -205,19 +205,19 @@ async fn cognito_srp_login(config: &AppConfig, client: &reqwest::Client) -> Resu
     // ──── Step 2: Compute the password claim ────
 
     // u = H(pad_hex(A) || pad_hex(B))  — operates on hex strings
-    let u = compute_u(&big_a, &big_b);
+    let u = compute_u(&big_a, &big_b)?;
     if u == BigUint::ZERO {
         bail!("SRP u is zero — invalid state");
     }
 
     // x = H(pad_hex(salt) || H(poolName || userId || ":" || password))
-    let x = compute_x(pool_name, user_id, &config.password, salt_hex);
+    let x = compute_x(pool_name, user_id, &config.password, salt_hex)?;
 
     // S = (B - k * g^x) ^ (a + u * x) mod N
     let s = compute_s(&big_b, &k, &g, &x, &a, &u, &n);
 
     // HKDF key — manual HMAC-based KDF matching Python warrant exactly
-    let hkdf_key = compute_hkdf(&s, &u);
+    let hkdf_key = compute_hkdf(&s, &u)?;
 
     // Timestamp (must match Cognito's expected format exactly)
     let now = Utc::now();
@@ -325,9 +325,9 @@ fn hash_sha256(buf: &[u8]) -> String {
 }
 
 /// Python: `hex_hash(hex_string)` — hash_sha256(bytearray.fromhex(hex_string))
-fn hex_hash(hex_string: &str) -> String {
-    let bytes = hex::decode(hex_string).expect("hex_hash: invalid hex input");
-    hash_sha256(&bytes)
+fn hex_hash(hex_string: &str) -> Result<String> {
+    let bytes = hex::decode(hex_string).context("hex_hash: invalid hex input")?;
+    Ok(hash_sha256(&bytes))
 }
 
 /// Python `pad_hex(long_int)`:
@@ -355,18 +355,18 @@ fn pad_hex_str(hex_str: &str) -> String {
 
 /// Python: `calculate_u(big_a, big_b)`
 /// `u_hex_hash = hex_hash(pad_hex(big_a) + pad_hex(big_b))`
-fn compute_u(a: &BigUint, b: &BigUint) -> BigUint {
-    let u_hex_hash = hex_hash(&format!("{}{}", pad_hex(a), pad_hex(b)));
-    BigUint::parse_bytes(u_hex_hash.as_bytes(), 16).unwrap()
+fn compute_u(a: &BigUint, b: &BigUint) -> Result<BigUint> {
+    let u_hex_hash = hex_hash(&format!("{}{}", pad_hex(a), pad_hex(b)))?;
+    BigUint::parse_bytes(u_hex_hash.as_bytes(), 16).context("Failed to parse BigUint for u")
 }
 
 /// Python: `self.k = hex_to_long(hex_hash('00' + n_hex + '0' + g_hex))`
-fn compute_k() -> BigUint {
+fn compute_k() -> Result<BigUint> {
     let n_hex_lower = N_HEX.to_lowercase();
     let g_hex_lower = G_HEX.to_lowercase();
     let combined = format!("00{}0{}", n_hex_lower, g_hex_lower);
-    let k_hex = hex_hash(&combined);
-    BigUint::parse_bytes(k_hex.as_bytes(), 16).unwrap()
+    let k_hex = hex_hash(&combined)?;
+    BigUint::parse_bytes(k_hex.as_bytes(), 16).context("Failed to parse BigUint for k")
 }
 
 /// Python:
@@ -376,15 +376,15 @@ fn compute_k() -> BigUint {
 /// x_value = hex_to_long(hex_hash(pad_hex(salt) + username_password_hash))
 /// ```
 /// Note: salt is passed as a hex string from ChallengeParameters.
-fn compute_x(pool_name: &str, user_id: &str, password: &str, salt_hex: &str) -> BigUint {
+fn compute_x(pool_name: &str, user_id: &str, password: &str, salt_hex: &str) -> Result<BigUint> {
     let username_password = format!("{}{}:{}", pool_name, user_id, password);
     let username_password_hash = hash_sha256(username_password.as_bytes());
 
     // pad_hex(salt) — salt_hex is already a hex string from the server
     let padded_salt = pad_hex_str(salt_hex);
 
-    let x_hex = hex_hash(&format!("{}{}", padded_salt, username_password_hash));
-    BigUint::parse_bytes(x_hex.as_bytes(), 16).unwrap()
+    let x_hex = hex_hash(&format!("{}{}", padded_salt, username_password_hash))?;
+    BigUint::parse_bytes(x_hex.as_bytes(), 16).context("Failed to parse BigUint for x")
 }
 
 /// S = (B - k * g^x mod N) ^ (a + u * x) mod N
@@ -426,15 +426,15 @@ fn compute_s(
 ///
 /// Called as: `compute_hkdf(bytearray.fromhex(pad_hex(s_value)),
 ///                          bytearray.fromhex(pad_hex(long_to_hex(u_value))))`
-fn compute_hkdf(s: &BigUint, u: &BigUint) -> Vec<u8> {
+fn compute_hkdf(s: &BigUint, u: &BigUint) -> Result<Vec<u8>> {
     // ikm = bytearray.fromhex(pad_hex(s_value))
-    let ikm = hex::decode(pad_hex(s)).expect("Invalid hex in S for HKDF");
+    let ikm = hex::decode(pad_hex(s)).context("Invalid hex in S for HKDF")?;
     // salt = bytearray.fromhex(pad_hex(long_to_hex(u_value)))
     // pad_hex(long_to_hex(u)) is the same as pad_hex(u) since pad_hex accepts a long
-    let salt = hex::decode(pad_hex(u)).expect("Invalid hex in U for HKDF");
+    let salt = hex::decode(pad_hex(u)).context("Invalid hex in U for HKDF")?;
 
     // HKDF-Extract: PRK = HMAC-SHA256(salt, ikm)
-    let mut mac = HmacSha256::new_from_slice(&salt).expect("HMAC key creation failed");
+    let mut mac = HmacSha256::new_from_slice(&salt).context("HMAC key creation failed")?;
     mac.update(&ikm);
     let prk = mac.finalize().into_bytes();
 
@@ -442,9 +442,9 @@ fn compute_hkdf(s: &BigUint, u: &BigUint) -> Vec<u8> {
     let mut info_update = Vec::from(INFO_BITS);
     info_update.push(1u8); // chr(1)
 
-    let mut mac2 = HmacSha256::new_from_slice(&prk).expect("HMAC key creation failed");
+    let mut mac2 = HmacSha256::new_from_slice(&prk).context("HMAC key creation failed")?;
     mac2.update(&info_update);
     let hmac_hash = mac2.finalize().into_bytes();
 
-    hmac_hash[..16].to_vec()
+    Ok(hmac_hash[..16].to_vec())
 }
