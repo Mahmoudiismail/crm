@@ -19,7 +19,8 @@ src/
 │   ├── mod.rs
 │   ├── config.rs
 │   ├── engine.rs
-│   └── gui.rs
+│   ├── gui.rs
+│   └── form_script.js
 ```
 
 ## Responsibilities
