@@ -2,12 +2,13 @@
 
 ## What It Does
 
-This project ships two Rust executables:
+This project ships three Rust executables:
 
 - `runner`: tray scheduler + GUI + task engine
 - `crm`: one-shot CRM fetch executable
+- `yasweb`: headless browser automation tool for Yasweb login
 
-Release builds are optimized for maximum runtime performance and minimal file size through the Cargo release profile (`opt-level=3`, `lto=fat`, `strip=symbols`, `panic=abort`). GitHub release publishing is split by executable so `runner_windows.zip` and `crm_windows.zip` can be built and uploaded independently.
+Release builds are optimized for maximum runtime performance and minimal file size through the Cargo release profile (`opt-level=3`, `lto=fat`, `strip=symbols`, `panic=abort`). GitHub release publishing is split by executable so `runner_windows.zip`, `crm_windows.zip`, and `yasweb_windows.zip` can be built and uploaded independently.
 
 Together they:
 
@@ -22,6 +23,7 @@ Together they:
 
 - `runner` is tray-oriented (`#![windows_subsystem = "windows"]` on Windows).
 - `crm` is a console-style one-shot command.
+- `yasweb` runs headless browser automation using `headless_chrome`.
 - Single-instance lock via TCP bind on `127.0.0.1:14592`.
 - Async orchestration with `tokio`.
 - Non-blocking logs to file + stdout.
@@ -61,10 +63,21 @@ CRM always performs login.
 - Atomic run guard prevents overlapping task execution.
 - Shell tasks are controlled by runner safety policy (`allow_shell_tasks`, timeout, min interval) and can run commands sequentially or in parallel.
 
+## Main Workflow (yasweb)
+
+1. Load/create `yasweb_config.json` under executable directory.
+2. Launch a headless Chrome browser.
+3. Attach Chrome DevTools Protocol network listeners to log events.
+4. Navigate to the configured Yasweb URL.
+5. Identify and fill the username and password form fields.
+6. Submit the login form and print success.
+7. Logs are written to the `yasweblog` file.
+
 ## Primary Outputs
 
 - `runner.log` for runner executable.
 - `crm.log` for crm executable.
+- `yasweblog` for yasweb executable containing network request events.
 - `Downloads/*.csv` in executable directory.
 
 ## Modules
@@ -72,6 +85,7 @@ CRM always performs login.
 - `src/lib.rs`
 - `src/bin/runner.rs`
 - `src/bin/crm.rs`
+- `src/bin/yasweb.rs`
 - `src/runner/config.rs`
 - `src/runner/engine.rs`
 - `src/runner/gui.rs`
