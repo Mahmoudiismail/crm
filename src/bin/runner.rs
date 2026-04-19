@@ -172,12 +172,7 @@ impl ApplicationHandler for App {
 fn load_icon() -> Icon {
     let width = 32;
     let height = 32;
-    let mut rgba = Vec::with_capacity((width * height * 4) as usize);
-    for _ in 0..height {
-        for _ in 0..width {
-            rgba.extend_from_slice(&[0, 255, 0, 255]);
-        }
-    }
+    let rgba = [0, 255, 0, 255].repeat((width * height) as usize);
     Icon::from_rgba(rgba, width, height).unwrap_or_else(|_| panic!("Failed to create icon"))
 }
 
