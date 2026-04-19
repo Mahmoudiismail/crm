@@ -99,6 +99,13 @@ On success:
 - Invalid SRP math state (`u == 0`, `A mod N == 0`, `B mod N == 0`).
 - JSON/decoding errors.
 
+## Implementation Quality and Testing
+
+The SRP-6a modular exponentiation math in `compute_s` is unit-tested against known test vectors to ensure reliability and handle edge cases like underflow. The tests cover:
+- Standard scenarios where `b >= kgx`.
+- Underflow scenarios where `b < kgx`, ensuring the logic `(b + N - kgx) mod N` correctly handles big integers.
+- Realistic 2048-bit SRP-6a test vectors verified against reference Python implementations.
+
 ## Security Guidance
 
 - Prefer default TLS verification (`no_verify_ssl = false`) in production.
