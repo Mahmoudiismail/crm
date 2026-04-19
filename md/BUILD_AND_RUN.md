@@ -129,6 +129,9 @@ All workflows use one shared cargo cache key strategy:
 
 - `shared-cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}`
 
+Caching optimizes Rust build times using `actions/cache@v5`, which saves only specific Cargo directories (`~/.cargo/registry/index`, `~/.cargo/registry/cache`, `~/.cargo/git/db`) and `target` to reduce storage.
+The release workflows utilize `softprops/action-gh-release@v3` and `actions/checkout@v6`.
+
 ## Quick Smoke Verification
 
 1. App starts and logs initialization banner.
