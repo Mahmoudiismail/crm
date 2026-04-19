@@ -5,6 +5,7 @@ pub mod fetcher;
 pub mod types;
 
 use anyhow::Result;
+use futures_util::future::join_all;
 use tracing::error;
 
 use config::AppConfig;
@@ -30,11 +31,12 @@ pub async fn run_once(crm_config_path: &str, report: ReportType) -> Result<()> {
         let download_dir = exe_dir.join("Downloads");
         std::fs::create_dir_all(&download_dir)?;
 
-        for (key, url) in &urls {
+        let download_futures = urls.iter().map(|(key, url)| async {
             if let Err(e) = downloader::download_csv(&client, url, key, &download_dir).await {
                 error!("Download failed for {}: {:#}", key, e);
             }
-        }
+        });
+        join_all(download_futures).await;
     }
 
     config.save(crm_config_path)?;

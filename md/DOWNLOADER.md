@@ -6,7 +6,7 @@ Implementation: `src/crm/downloader.rs`
 
 Downloads CSV files from signed URLs returned by report APIs.
 
-When the fetcher splits a report after a `Failed to generate signed url` API response, each successful split payload contributes its own signed URL. The downloader treats each URL independently and writes each CSV to the target directory.
+When the fetcher splits a report after a `Failed to generate signed url` API response, each successful split payload contributes its own signed URL. The downloader treats each URL independently and writes each CSV to the target directory. To optimize performance, multiple CSV files are downloaded concurrently.
 
 ## Public Function
 
