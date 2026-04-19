@@ -116,7 +116,7 @@ pub async fn fetch_reports(
                         tz: &tz,
                         extra_params: extra,
                     };
-                    let result = fetch_with_signed_url_split(
+                    let v = fetch_with_signed_url_split(
                         &client,
                         &token,
                         endpoint,
@@ -124,14 +124,13 @@ pub async fn fetch_reports(
                         &batch_to,
                         &params,
                     )
-                    .await;
-                    match result {
-                        Ok(v) => (key, v),
-                        Err(e) => {
-                            error!("Call log batch {}-{} failed: {}", batch_from, batch_to, e);
-                            (key, serde_json::json!({"error": format!("{}", e)}))
-                        }
-                    }
+                    .await
+                    .unwrap_or_else(|e| {
+                        error!("Call log batch {}-{} failed: {}", batch_from, batch_to, e);
+                        serde_json::json!({"error": format!("{}", e)})
+                    });
+
+                    (key, v)
                 }));
             }
         } else {
@@ -157,17 +156,16 @@ pub async fn fetch_reports(
                     tz: &tz,
                     extra_params: extra,
                 };
-                let result = fetch_with_signed_url_split(
+                let v = fetch_with_signed_url_split(
                     &client, &token, endpoint, &from_date, &to_date, &params,
                 )
-                .await;
-                match result {
-                    Ok(v) => (key, v),
-                    Err(e) => {
-                        error!("Report '{}' failed: {}", endpoint, e);
-                        (key, serde_json::json!({"error": format!("{}", e)}))
-                    }
-                }
+                .await
+                .unwrap_or_else(|e| {
+                    error!("Report '{}' failed: {}", endpoint, e);
+                    serde_json::json!({"error": format!("{}", e)})
+                });
+
+                (key, v)
             }));
         }
     }
