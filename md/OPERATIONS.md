@@ -96,7 +96,7 @@ Check:
 - non-empty shell command text for `shell_command` tasks
 - valid command group headers such as `@group Reports parallel`
 
-Note: As of the GUI improvements (see `GUI_IMPROVEMENTS_SUMMARY.md`), the `+ Add schedule` and `+ Add command` buttons now have proper event listener scoping and will reliably add new rows to the form.
+Note: As of the GUI improvements, the `+ Add schedule` and `+ Add command` buttons now have proper event listener scoping and will reliably add new rows to the form.
 
 Use `GET /tasks` to confirm persisted task state after edits.
 
