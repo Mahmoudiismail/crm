@@ -883,6 +883,49 @@ mod tests {
     }
 
     #[test]
+    fn test_next_daily_run_after() {
+        use chrono::TimeZone;
+
+        // Base date: 2024-01-01 12:00:00 UTC
+        let base_now = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap();
+
+        // 1. Same day, future time
+        let times = vec!["15:00".to_string()];
+        let res = next_daily_run_after(&times, base_now).unwrap();
+        let dt = DateTime::parse_from_rfc3339(&res).unwrap();
+        // It should be strictly after base_now
+        assert!(dt.with_timezone(&Utc) > base_now);
+        // Note: Timezone logic means we can't definitively check the day without knowing local tz,
+        // but it should be valid RFC3339 output.
+
+        // 2. Same day, past time (should wrap to next day)
+        let times = vec!["10:00".to_string()];
+        let res = next_daily_run_after(&times, base_now).unwrap();
+        let dt2 = DateTime::parse_from_rfc3339(&res).unwrap();
+        assert!(dt2.with_timezone(&Utc) > base_now);
+        // It should be approximately 22 hours later (24 hours minus 2 hours)
+
+        // 3. Multiple times, picks the earliest valid one
+        let times = vec!["10:00".to_string(), "15:00".to_string(), "18:00".to_string()];
+        let res = next_daily_run_after(&times, base_now).unwrap();
+        let dt3 = DateTime::parse_from_rfc3339(&res).unwrap();
+        assert!(dt3.with_timezone(&Utc) > base_now);
+        // It should pick "15:00" as it's the earliest future time
+        assert!(dt3 <= dt); // It should be equal to the 15:00 single time case
+
+        // 4. Empty times array
+        let empty_times: Vec<String> = vec![];
+        assert!(next_daily_run_after(&empty_times, base_now).is_err());
+
+        // 5. Invalid time formats
+        let invalid_times = vec!["25:00".to_string()];
+        assert!(next_daily_run_after(&invalid_times, base_now).is_err());
+
+        let invalid_format = vec!["3 PM".to_string()];
+        assert!(next_daily_run_after(&invalid_format, base_now).is_err());
+    }
+
+    #[test]
     fn test_next_weekly_run_after() {
         use chrono::TimeZone;
 
@@ -932,5 +975,41 @@ mod tests {
         let res = next_weekly_run_after("Tuesday", "", base_now).unwrap();
         let dt = DateTime::parse_from_rfc3339(&res).unwrap();
         assert_eq!(dt.with_timezone(&Utc).weekday(), chrono::Weekday::Tue);
+    }
+
+    #[test]
+    fn test_relative_time() {
+        use chrono::TimeZone;
+        let now = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap();
+
+        // 1. just now (past, < 60s)
+        assert_eq!(relative_time(now, now), "just now");
+        assert_eq!(relative_time(now - chrono::TimeDelta::seconds(59), now), "just now");
+
+        // 2. in less than 1 minute (future, < 60s)
+        assert_eq!(relative_time(now + chrono::TimeDelta::seconds(1), now), "in less than 1 minute");
+        assert_eq!(relative_time(now + chrono::TimeDelta::seconds(59), now), "in less than 1 minute");
+
+        // 3. past, >= 60s
+        assert_eq!(relative_time(now - chrono::TimeDelta::seconds(60), now), "1 minute ago");
+        assert_eq!(relative_time(now - chrono::TimeDelta::seconds(119), now), "1 minute 59 seconds ago");
+        assert_eq!(relative_time(now - chrono::TimeDelta::seconds(120), now), "2 minutes ago");
+        assert_eq!(relative_time(now - chrono::TimeDelta::seconds(3600), now), "1 hour ago");
+        assert_eq!(relative_time(now - chrono::TimeDelta::seconds(7200), now), "2 hours ago");
+        assert_eq!(relative_time(now - chrono::TimeDelta::seconds(86400), now), "1 day ago");
+        assert_eq!(relative_time(now - chrono::TimeDelta::seconds(172800), now), "2 days ago");
+
+        // 4. future, >= 60s
+        assert_eq!(relative_time(now + chrono::TimeDelta::seconds(60), now), "in 1 minute");
+        assert_eq!(relative_time(now + chrono::TimeDelta::seconds(119), now), "in 1 minute 59 seconds");
+        assert_eq!(relative_time(now + chrono::TimeDelta::seconds(120), now), "in 2 minutes");
+        assert_eq!(relative_time(now + chrono::TimeDelta::seconds(3600), now), "in 1 hour");
+        assert_eq!(relative_time(now + chrono::TimeDelta::seconds(7200), now), "in 2 hours");
+        assert_eq!(relative_time(now + chrono::TimeDelta::seconds(86400), now), "in 1 day");
+        assert_eq!(relative_time(now + chrono::TimeDelta::seconds(172800), now), "in 2 days");
+
+        // 5. compound values (human_duration returns up to two units)
+        assert_eq!(relative_time(now - chrono::TimeDelta::seconds(3600 + 120), now), "1 hour 2 minutes ago");
+        assert_eq!(relative_time(now + chrono::TimeDelta::seconds(86400 + 7200), now), "in 1 day 2 hours");
     }
 }
