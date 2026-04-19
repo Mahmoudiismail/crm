@@ -171,6 +171,26 @@
         }).filter(Boolean).join('\n');
     }
 
+    const taskTypeSelect = document.getElementById('task-type-select');
+    const crmReportContainer = document.getElementById('crm-report-container');
+    const shellCommandContainer = document.getElementById('shell-command-container');
+
+    function updateTaskTypeVisibility() {
+        if (!taskTypeSelect) return;
+        const type = taskTypeSelect.value;
+        if (crmReportContainer) {
+            crmReportContainer.classList.toggle('hidden', type !== 'crm_fetch');
+        }
+        if (shellCommandContainer) {
+            shellCommandContainer.classList.toggle('hidden', type !== 'shell_command');
+        }
+    }
+
+    if (taskTypeSelect) {
+        taskTypeSelect.addEventListener('change', updateTaskTypeVisibility);
+        updateTaskTypeVisibility();
+    }
+
     const form = document.querySelector('form');
     if (form) {
         form.addEventListener('submit', function() {

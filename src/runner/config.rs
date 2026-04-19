@@ -63,10 +63,10 @@ pub enum TaskKind {
         report: ReportType,
     },
     ShellCommand {
-        #[serde(default, skip_serializing_if = "String::is_empty")]
-        command: String,
+        #[serde(default)]
+        mode: ShellCommandMode,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
-        groups: Vec<ShellCommandGroup>,
+        commands: Vec<ShellCommandSpec>,
     },
 }
 
@@ -115,16 +115,6 @@ pub enum TaskSchedule {
         #[serde(default)]
         next_run_at: String,
     },
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ShellCommandGroup {
-    #[serde(default)]
-    pub name: String,
-    #[serde(default)]
-    pub mode: ShellCommandMode,
-    #[serde(default)]
-    pub commands: Vec<ShellCommandSpec>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -721,7 +711,7 @@ mod tests {
 
     #[test]
     fn test_shell_command_persistence() {
-        // Create a task with shell command groups
+        // Create a task with shell commands
         let task = RunnerTask {
             id: "test_shell".to_string(),
             name: "Test Shell Task".to_string(),
@@ -731,29 +721,15 @@ mod tests {
             next_run_at: String::new(),
             schedules: vec![],
             kind: TaskKind::ShellCommand {
-                command: String::new(),
-                groups: vec![
-                    ShellCommandGroup {
-                        name: "Backup".to_string(),
-                        mode: ShellCommandMode::Sequential,
-                        commands: vec![
-                            ShellCommandSpec {
-                                command: "tar -czf backup.tar.gz /data".to_string(),
-                                continue_on_error: false,
-                            },
-                            ShellCommandSpec {
-                                command: "echo Backup complete".to_string(),
-                                continue_on_error: true,
-                            },
-                        ],
+                mode: ShellCommandMode::Parallel,
+                commands: vec![
+                    ShellCommandSpec {
+                        command: "tar -czf backup.tar.gz /data".to_string(),
+                        continue_on_error: false,
                     },
-                    ShellCommandGroup {
-                        name: "Cleanup".to_string(),
-                        mode: ShellCommandMode::Parallel,
-                        commands: vec![ShellCommandSpec {
-                            command: "rm -f /tmp/*.log".to_string(),
-                            continue_on_error: true,
-                        }],
+                    ShellCommandSpec {
+                        command: "echo Backup complete".to_string(),
+                        continue_on_error: true,
                     },
                 ],
             },
@@ -785,26 +761,15 @@ mod tests {
 
         // Verify shell command kind
         match &loaded_task.kind {
-            TaskKind::ShellCommand { command, groups } => {
-                assert!(command.is_empty()); // empty simple command
-                assert_eq!(groups.len(), 2);
-
-                // First group
-                assert_eq!(groups[0].name, "Backup");
-                assert_eq!(groups[0].mode, ShellCommandMode::Sequential);
-                assert_eq!(groups[0].commands.len(), 2);
+            TaskKind::ShellCommand { mode, commands } => {
+                assert_eq!(*mode, ShellCommandMode::Parallel);
+                assert_eq!(commands.len(), 2);
                 assert_eq!(
-                    groups[0].commands[0].command,
+                    commands[0].command,
                     "tar -czf backup.tar.gz /data"
                 );
-                assert!(!groups[0].commands[0].continue_on_error);
-                assert!(groups[0].commands[1].continue_on_error);
-
-                // Second group
-                assert_eq!(groups[1].name, "Cleanup");
-                assert_eq!(groups[1].mode, ShellCommandMode::Parallel);
-                assert_eq!(groups[1].commands.len(), 1);
-                assert!(groups[1].commands[0].continue_on_error);
+                assert!(!commands[0].continue_on_error);
+                assert!(commands[1].continue_on_error);
             }
             _ => panic!("Expected ShellCommand kind"),
         }
@@ -844,8 +809,11 @@ mod tests {
                     next_run_at: (Utc::now() + chrono::Duration::hours(1)).to_rfc3339(),
                 }],
                 kind: TaskKind::ShellCommand {
-                    command: "echo Hello World".to_string(),
-                    groups: vec![],
+                    mode: ShellCommandMode::Sequential,
+                    commands: vec![ShellCommandSpec {
+                        command: "echo Hello World".to_string(),
+                        continue_on_error: false,
+                    }],
                 },
                 last_run_at: String::new(),
                 last_status: String::new(),
@@ -888,9 +856,10 @@ mod tests {
         assert_eq!(shell_task.id, "shell_task");
         assert!(!shell_task.enabled);
         match &shell_task.kind {
-            TaskKind::ShellCommand { command, groups } => {
-                assert_eq!(command, "echo Hello World");
-                assert!(groups.is_empty());
+            TaskKind::ShellCommand { mode, commands } => {
+                assert_eq!(*mode, ShellCommandMode::Sequential);
+                assert_eq!(commands.len(), 1);
+                assert_eq!(commands[0].command, "echo Hello World");
             }
             _ => panic!("Expected ShellCommand kind"),
         }

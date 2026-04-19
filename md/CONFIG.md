@@ -34,7 +34,7 @@ Implementation: `src/runner/config.rs`
 - `schedules`: optional list of schedules. When present, this replaces the legacy `repetition`/`frequency_seconds`/`next_run_at` behavior for due-task detection.
 - `kind`: tagged task payload
   - `crm_fetch` with `report` (`all`, `tickets`, `calls`, `leads`, `none`)
-  - `shell_command` with legacy `command` or grouped `groups`
+  - `shell_command` with execution `mode` and `commands`
 - `last_run_at`: last run timestamp
 - `last_status`: last run result message
 
@@ -55,17 +55,16 @@ Each `schedules` item has a `type`:
 
 All persisted `next_run_at` and `last_run_at` values remain RFC3339 UTC. The GUI renders these values as local human-readable time with relative text.
 
-### Shell command groups
+### Shell commands
 
-`shell_command` supports the legacy single `command` field and the newer `groups` list:
+`shell_command` supports execution of multiple commands with an execution `mode`:
 
-- `name`: display name for the command group.
 - `mode`: `sequential` or `parallel`.
 - `commands`: list of command specs.
 - `commands[].command`: shell text executed with `bash -lc`.
-- `commands[].continue_on_error`: when `true`, a failed command does not fail the group.
+- `commands[].continue_on_error`: when `true`, a failed command does not fail the task.
 
-Groups run in order. A sequential group stops at the first failed command unless that command has `continue_on_error=true`. A parallel group starts all commands together, waits for all commands, and fails when any non-continued command fails.
+A sequential task stops at the first failed command unless that command has `continue_on_error=true`. A parallel task starts all commands together, waits for all commands, and fails when any non-continued command fails.
 
 ### Task validation and normalization
 
@@ -76,7 +75,7 @@ When tasks are created/updated through the runner GUI CRUD endpoints:
 - `next_run_at` must be empty or valid RFC3339
 - for `repetition=repeat`, `frequency_seconds` is clamped to at least `min_task_interval_seconds`
 - `schedules` entries must use valid intervals, RFC3339 once timestamps, or `HH:MM` daily local times
-- `shell_command.command` or `shell_command.groups` must contain at least one non-empty command
+- `shell_command.commands` must contain at least one non-empty command
 
 `id` uniqueness is enforced across all tasks. Updates preserve `last_run_at` and `last_status` when these fields are not explicitly provided.
 
@@ -92,10 +91,10 @@ The GUI create/update forms now provide a simpler task editor:
 
 Shell commands can be added as separate command rows:
 
+- `Execution Mode` dropdown for the task: `Sequential` or `Parallel`
 - `Command` input field for the shell command
 - `Mode` dropdown: `Run` (halt on error, default) or `Continue` (ignore errors and proceed)
 - a `+ Add command` button to add more commands
-- commands are automatically grouped into a single task group on form submit
 
 ### Runner -> CRM invocation contract
 
@@ -147,20 +146,15 @@ Runner resolves relative `crm_config_path` and `crm_executable_path` from execut
 }
 ```
 
-Shell command group example:
+Shell commands example:
 
 ```json
 {
   "type": "shell_command",
-  "groups": [
-    {
-      "name": "Reports",
-      "mode": "parallel",
-      "commands": [
-        { "command": "./fetch-a.sh", "continue_on_error": false },
-        { "command": "./fetch-b.sh", "continue_on_error": true }
-      ]
-    }
+    "mode": "parallel",
+    "commands": [
+      { "command": "./fetch-a.sh", "continue_on_error": false },
+      { "command": "echo done", "continue_on_error": true }
   ]
 }
 ```

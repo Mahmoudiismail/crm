@@ -41,7 +41,7 @@ The runner uses **cron-based polling** to evaluate task schedules:
    - **Monthly**: Check if current time >= calculated `next_run_at` for the target date
 4. **Task Execution**: If any schedule is due, execute the task:
    - For `crm_fetch`, invoke external `crm` executable with CLI args (`--config`, `--report`)
-   - For `shell_command`, run configured command groups in order. Groups can execute commands sequentially or in parallel
+   - For `shell_command`, run configured commands. Commands can execute sequentially or in parallel
 5. **Task State Update**:
    - Update `last_run_at` timestamp
    - Update `last_status` with execution result
@@ -91,4 +91,4 @@ CRUD operations persist directly to `runner_config.json` and return validation e
 - `allow_shell_tasks=false` blocks all `shell_command` task execution.
 - `shell_timeout_seconds` terminates long-running shell tasks by timeout.
 - `min_task_interval_seconds` prevents repeat tasks from running too frequently.
-- `shell_command` groups use `bash -lc` for each command. A command with `continue_on_error=true` does not fail its group.
+- `shell_command` tasks use `bash -lc` for each command. A command with `continue_on_error=true` does not fail its task.

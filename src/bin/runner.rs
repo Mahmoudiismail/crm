@@ -55,6 +55,9 @@ async fn main() -> Result<()> {
         });
     }
 
+    if let Err(e) = gtk::init() {
+        error!("Failed to initialize GTK: {}", e);
+    }
     let event_loop = EventLoop::new()?;
     let mut app = App {
         tray_icon: None,
