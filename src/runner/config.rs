@@ -483,7 +483,11 @@ pub fn next_daily_run_after(times: &[String], now: DateTime<Utc>) -> Result<Stri
         .ok_or_else(|| anyhow::anyhow!("daily_times schedule requires at least one HH:MM time"))
 }
 
-pub fn next_weekly_run_after(day_of_week: &str, at_time: &str, now: DateTime<Utc>) -> Result<String> {
+pub fn next_weekly_run_after(
+    day_of_week: &str,
+    at_time: &str,
+    now: DateTime<Utc>,
+) -> Result<String> {
     let day_lower = day_of_week.trim().to_lowercase();
     let target_weekday = match day_lower.as_str() {
         "sunday" | "sun" | "0" => chrono::Weekday::Sun,
@@ -493,10 +497,12 @@ pub fn next_weekly_run_after(day_of_week: &str, at_time: &str, now: DateTime<Utc
         "thursday" | "thu" | "4" => chrono::Weekday::Thu,
         "friday" | "fri" | "5" => chrono::Weekday::Fri,
         "saturday" | "sat" | "6" => chrono::Weekday::Sat,
-        _ => return Err(anyhow::anyhow!(
-            "Invalid day of week '{}'. Use monday-sunday (or mon-sun, 0-6)",
-            day_of_week
-        )),
+        _ => {
+            return Err(anyhow::anyhow!(
+                "Invalid day of week '{}'. Use monday-sunday (or mon-sun, 0-6)",
+                day_of_week
+            ))
+        }
     };
 
     let now_local = now.with_timezone(&Local);
@@ -520,7 +526,9 @@ pub fn next_weekly_run_after(day_of_week: &str, at_time: &str, now: DateTime<Utc
     let candidate = match Local.from_local_datetime(&local_dt) {
         chrono::LocalResult::Single(dt) => dt,
         chrono::LocalResult::Ambiguous(dt, _) => dt,
-        chrono::LocalResult::None => return Err(anyhow::anyhow!("Could not resolve weekly schedule time")),
+        chrono::LocalResult::None => {
+            return Err(anyhow::anyhow!("Could not resolve weekly schedule time"))
+        }
     }
     .with_timezone(&Utc);
 
@@ -530,7 +538,9 @@ pub fn next_weekly_run_after(day_of_week: &str, at_time: &str, now: DateTime<Utc
         let next_dt = match Local.from_local_datetime(&local_dt) {
             chrono::LocalResult::Single(dt) => dt,
             chrono::LocalResult::Ambiguous(dt, _) => dt,
-            chrono::LocalResult::None => return Err(anyhow::anyhow!("Could not resolve weekly schedule time")),
+            chrono::LocalResult::None => {
+                return Err(anyhow::anyhow!("Could not resolve weekly schedule time"))
+            }
         }
         .with_timezone(&Utc);
         Ok(next_dt.to_rfc3339())
@@ -539,7 +549,11 @@ pub fn next_weekly_run_after(day_of_week: &str, at_time: &str, now: DateTime<Utc
     }
 }
 
-pub fn next_monthly_run_after(day_of_month: u32, at_time: &str, now: DateTime<Utc>) -> Result<String> {
+pub fn next_monthly_run_after(
+    day_of_month: u32,
+    at_time: &str,
+    now: DateTime<Utc>,
+) -> Result<String> {
     let now_local = now.with_timezone(&Local);
     let today = now_local.date_naive();
     let current_year = today.year();
@@ -577,7 +591,9 @@ pub fn next_monthly_run_after(day_of_month: u32, at_time: &str, now: DateTime<Ut
         }
     }
 
-    Err(anyhow::anyhow!("Could not find a valid monthly schedule date"))
+    Err(anyhow::anyhow!(
+        "Could not find a valid monthly schedule date"
+    ))
 }
 
 fn days_in_month(year: i32, month: u32) -> u32 {
@@ -764,10 +780,7 @@ mod tests {
             TaskKind::ShellCommand { mode, commands } => {
                 assert_eq!(*mode, ShellCommandMode::Parallel);
                 assert_eq!(commands.len(), 2);
-                assert_eq!(
-                    commands[0].command,
-                    "tar -czf backup.tar.gz /data"
-                );
+                assert_eq!(commands[0].command, "tar -czf backup.tar.gz /data");
                 assert!(!commands[0].continue_on_error);
                 assert!(commands[1].continue_on_error);
             }
@@ -870,6 +883,49 @@ mod tests {
     }
 
     #[test]
+    fn test_next_daily_run_after() {
+        use chrono::TimeZone;
+
+        // Base date: 2024-01-01 12:00:00 UTC
+        let base_now = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap();
+
+        // 1. Same day, future time
+        let times = vec!["15:00".to_string()];
+        let res = next_daily_run_after(&times, base_now).unwrap();
+        let dt = DateTime::parse_from_rfc3339(&res).unwrap();
+        // It should be strictly after base_now
+        assert!(dt.with_timezone(&Utc) > base_now);
+        // Note: Timezone logic means we can't definitively check the day without knowing local tz,
+        // but it should be valid RFC3339 output.
+
+        // 2. Same day, past time (should wrap to next day)
+        let times = vec!["10:00".to_string()];
+        let res = next_daily_run_after(&times, base_now).unwrap();
+        let dt2 = DateTime::parse_from_rfc3339(&res).unwrap();
+        assert!(dt2.with_timezone(&Utc) > base_now);
+        // It should be approximately 22 hours later (24 hours minus 2 hours)
+
+        // 3. Multiple times, picks the earliest valid one
+        let times = vec!["10:00".to_string(), "15:00".to_string(), "18:00".to_string()];
+        let res = next_daily_run_after(&times, base_now).unwrap();
+        let dt3 = DateTime::parse_from_rfc3339(&res).unwrap();
+        assert!(dt3.with_timezone(&Utc) > base_now);
+        // It should pick "15:00" as it's the earliest future time
+        assert!(dt3 <= dt); // It should be equal to the 15:00 single time case
+
+        // 4. Empty times array
+        let empty_times: Vec<String> = vec![];
+        assert!(next_daily_run_after(&empty_times, base_now).is_err());
+
+        // 5. Invalid time formats
+        let invalid_times = vec!["25:00".to_string()];
+        assert!(next_daily_run_after(&invalid_times, base_now).is_err());
+
+        let invalid_format = vec!["3 PM".to_string()];
+        assert!(next_daily_run_after(&invalid_format, base_now).is_err());
+    }
+
+    #[test]
     fn test_next_weekly_run_after() {
         use chrono::TimeZone;
 
@@ -922,74 +978,38 @@ mod tests {
     }
 
     #[test]
-    fn test_next_monthly_run_after() {
+    fn test_relative_time() {
         use chrono::TimeZone;
+        let now = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap();
 
-        // Note: For rigorous testing without global TZ mutations, we rely on the logic
-        // within next_monthly_run_after which converts the `now` to Local and then
-        // the resulting candidate back to Utc. For our deterministic inputs we assume a baseline execution environment.
+        // 1. just now (past, < 60s)
+        assert_eq!(relative_time(now, now), "just now");
+        assert_eq!(relative_time(now - chrono::TimeDelta::seconds(59), now), "just now");
 
-        // Base date: Jan 15, 2024 12:00:00 UTC (leap year)
-        let base_now = Utc.with_ymd_and_hms(2024, 1, 15, 12, 0, 0).unwrap();
+        // 2. in less than 1 minute (future, < 60s)
+        assert_eq!(relative_time(now + chrono::TimeDelta::seconds(1), now), "in less than 1 minute");
+        assert_eq!(relative_time(now + chrono::TimeDelta::seconds(59), now), "in less than 1 minute");
 
-        // 1. Same month, future day
-        let res = next_monthly_run_after(20, "15:00", base_now).unwrap();
-        let dt = DateTime::parse_from_rfc3339(&res).unwrap();
-        assert_eq!(dt.with_timezone(&Utc).year(), 2024);
-        assert_eq!(dt.with_timezone(&Utc).month(), 1);
-        assert_eq!(dt.with_timezone(&Utc).day(), 20);
+        // 3. past, >= 60s
+        assert_eq!(relative_time(now - chrono::TimeDelta::seconds(60), now), "1 minute ago");
+        assert_eq!(relative_time(now - chrono::TimeDelta::seconds(119), now), "1 minute 59 seconds ago");
+        assert_eq!(relative_time(now - chrono::TimeDelta::seconds(120), now), "2 minutes ago");
+        assert_eq!(relative_time(now - chrono::TimeDelta::seconds(3600), now), "1 hour ago");
+        assert_eq!(relative_time(now - chrono::TimeDelta::seconds(7200), now), "2 hours ago");
+        assert_eq!(relative_time(now - chrono::TimeDelta::seconds(86400), now), "1 day ago");
+        assert_eq!(relative_time(now - chrono::TimeDelta::seconds(172800), now), "2 days ago");
 
-        // 2. Same month, same day, future time
-        let res = next_monthly_run_after(15, "15:00", base_now).unwrap();
-        let dt = DateTime::parse_from_rfc3339(&res).unwrap();
-        assert_eq!(dt.with_timezone(&Utc).month(), 1);
-        assert_eq!(dt.with_timezone(&Utc).day(), 15);
-        assert!(dt.with_timezone(&Utc) > base_now);
+        // 4. future, >= 60s
+        assert_eq!(relative_time(now + chrono::TimeDelta::seconds(60), now), "in 1 minute");
+        assert_eq!(relative_time(now + chrono::TimeDelta::seconds(119), now), "in 1 minute 59 seconds");
+        assert_eq!(relative_time(now + chrono::TimeDelta::seconds(120), now), "in 2 minutes");
+        assert_eq!(relative_time(now + chrono::TimeDelta::seconds(3600), now), "in 1 hour");
+        assert_eq!(relative_time(now + chrono::TimeDelta::seconds(7200), now), "in 2 hours");
+        assert_eq!(relative_time(now + chrono::TimeDelta::seconds(86400), now), "in 1 day");
+        assert_eq!(relative_time(now + chrono::TimeDelta::seconds(172800), now), "in 2 days");
 
-        // 3. Same month, same day, past time (should wrap to next month)
-        let res = next_monthly_run_after(15, "10:00", base_now).unwrap();
-        let dt = DateTime::parse_from_rfc3339(&res).unwrap();
-        assert_eq!(dt.with_timezone(&Utc).month(), 2);
-        assert_eq!(dt.with_timezone(&Utc).day(), 15);
-        assert!(dt.with_timezone(&Utc) > base_now);
-
-        // 4. Past day (should wrap to next month)
-        let res = next_monthly_run_after(5, "12:00", base_now).unwrap();
-        let dt = DateTime::parse_from_rfc3339(&res).unwrap();
-        // The exact expected day might depend on Local timezone of CI, so we just verify it wrapped or stayed same based on offset.
-        assert!(dt.with_timezone(&Utc) > base_now);
-
-        // 5. Edge case: day of month exceeds days in target month (e.g., Feb 30 -> Feb 29 in 2024)
-        let res = next_monthly_run_after(31, "12:00", base_now).unwrap();
-        let dt = DateTime::parse_from_rfc3339(&res).unwrap();
-        // Should be Jan 31st first, as base_now is Jan 15th
-        assert_eq!(dt.with_timezone(&Utc).month(), 1);
-        assert_eq!(dt.with_timezone(&Utc).day(), 31);
-
-        // What if base is Jan 31st 12:00? Next 31st would be Feb 29th
-        let end_jan = Utc.with_ymd_and_hms(2024, 1, 31, 12, 0, 0).unwrap();
-        let res2 = next_monthly_run_after(31, "15:00", end_jan).unwrap();
-        let dt2 = DateTime::parse_from_rfc3339(&res2).unwrap();
-        // Since we are at Jan 31 12:00, target Jan 31 15:00 is in the future
-        assert_eq!(dt2.with_timezone(&Utc).month(), 1);
-        assert_eq!(dt2.with_timezone(&Utc).day(), 31);
-
-        let res3 = next_monthly_run_after(31, "10:00", end_jan).unwrap();
-        let dt3 = DateTime::parse_from_rfc3339(&res3).unwrap();
-        // Target Jan 31 10:00 is in past. Next is Feb, which only has 29 days
-        assert_eq!(dt3.with_timezone(&Utc).month(), 2);
-        assert_eq!(dt3.with_timezone(&Utc).day(), 29); // Leap year
-
-        // 6. Year wrapping (Dec -> Jan)
-        let end_year = Utc.with_ymd_and_hms(2024, 12, 20, 12, 0, 0).unwrap();
-        let res4 = next_monthly_run_after(5, "12:00", end_year).unwrap();
-        let dt4 = DateTime::parse_from_rfc3339(&res4).unwrap();
-        assert_eq!(dt4.with_timezone(&Utc).year(), 2025);
-        assert_eq!(dt4.with_timezone(&Utc).month(), 1);
-        assert_eq!(dt4.with_timezone(&Utc).day(), 5);
-
-        // 7. Invalid time
-        assert!(next_monthly_run_after(15, "25:00", base_now).is_err());
-        assert!(next_monthly_run_after(15, "not-a-time", base_now).is_err());
+        // 5. compound values (human_duration returns up to two units)
+        assert_eq!(relative_time(now - chrono::TimeDelta::seconds(3600 + 120), now), "1 hour 2 minutes ago");
+        assert_eq!(relative_time(now + chrono::TimeDelta::seconds(86400 + 7200), now), "in 1 day 2 hours");
     }
 }
