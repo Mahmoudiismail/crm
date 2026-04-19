@@ -36,6 +36,7 @@ For one optimized application binary:
 ```bash
 cargo build --release --bin runner
 cargo build --release --bin crm
+cargo build --release --bin yasweb
 ```
 
 ## Run
@@ -43,6 +44,7 @@ cargo build --release --bin crm
 ```bash
 cargo run --bin runner
 cargo run --bin crm
+cargo run --bin yasweb
 ```
 
 - `runner` starts tray + scheduler + GUI.
@@ -100,6 +102,7 @@ Output binary:
 
 - `target/x86_64-pc-windows-gnu/release/runner.exe`
 - `target/x86_64-pc-windows-gnu/release/crm.exe`
+- `target/x86_64-pc-windows-gnu/release/yasweb.exe`
 
 ## Windows-target validation in Linux dev container
 
@@ -118,12 +121,14 @@ GitHub Actions are split into:
 - `.github/workflows/build-windows.yml`
 - `.github/workflows/release-runner.yml`
 - `.github/workflows/release-crm.yml`
+- `.github/workflows/release-yasweb.yml`
 
 Release workflow behavior:
 
 - `release-runner.yml` builds `cargo build --release --bin runner` and uploads `runner_windows.zip`.
 - `release-crm.yml` builds `cargo build --release --bin crm` and uploads `crm_windows.zip`.
-- Both release workflows publish to tag `v<package version>` from `Cargo.toml` and can update the same GitHub release with separate assets.
+- `release-yasweb.yml` builds `cargo build --release --bin yasweb` and uploads `yasweb_windows.zip`.
+- All three release workflows publish to tag `v<package version>` from `Cargo.toml` and can update the same GitHub release with separate assets.
 
 All workflows use one shared cargo cache key strategy:
 

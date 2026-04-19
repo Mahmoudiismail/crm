@@ -1,11 +1,12 @@
 # Configuration
 
-The application now uses two config files:
+The application now uses three config files:
 
 - `runner_config.json` (runner behavior, task storage, GUI host/port)
 - `config.json` (CRM auth/report settings and token cache)
+- `yasweb_config.json` (Yasweb browser automation target and credentials)
 
-Runner behavior is config-driven. CRM executable behavior is controlled via CLI args.
+Runner behavior is config-driven. CRM executable behavior is controlled via CLI args. Yasweb runs headlessly according to its config file.
 
 ## 1) Runner Config (`runner_config.json`)
 
@@ -201,3 +202,17 @@ Implementation: `src/crm/config.rs`
 - If `remember_secrets=false`, secret/token fields are removed before saving.
 - Authentication credentials (`username` and `password`) must match the configured Cognito user pool.
 - No config field is required for signed-URL failure splitting; the fetcher automatically halves a report date range when the CRM API returns `Failed to generate signed url`.
+
+## 3) Yasweb Config (`yasweb_config.json`)
+
+The `yasweb` binary stores its target URL and automation credentials in `yasweb_config.json`, expected to be located next to the executable. If it does not exist, the binary will auto-create a default file:
+
+```json
+{
+  "url": "https://yasweb.fakeeh.care:8030/",
+  "username": "",
+  "password": null
+}
+```
+
+This configuration file is used by the headless browser automation tool to navigate to the target application and fill in the login form fields (`input[name='username']`, `input[type='password']`).
