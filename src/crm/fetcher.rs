@@ -403,7 +403,11 @@ pub fn split_monthly(from: &str, to: &str) -> Result<Vec<(String, String)>> {
 
 /// Return the last day of the given month.
 fn last_day_of_month(year: i32, month: u32) -> Option<NaiveDate> {
-    let (y, m) = if month == 12 { (year + 1, 1) } else { (year, month + 1) };
+    let (y, m) = if month == 12 {
+        (year + 1, 1)
+    } else {
+        (year, month + 1)
+    };
     NaiveDate::from_ymd_opt(y, m, 1)?.pred_opt()
 }
 

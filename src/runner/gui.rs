@@ -474,10 +474,7 @@ fn render_task_form(
     let name = task.map(|t| t.name.as_str()).unwrap_or_default();
     let enabled = task.map(|t| t.enabled).unwrap_or(true);
     let (task_type, report) = match task.map(|t| &t.kind) {
-        Some(TaskKind::ShellCommand { .. }) => (
-            "shell_command",
-            "all",
-        ),
+        Some(TaskKind::ShellCommand { .. }) => ("shell_command", "all"),
         Some(TaskKind::CrmFetch { report }) => (
             "crm_fetch",
             match report {
@@ -680,9 +677,7 @@ fn shell_command_rows_html(task: &RunnerTask) -> String {
             let rows = commands
                 .iter()
                 .enumerate()
-                .map(|(index, spec)| {
-                    command_row_html(index, &spec.command, spec.continue_on_error)
-                })
+                .map(|(index, spec)| command_row_html(index, &spec.command, spec.continue_on_error))
                 .collect::<Vec<_>>();
             if rows.is_empty() {
                 command_row_html(0, "", false)
@@ -848,10 +843,7 @@ fn local_datetime_value(value: &str) -> String {
 }
 
 fn form_script() -> String {
-    format!(
-        "<script>{}</script>",
-        include_str!("form_script.js")
-    )
+    format!("<script>{}</script>", include_str!("form_script.js"))
 }
 
 fn input_field(label: &str, name: &str, value: &str) -> String {

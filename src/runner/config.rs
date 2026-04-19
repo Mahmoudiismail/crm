@@ -483,7 +483,11 @@ pub fn next_daily_run_after(times: &[String], now: DateTime<Utc>) -> Result<Stri
         .ok_or_else(|| anyhow::anyhow!("daily_times schedule requires at least one HH:MM time"))
 }
 
-pub fn next_weekly_run_after(day_of_week: &str, at_time: &str, now: DateTime<Utc>) -> Result<String> {
+pub fn next_weekly_run_after(
+    day_of_week: &str,
+    at_time: &str,
+    now: DateTime<Utc>,
+) -> Result<String> {
     let day_lower = day_of_week.trim().to_lowercase();
     let target_weekday = match day_lower.as_str() {
         "sunday" | "sun" | "0" => chrono::Weekday::Sun,
@@ -493,10 +497,12 @@ pub fn next_weekly_run_after(day_of_week: &str, at_time: &str, now: DateTime<Utc
         "thursday" | "thu" | "4" => chrono::Weekday::Thu,
         "friday" | "fri" | "5" => chrono::Weekday::Fri,
         "saturday" | "sat" | "6" => chrono::Weekday::Sat,
-        _ => return Err(anyhow::anyhow!(
-            "Invalid day of week '{}'. Use monday-sunday (or mon-sun, 0-6)",
-            day_of_week
-        )),
+        _ => {
+            return Err(anyhow::anyhow!(
+                "Invalid day of week '{}'. Use monday-sunday (or mon-sun, 0-6)",
+                day_of_week
+            ))
+        }
     };
 
     let now_local = now.with_timezone(&Local);
@@ -520,7 +526,9 @@ pub fn next_weekly_run_after(day_of_week: &str, at_time: &str, now: DateTime<Utc
     let candidate = match Local.from_local_datetime(&local_dt) {
         chrono::LocalResult::Single(dt) => dt,
         chrono::LocalResult::Ambiguous(dt, _) => dt,
-        chrono::LocalResult::None => return Err(anyhow::anyhow!("Could not resolve weekly schedule time")),
+        chrono::LocalResult::None => {
+            return Err(anyhow::anyhow!("Could not resolve weekly schedule time"))
+        }
     }
     .with_timezone(&Utc);
 
@@ -530,7 +538,9 @@ pub fn next_weekly_run_after(day_of_week: &str, at_time: &str, now: DateTime<Utc
         let next_dt = match Local.from_local_datetime(&local_dt) {
             chrono::LocalResult::Single(dt) => dt,
             chrono::LocalResult::Ambiguous(dt, _) => dt,
-            chrono::LocalResult::None => return Err(anyhow::anyhow!("Could not resolve weekly schedule time")),
+            chrono::LocalResult::None => {
+                return Err(anyhow::anyhow!("Could not resolve weekly schedule time"))
+            }
         }
         .with_timezone(&Utc);
         Ok(next_dt.to_rfc3339())
@@ -539,7 +549,11 @@ pub fn next_weekly_run_after(day_of_week: &str, at_time: &str, now: DateTime<Utc
     }
 }
 
-pub fn next_monthly_run_after(day_of_month: u32, at_time: &str, now: DateTime<Utc>) -> Result<String> {
+pub fn next_monthly_run_after(
+    day_of_month: u32,
+    at_time: &str,
+    now: DateTime<Utc>,
+) -> Result<String> {
     let now_local = now.with_timezone(&Local);
     let today = now_local.date_naive();
     let current_year = today.year();
@@ -577,7 +591,9 @@ pub fn next_monthly_run_after(day_of_month: u32, at_time: &str, now: DateTime<Ut
         }
     }
 
-    Err(anyhow::anyhow!("Could not find a valid monthly schedule date"))
+    Err(anyhow::anyhow!(
+        "Could not find a valid monthly schedule date"
+    ))
 }
 
 fn days_in_month(year: i32, month: u32) -> u32 {
@@ -764,10 +780,7 @@ mod tests {
             TaskKind::ShellCommand { mode, commands } => {
                 assert_eq!(*mode, ShellCommandMode::Parallel);
                 assert_eq!(commands.len(), 2);
-                assert_eq!(
-                    commands[0].command,
-                    "tar -czf backup.tar.gz /data"
-                );
+                assert_eq!(commands[0].command, "tar -czf backup.tar.gz /data");
                 assert!(!commands[0].continue_on_error);
                 assert!(commands[1].continue_on_error);
             }
