@@ -29,15 +29,13 @@ pub async fn run_once(crm_config_path: &str, report: ReportType) -> Result<()> {
             .parent()
             .unwrap_or_else(|| std::path::Path::new("."));
         let download_dir = exe_dir.join("Downloads");
-        std::fs::create_dir_all(&download_dir)?;
+        tokio::fs::create_dir_all(&download_dir).await?;
 
         let download_futures = urls.iter().map(|(key, url)| {
             let client = client.clone();
             let download_dir = download_dir.clone();
-            let key = key.clone();
-            let url = url.clone();
             async move {
-                if let Err(e) = downloader::download_csv(&client, &url, &key, &download_dir).await {
+                if let Err(e) = downloader::download_csv(&client, url, key, &download_dir).await {
                     error!("Download failed for {}: {:#}", key, e);
                 }
             }
