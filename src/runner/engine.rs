@@ -8,9 +8,8 @@ use tokio::sync::{mpsc, Mutex};
 use tracing::{error, info};
 
 use super::config::{
-    next_daily_run_after, next_monthly_run_after, parse_rfc3339_utc,
-    Repetition, ReportType, RunnerConfig, RunnerTask, ShellCommandMode,
-    ShellCommandSpec, TaskKind, TaskSchedule,
+    next_daily_run_after, next_monthly_run_after, parse_rfc3339_utc, Repetition, ReportType,
+    RunnerConfig, RunnerTask, ShellCommandMode, ShellCommandSpec, TaskKind, TaskSchedule,
 };
 
 #[derive(Debug, Clone)]
@@ -58,9 +57,7 @@ pub fn start_scheduler(runner_config_path: String) -> RunnerHandle {
     let config_path = runner_config_path.clone();
 
     // Get initial config modification time
-    let get_mod_time = |p: &str| -> Option<SystemTime> {
-        fs::metadata(p).ok()?.modified().ok()
-    };
+    let get_mod_time = |p: &str| -> Option<SystemTime> { fs::metadata(p).ok()?.modified().ok() };
 
     let mut last_modified = get_mod_time(&config_path).unwrap_or(SystemTime::now());
 
@@ -104,7 +101,7 @@ pub fn start_scheduler(runner_config_path: String) -> RunnerHandle {
                             }
                         }
                     }
-                    
+
                     // Check for config file changes
                     let current_modified = get_mod_time(&config_path_loop);
                     if let Some(now_modified) = current_modified {
@@ -816,9 +813,6 @@ fn schedule_is_due(schedule: &TaskSchedule, now: DateTime<Utc>) -> bool {
         }
     }
 }
-
-
-
 
 #[cfg(test)]
 mod tests {

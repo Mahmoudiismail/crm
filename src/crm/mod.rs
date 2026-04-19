@@ -34,8 +34,10 @@ pub async fn run_once(crm_config_path: &str, report: ReportType) -> Result<()> {
         let download_futures = urls.iter().map(|(key, url)| {
             let client = client.clone();
             let download_dir = download_dir.clone();
+            let key = key.clone();
+            let url = url.clone();
             async move {
-                if let Err(e) = downloader::download_csv(&client, url, key, &download_dir).await {
+                if let Err(e) = downloader::download_csv(&client, &url, &key, &download_dir).await {
                     error!("Download failed for {}: {:#}", key, e);
                 }
             }

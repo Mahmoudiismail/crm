@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use chrono::{Datelike, Duration as ChronoDuration, NaiveDate};
 use futures_util::future::join_all;
 use serde_json::Value;
+use std::fmt::Write;
 use std::sync::Arc;
 use tracing::{debug, error, info};
 
@@ -301,7 +302,7 @@ async fn fetch_single(
         .with_context(|| format!("HTTP request to {} failed", endpoint))?;
 
     let status = resp.status();
-    let headers = format!("{:?}", resp.headers());
+    let headers = format_redacted_headers(resp.headers());
     let body = resp
         .text()
         .await
@@ -403,7 +404,11 @@ pub fn split_monthly(from: &str, to: &str) -> Result<Vec<(String, String)>> {
 
 /// Return the last day of the given month.
 fn last_day_of_month(year: i32, month: u32) -> Option<NaiveDate> {
-    let (y, m) = if month == 12 { (year + 1, 1) } else { (year, month + 1) };
+    let (y, m) = if month == 12 {
+        (year + 1, 1)
+    } else {
+        (year, month + 1)
+    };
     NaiveDate::from_ymd_opt(y, m, 1)?.pred_opt()
 }
 
@@ -438,6 +443,45 @@ fn extract_data_url(val: &Value) -> Option<String> {
         .and_then(|u| u.as_str())
         .filter(|s| !s.is_empty())
         .map(|s| s.to_string())
+}
+
+// ──────────────────────────────────────────────────────────────
+// Redacted Headers
+// ──────────────────────────────────────────────────────────────
+
+fn format_redacted_headers(headers: &reqwest::header::HeaderMap) -> String {
+    let mut s = String::new();
+    s.push('{');
+    let mut first = true;
+    for (name, value) in headers.iter() {
+        if !first {
+            s.push_str(", ");
+        }
+        first = false;
+
+        let name_str = name.as_str();
+        s.push('"');
+        s.push_str(name_str);
+        s.push_str("\": ");
+
+        match name_str.to_ascii_lowercase().as_str() {
+            "authorization" | "set-cookie" | "cookie" => {
+                s.push_str("\"<REDACTED>\"");
+            }
+            _ => {
+                // Safely convert header value to a string, or format it as opaque bytes
+                if let Ok(v) = value.to_str() {
+                    s.push('"');
+                    s.push_str(v);
+                    s.push('"');
+                } else {
+                    write!(&mut s, "{:?}", value.as_bytes()).unwrap_or_default();
+                }
+            }
+        }
+    }
+    s.push('}');
+    s
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -526,5 +570,42 @@ mod tests {
                 ("tickets".into(), "https://example.com/tickets-2.csv".into()),
             ]
         );
+    }
+
+    #[test]
+    fn test_format_redacted_headers() {
+        use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            HeaderName::from_static("authorization"),
+            HeaderValue::from_static("Bearer super_secret_token"),
+        );
+        headers.insert(
+            HeaderName::from_static("set-cookie"),
+            HeaderValue::from_static("session_id=12345; Secure; HttpOnly"),
+        );
+        headers.insert(
+            HeaderName::from_static("content-type"),
+            HeaderValue::from_static("application/json"),
+        );
+        headers.insert(
+            HeaderName::from_static("x-api-version"),
+            HeaderValue::from_static("v1"),
+        );
+
+        let redacted = format_redacted_headers(&headers);
+
+        // Sensitive headers should be redacted
+        assert!(redacted.contains("\"authorization\": \"<REDACTED>\""));
+        assert!(redacted.contains("\"set-cookie\": \"<REDACTED>\""));
+
+        // Non-sensitive headers should be present and unredacted
+        assert!(redacted.contains("\"content-type\": \"application/json\""));
+        assert!(redacted.contains("\"x-api-version\": \"v1\""));
+
+        // Verify the sensitive values are NOT present anywhere in the string
+        assert!(!redacted.contains("super_secret_token"));
+        assert!(!redacted.contains("session_id=12345"));
     }
 }
