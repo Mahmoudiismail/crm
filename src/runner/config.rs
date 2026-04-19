@@ -899,4 +899,56 @@ mod tests {
             _ => panic!("Expected Once schedule"),
         }
     }
+
+    #[test]
+    fn test_next_weekly_run_after() {
+        use chrono::TimeZone;
+
+        // Base date: Monday 2024-01-01 12:00:00 UTC
+        let base_now = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap();
+
+        // 1. Same day, future time
+        let res = next_weekly_run_after("Monday", "15:00", base_now).unwrap();
+        let dt = DateTime::parse_from_rfc3339(&res).unwrap();
+        assert_eq!(dt.with_timezone(&Utc).year(), 2024);
+        assert_eq!(dt.with_timezone(&Utc).month(), 1);
+        assert_eq!(dt.with_timezone(&Utc).day(), 1);
+        // Note: The function uses Local internally, so we should be careful with exact hour comparison
+        // unless we know the local timezone. But we can at least check it's after base_now.
+        assert!(dt.with_timezone(&Utc) > base_now);
+
+        // 2. Same day, past time (should wrap to next week)
+        let res = next_weekly_run_after("Monday", "10:00", base_now).unwrap();
+        let dt = DateTime::parse_from_rfc3339(&res).unwrap();
+        assert!(dt.with_timezone(&Utc) > base_now);
+        // It should be 7 days later
+        let diff = dt.with_timezone(&Utc) - base_now;
+        assert!(diff.num_days() >= 6); // roughly a week
+
+        // 3. Different day formats
+        assert!(next_weekly_run_after("mon", "10:00", base_now).is_ok());
+        assert!(next_weekly_run_after("1", "10:00", base_now).is_ok()); // 1 is Monday
+        assert!(next_weekly_run_after("monday", "10:00", base_now).is_ok());
+
+        // 4. Later in the week
+        let res = next_weekly_run_after("Wednesday", "12:00", base_now).unwrap();
+        let dt = DateTime::parse_from_rfc3339(&res).unwrap();
+        assert_eq!(dt.with_timezone(&Utc).weekday(), chrono::Weekday::Wed);
+
+        // 5. Earlier in the week (should wrap)
+        let res = next_weekly_run_after("Sunday", "12:00", base_now).unwrap();
+        let dt = DateTime::parse_from_rfc3339(&res).unwrap();
+        assert_eq!(dt.with_timezone(&Utc).weekday(), chrono::Weekday::Sun);
+        assert!(dt.with_timezone(&Utc) > base_now);
+
+        // 6. Invalid inputs
+        assert!(next_weekly_run_after("InvalidDay", "12:00", base_now).is_err());
+        assert!(next_weekly_run_after("Monday", "25:00", base_now).is_err());
+        assert!(next_weekly_run_after("Monday", "not-a-time", base_now).is_err());
+
+        // 7. Empty time (should default to 00:00)
+        let res = next_weekly_run_after("Tuesday", "", base_now).unwrap();
+        let dt = DateTime::parse_from_rfc3339(&res).unwrap();
+        assert_eq!(dt.with_timezone(&Utc).weekday(), chrono::Weekday::Tue);
+    }
 }
