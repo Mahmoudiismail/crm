@@ -448,3 +448,67 @@ fn compute_hkdf(s: &BigUint, u: &BigUint) -> Result<Vec<u8>> {
 
     Ok(hmac_hash[..16].to_vec())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_compute_s_b_greater_than_kgx() {
+        // Small-number test vector where b > kgx
+        // n=101, g=2, k=3, x=5, a=7, u=11, b=150
+        // gx = 2^5 % 101 = 32
+        // kgx = 3 * 32 = 96
+        // b = 150. 150 > 96.
+        // base = (150 - 96) % 101 = 54
+        // exp = 7 + 11 * 5 = 62
+        // s = 54^62 % 101 = 19 (Verified with Python: pow(150 - 96, 62, 101) == 19)
+        let n = BigUint::from(101u32);
+        let g = BigUint::from(2u32);
+        let k = BigUint::from(3u32);
+        let x = BigUint::from(5u32);
+        let a = BigUint::from(7u32);
+        let u = BigUint::from(11u32);
+        let b = BigUint::from(150u32);
+
+        let s = compute_s(&b, &k, &g, &x, &a, &u, &n);
+        assert_eq!(s, BigUint::from(19u32));
+    }
+
+    #[test]
+    fn test_compute_s_b_less_than_kgx() {
+        // Small-number test vector where b < kgx
+        // n=101, g=2, k=3, x=10, a=7, u=11, b=10
+        // gx = 2^10 % 101 = 14
+        // kgx = 3 * 14 = 42
+        // b = 10. 10 < 42.
+        // base = (10 + 101 - 42) % 101 = 69
+        // exp = 7 + 11 * 10 = 117
+        // s = 69^117 % 101 = 39 (Verified with Python: pow((10 - 42) % 101, 117, 101) == 39)
+        let n = BigUint::from(101u32);
+        let g = BigUint::from(2u32);
+        let k = BigUint::from(3u32);
+        let x = BigUint::from(10u32);
+        let a = BigUint::from(7u32);
+        let u = BigUint::from(11u32);
+        let b = BigUint::from(10u32);
+
+        let s = compute_s(&b, &k, &g, &x, &a, &u, &n);
+        assert_eq!(s, BigUint::from(39u32));
+    }
+
+    #[test]
+    fn test_compute_s_large_numbers() {
+        let n = BigUint::parse_bytes(N_HEX.as_bytes(), 16).unwrap();
+        let g = BigUint::from(2u32);
+        let k = BigUint::parse_bytes(b"94781652145770828568693154820068118481071319461203609910235169525938894292833", 10).unwrap();
+        let x = BigUint::parse_bytes(b"57342845408344078087409546890185131247557055518447571803285707850707119990624", 10).unwrap();
+        let a = BigUint::parse_bytes(b"37996974895140942209423261877439902212126989024440769239204529345877668725403481274789123247893533273764280592749938825115726044399812824296566789993270290673251382596242866798594055198067504726615870620775698244291009468974236464827316958821759948517476000607580207061541247784174633462848551803113365093658", 10).unwrap();
+        let u = BigUint::parse_bytes(b"44444098212040351355717692468363509183647834247620902213903532544853357575578", 10).unwrap();
+        let b = BigUint::parse_bytes(b"b94cfcfcd510df263a041f83334e2789dd8fff6ab9bf1b530c76b2596d66a3c4ba8bc0c2e5cb980ba977f5c916c1757ac93d283c321778aa2f4708c908f1e1d5065ed7dd3a3827239c79cf8bd4feade9014393be909549bed99062e796080b68204370d356f3ab6c2047aebbca482dce7da67f19050533b17c61b3c21dbab9e843df28933b8727aceb8c57b2702a7897105ea5e201795f032afc54866c3151fb30a40a393195dc777b2fce4e8623fc2b751d6aa6f8898155b48e6409dd23fce9ffda6870042763395b380741ca92fd647f3381b5864d06acb49a4ac25ce159921f8cfd54126c4ee2809ac7e1e74d39086f6b2dbfb18045c75de614f89dcba090", 16).unwrap();
+        let expected_s = BigUint::parse_bytes(b"1cd86a03cc3d9bfaf4f72ba600fe8d3c135d681556e0e15657783a44a7f913def250866718eb1d3ba97aa08851e3f86d13a6748a4976000f5b87a6dad256d2012562f632417f61231c5b403a5d519cbad94f77b483eedb30eade757c549a643809e2988b19acf14a5b714876e2f8f7ae00c85eebf5d3030a5a1d1bbdb1d1500f80eff2cdcc75d72dda9f1857fd32d137a6e2e922e8fe3769dd1359d5561423513663be792c61133b5f6f220c86a589c27c0a36906c1fc07f6f334c0e25fcc1f732a2672778a9781d4b45e43c9049e507516f79599694b8ad218fd6a8d02a8e405ae8f50941bd334b4343676124e1a4b2c676db76ee71618546039347d0a0df632cda28b720df96ca8aa6ded9dc30762de0958456d846642aa751004533586b595de729f3786810d79c3997c3de7c5960c45339ba9827a87d1d0f10d848460dddf35d7611d9ce9a01d218364d771d9369179642a07609e48e3f33a18cc54e105580334ca6036a76268383ce5f1b33a46fc35284c1bc49a65cbdd603de0bbb2dec", 16).unwrap();
+
+        let s = compute_s(&b, &k, &g, &x, &a, &u, &n);
+        assert_eq!(s, expected_s);
+    }
+}
