@@ -448,3 +448,92 @@ fn compute_hkdf(s: &BigUint, u: &BigUint) -> Result<Vec<u8>> {
 
     Ok(hmac_hash[..16].to_vec())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_pad_hex_str() {
+        assert_eq!(pad_hex_str("a"), "0a");
+        assert_eq!(pad_hex_str("ab"), "00ab");
+        assert_eq!(pad_hex_str("8b"), "008b");
+    }
+
+    #[test]
+    fn test_compute_x() {
+        let pool_name = "test_pool";
+        let user_id = "test_user";
+        let password = "test_password";
+        let salt_hex = "deadbeef";
+
+        let x = compute_x(pool_name, user_id, password, salt_hex).unwrap();
+        // Python reference: hex(compute_x)
+        assert_eq!(
+            x.to_str_radix(16),
+            "66aa0a061312b2a5f776bd7eda83e0063a4a32b0f9c32ce46e48b0794ef3f574"
+        );
+    }
+
+    #[test]
+    fn test_compute_k() {
+        let k = compute_k().unwrap();
+        // Python reference: hex(compute_k)
+        assert_eq!(
+            k.to_str_radix(16),
+            "538282c4354742d7cbbde2359fcf67f9f5b3a6b08791e5011b43b8a5b66d9ee6"
+        );
+    }
+
+    #[test]
+    fn test_compute_u() {
+        let a = BigUint::parse_bytes(b"deadbeef", 16).unwrap();
+        let b = BigUint::parse_bytes(b"cafebabe", 16).unwrap();
+
+        let u = compute_u(&a, &b).unwrap();
+        assert_eq!(
+            u.to_str_radix(16),
+            "80170b1141a80ddfbc94afe0102b0765bb133f6c844772bf0cf2932d98219cee"
+        );
+    }
+
+    #[test]
+    fn test_compute_s() {
+        let n = BigUint::parse_bytes(N_HEX.as_bytes(), 16).unwrap();
+        let g = BigUint::parse_bytes(G_HEX.as_bytes(), 16).unwrap();
+        let b = BigUint::parse_bytes(b"cafebabe", 16).unwrap();
+        let k = compute_k().unwrap();
+        let pool_name = "test_pool";
+        let user_id = "test_user";
+        let password = "test_password";
+        let salt_hex = "deadbeef";
+        let x = compute_x(pool_name, user_id, password, salt_hex).unwrap();
+        let a = BigUint::parse_bytes(b"deadbeef", 16).unwrap();
+        let u = compute_u(&a, &b).unwrap();
+
+        let s = compute_s(&b, &k, &g, &x, &a, &u, &n);
+        assert_eq!(
+            s.to_str_radix(16),
+            "b6587bcce30370783fb3e4558ee4e0545b6021dc3a6e5ee2712f0b33f89faec1a5b0076f7573605cc788144f13d367a7ce90eb6de865d072510f71b175af7b6877f48ea14ecaf7e5b7cbd2136fb58e150a5cf21af07b2ad70e695214d62982c3763cb44d4c2072bb811f98a4ac554c90ded54f1b6c94e9194061b690237963f28e8a9dc38777f05e3d867e3736dbe998254074f35156c0834de954f2632e7d840a130ea1c3488f2805499712a5f493b3f54a9f989f2d1dd1421149320cb282275a0406322cbbc69e44a8a136f30021ca86db7e47aaaf1b690336baadebaafa013c79b52213947ec556afbbe00588a7ccf1118bc4e813f1a0a352df5078cbcb49f9750bc3d03278e1a2bb83cb8d617883189efd57e1ccac498c78bfbdeb3c8cb78e9028a3b9dab87e4229c88a78186421f76646f3ba0a6c53ed41300b91e0b85a31ac6f48136e1999c83d2367dc31acac9d2f12e9e85c71bd5aaf347d15e6f0f76a282a133f3e22d3d46326cbe0e4f873557b6b95c90932f443ce735762d6c325"
+        );
+    }
+
+    #[test]
+    fn test_compute_hkdf() {
+        let n = BigUint::parse_bytes(N_HEX.as_bytes(), 16).unwrap();
+        let g = BigUint::parse_bytes(G_HEX.as_bytes(), 16).unwrap();
+        let b = BigUint::parse_bytes(b"cafebabe", 16).unwrap();
+        let k = compute_k().unwrap();
+        let pool_name = "test_pool";
+        let user_id = "test_user";
+        let password = "test_password";
+        let salt_hex = "deadbeef";
+        let x = compute_x(pool_name, user_id, password, salt_hex).unwrap();
+        let a = BigUint::parse_bytes(b"deadbeef", 16).unwrap();
+        let u = compute_u(&a, &b).unwrap();
+        let s = compute_s(&b, &k, &g, &x, &a, &u, &n);
+
+        let hkdf = compute_hkdf(&s, &u).unwrap();
+        assert_eq!(hex::encode(hkdf), "98365aeb49efee280585c92df590ffd1");
+    }
+}
