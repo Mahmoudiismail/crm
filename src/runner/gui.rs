@@ -926,26 +926,25 @@ fn form_script() -> String {
             if(commandRows){\
                 Array.from(commandRows.querySelectorAll('[data-command-row]')).forEach(attachCommandEvents);\
             }\
-if(addScheduleBtn){
- addScheduleBtn.addEventListener('click', function(){
- const scheduleRows = document.getElementById('schedule-rows');
- if (!scheduleRows) return;
- const row = createScheduleRow('interval','1h','','','','');
- scheduleRows.appendChild(row);
- attachScheduleEvents(row);
- scheduleIndex += 1;
- });
-}
-if(addCommandBtn){
- addCommandBtn.addEventListener('click', function(){
- const commandRows = document.getElementById('command-rows');
- if (!commandRows) return;
- const row = createCommandRow('');
- commandRows.appendChild(row);
- attachCommandEvents(row);
- commandIndex += 1;
- });
-}
+            if(addScheduleBtn){\
+                addScheduleBtn.addEventListener('click', function(){\
+                    const scheduleRows = document.getElementById('schedule-rows');\
+                    if (!scheduleRows) return;\
+                    const row = createScheduleRow('interval','1h','','','','');\
+                    scheduleRows.appendChild(row);\
+                    attachScheduleEvents(row);\
+                    scheduleIndex += 1;\
+                });\
+            }\
+            if(addCommandBtn){\
+                addCommandBtn.addEventListener('click', function(){\
+                    const commandRows = document.getElementById('command-rows');\
+                    if (!commandRows) return;\
+                    const row = createCommandRow('');\
+                    commandRows.appendChild(row);\
+                    attachCommandEvents(row);\
+                    commandIndex += 1;\
+                });\
             }\
             function encodeIsoDatetime(value){\
                 if(!value) return '';\
