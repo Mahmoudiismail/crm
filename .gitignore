@@ -3,3 +3,5 @@ crm_tool.*
 *.csv
 .git/
 crm.log
+node_modules
+/node_modules/

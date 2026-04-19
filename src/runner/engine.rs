@@ -9,7 +9,7 @@ use tracing::{error, info};
 
 use super::config::{
     next_daily_run_after, next_monthly_run_after, parse_rfc3339_utc,
-    Repetition, ReportType, RunnerConfig, RunnerTask, ShellCommandGroup, ShellCommandMode,
+    Repetition, ReportType, RunnerConfig, RunnerTask, ShellCommandMode,
     ShellCommandSpec, TaskKind, TaskSchedule,
 };
 
@@ -322,12 +322,14 @@ fn normalize_and_validate_task(task: &mut RunnerTask, cfg: &RunnerConfig) -> Res
 
     match &mut task.kind {
         TaskKind::CrmFetch { .. } => {}
-        TaskKind::ShellCommand { command, groups } => {
-            *command = command.trim().to_string();
-            normalize_shell_groups(groups);
-            if command.is_empty() && groups.is_empty() {
+        TaskKind::ShellCommand { commands, .. } => {
+            commands.retain(|c| !c.command.trim().is_empty());
+            for c in commands.iter_mut() {
+                c.command = c.command.trim().to_string();
+            }
+            if commands.is_empty() {
                 return Err(anyhow::anyhow!(
-                    "shell_command requires a non-empty command or command group"
+                    "shell_command requires at least one non-empty command"
                 ));
             }
         }
@@ -402,14 +404,20 @@ async fn run_task(
             )
             .await
         }
-        TaskKind::ShellCommand { command, groups } => {
+        TaskKind::ShellCommand { mode, commands } => {
             if !policy.allow_shell_tasks {
                 Err(anyhow::anyhow!(
                     "shell_command tasks are disabled by runner config"
                 ))
             } else {
-                let effective_groups = effective_shell_groups(command, groups);
-                run_shell_groups(&effective_groups, policy.shell_timeout_seconds).await
+                match mode {
+                    ShellCommandMode::Sequential => {
+                        run_shell_sequential(commands, policy.shell_timeout_seconds).await
+                    }
+                    ShellCommandMode::Parallel => {
+                        run_shell_parallel(commands, policy.shell_timeout_seconds).await
+                    }
+                }
             }
         }
     };
@@ -698,76 +706,25 @@ fn advance_schedule(
     }
 }
 
-fn normalize_shell_groups(groups: &mut Vec<ShellCommandGroup>) {
-    for (index, group) in groups.iter_mut().enumerate() {
-        group.name = group.name.trim().to_string();
-        if group.name.is_empty() {
-            group.name = format!("Group {}", index + 1);
-        }
-        group
-            .commands
-            .retain(|command| !command.command.trim().is_empty());
-        for command in &mut group.commands {
-            command.command = command.command.trim().to_string();
-        }
-    }
-    groups.retain(|group| !group.commands.is_empty());
-}
-
-fn effective_shell_groups(command: &str, groups: &[ShellCommandGroup]) -> Vec<ShellCommandGroup> {
-    if !groups.is_empty() {
-        return groups.to_vec();
-    }
-
-    let command = command.trim();
-    if command.is_empty() {
-        return Vec::new();
-    }
-
-    vec![ShellCommandGroup {
-        name: "Default".to_string(),
-        mode: ShellCommandMode::Sequential,
-        commands: vec![ShellCommandSpec {
-            command: command.to_string(),
-            continue_on_error: false,
-        }],
-    }]
-}
-
-async fn run_shell_groups(groups: &[ShellCommandGroup], shell_timeout_seconds: u64) -> Result<()> {
-    for group in groups {
-        match group.mode {
-            ShellCommandMode::Sequential => {
-                run_shell_group_sequential(group, shell_timeout_seconds).await?
-            }
-            ShellCommandMode::Parallel => {
-                run_shell_group_parallel(group, shell_timeout_seconds).await?
-            }
-        }
-    }
-    Ok(())
-}
-
-async fn run_shell_group_sequential(
-    group: &ShellCommandGroup,
+async fn run_shell_sequential(
+    commands: &[ShellCommandSpec],
     shell_timeout_seconds: u64,
 ) -> Result<()> {
-    for spec in &group.commands {
+    for spec in commands {
         if let Err(e) = run_shell_command(&spec.command, shell_timeout_seconds).await {
             if !spec.continue_on_error {
-                return Err(anyhow::anyhow!("group '{}': {}", group.name, e));
+                return Err(anyhow::anyhow!("command failed: {}", e));
             }
         }
     }
     Ok(())
 }
 
-async fn run_shell_group_parallel(
-    group: &ShellCommandGroup,
+async fn run_shell_parallel(
+    commands: &[ShellCommandSpec],
     shell_timeout_seconds: u64,
 ) -> Result<()> {
-    let handles = group
-        .commands
+    let handles = commands
         .iter()
         .cloned()
         .map(|spec| {
@@ -794,8 +751,7 @@ async fn run_shell_group_parallel(
         Ok(())
     } else {
         Err(anyhow::anyhow!(
-            "group '{}' failed: {}",
-            group.name,
+            "parallel commands failed: {}",
             failures.join("; ")
         ))
     }
@@ -904,59 +860,43 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn sequential_group_continues_when_command_allows_error() {
-        let group = ShellCommandGroup {
-            name: "test".to_string(),
-            mode: ShellCommandMode::Sequential,
-            commands: vec![
-                ShellCommandSpec {
-                    command: "exit 8".to_string(),
-                    continue_on_error: true,
-                },
-                ShellCommandSpec {
-                    command: "echo ok".to_string(),
-                    continue_on_error: false,
-                },
-            ],
-        };
-
-        run_shell_group_sequential(&group, 5).await.unwrap();
-    }
-
-    #[tokio::test]
-    async fn sequential_group_stops_on_non_continued_error() {
-        let group = ShellCommandGroup {
-            name: "test".to_string(),
-            mode: ShellCommandMode::Sequential,
-            commands: vec![ShellCommandSpec {
-                command: "exit 8".to_string(),
-                continue_on_error: false,
-            }],
-        };
-
-        assert!(run_shell_group_sequential(&group, 5).await.is_err());
-    }
-
-    #[tokio::test]
-    async fn parallel_group_fails_only_non_continued_errors() {
-        let ignored = ShellCommandGroup {
-            name: "ignored".to_string(),
-            mode: ShellCommandMode::Parallel,
-            commands: vec![ShellCommandSpec {
+    async fn sequential_continues_when_command_allows_error() {
+        let commands = vec![
+            ShellCommandSpec {
                 command: "exit 8".to_string(),
                 continue_on_error: true,
-            }],
-        };
-        run_shell_group_parallel(&ignored, 5).await.unwrap();
-
-        let failed = ShellCommandGroup {
-            name: "failed".to_string(),
-            mode: ShellCommandMode::Parallel,
-            commands: vec![ShellCommandSpec {
-                command: "exit 8".to_string(),
+            },
+            ShellCommandSpec {
+                command: "echo ok".to_string(),
                 continue_on_error: false,
-            }],
-        };
-        assert!(run_shell_group_parallel(&failed, 5).await.is_err());
+            },
+        ];
+
+        run_shell_sequential(&commands, 5).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sequential_stops_on_non_continued_error() {
+        let commands = vec![ShellCommandSpec {
+            command: "exit 8".to_string(),
+            continue_on_error: false,
+        }];
+
+        assert!(run_shell_sequential(&commands, 5).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn parallel_fails_only_non_continued_errors() {
+        let ignored = vec![ShellCommandSpec {
+            command: "exit 8".to_string(),
+            continue_on_error: true,
+        }];
+        run_shell_parallel(&ignored, 5).await.unwrap();
+
+        let failed = vec![ShellCommandSpec {
+            command: "exit 8".to_string(),
+            continue_on_error: false,
+        }];
+        assert!(run_shell_parallel(&failed, 5).await.is_err());
     }
 }

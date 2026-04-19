@@ -7,7 +7,7 @@ use tracing::{error, info};
 
 use crate::runner::config::{
     human_datetime, next_daily_run_after, parse_rfc3339_utc, Repetition, ReportType, RunnerConfig,
-    RunnerTask, ShellCommandGroup, ShellCommandMode, ShellCommandSpec, TaskKind, TaskSchedule,
+    RunnerTask, ShellCommandMode, ShellCommandSpec, TaskKind, TaskSchedule,
 };
 use crate::runner::engine::{create_task, delete_task, update_task};
 use crate::runner::engine::{RunnerCommand, RunnerHandle};
@@ -408,16 +408,17 @@ fn render_task_row(task: &RunnerTask) -> String {
     };
     let kind = match &task.kind {
         TaskKind::CrmFetch { report } => format!("CRM {}", report.as_arg()),
-        TaskKind::ShellCommand { groups, command } => {
-            let group_count = if groups.is_empty() && !command.is_empty() {
-                1
-            } else {
-                groups.len()
+        TaskKind::ShellCommand { mode, commands } => {
+            let command_count = commands.len();
+            let mode_str = match mode {
+                ShellCommandMode::Sequential => "seq",
+                ShellCommandMode::Parallel => "par",
             };
             format!(
-                "Shell, {} group{}",
-                group_count,
-                if group_count == 1 { "" } else { "s" }
+                "Shell, {} cmd{} ({})",
+                command_count,
+                if command_count == 1 { "" } else { "s" },
+                mode_str
             )
         }
     };
@@ -442,9 +443,9 @@ fn render_task_row(task: &RunnerTask) -> String {
             <td class='px-4 py-4 align-top text-gray-700 max-w-xs break-words'>{}</td>\
             <td class='px-4 py-4 align-top'><div class='flex flex-wrap gap-2'>\
                 <a class='rounded border border-gray-300 px-3 py-1 font-semibold text-gray-800' href='/run/{}'>Run</a>\
-                <a class='rounded border border-gray-300 px-3 py-1 font-semibold text-gray-800' href='/enable/{}'>Enable</a>\
-                <a class=\"rounded border border-gray-300 px-3 py-1 font-semibold text-gray-800\" href=\"/disable/{}\">Disable</a>\\
-<a class='rounded bg-emerald-600 text-white px-3 py-1 text-sm font-semibold hover:bg-emerald-700' href='/edit/{}'>Edit</a>
+                {}\
+                {}\
+                <a class='rounded bg-emerald-600 text-white px-3 py-1 text-sm font-semibold hover:bg-emerald-700' href='/edit/{}'>Edit</a>\
                 <a class='rounded bg-red-600 text-white px-3 py-1 text-sm font-semibold hover:bg-red-700' href='/delete/{}'>Delete</a>\
             </div></td>\
         </tr>",
@@ -456,8 +457,8 @@ fn render_task_row(task: &RunnerTask) -> String {
         escape_html(&last_run),
         last_status,
         id,
-        id,
-        id,
+        if !task.enabled { format!("<a class='rounded border border-gray-300 px-3 py-1 font-semibold text-gray-800' href='/enable/{}'>Enable</a>", id) } else { "".to_string() },
+        if task.enabled { format!("<a class='rounded border border-gray-300 px-3 py-1 font-semibold text-gray-800' href='/disable/{}'>Disable</a>", id) } else { "".to_string() },
         id,
         id
     )
@@ -473,11 +474,10 @@ fn render_task_form(
     let id = task.map(|t| t.id.as_str()).unwrap_or_default();
     let name = task.map(|t| t.name.as_str()).unwrap_or_default();
     let enabled = task.map(|t| t.enabled).unwrap_or(true);
-    let (task_type, report, _command_text) = match task.map(|t| &t.kind) {
-        Some(TaskKind::ShellCommand { command, groups }) => (
+    let (task_type, report) = match task.map(|t| &t.kind) {
+        Some(TaskKind::ShellCommand { .. }) => (
             "shell_command",
             "all",
-            shell_groups_to_text(command, groups),
         ),
         Some(TaskKind::CrmFetch { report }) => (
             "crm_fetch",
@@ -488,9 +488,8 @@ fn render_task_form(
                 ReportType::Leads => "leads",
                 ReportType::None => "none",
             },
-            String::new(),
         ),
-        None => ("crm_fetch", "all", String::new()),
+        None => ("crm_fetch", "all"),
     };
 
     let error_html = error
@@ -559,14 +558,31 @@ fn schedule_editor_html(task: Option<&RunnerTask>) -> String {
 }
 
 fn shell_command_editor_html(task: Option<&RunnerTask>) -> String {
+    let mode = match task.map(|t| &t.kind) {
+        Some(TaskKind::ShellCommand { mode, .. }) => *mode,
+        _ => ShellCommandMode::Sequential,
+    };
+    let mode_html = format!(
+        "<label class='block mb-3'>\
+            <span class='text-sm font-semibold text-gray-800'>Execution Mode</span>\
+            <select class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' name='shell_command_mode'>\
+                <option value='sequential' {}>Sequential</option>\
+                <option value='parallel' {}>Parallel</option>\
+            </select>\
+        </label>",
+        if mode == ShellCommandMode::Sequential { "selected" } else { "" },
+        if mode == ShellCommandMode::Parallel { "selected" } else { "" }
+    );
+
     let rows = if let Some(task) = task {
         shell_command_rows_html(task)
     } else {
-        command_row_html(0, "")
+        command_row_html(0, "", false)
     };
 
     format!(
-        "<div class='space-y-3'>\
+        "<div id='shell-command-container' class='space-y-3 hidden'>\
+            {}\
             <div class='flex items-center justify-between'>\
                 <span class='text-sm font-semibold text-gray-800'>Shell Commands</span>\
                 <button type='button' id='add-command-row' class='rounded border border-gray-300 bg-emerald-600 text-white px-3 py-1 text-sm font-semibold hover:bg-emerald-700'>+ Add command</button>\
@@ -581,6 +597,7 @@ fn shell_command_editor_html(task: Option<&RunnerTask>) -> String {
                 </ul>\
             </div>\
         </div>",
+        mode_html,
         rows
     )
 }
@@ -659,21 +676,22 @@ fn schedule_rows_html(task: &RunnerTask) -> String {
 }
 
 fn shell_command_rows_html(task: &RunnerTask) -> String {
-    let (command_text, groups) = match &task.kind {
-        TaskKind::ShellCommand { command, groups } => (command.as_str(), groups.as_slice()),
-        _ => ("", &[] as &[ShellCommandGroup]),
-    };
-    let text = shell_groups_to_text(command_text, groups);
-    let rows = text
-        .lines()
-        .filter(|line| !line.trim().is_empty())
-        .enumerate()
-        .map(|(index, line)| command_row_html(index, line))
-        .collect::<Vec<_>>();
-    if rows.is_empty() {
-        command_row_html(0, "")
-    } else {
-        rows.join("")
+    match &task.kind {
+        TaskKind::ShellCommand { commands, .. } => {
+            let rows = commands
+                .iter()
+                .enumerate()
+                .map(|(index, spec)| {
+                    command_row_html(index, &spec.command, spec.continue_on_error)
+                })
+                .collect::<Vec<_>>();
+            if rows.is_empty() {
+                command_row_html(0, "", false)
+            } else {
+                rows.join("")
+            }
+        }
+        _ => command_row_html(0, "", false),
     }
 }
 
@@ -792,7 +810,7 @@ fn schedule_row_html(
     )
 }
 
-fn command_row_html(index: usize, command: &str) -> String {
+fn command_row_html(index: usize, command: &str, continue_on_error: bool) -> String {
     format!(
         "<div class='grid md:grid-cols-[1fr_100px_auto] gap-2 items-center p-2 bg-gray-50 border border-gray-200 rounded' data-command-row>\
             <div class='grid md:grid-cols-2 gap-2'>\
@@ -803,15 +821,17 @@ fn command_row_html(index: usize, command: &str) -> String {
                 <label class='block'>\
                     <span class='text-xs font-semibold text-gray-700'>Mode</span>\
                     <select class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm command-mode' name='command_mode_{}'>\
-                        <option value='run'>Run</option>\
-                        <option value='continue'>Continue</option>\
+                        <option value='run' {}>Run</option>\
+                        <option value='continue' {}>Continue</option>\
                     </select>\
                 </label>\
             </div>\
             <button type='button' class='remove-command rounded bg-red-600 text-white px-3 py-2 text-sm font-semibold hover:bg-red-700'>Remove</button>\
         </div>",
         escape_html(command),
-        index
+        index,
+        if !continue_on_error { "selected" } else { "" },
+        if continue_on_error { "selected" } else { "" }
     )
 }
 
@@ -846,7 +866,7 @@ fn input_field(label: &str, name: &str, value: &str) -> String {
 
 fn select_task_type(value: &str) -> String {
     format!(
-        "<label class='block'><span class='text-sm font-semibold text-gray-800'>Task Type</span><select class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' name='task_type'><option value='crm_fetch' {}>CRM Fetch</option><option value='shell_command' {}>Shell Command</option></select></label>",
+        "<label class='block'><span class='text-sm font-semibold text-gray-800'>Task Type</span><select id='task-type-select' class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' name='task_type'><option value='crm_fetch' {}>CRM Fetch</option><option value='shell_command' {}>Shell Command</option></select></label>",
         if value == "crm_fetch" { "selected" } else { "" },
         if value == "shell_command" { "selected" } else { "" }
     )
@@ -862,7 +882,7 @@ fn select_report(value: &str) -> String {
         )
     };
     format!(
-        "<label class='block'><span class='text-sm font-semibold text-gray-800'>CRM Report</span><select class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' name='report'>{}</select></label>",
+        "<div id='crm-report-container' class='block'><label class='block'><span class='text-sm font-semibold text-gray-800'>CRM Report</span><select class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' name='report'>{}</select></label></div>",
         [
             option("all", "All"),
             option("tickets", "Tickets"),
@@ -1025,9 +1045,13 @@ fn build_task_from_values(
         .unwrap_or_else(|| "crm_fetch".to_string());
 
     let kind = if task_type == "shell_command" {
+        let mode = match values.get("shell_command_mode").map(|v| v.as_str()) {
+            Some("parallel") => ShellCommandMode::Parallel,
+            _ => ShellCommandMode::Sequential,
+        };
         TaskKind::ShellCommand {
-            command: String::new(),
-            groups: parse_shell_groups_text(
+            mode,
+            commands: parse_shell_commands_text(
                 values
                     .get("commands")
                     .map(String::as_str)
@@ -1221,9 +1245,8 @@ fn compact_duration(seconds: u64) -> String {
     }
 }
 
-fn parse_shell_groups_text(value: &str) -> Result<Vec<ShellCommandGroup>> {
-    let mut groups = Vec::<ShellCommandGroup>::new();
-    let mut current: Option<ShellCommandGroup> = None;
+fn parse_shell_commands_text(value: &str) -> Result<Vec<ShellCommandSpec>> {
+    let mut commands = Vec::new();
 
     for raw_line in value.lines() {
         let line = raw_line.trim();
@@ -1231,111 +1254,25 @@ fn parse_shell_groups_text(value: &str) -> Result<Vec<ShellCommandGroup>> {
             continue;
         }
 
-        if let Some(rest) = line.strip_prefix("@group") {
-            if let Some(group) = current.take() {
-                groups.push(group);
-            }
-            current = Some(parse_group_header(rest.trim())?);
-            continue;
-        }
-
-        let group = current.get_or_insert_with(|| ShellCommandGroup {
-            name: "Default".to_string(),
-            mode: ShellCommandMode::Sequential,
-            commands: Vec::new(),
-        });
-
         if let Some(command) = line.strip_prefix("run:") {
-            group.commands.push(ShellCommandSpec {
+            commands.push(ShellCommandSpec {
                 command: command.trim().to_string(),
                 continue_on_error: false,
             });
         } else if let Some(command) = line.strip_prefix("continue:") {
-            group.commands.push(ShellCommandSpec {
+            commands.push(ShellCommandSpec {
                 command: command.trim().to_string(),
                 continue_on_error: true,
             });
         } else {
-            group.commands.push(ShellCommandSpec {
+            commands.push(ShellCommandSpec {
                 command: line.to_string(),
                 continue_on_error: false,
             });
         }
     }
 
-    if let Some(group) = current {
-        groups.push(group);
-    }
-
-    for group in &groups {
-        if group.commands.is_empty() {
-            return Err(anyhow::anyhow!(
-                "Command group '{}' has no commands",
-                group.name
-            ));
-        }
-    }
-
-    Ok(groups)
-}
-
-fn parse_group_header(value: &str) -> Result<ShellCommandGroup> {
-    let mut parts = value.split_whitespace().collect::<Vec<_>>();
-    let mode = match parts.last().map(|part| part.to_ascii_lowercase()) {
-        Some(mode) if mode == "parallel" => {
-            parts.pop();
-            ShellCommandMode::Parallel
-        }
-        Some(mode) if mode == "sequential" => {
-            parts.pop();
-            ShellCommandMode::Sequential
-        }
-        Some(_) | None => ShellCommandMode::Sequential,
-    };
-    let name = if parts.is_empty() {
-        "Default".to_string()
-    } else {
-        parts.join(" ")
-    };
-    Ok(ShellCommandGroup {
-        name,
-        mode,
-        commands: Vec::new(),
-    })
-}
-
-fn shell_groups_to_text(command: &str, groups: &[ShellCommandGroup]) -> String {
-    if groups.is_empty() {
-        return command
-            .lines()
-            .map(|line| format!("run: {}", line))
-            .collect::<Vec<_>>()
-            .join("\n");
-    }
-
-    groups
-        .iter()
-        .map(|group| {
-            let mode = match group.mode {
-                ShellCommandMode::Sequential => "sequential",
-                ShellCommandMode::Parallel => "parallel",
-            };
-            let mut lines = vec![format!("@group {} {}", group.name, mode)];
-            for command in &group.commands {
-                lines.push(format!(
-                    "{}: {}",
-                    if command.continue_on_error {
-                        "continue"
-                    } else {
-                        "run"
-                    },
-                    command.command
-                ));
-            }
-            lines.join("\n")
-        })
-        .collect::<Vec<_>>()
-        .join("\n\n")
+    Ok(commands)
 }
 
 fn escape_html(value: &str) -> String {
@@ -1364,23 +1301,18 @@ mod tests {
     }
 
     #[test]
-    fn parses_shell_command_groups() {
-        let groups = parse_shell_groups_text(
-            "@group Setup sequential\nrun: echo prepare\ncontinue: cleanup-if-present\n\n@group Reports parallel\nrun: ./fetch-a.sh\nrun: ./fetch-b.sh",
+    fn parses_shell_commands_text_correctly() {
+        let commands = parse_shell_commands_text(
+            "run: echo prepare\ncontinue: cleanup-if-present\necho fallback",
         )
         .unwrap();
-        assert_eq!(groups.len(), 2);
-        assert_eq!(groups[0].commands.len(), 2);
-        assert!(groups[0].commands[1].continue_on_error);
-        assert_eq!(groups[1].mode, ShellCommandMode::Parallel);
-    }
-
-    #[test]
-    fn plain_command_lines_become_default_group() {
-        let groups = parse_shell_groups_text("echo one\necho two").unwrap();
-        assert_eq!(groups.len(), 1);
-        assert_eq!(groups[0].name, "Default");
-        assert_eq!(groups[0].commands.len(), 2);
+        assert_eq!(commands.len(), 3);
+        assert_eq!(commands[0].command, "echo prepare");
+        assert!(!commands[0].continue_on_error);
+        assert_eq!(commands[1].command, "cleanup-if-present");
+        assert!(commands[1].continue_on_error);
+        assert_eq!(commands[2].command, "echo fallback");
+        assert!(!commands[2].continue_on_error);
     }
 
     #[test]

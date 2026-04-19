@@ -32,7 +32,7 @@ Together they:
 1. Load/create `runner_config.json` under executable directory.
 2. Ensure CRM `config.json` exists under executable directory.
 3. Start scheduler loop and runner GUI server.
-4. Run tasks from runner config (`crm_fetch` and optional shell command groups).
+4. Run tasks from runner config (`crm_fetch` and optional shell commands).
 5. For CRM tasks, invoke external `crm` executable with CLI args.
 6. Persist task run metadata (`next_run_at`, `last_status`, `last_run_at`).
 
@@ -59,7 +59,7 @@ CRM always performs login.
 - Schedule summaries, next-run times, and last-run times are rendered in human-readable local time in the GUI.
 - Tray and GUI can trigger run-all, tickets-only CRM, or specific task by id.
 - Atomic run guard prevents overlapping task execution.
-- Shell tasks are controlled by runner safety policy (`allow_shell_tasks`, timeout, min interval) and can run command groups sequentially or in parallel.
+- Shell tasks are controlled by runner safety policy (`allow_shell_tasks`, timeout, min interval) and can run commands sequentially or in parallel.
 
 ## Primary Outputs
 

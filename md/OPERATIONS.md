@@ -81,8 +81,8 @@ Check:
 - `shell_timeout_seconds` value
 - `last_status` and runner `last_error` for timeout details
 - command correctness under `bash -lc`
-- command group `mode` (`sequential` or `parallel`)
-- per-command `continue_on_error` when a failure should not fail the group
+- shell command `mode` (`sequential` or `parallel`)
+- per-command `continue_on_error` when a failure should not fail the task
 
 ### 7) Task create/update fails from GUI
 
@@ -94,7 +94,6 @@ Check:
 - valid RFC3339 `next_run_at` when provided
 - use the runner GUI schedule editor with interval/once rows and the + button to add more schedules
 - non-empty shell command text for `shell_command` tasks
-- valid command group headers such as `@group Reports parallel`
 
 Note: As of the GUI improvements, the `+ Add schedule` and `+ Add command` buttons now have proper event listener scoping and will reliably add new rows to the form.
 

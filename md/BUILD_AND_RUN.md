@@ -138,6 +138,6 @@ The release workflows utilize `softprops/action-gh-release@v3` and `actions/chec
 2. Runner GUI starts on configured host/port.
 3. Dashboard shows human-readable schedule, next-run, and last-run values.
 4. Task scheduler runs configured legacy tasks and multi-schedule tasks.
-5. Shell command groups run sequentially or in parallel when `allow_shell_tasks=true`.
+5. Shell commands run sequentially or in parallel when `allow_shell_tasks=true`.
 6. CRM auth/fetch/download succeeds for CRM tasks.
 7. CSV files are created under `Downloads/` beside `crm` executable.

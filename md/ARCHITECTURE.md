@@ -54,7 +54,7 @@ src/
 - Runner-local report enum for `crm_fetch` tasks.
 - Task definitions (`crm_fetch`, `shell_command`).
 - Legacy repetition/frequency scheduling fields and multi-schedule task definitions.
-- Shell command group definitions for sequential or parallel execution.
+- Shell command definitions for sequential or parallel execution.
 - External CRM executable path configuration.
 
 ### `src/runner/engine.rs`
@@ -70,8 +70,8 @@ src/
   - **Monthly**: runs on specified day of month at optional time (defaults 09:00); handles month-end edge cases
 - **Task execution**:
   - **CRM tasks**: fork external `crm` executable with CLI args (report names, config path)
-  - **Shell commands**: execute in configured group order; `parallel` groups spawn concurrently, `sequential` groups run one-at-a-time
-  - **Per-command control**: `continue_on_error` flag determines if group halts on first failure
+  - **Shell commands**: execute in configured order; `parallel` mode spawns concurrently, `sequential` mode runs one-at-a-time
+  - **Per-command control**: `continue_on_error` flag determines if task halts on first failure
   - **Multi-schedule advancement**: after execution, *all* due schedules call `advance_schedule()` to compute next `next_run_at`
 - **Metadata updates**: sets `last_run_at` (current UTC), `last_status` (success/error code), and per-schedule `next_run_at`
 - **Safety**: child process spawning with timeout/error handling; status lock prevents concurrent task execution
@@ -96,7 +96,7 @@ src/
 ## Concurrency Design
 
 - Runner-level status lock prevents overlapping execution cycles.
-- Shell command groups run in configured group order. Commands inside a `parallel` group are spawned concurrently and joined before the next group starts.
+- Shell commands run in configured order. Commands inside a `parallel` mode task are spawned concurrently and joined before the task completes.
 - Report-level parallelism remains in fetcher (`tokio::spawn` + `join_all`).
 - Scheduler and GUI run concurrently in Tokio runtime.
 
