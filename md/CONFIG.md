@@ -216,3 +216,6 @@ The `yasweb` binary stores its target URL and automation credentials in `yasweb_
 ```
 
 This configuration file is used by the headless browser automation tool to navigate to the target application and fill in the login form fields (`input[name='username']`, `input[type='password']`).
+
+### `yasweb_chrome_data/` Directory
+The `yasweb` executable creates and manages this directory alongside the executable to persist Chrome profile data and caching. This directory speeds up repeated headless automation tasks.

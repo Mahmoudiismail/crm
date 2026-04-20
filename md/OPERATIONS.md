@@ -158,3 +158,12 @@ GitHub release publishing is split by application:
 - Run `Release CRM` to publish `crm_windows.zip`.
 - Both workflows use the `v<version>` tag from `Cargo.toml`; run both when a release should contain both applications.
 - Release workflow uses `actions/checkout@v6`, `actions/cache@v5`, and `softprops/action-gh-release@v3` for improved build performance.
+
+### Yasweb Browser Automation
+
+When executing the `yasweb` headless browser:
+- The browser now starts maximized by default for consistent element rendering and visibility during debug runs.
+- Chrome's user data and cache are persisted to a `yasweb_chrome_data` directory alongside the executable, significantly reducing load times on subsequent runs.
+- The automation re-uses the initially launched browser tab instead of opening new ones to conserve memory.
+- Wait loops dynamically poll for specific success (`.usr-id`) or failure (`.alert-danger`) elements, allowing the tool to fail-fast upon invalid logins without arbitrary delays.
+- A mandatory 60-second delay is enforced at the end of the script before exiting. This pause occurs regardless of whether the run was successful or failed, allowing operators time to visually inspect the final browser state when running in non-headless mode.
