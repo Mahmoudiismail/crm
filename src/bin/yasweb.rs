@@ -22,8 +22,8 @@ impl Default for YaswebConfig {
     fn default() -> Self {
         Self {
             url: "https://yasweb.fakeeh.care:8030/".to_string(),
-            username: "".to_string(),
-            password: None,
+            username: "3245".to_string(),
+            password: Some("Soso@2350181".to_string()),
             headless: false,
         }
     }
@@ -115,6 +115,9 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
             info!("Typing username...");
             user_input.type_into(&config.username).context("Failed to type username")?;
 
+            // Wait a brief moment to ensure page loads data after username
+            std::thread::sleep(Duration::from_secs(2));
+
             if let Some(password) = &config.password {
                 info!("Waiting for password input...");
                 let password_selector = "input[formcontrolname='password'], #passFocus";
@@ -156,6 +159,68 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
 
             println!("Login successful");
             info!("Login successful");
+
+            // Verify username presence
+            info!("Verifying username exists in correct place...");
+            let usr_id_selector = "span.usr-id";
+            match tab.wait_for_element(usr_id_selector) {
+                Ok(usr_id_element) => {
+                    let inner_text = usr_id_element.get_inner_text().unwrap_or_default();
+                    if inner_text.contains(&config.username) {
+                        info!("Successfully verified username {} on the page.", config.username);
+                        println!("Verified username {} on the page.", config.username);
+                    } else {
+                        error!("Username mismatch! Found '{}', expected '{}'", inner_text, config.username);
+                        if let Ok(html) = tab.get_content() {
+                            error!("Page HTML:\n{}", html);
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to find '.usr-id' element: {:?}", e);
+                    if let Ok(html) = tab.get_content() {
+                        error!("Page HTML:\n{}", html);
+                    }
+                }
+            }
+
+            info!("Opening menu via #menuPinnedBtn...");
+            match tab.wait_for_element("#menuPinnedBtn") {
+                Ok(menu_btn) => {
+                    if let Err(e) = menu_btn.click() {
+                        error!("Failed to click #menuPinnedBtn: {:?}", e);
+                    } else {
+                        // Wait for MIS module to appear
+                        info!("Looking for MIS module...");
+                        // We wait for the .misManagement element which contains the MIS text
+                        let mis_selector = ".menu-grid-item.misManagement";
+                        match tab.wait_for_element(mis_selector) {
+                            Ok(mis_module) => {
+                                info!("Clicking on MIS module...");
+                                if let Err(e) = mis_module.click() {
+                                    error!("Failed to click MIS module: {:?}", e);
+                                } else {
+                                    info!("Clicked MIS successfully.");
+                                    println!("Clicked MIS successfully.");
+                                }
+                            }
+                            Err(e) => {
+                                error!("Failed to find MIS module: {:?}", e);
+                                if let Ok(html) = tab.get_content() {
+                                    error!("Page HTML:\n{}", html);
+                                }
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to find #menuPinnedBtn: {:?}", e);
+                    if let Ok(html) = tab.get_content() {
+                        error!("Page HTML:\n{}", html);
+                    }
+                }
+            }
+
             std::thread::sleep(Duration::from_secs(60));
         }
         Err(e) => {
