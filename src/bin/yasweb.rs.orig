@@ -75,7 +75,6 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
         .headless(config.headless)
         .sandbox(false)
         .idle_browser_timeout(std::time::Duration::from_secs(120))
-        .args(vec![std::ffi::OsStr::new("--ignore-certificate-errors")])
         .build()
         .unwrap();
 
@@ -101,59 +100,20 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
     info!("Navigating to {}", config.url);
     if let Err(e) = tab.navigate_to(&config.url) {
         error!("Navigate failed: {:?}", e);
-        if let Ok(html) = tab.get_content() {
-            error!("Page HTML after navigation failure:\n{}", html);
-        }
+        // Sometimes navigate fails but it still actually loads the page, or it's a test env error
+        // Continue but with warning
         println!("Warning: navigate to {} returned error, continuing anyway...", config.url);
-    } else {
-        info!("Successfully navigated to {}", config.url);
-        if let Ok(html) = tab.get_content() {
-            info!("Page HTML after navigation:\n{}", html);
-        }
     }
 
     // Attempt to wait until navigated, ignore error if it timeouts but page loads
     let _ = tab.wait_until_navigated();
 
-    // Give Angular more time to bootstrap and render the initial DOM
-    std::thread::sleep(Duration::from_secs(10));
-
     info!("Waiting for username input...");
     let username_selector = "input[formcontrolname='username'], #mat-input-0";
-
-    // Custom wait loop to wait longer than default timeout
-    let mut username_found = false;
-    for _ in 0..6 { // 6 * 5 = 30 seconds max wait
-        if let Ok(_) = tab.wait_for_element(username_selector) {
-            username_found = true;
-            break;
-        }
-        std::thread::sleep(Duration::from_secs(5));
-    }
-
-    if !username_found {
-        error!("Failed to find username input after extended wait.");
-        if let Ok(html) = tab.get_content() {
-            error!("Page HTML at failure to find username:\n{}", html);
-        }
-        std::thread::sleep(Duration::from_secs(60));
-        return Err(anyhow::anyhow!("Failed to find elements to login"));
-    }
-
     match tab.wait_for_element(username_selector) {
         Ok(user_input) => {
             info!("Typing username...");
-            if let Err(e) = user_input.type_into(&config.username) {
-                error!("Failed to type username: {:?}", e);
-                if let Ok(html) = tab.get_content() {
-                    error!("Page HTML after failed username typing:\n{}", html);
-                }
-                return Err(anyhow::anyhow!("Failed to type username"));
-            }
-            info!("Successfully typed username.");
-            if let Ok(html) = tab.get_content() {
-                info!("Page HTML after typing username:\n{}", html);
-            }
+            user_input.type_into(&config.username).context("Failed to type username")?;
 
             // Wait a brief moment to ensure page loads data after username
             std::thread::sleep(Duration::from_secs(2));
@@ -164,22 +124,12 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                 match tab.wait_for_element(password_selector) {
                     Ok(pass_input) => {
                         info!("Typing password...");
-                        if let Err(e) = pass_input.type_into(password) {
-                            error!("Failed to type password: {:?}", e);
-                            if let Ok(html) = tab.get_content() {
-                                error!("Page HTML after failed password typing:\n{}", html);
-                            }
-                            return Err(anyhow::anyhow!("Failed to type password"));
-                        }
-                        info!("Successfully typed password.");
-                        if let Ok(html) = tab.get_content() {
-                            info!("Page HTML after typing password:\n{}", html);
-                        }
+                        pass_input.type_into(password).context("Failed to type password")?;
                     }
                     Err(e) => {
                         error!("Failed to find password input: {:?}", e);
                         if let Ok(html) = tab.get_content() {
-                            error!("Page HTML at failure to find password input:\n{}", html);
+                            error!("Page HTML:\n{}", html);
                         }
                         std::thread::sleep(Duration::from_secs(60));
                         return Err(anyhow::anyhow!("Failed to find password input"));
@@ -192,37 +142,23 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
             match tab.wait_for_element(button_selector) {
                 Ok(login_button) => {
                     info!("Clicking login button...");
-                    if let Err(e) = login_button.click() {
-                        error!("Failed to click login button: {:?}", e);
-                        if let Ok(html) = tab.get_content() {
-                            error!("Page HTML after failed login click:\n{}", html);
-                        }
-                        return Err(anyhow::anyhow!("Failed to click login button"));
-                    }
-                    info!("Successfully clicked login button.");
-                    if let Ok(html) = tab.get_content() {
-                        info!("Page HTML after clicking login:\n{}", html);
-                    }
+                    login_button.click().context("Failed to click login button")?;
                 }
                 Err(e) => {
                     error!("Failed to find login button: {:?}", e);
                     if let Ok(html) = tab.get_content() {
-                        error!("Page HTML at failure to find login button:\n{}", html);
+                        error!("Page HTML:\n{}", html);
                     }
                     std::thread::sleep(Duration::from_secs(60));
                     return Err(anyhow::anyhow!("Failed to find login button"));
                 }
             }
 
-            // Wait longer to ensure login is submitted and dashboard is loaded
-            info!("Waiting 15 seconds for dashboard to load...");
-            std::thread::sleep(Duration::from_secs(15));
+            // Wait a brief moment to ensure login is submitted
+            std::thread::sleep(Duration::from_secs(5));
 
             println!("Login successful");
             info!("Login successful");
-            if let Ok(html) = tab.get_content() {
-                info!("Page HTML after login load wait:\n{}", html);
-            }
 
             // Verify username presence
             info!("Verifying username exists in correct place...");
@@ -236,39 +172,26 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                     } else {
                         error!("Username mismatch! Found '{}', expected '{}'", inner_text, config.username);
                         if let Ok(html) = tab.get_content() {
-                            error!("Page HTML at username verification mismatch:\n{}", html);
+                            error!("Page HTML:\n{}", html);
                         }
                     }
                 }
                 Err(e) => {
                     error!("Failed to find '.usr-id' element: {:?}", e);
                     if let Ok(html) = tab.get_content() {
-                        error!("Page HTML at failure to find .usr-id:\n{}", html);
+                        error!("Page HTML:\n{}", html);
                     }
                 }
             }
-
-            info!("Waiting 15 seconds for menu to fully render...");
-            std::thread::sleep(Duration::from_secs(15));
 
             info!("Opening menu via #menuPinnedBtn...");
             match tab.wait_for_element("#menuPinnedBtn") {
                 Ok(menu_btn) => {
                     if let Err(e) = menu_btn.click() {
                         error!("Failed to click #menuPinnedBtn: {:?}", e);
-                        if let Ok(html) = tab.get_content() {
-                            error!("Page HTML after failed #menuPinnedBtn click:\n{}", html);
-                        }
                     } else {
-                        info!("Successfully clicked #menuPinnedBtn.");
-                        if let Ok(html) = tab.get_content() {
-                            info!("Page HTML after clicking #menuPinnedBtn:\n{}", html);
-                        }
-
                         // Wait for MIS module to appear
-                        info!("Waiting 10 seconds for MIS module to appear in menu...");
-                        std::thread::sleep(Duration::from_secs(10));
-
+                        info!("Looking for MIS module...");
                         // We wait for the .misManagement element which contains the MIS text
                         let mis_selector = ".menu-grid-item.misManagement";
                         match tab.wait_for_element(mis_selector) {
@@ -276,21 +199,15 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                                 info!("Clicking on MIS module...");
                                 if let Err(e) = mis_module.click() {
                                     error!("Failed to click MIS module: {:?}", e);
-                                    if let Ok(html) = tab.get_content() {
-                                        error!("Page HTML after failed MIS module click:\n{}", html);
-                                    }
                                 } else {
                                     info!("Clicked MIS successfully.");
                                     println!("Clicked MIS successfully.");
-                                    if let Ok(html) = tab.get_content() {
-                                        info!("Page HTML after clicking MIS module:\n{}", html);
-                                    }
                                 }
                             }
                             Err(e) => {
                                 error!("Failed to find MIS module: {:?}", e);
                                 if let Ok(html) = tab.get_content() {
-                                    error!("Page HTML at failure to find MIS module:\n{}", html);
+                                    error!("Page HTML:\n{}", html);
                                 }
                             }
                         }
@@ -299,7 +216,7 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                 Err(e) => {
                     error!("Failed to find #menuPinnedBtn: {:?}", e);
                     if let Ok(html) = tab.get_content() {
-                        error!("Page HTML at failure to find #menuPinnedBtn:\n{}", html);
+                        error!("Page HTML:\n{}", html);
                     }
                 }
             }
@@ -309,7 +226,7 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
         Err(e) => {
             error!("Failed to find username input, likely because page did not load: {:?}", e);
             if let Ok(html) = tab.get_content() {
-                error!("Page HTML at failure to find username:\n{}", html);
+                error!("Page HTML:\n{}", html);
             }
             std::thread::sleep(Duration::from_secs(60));
             return Err(anyhow::anyhow!("Failed to find elements to login"));
