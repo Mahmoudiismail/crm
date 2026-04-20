@@ -211,11 +211,19 @@ The `yasweb` binary stores its target URL and automation credentials in `yasweb_
 {
   "url": "https://yasweb.fakeeh.care:8030/",
   "username": "",
-  "password": null
+  "password": null,
+  "headless": false,
+  "report_type": "",
+  "report_name": ""
 }
 ```
 
 This configuration file is used by the headless browser automation tool to navigate to the target application and fill in the login form fields (`input[name='username']`, `input[type='password']`).
+
+The `report_type` and `report_name` can also be supplied dynamically via the CLI, which will automatically save them to the configuration file for future runs.
+Example: `yasweb --type "Report Manager" --name "My Daily Report"`
+
+Note: If a `report_type` is provided, a `report_name` MUST also be provided.
 
 ### `yasweb_chrome_data/` Directory
 The `yasweb` executable creates and manages this directory alongside the executable to persist Chrome profile data and caching. This directory speeds up repeated headless automation tasks.

@@ -149,3 +149,6 @@ The release workflows utilize `softprops/action-gh-release@v3` and `actions/chec
 
 ### Yasweb Artifacts
 Executing `cargo run --bin yasweb` will generate a `yasweb_chrome_data/` folder in the executable's directory. This folder contains the persistent browser cache and should not be committed to version control.
+
+You can configure the reporting automation by passing CLI arguments:
+`cargo run --bin yasweb -- --type "Report Manager" --name "Standard"`
