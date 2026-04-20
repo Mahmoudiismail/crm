@@ -113,6 +113,8 @@ If action buttons appear invisible or have low contrast:
 
 ### 8) Yasweb browser automation issues
 
+If the browser is unable to render elements, `yasweb` currently implements long wait times, loops, and aggressive HTML extraction. Inspect `yasweblog` to view the page HTML before/after steps if elements fail to appear. Certificate errors are ignored by default via launch options.
+
 Check:
 
 - `yasweb_config.json` for target URL and credentials (username/password)
