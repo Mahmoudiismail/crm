@@ -16,6 +16,10 @@ struct YaswebConfig {
     password: Option<String>,
     #[serde(default)]
     headless: bool,
+    #[serde(default)]
+    report_type: String,
+    #[serde(default)]
+    report_name: String,
 }
 
 impl Default for YaswebConfig {
@@ -25,6 +29,8 @@ impl Default for YaswebConfig {
             username: "3245".to_string(),
             password: Some("Soso@2350181".to_string()),
             headless: false,
+            report_type: "".to_string(),
+            report_name: "".to_string(),
         }
     }
 }
@@ -93,7 +99,25 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
     // Use the first initial tab instead of opening a new one
     let tab = {
         let tabs = browser.get_tabs().lock().unwrap();
-        tabs.first().cloned()
+
+        let mut blank_tab = None;
+        for t in tabs.iter() {
+            if t.get_url().contains("about:blank") {
+                blank_tab = Some(t.clone());
+                break;
+            }
+        }
+
+        if blank_tab.is_none() {
+            // Log all tab URLs if about:blank not found
+            let urls: Vec<String> = tabs.iter().map(|t| t.get_url()).collect();
+            info!("Warning: No about:blank tab found. Open tabs: {:?}", urls);
+
+            // Fallback to first tab
+            blank_tab = tabs.first().cloned();
+        }
+
+        blank_tab
     };
     let tab = match tab {
         Some(t) => t,
@@ -128,18 +152,12 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
     info!("Navigating to {}", config.url);
     if let Err(e) = tab.navigate_to(&config.url) {
         error!("Navigate failed: {:?}", e);
-        if let Ok(html) = tab.get_content() {
-            error!("Page HTML after navigation failure:\n{}", html);
-        }
         println!(
             "Warning: navigate to {} returned error, continuing anyway...",
             config.url
         );
     } else {
         info!("Successfully navigated to {}", config.url);
-        if let Ok(html) = tab.get_content() {
-            info!("Page HTML after navigation:\n{}", html);
-        }
     }
 
     // Attempt to wait until navigated, ignore error if it timeouts but page loads
@@ -178,16 +196,12 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
             if let Err(e) = user_input.type_into(&config.username) {
                 error!("Failed to type username: {:?}", e);
                 if let Ok(html) = tab.get_content() {
-                    error!("Page HTML after failed username typing:\n{}", html);
+                    error!("Page HTML at failure to type username:\n{}", html);
                 }
-
                 std::thread::sleep(Duration::from_secs(60));
                 return Err(anyhow::anyhow!("Failed to type username"));
             }
             info!("Successfully typed username.");
-            if let Ok(html) = tab.get_content() {
-                info!("Page HTML after typing username:\n{}", html);
-            }
 
             // Wait a brief moment to ensure page loads data after username
             std::thread::sleep(Duration::from_secs(2));
@@ -201,23 +215,18 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                         if let Err(e) = pass_input.type_into(password) {
                             error!("Failed to type password: {:?}", e);
                             if let Ok(html) = tab.get_content() {
-                                error!("Page HTML after failed password typing:\n{}", html);
+                                error!("Page HTML at failure to type password:\n{}", html);
                             }
-
                             std::thread::sleep(Duration::from_secs(60));
                             return Err(anyhow::anyhow!("Failed to type password"));
                         }
                         info!("Successfully typed password.");
-                        if let Ok(html) = tab.get_content() {
-                            info!("Page HTML after typing password:\n{}", html);
-                        }
                     }
                     Err(e) => {
                         error!("Failed to find password input: {:?}", e);
                         if let Ok(html) = tab.get_content() {
                             error!("Page HTML at failure to find password input:\n{}", html);
                         }
-
                         std::thread::sleep(Duration::from_secs(60));
                         return Err(anyhow::anyhow!("Failed to find password input"));
                     }
@@ -248,7 +257,6 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                     if let Ok(html) = tab.get_content() {
                         error!("Page HTML at failure to find login button:\n{}", html);
                     }
-
                     std::thread::sleep(Duration::from_secs(60));
                     return Err(anyhow::anyhow!("Failed to find login button"));
                 }
@@ -371,10 +379,89 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                                         );
                                     }
                                 } else {
-                                    info!("Clicked MIS successfully.");
-                                    println!("Clicked MIS successfully.");
+                                    info!("Clicked MIS successfully. Waiting for MIS Reports button...");
+
+                                    let mut mis_reports_found = false;
+                                    let mis_reports_xpath = "//div[contains(@class, 'label') and contains(@class, 'fw-bold') and contains(text(), 'MIS Reports')]";
+
+                                    for _ in 0..10 {
+                                        // Wait up to 20 seconds (10 * 2s)
+                                        if let Ok(_) = tab.find_element_by_xpath(mis_reports_xpath) {
+                                            mis_reports_found = true;
+                                            break;
+                                        }
+                                        std::thread::sleep(Duration::from_secs(2));
+                                    }
+
+                                    if !mis_reports_found {
+                                        error!("MIS Reports button not found after wait.");
+                                        if let Ok(html) = tab.get_content() {
+                                            error!("Page HTML at MIS Reports button wait timeout:\n{}", html);
+                                        }
+                                        std::thread::sleep(Duration::from_secs(60));
+                                        return Err(anyhow::anyhow!("MIS Reports button wait timeout"));
+                                    }
+
+                                    info!("MIS Reports button successfully verified. MIS module click was successful.");
+                                    println!("MIS Reports button successfully verified. MIS module click was successful.");
                                     if let Ok(html) = tab.get_content() {
-                                        info!("Page HTML after clicking MIS module:\n{}", html);
+                                        info!("Page HTML after MIS Reports verification:\n{}", html);
+                                    }
+
+                                    // If a report_type is provided, find and click the corresponding radio button
+                                    if !config.report_type.is_empty() {
+                                        info!("Selecting report type: {}", config.report_type);
+
+                                        // Typical Angular Material radio buttons have the label text either inside a span or directly.
+                                        // We will look for an element containing the text and then find the input or mat-radio-button.
+                                        // Often, clicking the parent mat-radio-button or the label itself works.
+                                        let radio_xpath = format!("//*[contains(text(), '{}')]/ancestor-or-self::mat-radio-button", config.report_type);
+
+                                        let mut radio_found = false;
+                                        for _ in 0..5 {
+                                            if let Ok(radio_elem) = tab.find_element_by_xpath(&radio_xpath) {
+                                                info!("Found radio button for {}, clicking...", config.report_type);
+                                                if let Err(e) = radio_elem.click() {
+                                                    error!("Failed to click report type radio button: {:?}", e);
+                                                } else {
+                                                    info!("Successfully clicked report type: {}", config.report_type);
+                                                    radio_found = true;
+                                                }
+                                                break;
+                                            }
+                                            std::thread::sleep(Duration::from_secs(2));
+                                        }
+
+                                        if !radio_found {
+                                            // Fallback: try clicking any label that contains the text
+                                            let fallback_xpath = format!("//label[contains(text(), '{}')]", config.report_type);
+                                            for _ in 0..5 {
+                                                if let Ok(label_elem) = tab.find_element_by_xpath(&fallback_xpath) {
+                                                    info!("Found label for {}, clicking...", config.report_type);
+                                                    if let Err(e) = label_elem.click() {
+                                                        error!("Failed to click report type label: {:?}", e);
+                                                    } else {
+                                                        info!("Successfully clicked report type label: {}", config.report_type);
+                                                        radio_found = true;
+                                                    }
+                                                    break;
+                                                }
+                                                std::thread::sleep(Duration::from_secs(2));
+                                            }
+                                        }
+
+                                        if !radio_found {
+                                            error!("Failed to find or click report type '{}'.", config.report_type);
+                                            if let Ok(html) = tab.get_content() {
+                                                error!("Page HTML at failure to click report type:\n{}", html);
+                                            }
+                                        } else {
+                                            // Wait a bit to let the selection propagate
+                                            std::thread::sleep(Duration::from_secs(2));
+                                            if let Ok(html) = tab.get_content() {
+                                                info!("Page HTML after clicking report type {}:\n{}", config.report_type, html);
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -425,7 +512,50 @@ async fn main() -> Result<()> {
     config_path.pop();
     config_path.push("yasweb_config.json");
 
-    let config = load_or_create_config(&config_path).await?;
+    let mut config = load_or_create_config(&config_path).await?;
+
+    // Parse CLI arguments to override report_type and report_name
+    // Usage: yasweb [--type "Report Type"] [--name "Report Name"]
+    let args: Vec<String> = std::env::args().collect();
+    let mut config_updated = false;
+
+    let mut i = 1;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--type" => {
+                if i + 1 < args.len() {
+                    config.report_type = args[i + 1].clone();
+                    config_updated = true;
+                    i += 1;
+                }
+            }
+            "--name" => {
+                if i + 1 < args.len() {
+                    config.report_name = args[i + 1].clone();
+                    config_updated = true;
+                    i += 1;
+                }
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+
+    // Ensure the constraint: if report_type is provided, report_name must also be provided.
+    if !config.report_type.is_empty() && config.report_name.is_empty() {
+        error!("Validation failed: report_type is provided but report_name is missing.");
+        std::process::exit(1);
+    }
+
+    if config_updated {
+        info!("Updating yasweb_config.json with CLI report parameters...");
+        let content = serde_json::to_string_pretty(&config)
+            .context("Failed to serialize updated yasweb config")?;
+        fs::write(&config_path, content)
+            .await
+            .context("Failed to write updated yasweb_config.json")?;
+    }
+
     info!("Loaded config for URL: {}", config.url);
 
     // Run browser logic in a blocking task since headless_chrome is synchronous
