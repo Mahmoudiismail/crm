@@ -1142,6 +1142,7 @@ fn parse_schedules_text(value: &str) -> Result<Vec<TaskSchedule>> {
                     enabled: true,
                     every_seconds: parse_duration_text(rest)?,
                     next_run_at: Utc::now().to_rfc3339(),
+                    working_hours: None,
                 });
             }
             "daily" => {

@@ -423,7 +423,8 @@ async fn run_task(
     match result {
         Ok(_) => {
             if !task.post_run_script.trim().is_empty() {
-                match run_post_run_script(&task.post_run_script, policy.shell_timeout_seconds).await {
+                match run_post_run_script(&task.post_run_script, policy.shell_timeout_seconds).await
+                {
                     Ok(_) => task.last_status = "ok".to_string(),
                     Err(e) => {
                         task.last_status = format!("post-run script error: {}", e);
@@ -576,7 +577,10 @@ async fn run_post_run_script(script_path: &str, timeout_seconds: u64) -> Result<
         }
         "ps1" => {
             let mut cmd = tokio::process::Command::new("powershell.exe");
-            cmd.arg("-ExecutionPolicy").arg("Bypass").arg("-File").arg(script_path);
+            cmd.arg("-ExecutionPolicy")
+                .arg("Bypass")
+                .arg("-File")
+                .arg(script_path);
             cmd
         }
         _ => tokio::process::Command::new(script_path),
@@ -747,10 +751,17 @@ fn advance_schedule(
         TaskSchedule::Interval {
             every_seconds,
             next_run_at,
+            working_hours,
             ..
         } => {
             let effective_frequency = (*every_seconds).max(min_task_interval_seconds.max(1));
             let next = now + chrono::TimeDelta::seconds(effective_frequency as i64);
+
+            if let Some(_wh) = working_hours {
+                // If the naturally computed next run is outside working hours, `schedule_is_due`
+                // will hold the task back until working hours open, at which point it fires immediately.
+            }
+
             *every_seconds = effective_frequency;
             *next_run_at = next.to_rfc3339();
         }
@@ -838,14 +849,28 @@ fn schedule_is_due(schedule: &TaskSchedule, now: DateTime<Utc>) -> bool {
                 }
             }
         }
-        TaskSchedule::Interval { next_run_at, .. } => {
-            if next_run_at.is_empty() {
+        TaskSchedule::Interval {
+            next_run_at,
+            working_hours,
+            ..
+        } => {
+            let is_due = if next_run_at.is_empty() {
                 true
             } else {
                 match parse_rfc3339_utc(next_run_at) {
                     Ok(next_time) => now >= next_time,
                     Err(_) => false,
                 }
+            };
+
+            if is_due {
+                if let Some(wh) = working_hours {
+                    crate::runner::config::is_within_working_hours(wh, now)
+                } else {
+                    true
+                }
+            } else {
+                false
             }
         }
         TaskSchedule::DailyTimes { next_run_at, .. } => {
