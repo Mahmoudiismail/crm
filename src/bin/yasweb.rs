@@ -74,7 +74,7 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
     let launch_options = LaunchOptions::default_builder()
         .headless(config.headless)
         .sandbox(false)
-        .idle_browser_timeout(std::time::Duration::from_secs(60))
+        .idle_browser_timeout(std::time::Duration::from_secs(120))
         .build()
         .unwrap();
 
@@ -128,6 +128,7 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                         if let Ok(html) = tab.get_content() {
                             error!("Page HTML:\n{}", html);
                         }
+                        std::thread::sleep(Duration::from_secs(60));
                         return Err(anyhow::anyhow!("Failed to find password input"));
                     }
                 }
@@ -145,6 +146,7 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                     if let Ok(html) = tab.get_content() {
                         error!("Page HTML:\n{}", html);
                     }
+                    std::thread::sleep(Duration::from_secs(60));
                     return Err(anyhow::anyhow!("Failed to find login button"));
                 }
             }
@@ -154,12 +156,14 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
 
             println!("Login successful");
             info!("Login successful");
+            std::thread::sleep(Duration::from_secs(60));
         }
         Err(e) => {
             error!("Failed to find username input, likely because page did not load: {:?}", e);
             if let Ok(html) = tab.get_content() {
                 error!("Page HTML:\n{}", html);
             }
+            std::thread::sleep(Duration::from_secs(60));
             return Err(anyhow::anyhow!("Failed to find elements to login"));
         }
     }
