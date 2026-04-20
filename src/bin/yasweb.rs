@@ -14,6 +14,8 @@ struct YaswebConfig {
     url: String,
     username: String,
     password: Option<String>,
+    #[serde(default)]
+    headless: bool,
 }
 
 impl Default for YaswebConfig {
@@ -22,6 +24,7 @@ impl Default for YaswebConfig {
             url: "https://yasweb.fakeeh.care:8030/".to_string(),
             username: "".to_string(),
             password: None,
+            headless: false,
         }
     }
 }
@@ -69,10 +72,9 @@ fn setup_logging() -> Result<()> {
 
 fn run_browser(config: &YaswebConfig) -> Result<()> {
     let launch_options = LaunchOptions::default_builder()
-        .headless(true) // Ensure it works in headless container environments
+        .headless(config.headless)
         .sandbox(false)
         .idle_browser_timeout(std::time::Duration::from_secs(60))
-        .port(Some(9222))
         .build()
         .unwrap();
 
