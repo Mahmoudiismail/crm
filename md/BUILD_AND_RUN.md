@@ -146,3 +146,6 @@ The release workflows utilize `softprops/action-gh-release@v3` and `actions/chec
 5. Shell commands run sequentially or in parallel when `allow_shell_tasks=true`.
 6. CRM auth/fetch/download succeeds for CRM tasks.
 7. CSV files are created under `Downloads/` beside `crm` executable.
+
+### Yasweb Artifacts
+Executing `cargo run --bin yasweb` will generate a `yasweb_chrome_data/` folder in the executable's directory. This folder contains the persistent browser cache and should not be committed to version control.
