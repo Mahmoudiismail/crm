@@ -74,7 +74,7 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
     let launch_options = LaunchOptions::default_builder()
         .headless(config.headless)
         .sandbox(false)
-        .idle_browser_timeout(std::time::Duration::from_secs(60))
+        .idle_browser_timeout(std::time::Duration::from_secs(120))
         .build()
         .unwrap();
 
@@ -109,7 +109,7 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
     let _ = tab.wait_until_navigated();
 
     info!("Waiting for username input...");
-    let username_selector = "input[type='text'], input[name='username'], input[id='username'], input";
+    let username_selector = "input[formcontrolname='username'], #mat-input-0";
     match tab.wait_for_element(username_selector) {
         Ok(user_input) => {
             info!("Typing username...");
@@ -117,26 +117,53 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
 
             if let Some(password) = &config.password {
                 info!("Waiting for password input...");
-                let password_selector = "input[type='password'], input[name='password'], input[id='password']";
-                let pass_input = tab.wait_for_element(password_selector).context("Failed to find password input")?;
-                info!("Typing password...");
-                pass_input.type_into(password).context("Failed to type password")?;
+                let password_selector = "input[formcontrolname='password'], #passFocus";
+                match tab.wait_for_element(password_selector) {
+                    Ok(pass_input) => {
+                        info!("Typing password...");
+                        pass_input.type_into(password).context("Failed to type password")?;
+                    }
+                    Err(e) => {
+                        error!("Failed to find password input: {:?}", e);
+                        if let Ok(html) = tab.get_content() {
+                            error!("Page HTML:\n{}", html);
+                        }
+                        std::thread::sleep(Duration::from_secs(60));
+                        return Err(anyhow::anyhow!("Failed to find password input"));
+                    }
+                }
             }
 
             info!("Waiting for login button...");
-            let button_selector = "button[type='submit'], input[type='submit'], button, .login-btn, #login";
-            let login_button = tab.wait_for_element(button_selector).context("Failed to find login button")?;
-            info!("Clicking login button...");
-            login_button.click().context("Failed to click login button")?;
+            let button_selector = "button#submitFocus, button.pmry";
+            match tab.wait_for_element(button_selector) {
+                Ok(login_button) => {
+                    info!("Clicking login button...");
+                    login_button.click().context("Failed to click login button")?;
+                }
+                Err(e) => {
+                    error!("Failed to find login button: {:?}", e);
+                    if let Ok(html) = tab.get_content() {
+                        error!("Page HTML:\n{}", html);
+                    }
+                    std::thread::sleep(Duration::from_secs(60));
+                    return Err(anyhow::anyhow!("Failed to find login button"));
+                }
+            }
 
             // Wait a brief moment to ensure login is submitted
             std::thread::sleep(Duration::from_secs(5));
 
             println!("Login successful");
             info!("Login successful");
+            std::thread::sleep(Duration::from_secs(60));
         }
         Err(e) => {
             error!("Failed to find username input, likely because page did not load: {:?}", e);
+            if let Ok(html) = tab.get_content() {
+                error!("Page HTML:\n{}", html);
+            }
+            std::thread::sleep(Duration::from_secs(60));
             return Err(anyhow::anyhow!("Failed to find elements to login"));
         }
     }
