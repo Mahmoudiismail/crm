@@ -69,9 +69,12 @@ CRM always performs login.
 2. Launch a headless Chrome browser.
 3. Attach Chrome DevTools Protocol network listeners to log events.
 4. Navigate to the configured Yasweb URL.
-5. Identify and fill the username and password form fields.
-6. Submit the login form and print success.
-7. Logs are written to the `yasweblog` file.
+5. Identify and fill the username.
+6. Wait briefly for external data to load, then fill the password.
+7. Submit the login form.
+8. Verify login success by checking if the username appears in the header.
+9. Click the pinned menu button and select the MIS module.
+10. Logs are written to the `yasweblog` file.
 
 ## Primary Outputs
 

@@ -111,7 +111,16 @@ If action buttons appear invisible or have low contrast:
 - Check Tailwind CSS is loading from CDN (styles will degrade gracefully if unavailable)
 - Verify browser isn't applying custom CSS extensions that might override button styling
 
-### 8) Runner cannot execute CRM
+### 8) Yasweb browser automation issues
+
+Check:
+
+- `yasweb_config.json` for target URL and credentials (username/password)
+- headless/visible mode setting
+- whether the page layout matches expected selectors (`#mat-input-0`, `span.usr-id`, `#menuPinnedBtn`, `.misManagement`)
+- the application includes a 2-second sleep after typing the username, to accommodate the login page fetching external data before the password field becomes available.
+
+### 9) Runner cannot execute CRM
 
 Check:
 
