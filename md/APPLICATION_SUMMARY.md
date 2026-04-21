@@ -74,7 +74,8 @@ CRM always performs login.
 7. Submit the login form.
 8. Verify login success by checking if the username appears in the header.
 9. Click the pinned menu button and select the MIS module.
-10. Logs are written to the `yasweblog` file. HTML content is extracted and logged heavily across all stages (successes and failures) for debugging purposes. Certificate errors are ignored during browser instantiation.
+10. Click the MIS Reports button and, if configured, locate and select the target report type inside the resulting iframe.
+11. Logs are written to the `yasweblog` file. HTML content is extracted and logged heavily across all stages (successes and failures) for debugging purposes. Certificate errors are ignored during browser instantiation.
 
 ## Primary Outputs
 

@@ -223,7 +223,7 @@ This configuration file is used by the headless browser automation tool to navig
 The `report_type` and `report_name` can also be supplied dynamically via the CLI, which will automatically save them to the configuration file for future runs.
 Example: `yasweb --type "Report Manager" --name "My Daily Report"`
 
-Note: If a `report_type` is provided, a `report_name` MUST also be provided.
+Note: If a `report_type` is provided, a `report_name` MUST also be provided. The script automatically searches inside the report iframe to find and click the radio button corresponding to `report_type`.
 
 ### `yasweb_chrome_data/` Directory
 The `yasweb` executable creates and manages this directory alongside the executable to persist Chrome profile data and caching. This directory speeds up repeated headless automation tasks.
