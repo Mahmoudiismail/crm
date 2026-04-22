@@ -120,7 +120,7 @@ Check:
 - `yasweb_config.json` for target URL and credentials (username/password)
 - headless/visible mode setting
 - whether the page layout matches expected selectors (`#mat-input-0`, `span.usr-id`, `#menuPinnedBtn`, `.misManagement`)
-- the report selection logic requires navigating into an iframe; if the iframe path or inner structure changes, the JS evaluation block may need updates.
+- the report selection logic requires navigating into an iframe; it robustly searches for mat-radio-buttons, buttons, labels, or any clickable elements matching the text. If the iframe path or inner structure changes significantly, the JS evaluation block may need updates.
 - the application includes a 2-second sleep after typing the username, to accommodate the login page fetching external data before the password field becomes available.
 
 ### 9) Runner cannot execute CRM
