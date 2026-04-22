@@ -386,7 +386,8 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
 
                                     for _ in 0..10 {
                                         // Wait up to 20 seconds (10 * 2s)
-                                        if let Ok(_) = tab.find_element_by_xpath(mis_reports_xpath) {
+                                        if let Ok(_) = tab.find_element_by_xpath(mis_reports_xpath)
+                                        {
                                             mis_reports_found = true;
                                             break;
                                         }
@@ -396,71 +397,121 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                                     if !mis_reports_found {
                                         error!("MIS Reports button not found after wait.");
                                         if let Ok(html) = tab.get_content() {
-                                            error!("Page HTML at MIS Reports button wait timeout:\n{}", html);
+                                            error!(
+                                                "Page HTML at MIS Reports button wait timeout:\n{}",
+                                                html
+                                            );
                                         }
                                         std::thread::sleep(Duration::from_secs(60));
-                                        return Err(anyhow::anyhow!("MIS Reports button wait timeout"));
+                                        return Err(anyhow::anyhow!(
+                                            "MIS Reports button wait timeout"
+                                        ));
                                     }
 
                                     info!("MIS Reports button successfully verified. MIS module click was successful.");
                                     println!("MIS Reports button successfully verified. MIS module click was successful.");
                                     if let Ok(html) = tab.get_content() {
-                                        info!("Page HTML after MIS Reports verification:\n{}", html);
+                                        info!(
+                                            "Page HTML after MIS Reports verification:\n{}",
+                                            html
+                                        );
                                     }
 
                                     // If a report_type is provided, find and click the corresponding radio button
                                     if !config.report_type.is_empty() {
                                         info!("Selecting report type: {}", config.report_type);
 
-                                        // Typical Angular Material radio buttons have the label text either inside a span or directly.
-                                        // We will look for an element containing the text and then find the input or mat-radio-button.
-                                        // Often, clicking the parent mat-radio-button or the label itself works.
-                                        let radio_xpath = format!("//*[contains(text(), '{}')]/ancestor-or-self::mat-radio-button", config.report_type);
+                                        // The report UI is inside an iframe. We must evaluate JS to find and click the radio button.
+                                        let js_eval = format!(
+                                            r#"
+                                            (function() {{
+                                                var iframes = document.querySelectorAll('iframe');
+                                                for (var i = 0; i < iframes.length; i++) {{
+                                                    try {{
+                                                        var doc = iframes[i].contentWindow.document;
+
+                                                        // Look for mat-radio-button containing the text
+                                                        var xpath = "//*[contains(text(), '{}')]/ancestor-or-self::mat-radio-button";
+                                                        var result = doc.evaluate(xpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                                                        var node = result.singleNodeValue;
+
+                                                        if (node) {{
+                                                            node.click();
+                                                            return "CLICKED_RADIO";
+                                                        }}
+
+                                                        // Fallback to finding label
+                                                        var fallbackXpath = "//label[contains(text(), '{}')]";
+                                                        var fallbackResult = doc.evaluate(fallbackXpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                                                        var fallbackNode = fallbackResult.singleNodeValue;
+
+                                                        if (fallbackNode) {{
+                                                            fallbackNode.click();
+                                                            return "CLICKED_LABEL";
+                                                        }}
+                                                    }} catch (e) {{
+                                                        // Ignore cross-origin frame errors or other exceptions
+                                                    }}
+                                                }}
+                                                return "NOT_FOUND";
+                                            }})();
+                                        "#,
+                                            config.report_type, config.report_type
+                                        );
 
                                         let mut radio_found = false;
-                                        for _ in 0..5 {
-                                            if let Ok(radio_elem) = tab.find_element_by_xpath(&radio_xpath) {
-                                                info!("Found radio button for {}, clicking...", config.report_type);
-                                                if let Err(e) = radio_elem.click() {
-                                                    error!("Failed to click report type radio button: {:?}", e);
-                                                } else {
-                                                    info!("Successfully clicked report type: {}", config.report_type);
-                                                    radio_found = true;
+                                        for _ in 0..10 {
+                                            if let Ok(eval_result) = tab.evaluate(&js_eval, true) {
+                                                if let Some(val) = eval_result.value {
+                                                    if let Some(val_str) = val.as_str() {
+                                                        if val_str == "CLICKED_RADIO"
+                                                            || val_str == "CLICKED_LABEL"
+                                                        {
+                                                            info!("Successfully clicked report type: {}", config.report_type);
+                                                            radio_found = true;
+                                                            break;
+                                                        }
+                                                    }
                                                 }
-                                                break;
                                             }
                                             std::thread::sleep(Duration::from_secs(2));
                                         }
 
                                         if !radio_found {
-                                            // Fallback: try clicking any label that contains the text
-                                            let fallback_xpath = format!("//label[contains(text(), '{}')]", config.report_type);
-                                            for _ in 0..5 {
-                                                if let Ok(label_elem) = tab.find_element_by_xpath(&fallback_xpath) {
-                                                    info!("Found label for {}, clicking...", config.report_type);
-                                                    if let Err(e) = label_elem.click() {
-                                                        error!("Failed to click report type label: {:?}", e);
-                                                    } else {
-                                                        info!("Successfully clicked report type label: {}", config.report_type);
-                                                        radio_found = true;
-                                                    }
-                                                    break;
-                                                }
-                                                std::thread::sleep(Duration::from_secs(2));
-                                            }
-                                        }
-
-                                        if !radio_found {
-                                            error!("Failed to find or click report type '{}'.", config.report_type);
+                                            error!("Failed to find or click report type '{}' inside iframe.", config.report_type);
                                             if let Ok(html) = tab.get_content() {
-                                                error!("Page HTML at failure to click report type:\n{}", html);
+                                                error!("Main Page HTML at failure to click report type:\n{}", html);
+                                            }
+
+                                            // Optional: Try to dump iframe content for debugging
+                                            let dump_iframe_js = r#"
+                                            (function() {
+                                                var iframes = document.querySelectorAll('iframe');
+                                                if (iframes.length > 0) {
+                                                    try {
+                                                        return iframes[0].contentWindow.document.body.innerHTML;
+                                                    } catch (e) {
+                                                        return "IFRAME_ACCESS_ERROR: " + e.message;
+                                                    }
+                                                }
+                                                return "NO_IFRAMES_FOUND";
+                                            })();
+                                            "#;
+                                            if let Ok(iframe_eval) =
+                                                tab.evaluate(dump_iframe_js, true)
+                                            {
+                                                if let Some(iframe_val) = iframe_eval.value {
+                                                    if let Some(iframe_html) = iframe_val.as_str() {
+                                                        error!(
+                                                            "First IFrame HTML:\n{}",
+                                                            iframe_html
+                                                        );
+                                                    }
+                                                }
                                             }
                                         } else {
                                             // Wait a bit to let the selection propagate
                                             std::thread::sleep(Duration::from_secs(2));
-                                            if let Ok(html) = tab.get_content() {
-                                                info!("Page HTML after clicking report type {}:\n{}", config.report_type, html);
-                                            }
                                         }
                                     }
                                 }
