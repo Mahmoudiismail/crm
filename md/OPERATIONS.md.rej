@@ -1,0 +1,20 @@
+--- OPERATIONS.md
++++ OPERATIONS.md
+@@ -114,6 +114,6 @@
+
+ ### 8) Yasweb browser automation issues
+
+-If the browser is unable to render elements,  currently implements long wait times, loops, and aggressive HTML extraction. Inspect  to view the page HTML before/after steps if elements fail to appear. Certificate errors are ignored by default via launch options.
++If the browser is unable to render elements, `yasweb` currently implements long wait times, loops, and aggressive HTML extraction. Inspect `yasweblog` to view the page HTML before/after steps if elements fail to appear. Certificate errors are ignored by default via launch options. The menu button (`#menuPinnedBtn`) interaction is optimized to avoid double-clicking and provides diagnostic class list logging on failure.
+
+ Check:
+--- APPLICATION_SUMMARY.md
++++ APPLICATION_SUMMARY.md
+@@ -21,6 +21,7 @@
+ 5. Type username, wait 2 seconds.
+ 6. Type password and click login.
+ 7. Verify login success via "span.usr-id".
++8. Open menu via "#menuPinnedBtn" (preferring the inner plus icon to ensure reliable single click).
+ 8. Navigate to MIS module.
+ 9. Select report parameters (handling cross-frame interactions via JS if needed).
+ 10. Click fetch and wait for CSV download completion.
