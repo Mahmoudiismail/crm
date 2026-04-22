@@ -530,29 +530,46 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                                         let js_eval = format!(
                                             r#"
                                             (function() {{
-                                                var iframes = document.querySelectorAll('iframe');
+                                                var iframes = document.querySelectorAll("iframe");
+                                                var targetText = "{}";
                                                 for (var i = 0; i < iframes.length; i++) {{
                                                     try {{
                                                         var doc = iframes[i].contentWindow.document;
 
-                                                        // Look for mat-radio-button containing the text
-                                                        var xpath = "//*[contains(text(), '{}')]/ancestor-or-self::mat-radio-button";
-                                                        var result = doc.evaluate(xpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-                                                        var node = result.singleNodeValue;
-
-                                                        if (node) {{
-                                                            node.click();
+                                                        // Priority 1: mat-radio-button
+                                                        var radioXpath = "//*[contains(text(), '" + targetText + "')]/ancestor-or-self::mat-radio-button";
+                                                        var radioResult = doc.evaluate(radioXpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                                                        var radioNode = radioResult.singleNodeValue;
+                                                        if (radioNode) {{
+                                                            radioNode.click();
                                                             return "CLICKED_RADIO";
                                                         }}
 
-                                                        // Fallback to finding label
-                                                        var fallbackXpath = "//label[contains(text(), '{}')]";
-                                                        var fallbackResult = doc.evaluate(fallbackXpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-                                                        var fallbackNode = fallbackResult.singleNodeValue;
+                                                        // Priority 2: button
+                                                        var buttonXpath = "//*[contains(text(), '" + targetText + "')]/ancestor-or-self::button";
+                                                        var buttonResult = doc.evaluate(buttonXpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                                                        var buttonNode = buttonResult.singleNodeValue;
+                                                        if (buttonNode) {{
+                                                            buttonNode.click();
+                                                            return "CLICKED_BUTTON";
+                                                        }}
 
-                                                        if (fallbackNode) {{
-                                                            fallbackNode.click();
+                                                        // Priority 3: label
+                                                        var labelXpath = "//label[contains(text(), '" + targetText + "')]";
+                                                        var labelResult = doc.evaluate(labelXpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                                                        var labelNode = labelResult.singleNodeValue;
+                                                        if (labelNode) {{
+                                                            labelNode.click();
                                                             return "CLICKED_LABEL";
+                                                        }}
+
+                                                        // Priority 4: any clickable element containing text
+                                                        var anyXpath = "//*[contains(text(), '" + targetText + "')]";
+                                                        var anyResult = doc.evaluate(anyXpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                                                        var anyNode = anyResult.singleNodeValue;
+                                                        if (anyNode) {{
+                                                            anyNode.click();
+                                                            return "CLICKED_ANY";
                                                         }}
                                                     }} catch (e) {{
                                                         // Ignore cross-origin frame errors or other exceptions
@@ -561,7 +578,7 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                                                 return "NOT_FOUND";
                                             }})();
                                         "#,
-                                            config.report_type, config.report_type
+                                            config.report_type
                                         );
 
                                         let mut radio_found = false;
@@ -569,10 +586,8 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                                             if let Ok(eval_result) = tab.evaluate(&js_eval, true) {
                                                 if let Some(val) = eval_result.value {
                                                     if let Some(val_str) = val.as_str() {
-                                                        if val_str == "CLICKED_RADIO"
-                                                            || val_str == "CLICKED_LABEL"
-                                                        {
-                                                            info!("Successfully clicked report type: {}", config.report_type);
+                                                        if val_str.starts_with("CLICKED") {
+                                                            info!("Successfully clicked report type: {} (via {})", config.report_type, val_str);
                                                             radio_found = true;
                                                             break;
                                                         }
@@ -673,33 +688,57 @@ async fn main() -> Result<()> {
     // Parse CLI arguments to override report_type and report_name
     // Usage: yasweb [--type "Report Type"] [--name "Report Name"]
     let args: Vec<String> = std::env::args().collect();
+    info!("CLI Arguments: {:?}", args);
     let mut config_updated = false;
 
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
-            "--type" => {
+            "--type" | "-t" => {
                 if i + 1 < args.len() {
                     config.report_type = args[i + 1].clone();
                     config_updated = true;
                     i += 1;
+                } else {
+                    eprintln!("Error: --type requires a value");
+                    std::process::exit(1);
                 }
             }
-            "--name" => {
+            "--name" | "-n" => {
                 if i + 1 < args.len() {
                     config.report_name = args[i + 1].clone();
                     config_updated = true;
                     i += 1;
+                } else {
+                    eprintln!("Error: --name requires a value");
+                    std::process::exit(1);
                 }
             }
-            _ => {}
+            "--help" | "-h" => {
+                println!("Usage: yasweb [--type \"Report Type\"] [--name \"Report Name\"] [--headless]");
+                println!("  --type, -t   The type of report to select (e.g., \"Report Manager\")");
+                println!("  --name, -n   The name of the report (required if type is provided)");
+                println!("  --headless   Run browser in headless mode");
+                std::process::exit(0);
+            }
+            "--headless" => {
+                config.headless = true;
+                config_updated = true;
+            }
+            _ => {
+                if args[i].starts_with("--") {
+                    eprintln!("Warning: Unknown argument: {}", args[i]);
+                }
+            }
         }
         i += 1;
     }
 
     // Ensure the constraint: if report_type is provided, report_name must also be provided.
     if !config.report_type.is_empty() && config.report_name.is_empty() {
-        error!("Validation failed: report_type is provided but report_name is missing.");
+        let err_msg = "Validation failed: report_type is provided but report_name is missing.";
+        error!("{}", err_msg);
+        eprintln!("{}", err_msg);
         std::process::exit(1);
     }
 
