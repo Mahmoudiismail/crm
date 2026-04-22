@@ -335,18 +335,14 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
             let js_click_menu = r#"
                 (function() {
                     try {
-                        var clicked = false;
-                        var btn = document.querySelector('#menuPinnedBtn');
-                        if (btn) {
-                            btn.click();
-                            clicked = true;
-                        }
                         var innerBtn = document.querySelector('#menuPinnedBtn > div.icon.font-icon.mod-triger > i.bi.bi-plus.second');
                         if (innerBtn) {
                             innerBtn.click();
-                            clicked = true;
+                            return "CLICKED";
                         }
-                        return clicked ? "CLICKED" : "NOT_FOUND";
+                        var btn = document.querySelector('#menuPinnedBtn');
+                        if (btn) { btn.click(); return "CLICKED"; }
+                        return "NOT_FOUND";
                     } catch (e) {
                         return "ERROR: " + e.message;
                     }
@@ -402,13 +398,15 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                 // Wait for menuPinnedBtn to have 'active' class
                 info!("Waiting for #menuPinnedBtn to have 'active' class...");
                 let mut is_active = false;
+                let mut last_status = String::new();
                 let check_active_js = r#"
                     (function() {
                         var btn = document.querySelector('#menuPinnedBtn');
-                        if (btn && btn.classList.contains("active")) {
+                        if (!btn) return "NOT_FOUND";
+                        if (btn.classList.contains("active")) {
                             return "ACTIVE";
                         }
-                        return "NOT_ACTIVE";
+                        return "CLASSES: " + btn.className;
                     })();
                 "#;
 
@@ -420,6 +418,7 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                                     is_active = true;
                                     break;
                                 }
+                                last_status = val_str.to_string();
                             }
                         }
                     }
@@ -427,7 +426,7 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                 }
 
                 if !is_active {
-                    error!("#menuPinnedBtn did not become active after wait.");
+                    error!("#menuPinnedBtn did not become active after wait. Last status: {}", last_status);
                     if let Ok(html) = tab.get_content() {
                         error!(
                             "Page HTML at menu active timeout:
