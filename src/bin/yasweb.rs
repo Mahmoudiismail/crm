@@ -484,112 +484,82 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                                         );
                                     }
                                 } else {
-                                    info!("Clicked MIS successfully. Waiting for MIS Reports button...");
+                                    info!("Clicked MIS successfully. Proceeding to report selection and search.");
 
-                                    let mut mis_reports_found = false;
-                                    let mis_reports_xpath = "//div[contains(@class, 'label') and contains(@class, 'fw-bold') and contains(text(), 'MIS Reports')]";
-
-                                    for _ in 0..10 {
-                                        // Wait up to 20 seconds (10 * 2s)
-                                        if let Ok(_) = tab.find_element_by_xpath(mis_reports_xpath)
-                                        {
-                                            mis_reports_found = true;
-                                            break;
-                                        }
-                                        std::thread::sleep(Duration::from_secs(2));
-                                    }
-
-                                    if !mis_reports_found {
-                                        error!("MIS Reports button not found after wait.");
-                                        if let Ok(html) = tab.get_content() {
-                                            error!(
-                                                "Page HTML at MIS Reports button wait timeout:\n{}",
-                                                html
-                                            );
-                                        }
-                                        std::thread::sleep(Duration::from_secs(60));
-                                        return Err(anyhow::anyhow!(
-                                            "MIS Reports button wait timeout"
-                                        ));
-                                    }
-
-                                    info!("MIS Reports button successfully verified. MIS module click was successful.");
-                                    println!("MIS Reports button successfully verified. MIS module click was successful.");
-                                    if let Ok(html) = tab.get_content() {
-                                        info!(
-                                            "Page HTML after MIS Reports verification:\n{}",
-                                            html
-                                        );
-                                    }
+                                    // Wait for MIS module to stabilize
+                                    std::thread::sleep(Duration::from_secs(5));
 
                                     // If a report_type is provided, find and click the corresponding radio button
+                                    // and then type the report_name in the search box.
                                     if !config.report_type.is_empty() {
-                                        info!("Selecting report type: {}", config.report_type);
+                                        info!("Selecting report type: {} and searching for: {}", config.report_type, config.report_name);
 
-                                        // The report UI is inside an iframe. We must evaluate JS to find and click the radio button.
+                                        // The report UI is inside an iframe. We evaluate JS to find the radio button and search input.
                                         let js_eval = format!(
                                             r#"
                                             (function() {{
                                                 var iframes = document.querySelectorAll("iframe");
-                                                var targetText = "{}";
+                                                var targetType = "{}";
+                                                var targetName = "{}";
+
                                                 for (var i = 0; i < iframes.length; i++) {{
                                                     try {{
                                                         var doc = iframes[i].contentWindow.document;
 
-                                                        // Priority 1: mat-radio-button
-                                                        var radioXpath = "//*[contains(text(), '" + targetText + "')]/ancestor-or-self::mat-radio-button";
+                                                        // 1. Find and click the radio button for report type
+                                                        var radioXpath = "//*[contains(text(), '" + targetType + "')]/ancestor-or-self::mat-radio-button";
                                                         var radioResult = doc.evaluate(radioXpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
                                                         var radioNode = radioResult.singleNodeValue;
+
                                                         if (radioNode) {{
                                                             radioNode.click();
-                                                            return "CLICKED_RADIO";
-                                                        }}
 
-                                                        // Priority 2: button
-                                                        var buttonXpath = "//*[contains(text(), '" + targetText + "')]/ancestor-or-self::button";
-                                                        var buttonResult = doc.evaluate(buttonXpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-                                                        var buttonNode = buttonResult.singleNodeValue;
-                                                        if (buttonNode) {{
-                                                            buttonNode.click();
-                                                            return "CLICKED_BUTTON";
-                                                        }}
+                                                            // 2. Find the search input #mat-input-0 and type the report name
+                                                            // We might need a small delay for the radio selection to register,
+                                                            // but let's try finding the input immediately first.
+                                                            var searchInput = doc.querySelector("#mat-input-0");
+                                                            if (searchInput) {{
+                                                                searchInput.value = targetName;
+                                                                // Trigger Angular input event
+                                                                searchInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
 
-                                                        // Priority 3: label
-                                                        var labelXpath = "//label[contains(text(), '" + targetText + "')]";
-                                                        var labelResult = doc.evaluate(labelXpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-                                                        var labelNode = labelResult.singleNodeValue;
-                                                        if (labelNode) {{
-                                                            labelNode.click();
-                                                            return "CLICKED_LABEL";
-                                                        }}
+                                                                // 3. Simulate Enter key press
+                                                                var enterEvent = new KeyboardEvent('keydown', {{
+                                                                    key: 'Enter',
+                                                                    code: 'Enter',
+                                                                    keyCode: 13,
+                                                                    which: 13,
+                                                                    bubbles: true
+                                                                }});
+                                                                searchInput.dispatchEvent(enterEvent);
 
-                                                        // Priority 4: any clickable element containing text
-                                                        var anyXpath = "//*[contains(text(), '" + targetText + "')]";
-                                                        var anyResult = doc.evaluate(anyXpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-                                                        var anyNode = anyResult.singleNodeValue;
-                                                        if (anyNode) {{
-                                                            anyNode.click();
-                                                            return "CLICKED_ANY";
+                                                                return "SUCCESS: Clicked " + targetType + " and searched " + targetName;
+                                                            }} else {{
+                                                                return "RADIO_CLICKED_BUT_SEARCH_NOT_FOUND";
+                                                            }}
                                                         }}
                                                     }} catch (e) {{
                                                         // Ignore cross-origin frame errors or other exceptions
                                                     }}
                                                 }}
-                                                return "NOT_FOUND";
+                                                return "NOT_FOUND_IN_ANY_IFRAME";
                                             }})();
                                         "#,
-                                            config.report_type
+                                            config.report_type,
+                                            config.report_name
                                         );
 
-                                        let mut radio_found = false;
-                                        for _ in 0..10 {
+                                        let mut action_success = false;
+                                        for _ in 0..15 {
                                             if let Ok(eval_result) = tab.evaluate(&js_eval, true) {
                                                 if let Some(val) = eval_result.value {
                                                     if let Some(val_str) = val.as_str() {
-                                                        if val_str.starts_with("CLICKED") {
-                                                            info!("Successfully clicked report type: {} (via {})", config.report_type, val_str);
-                                                            radio_found = true;
+                                                        if val_str.starts_with("SUCCESS") {
+                                                            info!("Automation result: {}", val_str);
+                                                            action_success = true;
                                                             break;
+                                                        } else if val_str == "RADIO_CLICKED_BUT_SEARCH_NOT_FOUND" {
+                                                            info!("Radio clicked, waiting for search box...");
                                                         }
                                                     }
                                                 }
@@ -597,41 +567,14 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                                             std::thread::sleep(Duration::from_secs(2));
                                         }
 
-                                        if !radio_found {
-                                            error!("Failed to find or click report type '{}' inside iframe.", config.report_type);
+                                        if !action_success {
+                                            error!("Failed to complete report selection or search inside iframe.");
                                             if let Ok(html) = tab.get_content() {
-                                                error!("Main Page HTML at failure to click report type:\n{}", html);
-                                            }
-
-                                            // Optional: Try to dump iframe content for debugging
-                                            let dump_iframe_js = r#"
-                                            (function() {
-                                                var iframes = document.querySelectorAll('iframe');
-                                                if (iframes.length > 0) {
-                                                    try {
-                                                        return iframes[0].contentWindow.document.body.innerHTML;
-                                                    } catch (e) {
-                                                        return "IFRAME_ACCESS_ERROR: " + e.message;
-                                                    }
-                                                }
-                                                return "NO_IFRAMES_FOUND";
-                                            })();
-                                            "#;
-                                            if let Ok(iframe_eval) =
-                                                tab.evaluate(dump_iframe_js, true)
-                                            {
-                                                if let Some(iframe_val) = iframe_eval.value {
-                                                    if let Some(iframe_html) = iframe_val.as_str() {
-                                                        error!(
-                                                            "First IFrame HTML:\n{}",
-                                                            iframe_html
-                                                        );
-                                                    }
-                                                }
+                                                error!("Main Page HTML at failure:\n{}", html);
                                             }
                                         } else {
-                                            // Wait a bit to let the selection propagate
-                                            std::thread::sleep(Duration::from_secs(2));
+                                            // Wait a bit to let the search results load
+                                            std::thread::sleep(Duration::from_secs(5));
                                         }
                                     }
                                 }
@@ -691,43 +634,96 @@ async fn main() -> Result<()> {
     info!("CLI Arguments: {:?}", args);
     let mut config_updated = false;
 
-    let mut i = 1;
+        let mut i = 1;
     while i < args.len() {
-        match args[i].as_str() {
-            "--type" | "-t" => {
-                if i + 1 < args.len() {
-                    config.report_type = args[i + 1].clone();
+        let arg = &args[i];
+        if let Some((key, value)) = arg.split_once('=') {
+            match key {
+                "--type" | "-t" => {
+                    config.report_type = value.trim_matches(|c| c == '"' || c == '\'').to_string();
                     config_updated = true;
-                    i += 1;
-                } else {
-                    eprintln!("Error: --type requires a value");
-                    std::process::exit(1);
+                }
+                "--name" | "-n" => {
+                    config.report_name = value.trim_matches(|c| c == '"' || c == '\'').to_string();
+                    config_updated = true;
+                }
+                _ => {
+                    if key.starts_with('-') {
+                        eprintln!("Warning: Unknown argument: {}", arg);
+                    }
                 }
             }
-            "--name" | "-n" => {
-                if i + 1 < args.len() {
-                    config.report_name = args[i + 1].clone();
+        } else {
+            match arg.as_str() {
+                "--type" | "-t" => {
+                    if i + 1 < args.len() {
+                        config.report_type = args[i + 1].trim_matches(|c| c == '"' || c == '\'').to_string();
+                        config_updated = true;
+                        i += 1;
+                    } else {
+                        eprintln!("Error: {} requires a value", arg);
+                        std::process::exit(1);
+                    }
+                }
+                "--name" | "-n" => {
+                    if i + 1 < args.len() {
+                        config.report_name = args[i + 1].trim_matches(|c| c == '"' || c == '\'').to_string();
+                        config_updated = true;
+                        i += 1;
+                    } else {
+                        eprintln!("Error: {} requires a value", arg);
+                        std::process::exit(1);
+                    }
+                }
+                "--help" | "-h" => {
+                    println!("Usage: yasweb [--type=\"Report Type\"] [--name=\"Report Name\"] [--headless]");
+                    println!("  --type, -t   The type of report to select (e.g., \"Report Manager\" or \"Standard Report\")");
+                    println!("  --name, -n   The name of the report (required if type is provided)");
+                    println!("  --headless   Run browser in headless mode");
+                    std::process::exit(0);
+                }
+                "--headless" => {
+                    config.headless = true;
                     config_updated = true;
-                    i += 1;
-                } else {
-                    eprintln!("Error: --name requires a value");
-                    std::process::exit(1);
+                }
+                _ => {
+                    if arg.starts_with('-') {
+                        eprintln!("Warning: Unknown argument: {}", arg);
+                    }
                 }
             }
-            "--help" | "-h" => {
-                println!("Usage: yasweb [--type \"Report Type\"] [--name \"Report Name\"] [--headless]");
-                println!("  --type, -t   The type of report to select (e.g., \"Report Manager\")");
-                println!("  --name, -n   The name of the report (required if type is provided)");
-                println!("  --headless   Run browser in headless mode");
-                std::process::exit(0);
-            }
-            "--headless" => {
-                config.headless = true;
-                config_updated = true;
-            }
-            _ => {
-                if args[i].starts_with("--") {
-                    eprintln!("Warning: Unknown argument: {}", args[i]);
+        }
+        i += 1;
+    } else {
+                        eprintln!("Error: {} requires a value", arg);
+                        std::process::exit(1);
+                    }
+                }
+                "--name" | "-n" => {
+                    if i + 1 < args.len() {
+                        config.report_name = args[i + 1].trim_matches(|c| c == '"' || c == '\'').to_string();
+                        config_updated = true;
+                        i += 1;
+                    } else {
+                        eprintln!("Error: {} requires a value", arg);
+                        std::process::exit(1);
+                    }
+                }
+                "--help" | "-h" => {
+                    println!("Usage: yasweb [--type=\"Report Type\"] [--name=\"Report Name\"] [--headless]");
+                    println!("  --type, -t   The type of report to select (e.g., \"Report Manager\" or \"Standard Report\")");
+                    println!("  --name, -n   The name of the report (required if type is provided)");
+                    println!("  --headless   Run browser in headless mode");
+                    std::process::exit(0);
+                }
+                "--headless" => {
+                    config.headless = true;
+                    config_updated = true;
+                }
+                _ => {
+                    if arg.starts_with('-') {
+                        eprintln!("Warning: Unknown argument: {}", arg);
+                    }
                 }
             }
         }
