@@ -220,11 +220,11 @@ The `yasweb` binary stores its target URL and automation credentials in `yasweb_
 
 This configuration file is used by the headless browser automation tool to navigate to the target application and fill in the login form fields (`input[name='username']`, `input[type='password']`).
 
-The `report_type` and `report_name` can also be supplied dynamically via the CLI, which will automatically save them to the configuration file for future runs.
-Example: `yasweb --type "Report Manager" --name "My Daily Report" --headless`
+The `report_type` and `report_name` can also be supplied dynamically via the CLI, which will automatically save them to the configuration file for future runs. The CLI supports both space-separated and equals-separated values.
+Example: `yasweb --type="Report Manager" --name="My Daily Report" --headless`
 
 Short flags are also supported:
-`yasweb -t "Report Manager" -n "Standard"`
+`yasweb -t="Report Manager" -n="Standard"`
 
 Note: If a `report_type` is provided, a `report_name` MUST also be provided. The script automatically searches inside the report iframe to find and click the radio button or button corresponding to `report_type`.
 
