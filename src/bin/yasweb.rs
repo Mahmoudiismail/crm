@@ -371,8 +371,7 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                             error!("Failed to click #menuPinnedBtn: {:?}", e);
                             if let Ok(html) = tab.get_content() {
                                 error!(
-                                    "Page HTML after failed #menuPinnedBtn click:
-{}",
+                                    "Page HTML after failed #menuPinnedBtn click:\n{}",
                                     html
                                 );
                             }
@@ -385,8 +384,7 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                         error!("Failed to find #menuPinnedBtn for fallback click: {:?}", e);
                         if let Ok(html) = tab.get_content() {
                             error!(
-                                "Page HTML at failure to find #menuPinnedBtn:
-{}",
+                                "Page HTML at failure to find #menuPinnedBtn:\n{}",
                                 html
                             );
                         }
@@ -429,8 +427,7 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                     error!("#menuPinnedBtn did not become active after wait. Last status: {}", last_status);
                     if let Ok(html) = tab.get_content() {
                         error!(
-                            "Page HTML at menu active timeout:
-{}",
+                            "Page HTML at menu active timeout:\n{}",
                             html
                         );
                     }
@@ -439,174 +436,148 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                 }
 
                 info!("Menu is active.");
-
-                // Keep structure same to close out match
-                // We fake the `match` structure to minimize changes required at the end of the block
             }
 
-            // Re-creating the original match to not break the brace structure down below
-            match Ok::<(), ()>(()) {
-                Ok(_) => {
-                    if !menu_clicked {
-                        error!("Menu was not clicked");
-                    } else {
-                        // Wait for MIS module to appear
-                        info!("Waiting for MIS module to appear in menu...");
-                        std::thread::sleep(Duration::from_secs(2)); // Short delay
-                        let mis_selector = ".menu-grid-item.misManagement";
-                        let mut mis_found = false;
-                        for _ in 0..10 {
-                            // Wait up to 20 seconds (10 * 2s)
-                            if let Ok(_) = tab.find_element(mis_selector) {
-                                mis_found = true;
-                                break;
-                            }
-                            std::thread::sleep(Duration::from_secs(2));
-                        }
-                        if !mis_found {
-                            error!("MIS module not found after wait.");
+            if !menu_clicked {
+                error!("Menu was not clicked");
+            } else {
+                // Wait for MIS module to appear
+                info!("Waiting for MIS module to appear in menu...");
+                std::thread::sleep(Duration::from_secs(2)); // Short delay
+                let mis_selector = ".menu-grid-item.misManagement";
+                let mut mis_found = false;
+                for _ in 0..10 {
+                    // Wait up to 20 seconds (10 * 2s)
+                    if let Ok(_) = tab.find_element(mis_selector) {
+                        mis_found = true;
+                        break;
+                    }
+                    std::thread::sleep(Duration::from_secs(2));
+                }
+                if !mis_found {
+                    error!("MIS module not found after wait.");
+                    if let Ok(html) = tab.get_content() {
+                        error!("Page HTML at MIS module wait timeout:\n{}", html);
+                    }
+
+                    std::thread::sleep(Duration::from_secs(60));
+                    return Err(anyhow::anyhow!("MIS module wait timeout"));
+                }
+                match tab.wait_for_element(mis_selector) {
+                    Ok(mis_module) => {
+                        info!("Clicking on MIS module...");
+                        if let Err(e) = mis_module.click() {
+                            error!("Failed to click MIS module: {:?}", e);
                             if let Ok(html) = tab.get_content() {
-                                error!("Page HTML at MIS module wait timeout:\n{}", html);
+                                error!(
+                                    "Page HTML after failed MIS module click:\n{}",
+                                    html
+                                );
                             }
+                        } else {
+                            info!("Clicked MIS successfully. Proceeding to report selection and search.");
 
-                            std::thread::sleep(Duration::from_secs(60));
-                            return Err(anyhow::anyhow!("MIS module wait timeout"));
-                        }
-                        match tab.wait_for_element(mis_selector) {
-                            Ok(mis_module) => {
-                                info!("Clicking on MIS module...");
-                                if let Err(e) = mis_module.click() {
-                                    error!("Failed to click MIS module: {:?}", e);
-                                    if let Ok(html) = tab.get_content() {
-                                        error!(
-                                            "Page HTML after failed MIS module click:\n{}",
-                                            html
-                                        );
-                                    }
-                                } else {
-                                    info!("Clicked MIS successfully. Proceeding to report selection and search.");
+                            // Wait for MIS module to stabilize
+                            std::thread::sleep(Duration::from_secs(5));
 
-                                    // Wait for MIS module to stabilize
-                                    std::thread::sleep(Duration::from_secs(5));
+                            // If a report_type is provided, find and click the corresponding radio button
+                            // and then type the report_name in the search box.
+                            if !config.report_type.is_empty() {
+                                info!("Selecting report type: {} and searching for: {}", config.report_type, config.report_name);
 
-                                    // If a report_type is provided, find and click the corresponding radio button
-                                    // and then type the report_name in the search box.
-                                    if !config.report_type.is_empty() {
-                                        info!("Selecting report type: {} and searching for: {}", config.report_type, config.report_name);
+                                // The report UI is inside an iframe. We evaluate JS to find the radio button and search input.
+                                let js_eval = format!(
+                                    r#"
+                                    (function() {{
+                                        var iframes = document.querySelectorAll("iframe");
+                                        var targetType = "{}";
+                                        var targetName = "{}";
 
-                                        // The report UI is inside an iframe. We evaluate JS to find the radio button and search input.
-                                        let js_eval = format!(
-                                            r#"
-                                            (function() {{
-                                                var iframes = document.querySelectorAll("iframe");
-                                                var targetType = "{}";
-                                                var targetName = "{}";
+                                        for (var i = 0; i < iframes.length; i++) {{
+                                            try {{
+                                                var doc = iframes[i].contentWindow.document;
 
-                                                for (var i = 0; i < iframes.length; i++) {{
-                                                    try {{
-                                                        var doc = iframes[i].contentWindow.document;
+                                                // 1. Find and click the radio button for report type
+                                                var radioXpath = "//*[contains(text(), '" + targetType + "')]/ancestor-or-self::mat-radio-button";
+                                                var radioResult = doc.evaluate(radioXpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                                                var radioNode = radioResult.singleNodeValue;
 
-                                                        // 1. Find and click the radio button for report type
-                                                        var radioXpath = "//*[contains(text(), '" + targetType + "')]/ancestor-or-self::mat-radio-button";
-                                                        var radioResult = doc.evaluate(radioXpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-                                                        var radioNode = radioResult.singleNodeValue;
+                                                if (radioNode) {{
+                                                    radioNode.click();
 
-                                                        if (radioNode) {{
-                                                            radioNode.click();
+                                                    // 2. Find the search input #mat-input-0 and type the report name
+                                                    // We might need a small delay for the radio selection to register,
+                                                    // but let's try finding the input immediately first.
+                                                    var searchInput = doc.querySelector("#mat-input-0");
+                                                    if (searchInput) {{
+                                                        searchInput.value = targetName;
+                                                        // Trigger Angular input event
+                                                        searchInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
 
-                                                            // 2. Find the search input #mat-input-0 and type the report name
-                                                            // We might need a small delay for the radio selection to register,
-                                                            // but let's try finding the input immediately first.
-                                                            var searchInput = doc.querySelector("#mat-input-0");
-                                                            if (searchInput) {{
-                                                                searchInput.value = targetName;
-                                                                // Trigger Angular input event
-                                                                searchInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                                                        // 3. Simulate Enter key press
+                                                        var enterEvent = new KeyboardEvent('keydown', {{
+                                                            key: 'Enter',
+                                                            code: 'Enter',
+                                                            keyCode: 13,
+                                                            which: 13,
+                                                            bubbles: true
+                                                        }});
+                                                        searchInput.dispatchEvent(enterEvent);
 
-                                                                // 3. Simulate Enter key press
-                                                                var enterEvent = new KeyboardEvent('keydown', {{
-                                                                    key: 'Enter',
-                                                                    code: 'Enter',
-                                                                    keyCode: 13,
-                                                                    which: 13,
-                                                                    bubbles: true
-                                                                }});
-                                                                searchInput.dispatchEvent(enterEvent);
-
-                                                                return "SUCCESS: Clicked " + targetType + " and searched " + targetName;
-                                                            }} else {{
-                                                                return "RADIO_CLICKED_BUT_SEARCH_NOT_FOUND";
-                                                            }}
-                                                        }}
-                                                    }} catch (e) {{
-                                                        // Ignore cross-origin frame errors or other exceptions
+                                                        return "SUCCESS: Clicked " + targetType + " and searched " + targetName;
+                                                    }} else {{
+                                                        return "RADIO_CLICKED_BUT_SEARCH_NOT_FOUND";
                                                     }}
                                                 }}
-                                                return "NOT_FOUND_IN_ANY_IFRAME";
-                                            }})();
-                                        "#,
-                                            config.report_type,
-                                            config.report_name
-                                        );
+                                            }} catch (e) {{
+                                                // Ignore cross-origin frame errors or other exceptions
+                                            }}
+                                        }}
+                                        return "NOT_FOUND_IN_ANY_IFRAME";
+                                    }})();
+                                "#,
+                                    config.report_type,
+                                    config.report_name
+                                );
 
-                                        let mut action_success = false;
-                                        for _ in 0..15 {
-                                            if let Ok(eval_result) = tab.evaluate(&js_eval, true) {
-                                                if let Some(val) = eval_result.value {
-                                                    if let Some(val_str) = val.as_str() {
-                                                        if val_str.starts_with("SUCCESS") {
-                                                            info!("Automation result: {}", val_str);
-                                                            action_success = true;
-                                                            break;
-                                                        } else if val_str == "RADIO_CLICKED_BUT_SEARCH_NOT_FOUND" {
-                                                            info!("Radio clicked, waiting for search box...");
-                                                        }
-                                                    }
+                                let mut action_success = false;
+                                for _ in 0..15 {
+                                    if let Ok(eval_result) = tab.evaluate(&js_eval, true) {
+                                        if let Some(val) = eval_result.value {
+                                            if let Some(val_str) = val.as_str() {
+                                                if val_str.starts_with("SUCCESS") {
+                                                    info!("Automation result: {}", val_str);
+                                                    action_success = true;
+                                                    break;
+                                                } else if val_str == "RADIO_CLICKED_BUT_SEARCH_NOT_FOUND" {
+                                                    info!("Radio clicked, waiting for search box...");
                                                 }
                                             }
-                                            std::thread::sleep(Duration::from_secs(2));
-                                        }
-
-                                        if !action_success {
-                                            error!("Failed to complete report selection or search inside iframe.");
-                                            if let Ok(html) = tab.get_content() {
-                                                error!("Main Page HTML at failure:\n{}", html);
-                                            }
-                                        } else {
-                                            // Wait a bit to let the search results load
-                                            std::thread::sleep(Duration::from_secs(5));
                                         }
                                     }
+                                    std::thread::sleep(Duration::from_secs(2));
                                 }
-                            }
-                            Err(e) => {
-                                error!("Failed to find MIS module: {:?}", e);
-                                if let Ok(html) = tab.get_content() {
-                                    error!("Page HTML at failure to find MIS module:\n{}", html);
+
+                                if !action_success {
+                                    error!("Failed to complete report selection or search inside iframe.");
+                                    if let Ok(html) = tab.get_content() {
+                                        error!("Main Page HTML at failure:\n{}", html);
+                                    }
+                                } else {
+                                    // Wait a bit to let the search results load
+                                    std::thread::sleep(Duration::from_secs(5));
                                 }
                             }
                         }
                     }
-                }
-                Err(e) => {
-                    error!("Failed to find #menuPinnedBtn: {:?}", e);
-                    if let Ok(html) = tab.get_content() {
-                        error!("Page HTML at failure to find #menuPinnedBtn:\n{}", html);
+                    Err(e) => {
+                        error!("Failed to find MIS module: {:?}", e);
+                        if let Ok(html) = tab.get_content() {
+                            error!("Page HTML at failure to find MIS module:\n{}", html);
+                        }
                     }
                 }
             }
-        }
-        Err(e) => {
-            error!(
-                "Failed to find username input, likely because page did not load: {:?}",
-                e
-            );
-            if let Ok(html) = tab.get_content() {
-                error!("Page HTML at failure to find username:\n{}", html);
-            }
-
-            std::thread::sleep(Duration::from_secs(60));
-            return Err(anyhow::anyhow!("Failed to find elements to login"));
         }
     }
 
@@ -640,11 +611,11 @@ async fn main() -> Result<()> {
         if let Some((key, value)) = arg.split_once('=') {
             match key {
                 "--type" | "-t" => {
-                    config.report_type = value.trim_matches('\"').to_string();
+                    config.report_type = value.trim_matches(|c| c == '"' || c == '\'').to_string();
                     config_updated = true;
                 }
                 "--name" | "-n" => {
-                    config.report_name = value.trim_matches('\"').to_string();
+                    config.report_name = value.trim_matches(|c| c == '"' || c == '\'').to_string();
                     config_updated = true;
                 }
                 _ => {
