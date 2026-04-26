@@ -168,3 +168,9 @@ When executing the `yasweb` headless browser:
 - The automation re-uses the initially launched browser tab instead of opening new ones to conserve memory.
 - Wait loops dynamically poll for specific success (`.usr-id`) or failure (`.alert-danger`) elements, allowing the tool to fail-fast upon invalid logins without arbitrary delays.
 - A mandatory 60-second delay is enforced at the end of the script before exiting. This pause occurs regardless of whether the run was successful or failed, allowing operators time to visually inspect the final browser state when running in non-headless mode.
+
+## Timeout Management
+
+The runner supports configurable timeouts for both shell tasks (`shell_timeout_seconds`) and post-run scripts (`post_run_timeout_seconds`).
+- Default timeout is 900 seconds (15 minutes).
+- Setting a timeout to `0` enables **unlimited execution time**. Use this with caution, as a hanging script will block the task from completing and may prevent the runner from starting new tasks.

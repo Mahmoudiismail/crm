@@ -34,6 +34,7 @@ struct ExecutionPolicy {
     crm_executable_path: String,
     allow_shell_tasks: bool,
     shell_timeout_seconds: u64,
+    post_run_timeout_seconds: u64,
     min_task_interval_seconds: u64,
 }
 
@@ -371,7 +372,8 @@ fn policy_from_config(cfg: &RunnerConfig) -> ExecutionPolicy {
         crm_config_path: cfg.crm_config_path.clone(),
         crm_executable_path: cfg.crm_executable_path.clone(),
         allow_shell_tasks: cfg.allow_shell_tasks,
-        shell_timeout_seconds: cfg.shell_timeout_seconds.max(1),
+        shell_timeout_seconds: cfg.shell_timeout_seconds,
+        post_run_timeout_seconds: cfg.post_run_timeout_seconds,
         min_task_interval_seconds: cfg.min_task_interval_seconds.max(1),
     }
 }
@@ -423,7 +425,8 @@ async fn run_task(
     match result {
         Ok(_) => {
             if !task.post_run_script.trim().is_empty() {
-                match run_post_run_script(&task.post_run_script, policy.shell_timeout_seconds).await
+                match run_post_run_script(&task.post_run_script, policy.post_run_timeout_seconds)
+                    .await
                 {
                     Ok(_) => task.last_status = "ok".to_string(),
                     Err(e) => {
@@ -586,17 +589,18 @@ async fn run_post_run_script(script_path: &str, timeout_seconds: u64) -> Result<
         _ => tokio::process::Command::new(script_path),
     };
 
-    let output = tokio::time::timeout(
-        Duration::from_secs(timeout_seconds.max(1)),
-        command.output(),
-    )
-    .await
-    .with_context(|| {
-        format!(
-            "post-run script timed out after {}s: {}",
-            timeout_seconds, script_path
-        )
-    })??;
+    let output = if timeout_seconds == 0 {
+        command.output().await?
+    } else {
+        tokio::time::timeout(Duration::from_secs(timeout_seconds), command.output())
+            .await
+            .with_context(|| {
+                format!(
+                    "post-run script timed out after {}s: {}",
+                    timeout_seconds, script_path
+                )
+            })??
+    };
 
     if !output.status.success() {
         let stdout_excerpt = excerpt_utf8(&output.stdout);
@@ -613,20 +617,21 @@ async fn run_post_run_script(script_path: &str, timeout_seconds: u64) -> Result<
 }
 
 async fn run_shell_command(command: &str, shell_timeout_seconds: u64) -> Result<()> {
-    let output = tokio::time::timeout(
-        Duration::from_secs(shell_timeout_seconds.max(1)),
-        tokio::process::Command::new("bash")
-            .arg("-lc")
-            .arg(command)
-            .output(),
-    )
-    .await
-    .with_context(|| {
-        format!(
-            "Command timed out after {}s: {}",
-            shell_timeout_seconds, command
-        )
-    })??;
+    let mut cmd = tokio::process::Command::new("bash");
+    cmd.arg("-lc").arg(command);
+
+    let output = if shell_timeout_seconds == 0 {
+        cmd.output().await?
+    } else {
+        tokio::time::timeout(Duration::from_secs(shell_timeout_seconds), cmd.output())
+            .await
+            .with_context(|| {
+                format!(
+                    "Command timed out after {}s: {}",
+                    shell_timeout_seconds, command
+                )
+            })??
+    };
 
     if !output.status.success() {
         return Err(anyhow::anyhow!(
@@ -784,6 +789,7 @@ fn advance_schedule(
 async fn run_shell_sequential(
     commands: &[ShellCommandSpec],
     shell_timeout_seconds: u64,
+    post_run_timeout_seconds: u64,
 ) -> Result<()> {
     for spec in commands {
         if let Err(e) = run_shell_command(&spec.command, shell_timeout_seconds).await {
@@ -798,6 +804,7 @@ async fn run_shell_sequential(
 async fn run_shell_parallel(
     commands: &[ShellCommandSpec],
     shell_timeout_seconds: u64,
+    post_run_timeout_seconds: u64,
 ) -> Result<()> {
     let handles = commands
         .iter()
