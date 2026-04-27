@@ -2,6 +2,19 @@
 
 ## Logs
 
+### Per-Task Detailed Logging
+
+In addition to the main `runner.log`, the runner now creates detailed log files for each individual task execution:
+- **Location**: `<exe_dir>/logs/<task_name>/`
+- **File Name**: `YYYYMMDD_HHMMSS_<task_name>_<task_id>.log`
+- **Contents**:
+  - Execution metadata (Task ID, Name, Start Time).
+  - All standard output (STDOUT) and error output (STDERR) from the task command and any post-run scripts.
+  - Final execution status.
+
+These logs are invaluable for debugging script failures or inspecting the exact output of CRM fetch commands.
+
+
 - Primary runner log file: `<exe_dir>/runner.log`
 - Primary crm one-shot log file: `<exe_dir>/crm.log`
 - Stdout logs at INFO level.

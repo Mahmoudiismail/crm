@@ -1,3 +1,4 @@
+use std::io::Write;
 use std::fs;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
@@ -5,7 +6,7 @@ use std::time::{Duration, SystemTime};
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use tokio::sync::{mpsc, Mutex};
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 use super::config::{
     next_daily_run_after, next_monthly_run_after, parse_rfc3339_utc, Repetition, ReportType,
@@ -28,8 +29,88 @@ pub struct RunnerStatus {
     pub last_run_at: String,
 }
 
-#[derive(Debug, Clone)]
-struct ExecutionPolicy {
+#[derive(Clone)]
+struct TaskLogger {
+    inner: Arc<Mutex<TaskLoggerInner>>,
+    task_id: String,
+}
+
+impl TaskLogger {
+    fn new(task_id: &str, task_name: &str) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(TaskLoggerInner::new(task_id, task_name))),
+            task_id: task_id.to_string(),
+        }
+    }
+
+    async fn log(&self, message: &str) {
+        let mut inner = self.inner.lock().await;
+        inner.log(message);
+    }
+
+    async fn log_bytes(&self, prefix: &str, bytes: &[u8]) {
+        let mut inner = self.inner.lock().await;
+        inner.log_bytes(prefix, bytes);
+    }
+}
+struct TaskLoggerInner {
+    file: Option<fs::File>,
+    task_id: String,
+}
+
+impl TaskLoggerInner {
+    fn new(task_id: &str, task_name: &str) -> Self {
+        let now = Utc::now();
+        let timestamp = now.format("%Y%m%d_%H%M%S").to_string();
+        let safe_task_name = task_name.replace(|c: char| !c.is_alphanumeric(), "_");
+        let filename = format!("{}_{}_{}.log", timestamp, safe_task_name, task_id);
+
+        let log_dir = match std::env::current_exe() {
+            Ok(exe) => exe.parent().map(|p| p.join("logs").join(&safe_task_name)).unwrap_or_else(|| std::path::PathBuf::from("logs").join(&safe_task_name)),
+            Err(_) => std::path::PathBuf::from("logs").join(&safe_task_name),
+        };
+
+        if let Err(e) = fs::create_dir_all(&log_dir) {
+            error!("Failed to create log directory {}: {}", log_dir.display(), e);
+            return Self { file: None, task_id: task_id.to_string() };
+        }
+
+        let log_path = log_dir.join(filename);
+        match fs::File::create(&log_path) {
+            Ok(file) => {
+                let mut logger = Self { file: Some(file), task_id: task_id.to_string() };
+                logger.log(&format!("Task ID: {}", task_id));
+                logger.log(&format!("Task Name: {}", task_name));
+                logger.log(&format!("Start Time: {}", now.to_rfc3339()));
+                logger.log("--------------------------------------------------");
+                logger
+            },
+            Err(e) => {
+                error!("Failed to create log file {}: {}", log_path.display(), e);
+                Self { file: None, task_id: task_id.to_string() }
+            }
+        }
+    }
+
+    fn log(&mut self, message: &str) {
+        let now = Utc::now().to_rfc3339();
+        let line = format!("[{}] {}\n", now, message);
+        if let Some(ref mut f) = self.file {
+            let _ = f.write_all(line.as_bytes());
+            let _ = f.flush();
+        }
+        debug!("[{}] {}", self.task_id, message);
+    }
+
+    fn log_bytes(&mut self, prefix: &str, bytes: &[u8]) {
+        if bytes.is_empty() { return; }
+        let text = String::from_utf8_lossy(bytes);
+        for line in text.lines() {
+            self.log(&format!("{}: {}", prefix, line));
+        }
+    }
+}
+\nstruct ExecutionPolicy {
     crm_config_path: String,
     crm_executable_path: String,
     allow_shell_tasks: bool,
@@ -45,7 +126,7 @@ pub struct RunnerHandle {
     pub runner_config_path: String,
 }
 
-pub fn start_scheduler(runner_config_path: String) -> RunnerHandle {
+pub fn start_scheduler(runner_config_path: String) -> RunnerHandle {\n    info!("Starting scheduler with config: {}", runner_config_path);
     let (tx, mut rx) = mpsc::channel::<RunnerCommand>(64);
     let status = Arc::new(Mutex::new(RunnerStatus {
         currently_running: false,
@@ -383,6 +464,9 @@ async fn run_task(
     policy: &ExecutionPolicy,
     status: &Arc<Mutex<RunnerStatus>>,
 ) {
+    let logger = TaskLogger::new(&task.id, &task.name);
+    logger.log("Initializing task execution...").await;
+
     {
         let mut st = status.lock().await;
         if st.currently_running {
@@ -396,7 +480,7 @@ async fn run_task(
 
     let result = match &task.kind {
         TaskKind::CrmFetch { report } => {
-            run_crm_command(
+            run_crm_command(&logger,
                 &policy.crm_executable_path,
                 &policy.crm_config_path,
                 *report,
@@ -412,10 +496,10 @@ async fn run_task(
             } else {
                 match mode {
                     ShellCommandMode::Sequential => {
-                        run_shell_sequential(commands, policy.shell_timeout_seconds).await
+                        run_shell_sequential(&logger, commands, policy.shell_timeout_seconds).await
                     }
                     ShellCommandMode::Parallel => {
-                        run_shell_parallel(commands, policy.shell_timeout_seconds).await
+                        run_shell_parallel(&logger, commands, policy.shell_timeout_seconds).await
                     }
                 }
             }
@@ -425,7 +509,7 @@ async fn run_task(
     match result {
         Ok(_) => {
             if !task.post_run_script.trim().is_empty() {
-                match run_post_run_script(&task.post_run_script, policy.post_run_timeout_seconds)
+                match run_post_run_script(&logger, &task.post_run_script, policy.post_run_timeout_seconds)
                     .await
                 {
                     Ok(_) => task.last_status = "ok".to_string(),
@@ -436,10 +520,12 @@ async fn run_task(
                     }
                 }
             } else {
+                logger.log("Task completed successfully.").await;
                 task.last_status = "ok".to_string();
             }
         }
         Err(e) => {
+            logger.log(&format!("Task failed with error: {}", e)).await;
             task.last_status = format!("error: {}", e);
             let mut st = status.lock().await;
             st.last_error = format!("{}", e);
@@ -451,7 +537,7 @@ async fn run_task(
     st.currently_running = false;
 }
 
-async fn run_crm_command(
+async fn run_crm_command(logger: &TaskLogger, &logger,
     executable_path: &str,
     config_path: &str,
     report: ReportType,
@@ -463,6 +549,7 @@ async fn run_crm_command(
     let mut command = tokio::process::Command::new(&resolved_executable);
     command.arg("--config").arg(&resolved_config_path);
     command.arg("--report").arg(report.as_arg());
+    logger.log(&format!("Executing CRM command: {:?}", command)).await;
 
     let output = tokio::time::timeout(
         Duration::from_secs(timeout_seconds.max(1)),
@@ -477,7 +564,8 @@ async fn run_crm_command(
         )
     })??;
 
-    if !output.status.success() {
+    logger.log_bytes("STDOUT", &output.stdout).await;
+    logger.log_bytes("STDERR", &output.stderr).await;\n    if !output.status.success() {
         let stdout_excerpt = excerpt_utf8(&output.stdout);
         let stderr_excerpt = excerpt_utf8(&output.stderr);
         return Err(anyhow::anyhow!(
@@ -559,7 +647,7 @@ fn excerpt_utf8(bytes: &[u8]) -> String {
     }
 }
 
-async fn run_post_run_script(script_path: &str, timeout_seconds: u64) -> Result<()> {
+async fn run_post_run_script(logger: &TaskLogger, script_path: &str, timeout_seconds: u64) -> Result<()> {
     let path = std::path::Path::new(script_path);
     let ext = path
         .extension()
@@ -588,6 +676,8 @@ async fn run_post_run_script(script_path: &str, timeout_seconds: u64) -> Result<
         }
         _ => tokio::process::Command::new(script_path),
     };
+    logger.log(&format!("Executing post-run script: {:?}", command)).await;
+    };
 
     let output = if timeout_seconds == 0 {
         command.output().await?
@@ -602,7 +692,8 @@ async fn run_post_run_script(script_path: &str, timeout_seconds: u64) -> Result<
             })??
     };
 
-    if !output.status.success() {
+    logger.log_bytes("STDOUT", &output.stdout).await;
+    logger.log_bytes("STDERR", &output.stderr).await;\n    if !output.status.success() {
         let stdout_excerpt = excerpt_utf8(&output.stdout);
         let stderr_excerpt = excerpt_utf8(&output.stderr);
         return Err(anyhow::anyhow!(
@@ -616,9 +707,10 @@ async fn run_post_run_script(script_path: &str, timeout_seconds: u64) -> Result<
     Ok(())
 }
 
-async fn run_shell_command(command: &str, shell_timeout_seconds: u64) -> Result<()> {
+async fn run_shell_command(logger: &TaskLogger, command: &str, shell_timeout_seconds: u64) -> Result<()> {
     let mut cmd = tokio::process::Command::new("bash");
     cmd.arg("-lc").arg(command);
+    logger.log(&format!("Executing shell command: {}", command)).await;
 
     let output = if shell_timeout_seconds == 0 {
         cmd.output().await?
@@ -633,7 +725,8 @@ async fn run_shell_command(command: &str, shell_timeout_seconds: u64) -> Result<
             })??
     };
 
-    if !output.status.success() {
+    logger.log_bytes("STDOUT", &output.stdout).await;
+    logger.log_bytes("STDERR", &output.stderr).await;\n    if !output.status.success() {
         return Err(anyhow::anyhow!(
             "Command failed ({}): {}",
             output.status,
@@ -786,13 +879,12 @@ fn advance_schedule(
     }
 }
 
-async fn run_shell_sequential(
+async fn run_shell_sequential(logger: &TaskLogger,
     commands: &[ShellCommandSpec],
     shell_timeout_seconds: u64,
-    post_run_timeout_seconds: u64,
 ) -> Result<()> {
     for spec in commands {
-        if let Err(e) = run_shell_command(&spec.command, shell_timeout_seconds).await {
+        if let Err(e) = run_shell_command(logger, &spec.command, shell_timeout_seconds).await {
             if !spec.continue_on_error {
                 return Err(anyhow::anyhow!("command failed: {}", e));
             }
@@ -802,16 +894,17 @@ async fn run_shell_sequential(
 }
 
 async fn run_shell_parallel(
+    logger: &TaskLogger,
     commands: &[ShellCommandSpec],
     shell_timeout_seconds: u64,
-    post_run_timeout_seconds: u64,
 ) -> Result<()> {
     let handles = commands
         .iter()
         .cloned()
         .map(|spec| {
+            let l = logger.clone();
             tokio::spawn(async move {
-                let result = run_shell_command(&spec.command, shell_timeout_seconds).await;
+                let result = run_shell_command(&l, &spec.command, shell_timeout_seconds).await;
                 (spec, result)
             })
         })
@@ -837,9 +930,7 @@ async fn run_shell_parallel(
             failures.join("; ")
         ))
     }
-}
-
-fn schedule_is_due(schedule: &TaskSchedule, now: DateTime<Utc>) -> bool {
+}\n\nfn schedule_is_due(schedule: &TaskSchedule, now: DateTime<Utc>) -> bool {
     if !schedule.enabled() {
         return false;
     }
@@ -966,7 +1057,7 @@ mod tests {
             },
         ];
 
-        run_shell_sequential(&commands, 5).await.unwrap();
+        run_shell_sequential(&TaskLogger::new("test", "test"), &commands, 5).await.unwrap();
     }
 
     #[tokio::test]
@@ -976,7 +1067,7 @@ mod tests {
             continue_on_error: false,
         }];
 
-        assert!(run_shell_sequential(&commands, 5).await.is_err());
+        assert!(run_shell_sequential(&TaskLogger::new("test", "test"), &commands, 5).await.is_err());
     }
 
     #[tokio::test]
@@ -985,12 +1076,12 @@ mod tests {
             command: "exit 8".to_string(),
             continue_on_error: true,
         }];
-        run_shell_parallel(&ignored, 5).await.unwrap();
+        run_shell_parallel(&TaskLogger::new("test", "test"), &ignored, 5).await.unwrap();
 
         let failed = vec![ShellCommandSpec {
             command: "exit 8".to_string(),
             continue_on_error: false,
         }];
-        assert!(run_shell_parallel(&failed, 5).await.is_err());
+        assert!(run_shell_parallel(&TaskLogger::new("test", "test"), &failed, 5).await.is_err());
     }
 }
