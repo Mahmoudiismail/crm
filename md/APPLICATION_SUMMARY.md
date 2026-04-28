@@ -80,7 +80,7 @@ CRM always performs login.
 
 ## Primary Outputs
 
-- `runner.log` for runner executable.
+- `runner.log` for runner executable.\n- `logs/<task_name>/YYYYMMDD_HHMMSS_<task_name>_<task_id>.log` for detailed per-task execution logs.
 - `crm.log` for crm executable.
 - `yasweblog` for yasweb executable containing network request events.
 - `Downloads/*.csv` in executable directory.

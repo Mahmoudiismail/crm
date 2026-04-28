@@ -197,7 +197,7 @@ fn setup_logging() -> Result<tracing_appender::non_blocking::WorkerGuard> {
         .with_writer(std::io::stdout)
         .with_target(false)
         .with_thread_ids(false)
-        .with_filter(LevelFilter::INFO);
+        .with_filter(LevelFilter::DEBUG);
 
     tracing_subscriber::registry()
         .with(file_layer)

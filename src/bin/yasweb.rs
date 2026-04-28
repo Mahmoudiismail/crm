@@ -370,10 +370,7 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                         if let Err(e) = menu_btn.click() {
                             error!("Failed to click #menuPinnedBtn: {:?}", e);
                             if let Ok(html) = tab.get_content() {
-                                error!(
-                                    "Page HTML after failed #menuPinnedBtn click:\n{}",
-                                    html
-                                );
+                                error!("Page HTML after failed #menuPinnedBtn click:\n{}", html);
                             }
                         } else {
                             info!("Successfully clicked #menuPinnedBtn (fallback native).");
@@ -383,10 +380,7 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                     Err(e) => {
                         error!("Failed to find #menuPinnedBtn for fallback click: {:?}", e);
                         if let Ok(html) = tab.get_content() {
-                            error!(
-                                "Page HTML at failure to find #menuPinnedBtn:\n{}",
-                                html
-                            );
+                            error!("Page HTML at failure to find #menuPinnedBtn:\n{}", html);
                         }
                     }
                 }
@@ -424,12 +418,12 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                 }
 
                 if !is_active {
-                    error!("#menuPinnedBtn did not become active after wait. Last status: {}", last_status);
+                    error!(
+                        "#menuPinnedBtn did not become active after wait. Last status: {}",
+                        last_status
+                    );
                     if let Ok(html) = tab.get_content() {
-                        error!(
-                            "Page HTML at menu active timeout:\n{}",
-                            html
-                        );
+                        error!("Page HTML at menu active timeout:\n{}", html);
                     }
                     std::thread::sleep(Duration::from_secs(60));
                     return Err(anyhow::anyhow!("Menu active state wait timeout"));
@@ -469,10 +463,7 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                         if let Err(e) = mis_module.click() {
                             error!("Failed to click MIS module: {:?}", e);
                             if let Ok(html) = tab.get_content() {
-                                error!(
-                                    "Page HTML after failed MIS module click:\n{}",
-                                    html
-                                );
+                                error!("Page HTML after failed MIS module click:\n{}", html);
                             }
                         } else {
                             info!("Clicked MIS successfully. Proceeding to report selection and search.");
@@ -483,7 +474,10 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                             // If a report_type is provided, find and click the corresponding radio button
                             // and then type the report_name in the search box.
                             if !config.report_type.is_empty() {
-                                info!("Selecting report type: {} and searching for: {}", config.report_type, config.report_name);
+                                info!(
+                                    "Selecting report type: {} and searching for: {}",
+                                    config.report_type, config.report_name
+                                );
 
                                 // The report UI is inside an iframe. We evaluate JS to find the radio button and search input.
                                 let js_eval = format!(
@@ -549,8 +543,12 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                                                     info!("Automation result: {}", val_str);
                                                     action_success = true;
                                                     break;
-                                                } else if val_str == "RADIO_CLICKED_BUT_SEARCH_NOT_FOUND" {
-                                                    info!("Radio clicked, waiting for search box...");
+                                                } else if val_str
+                                                    == "RADIO_CLICKED_BUT_SEARCH_NOT_FOUND"
+                                                {
+                                                    info!(
+                                                        "Radio clicked, waiting for search box..."
+                                                    );
                                                 }
                                             }
                                         }
@@ -628,7 +626,9 @@ async fn main() -> Result<()> {
             match arg.as_str() {
                 "--type" | "-t" => {
                     if i + 1 < args.len() {
-                        config.report_type = args[i + 1].trim_matches(|c| c == '"' || c == '\'').to_string();
+                        config.report_type = args[i + 1]
+                            .trim_matches(|c| c == '"' || c == '\'')
+                            .to_string();
                         config_updated = true;
                         i += 1;
                     } else {
@@ -638,7 +638,9 @@ async fn main() -> Result<()> {
                 }
                 "--name" | "-n" => {
                     if i + 1 < args.len() {
-                        config.report_name = args[i + 1].trim_matches(|c| c == '"' || c == '\'').to_string();
+                        config.report_name = args[i + 1]
+                            .trim_matches(|c| c == '"' || c == '\'')
+                            .to_string();
                         config_updated = true;
                         i += 1;
                     } else {
@@ -649,7 +651,9 @@ async fn main() -> Result<()> {
                 "--help" | "-h" => {
                     println!("Usage: yasweb [--type=\"Report Type\"] [--name=\"Report Name\"] [--headless]");
                     println!("  --type, -t   The type of report to select (e.g., \"Report Manager\" or \"Standard Report\")");
-                    println!("  --name, -n   The name of the report (required if type is provided)");
+                    println!(
+                        "  --name, -n   The name of the report (required if type is provided)"
+                    );
                     println!("  --headless   Run browser in headless mode");
                     std::process::exit(0);
                 }

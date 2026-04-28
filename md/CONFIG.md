@@ -20,7 +20,8 @@ Implementation: `src/runner/config.rs`
 - `crm_config_path`: path to CRM config file (default `config.json`)
 - `crm_executable_path`: crm executable file/path used by runner (default `crm.exe` on Windows, `crm` on non-Windows)
 - `allow_shell_tasks`: allow `shell_command` tasks (default `false`)
-- `shell_timeout_seconds`: max runtime per shell task (default `300`)
+- `shell_timeout_seconds`: max runtime per shell task (default `900`). A value of `0` means unlimited.
+- `post_run_timeout_seconds`: max runtime for post-run scripts (default `900`). A value of `0` means unlimited.
 - `min_task_interval_seconds`: clamp for repeat task minimum interval (default `5`)
 - `tasks`: list of runnable task definitions
 
@@ -119,7 +120,8 @@ Runner resolves relative `crm_config_path` and `crm_executable_path` from execut
   "crm_config_path": "config.json",
   "crm_executable_path": "crm",
   "allow_shell_tasks": false,
-  "shell_timeout_seconds": 300,
+  "shell_timeout_seconds": 900,
+  "post_run_timeout_seconds": 900,
   "min_task_interval_seconds": 5,
   "tasks": [
     {

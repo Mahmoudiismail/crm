@@ -18,6 +18,8 @@ pub struct RunnerConfig {
     pub allow_shell_tasks: bool,
     #[serde(default = "default_shell_timeout")]
     pub shell_timeout_seconds: u64,
+    #[serde(default = "default_post_run_timeout")]
+    pub post_run_timeout_seconds: u64,
     #[serde(default = "default_min_task_interval")]
     pub min_task_interval_seconds: u64,
     #[serde(default)]
@@ -189,6 +191,7 @@ impl Default for RunnerConfig {
             crm_executable_path: default_crm_executable_path(),
             allow_shell_tasks: default_allow_shell_tasks(),
             shell_timeout_seconds: default_shell_timeout(),
+            post_run_timeout_seconds: default_post_run_timeout(),
             min_task_interval_seconds: default_min_task_interval(),
             tasks: vec![RunnerTask {
                 id: "daily_all_reports".to_string(),
@@ -724,7 +727,11 @@ fn default_allow_shell_tasks() -> bool {
 }
 
 fn default_shell_timeout() -> u64 {
-    300
+    900
+}
+
+fn default_post_run_timeout() -> u64 {
+    900
 }
 
 fn default_min_task_interval() -> u64 {
