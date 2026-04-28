@@ -18,7 +18,7 @@ Behavior:
 2. URL-decode filename.
 3. Ensure `target_dir` exists.
 4. GET request with timeout and identity encoding.
-5. Stream bytes to file asynchronously.
+5. Stream bytes to file asynchronously using a `BufWriter` (128 KiB buffer) to reduce write syscalls on large downloads.
 6. Flush and return filename.
 
 ## HTTP Details
