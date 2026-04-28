@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use futures_util::StreamExt;
 use std::path::Path;
 use std::time::Duration;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncWriteExt, BufWriter};
 use tracing::{debug, info};
 
 /// Download a CSV file from a signed URL.
@@ -44,20 +44,21 @@ pub async fn download_csv(
     let content_length = resp.content_length();
     debug!("[{}] Content-Length: {:?}", report_key, content_length);
 
-    let mut file = tokio::fs::File::create(&dest_path)
+    let file = tokio::fs::File::create(&dest_path)
         .await
         .with_context(|| format!("Failed to create file: {:?}", dest_path))?;
+    let mut writer = BufWriter::with_capacity(128 * 1024, file);
 
     let mut stream = resp.bytes_stream();
     let mut downloaded: u64 = 0;
 
     while let Some(chunk) = stream.next().await {
         let chunk = chunk.with_context(|| format!("[{}] Error reading stream", report_key))?;
-        file.write_all(&chunk).await?;
+        writer.write_all(&chunk).await?;
         downloaded += chunk.len() as u64;
     }
 
-    file.flush().await?;
+    writer.flush().await?;
     info!(
         "[{}] Download complete: {} ({} bytes)",
         report_key, filename, downloaded
