@@ -155,3 +155,13 @@ You can configure the reporting automation by passing CLI arguments:
 
 You can also use short flags or request help:
 `cargo run --bin yasweb -- --help`
+
+## Linux Support
+
+The application is primarily targetted at Windows. On Linux:
+- UI components (`tray-icon`, `muda`, `winit`) are disabled.
+- The `runner` binary runs in a headless mode, which still handles the task scheduler and the GUI server.
+- To run the runner on Linux without UI libraries:
+  ```bash
+  cargo run --bin runner
+  ```

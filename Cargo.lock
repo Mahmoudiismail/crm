@@ -517,7 +517,6 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "futures-util",
- "gtk",
  "headless_chrome",
  "hex",
  "hmac",
