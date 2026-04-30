@@ -335,14 +335,18 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
             let js_click_menu = r#"
                 (function() {
                     try {
+                        var clicked = false;
+                        var btn = document.querySelector('#menuPinnedBtn');
+                        if (btn) {
+                            btn.click();
+                            clicked = true;
+                        }
                         var innerBtn = document.querySelector('#menuPinnedBtn > div.icon.font-icon.mod-triger > i.bi.bi-plus.second');
                         if (innerBtn) {
                             innerBtn.click();
-                            return "CLICKED";
+                            clicked = true;
                         }
-                        var btn = document.querySelector('#menuPinnedBtn');
-                        if (btn) { btn.click(); return "CLICKED"; }
-                        return "NOT_FOUND";
+                        return clicked ? "CLICKED" : "NOT_FOUND";
                     } catch (e) {
                         return "ERROR: " + e.message;
                     }
@@ -370,7 +374,11 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                         if let Err(e) = menu_btn.click() {
                             error!("Failed to click #menuPinnedBtn: {:?}", e);
                             if let Ok(html) = tab.get_content() {
-                                error!("Page HTML after failed #menuPinnedBtn click:\n{}", html);
+                                error!(
+                                    "Page HTML after failed #menuPinnedBtn click:
+{}",
+                                    html
+                                );
                             }
                         } else {
                             info!("Successfully clicked #menuPinnedBtn (fallback native).");
@@ -380,7 +388,11 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                     Err(e) => {
                         error!("Failed to find #menuPinnedBtn for fallback click: {:?}", e);
                         if let Ok(html) = tab.get_content() {
-                            error!("Page HTML at failure to find #menuPinnedBtn:\n{}", html);
+                            error!(
+                                "Page HTML at failure to find #menuPinnedBtn:
+{}",
+                                html
+                            );
                         }
                     }
                 }
@@ -390,15 +402,13 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                 // Wait for menuPinnedBtn to have 'active' class
                 info!("Waiting for #menuPinnedBtn to have 'active' class...");
                 let mut is_active = false;
-                let mut last_status = String::new();
                 let check_active_js = r#"
                     (function() {
                         var btn = document.querySelector('#menuPinnedBtn');
-                        if (!btn) return "NOT_FOUND";
-                        if (btn.classList.contains("active")) {
+                        if (btn && btn.classList.contains("active")) {
                             return "ACTIVE";
                         }
-                        return "CLASSES: " + btn.className;
+                        return "NOT_ACTIVE";
                     })();
                 "#;
 
@@ -410,7 +420,6 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                                     is_active = true;
                                     break;
                                 }
-                                last_status = val_str.to_string();
                             }
                         }
                     }
@@ -418,164 +427,229 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                 }
 
                 if !is_active {
-                    error!(
-                        "#menuPinnedBtn did not become active after wait. Last status: {}",
-                        last_status
-                    );
+                    error!("#menuPinnedBtn did not become active after wait.");
                     if let Ok(html) = tab.get_content() {
-                        error!("Page HTML at menu active timeout:\n{}", html);
+                        error!(
+                            "Page HTML at menu active timeout:
+{}",
+                            html
+                        );
                     }
                     std::thread::sleep(Duration::from_secs(60));
                     return Err(anyhow::anyhow!("Menu active state wait timeout"));
                 }
 
                 info!("Menu is active.");
+
+                // Keep structure same to close out match
+                // We fake the `match` structure to minimize changes required at the end of the block
             }
 
-            if !menu_clicked {
-                error!("Menu was not clicked");
-            } else {
-                // Wait for MIS module to appear
-                info!("Waiting for MIS module to appear in menu...");
-                std::thread::sleep(Duration::from_secs(2)); // Short delay
-                let mis_selector = ".menu-grid-item.misManagement";
-                let mut mis_found = false;
-                for _ in 0..10 {
-                    // Wait up to 20 seconds (10 * 2s)
-                    if let Ok(_) = tab.find_element(mis_selector) {
-                        mis_found = true;
-                        break;
-                    }
-                    std::thread::sleep(Duration::from_secs(2));
-                }
-                if !mis_found {
-                    error!("MIS module not found after wait.");
-                    if let Ok(html) = tab.get_content() {
-                        error!("Page HTML at MIS module wait timeout:\n{}", html);
-                    }
-
-                    std::thread::sleep(Duration::from_secs(60));
-                    return Err(anyhow::anyhow!("MIS module wait timeout"));
-                }
-                match tab.wait_for_element(mis_selector) {
-                    Ok(mis_module) => {
-                        info!("Clicking on MIS module...");
-                        if let Err(e) = mis_module.click() {
-                            error!("Failed to click MIS module: {:?}", e);
-                            if let Ok(html) = tab.get_content() {
-                                error!("Page HTML after failed MIS module click:\n{}", html);
+            // Re-creating the original match to not break the brace structure down below
+            match Ok::<(), ()>(()) {
+                Ok(_) => {
+                    if !menu_clicked {
+                        error!("Menu was not clicked");
+                    } else {
+                        // Wait for MIS module to appear
+                        info!("Waiting for MIS module to appear in menu...");
+                        std::thread::sleep(Duration::from_secs(2)); // Short delay
+                        let mis_selector = ".menu-grid-item.misManagement";
+                        let mut mis_found = false;
+                        for _ in 0..10 {
+                            // Wait up to 20 seconds (10 * 2s)
+                            if let Ok(_) = tab.find_element(mis_selector) {
+                                mis_found = true;
+                                break;
                             }
-                        } else {
-                            info!("Clicked MIS successfully. Proceeding to report selection and search.");
+                            std::thread::sleep(Duration::from_secs(2));
+                        }
+                        if !mis_found {
+                            error!("MIS module not found after wait.");
+                            if let Ok(html) = tab.get_content() {
+                                error!("Page HTML at MIS module wait timeout:\n{}", html);
+                            }
 
-                            // Wait for MIS module to stabilize
-                            std::thread::sleep(Duration::from_secs(5));
-
-                            // If a report_type is provided, find and click the corresponding radio button
-                            // and then type the report_name in the search box.
-                            if !config.report_type.is_empty() {
-                                info!(
-                                    "Selecting report type: {} and searching for: {}",
-                                    config.report_type, config.report_name
-                                );
-
-                                // The report UI is inside an iframe. We evaluate JS to find the radio button and search input.
-                                let js_eval = format!(
-                                    r#"
-                                    (function() {{
-                                        var iframes = document.querySelectorAll("iframe");
-                                        var targetType = "{}";
-                                        var targetName = "{}";
-
-                                        for (var i = 0; i < iframes.length; i++) {{
-                                            try {{
-                                                var doc = iframes[i].contentWindow.document;
-
-                                                // 1. Find and click the radio button for report type
-                                                var radioXpath = "//*[contains(text(), '" + targetType + "')]/ancestor-or-self::mat-radio-button";
-                                                var radioResult = doc.evaluate(radioXpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-                                                var radioNode = radioResult.singleNodeValue;
-
-                                                if (radioNode) {{
-                                                    radioNode.click();
-
-                                                    // 2. Find the search input #mat-input-0 and type the report name
-                                                    // We might need a small delay for the radio selection to register,
-                                                    // but let's try finding the input immediately first.
-                                                    var searchInput = doc.querySelector("#mat-input-0");
-                                                    if (searchInput) {{
-                                                        searchInput.value = targetName;
-                                                        // Trigger Angular input event
-                                                        searchInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
-
-                                                        // 3. Simulate Enter key press
-                                                        var enterEvent = new KeyboardEvent('keydown', {{
-                                                            key: 'Enter',
-                                                            code: 'Enter',
-                                                            keyCode: 13,
-                                                            which: 13,
-                                                            bubbles: true
-                                                        }});
-                                                        searchInput.dispatchEvent(enterEvent);
-
-                                                        return "SUCCESS: Clicked " + targetType + " and searched " + targetName;
-                                                    }} else {{
-                                                        return "RADIO_CLICKED_BUT_SEARCH_NOT_FOUND";
-                                                    }}
-                                                }}
-                                            }} catch (e) {{
-                                                // Ignore cross-origin frame errors or other exceptions
-                                            }}
-                                        }}
-                                        return "NOT_FOUND_IN_ANY_IFRAME";
-                                    }})();
-                                "#,
-                                    config.report_type,
-                                    config.report_name
-                                );
-
-                                let mut action_success = false;
-                                for _ in 0..15 {
-                                    if let Ok(eval_result) = tab.evaluate(&js_eval, true) {
-                                        if let Some(val) = eval_result.value {
-                                            if let Some(val_str) = val.as_str() {
-                                                if val_str.starts_with("SUCCESS") {
-                                                    info!("Automation result: {}", val_str);
-                                                    action_success = true;
-                                                    break;
-                                                } else if val_str
-                                                    == "RADIO_CLICKED_BUT_SEARCH_NOT_FOUND"
-                                                {
-                                                    info!(
-                                                        "Radio clicked, waiting for search box..."
-                                                    );
-                                                }
-                                            }
-                                        }
-                                    }
-                                    std::thread::sleep(Duration::from_secs(2));
-                                }
-
-                                if !action_success {
-                                    error!("Failed to complete report selection or search inside iframe.");
+                            std::thread::sleep(Duration::from_secs(60));
+                            return Err(anyhow::anyhow!("MIS module wait timeout"));
+                        }
+                        match tab.wait_for_element(mis_selector) {
+                            Ok(mis_module) => {
+                                info!("Clicking on MIS module...");
+                                if let Err(e) = mis_module.click() {
+                                    error!("Failed to click MIS module: {:?}", e);
                                     if let Ok(html) = tab.get_content() {
-                                        error!("Main Page HTML at failure:\n{}", html);
+                                        error!(
+                                            "Page HTML after failed MIS module click:\n{}",
+                                            html
+                                        );
                                     }
                                 } else {
-                                    // Wait a bit to let the search results load
-                                    std::thread::sleep(Duration::from_secs(5));
+                                    info!("Clicked MIS successfully. Waiting for MIS Reports button...");
+
+                                    let mut mis_reports_found = false;
+                                    let mis_reports_xpath = "//div[contains(@class, 'label') and contains(@class, 'fw-bold') and contains(text(), 'MIS Reports')]";
+
+                                    for _ in 0..10 {
+                                        // Wait up to 20 seconds (10 * 2s)
+                                        if let Ok(_) = tab.find_element_by_xpath(mis_reports_xpath)
+                                        {
+                                            mis_reports_found = true;
+                                            break;
+                                        }
+                                        std::thread::sleep(Duration::from_secs(2));
+                                    }
+
+                                    if !mis_reports_found {
+                                        error!("MIS Reports button not found after wait.");
+                                        if let Ok(html) = tab.get_content() {
+                                            error!(
+                                                "Page HTML at MIS Reports button wait timeout:\n{}",
+                                                html
+                                            );
+                                        }
+                                        std::thread::sleep(Duration::from_secs(60));
+                                        return Err(anyhow::anyhow!(
+                                            "MIS Reports button wait timeout"
+                                        ));
+                                    }
+
+                                    info!("MIS Reports button successfully verified. MIS module click was successful.");
+                                    println!("MIS Reports button successfully verified. MIS module click was successful.");
+                                    if let Ok(html) = tab.get_content() {
+                                        info!(
+                                            "Page HTML after MIS Reports verification:\n{}",
+                                            html
+                                        );
+                                    }
+
+                                    // If a report_type is provided, find and click the corresponding radio button
+                                    if !config.report_type.is_empty() {
+                                        info!("Selecting report type: {}", config.report_type);
+
+                                        // The report UI is inside an iframe. We must evaluate JS to find and click the radio button.
+                                        let js_eval = format!(
+                                            r#"
+                                            (function() {{
+                                                var iframes = document.querySelectorAll('iframe');
+                                                for (var i = 0; i < iframes.length; i++) {{
+                                                    try {{
+                                                        var doc = iframes[i].contentWindow.document;
+
+                                                        // Look for mat-radio-button containing the text
+                                                        var xpath = "//*[contains(text(), '{}')]/ancestor-or-self::mat-radio-button";
+                                                        var result = doc.evaluate(xpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                                                        var node = result.singleNodeValue;
+
+                                                        if (node) {{
+                                                            node.click();
+                                                            return "CLICKED_RADIO";
+                                                        }}
+
+                                                        // Fallback to finding label
+                                                        var fallbackXpath = "//label[contains(text(), '{}')]";
+                                                        var fallbackResult = doc.evaluate(fallbackXpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                                                        var fallbackNode = fallbackResult.singleNodeValue;
+
+                                                        if (fallbackNode) {{
+                                                            fallbackNode.click();
+                                                            return "CLICKED_LABEL";
+                                                        }}
+                                                    }} catch (e) {{
+                                                        // Ignore cross-origin frame errors or other exceptions
+                                                    }}
+                                                }}
+                                                return "NOT_FOUND";
+                                            }})();
+                                        "#,
+                                            config.report_type, config.report_type
+                                        );
+
+                                        let mut radio_found = false;
+                                        for _ in 0..10 {
+                                            if let Ok(eval_result) = tab.evaluate(&js_eval, true) {
+                                                if let Some(val) = eval_result.value {
+                                                    if let Some(val_str) = val.as_str() {
+                                                        if val_str == "CLICKED_RADIO"
+                                                            || val_str == "CLICKED_LABEL"
+                                                        {
+                                                            info!("Successfully clicked report type: {}", config.report_type);
+                                                            radio_found = true;
+                                                            break;
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            std::thread::sleep(Duration::from_secs(2));
+                                        }
+
+                                        if !radio_found {
+                                            error!("Failed to find or click report type '{}' inside iframe.", config.report_type);
+                                            if let Ok(html) = tab.get_content() {
+                                                error!("Main Page HTML at failure to click report type:\n{}", html);
+                                            }
+
+                                            // Optional: Try to dump iframe content for debugging
+                                            let dump_iframe_js = r#"
+                                            (function() {
+                                                var iframes = document.querySelectorAll('iframe');
+                                                if (iframes.length > 0) {
+                                                    try {
+                                                        return iframes[0].contentWindow.document.body.innerHTML;
+                                                    } catch (e) {
+                                                        return "IFRAME_ACCESS_ERROR: " + e.message;
+                                                    }
+                                                }
+                                                return "NO_IFRAMES_FOUND";
+                                            })();
+                                            "#;
+                                            if let Ok(iframe_eval) =
+                                                tab.evaluate(dump_iframe_js, true)
+                                            {
+                                                if let Some(iframe_val) = iframe_eval.value {
+                                                    if let Some(iframe_html) = iframe_val.as_str() {
+                                                        error!(
+                                                            "First IFrame HTML:\n{}",
+                                                            iframe_html
+                                                        );
+                                                    }
+                                                }
+                                            }
+                                        } else {
+                                            // Wait a bit to let the selection propagate
+                                            std::thread::sleep(Duration::from_secs(2));
+                                        }
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                error!("Failed to find MIS module: {:?}", e);
+                                if let Ok(html) = tab.get_content() {
+                                    error!("Page HTML at failure to find MIS module:\n{}", html);
                                 }
                             }
                         }
                     }
-                    Err(e) => {
-                        error!("Failed to find MIS module: {:?}", e);
-                        if let Ok(html) = tab.get_content() {
-                            error!("Page HTML at failure to find MIS module:\n{}", html);
-                        }
+                }
+                Err(e) => {
+                    error!("Failed to find #menuPinnedBtn: {:?}", e);
+                    if let Ok(html) = tab.get_content() {
+                        error!("Page HTML at failure to find #menuPinnedBtn:\n{}", html);
                     }
                 }
             }
+        }
+        Err(e) => {
+            error!(
+                "Failed to find username input, likely because page did not load: {:?}",
+                e
+            );
+            if let Ok(html) = tab.get_content() {
+                error!("Page HTML at failure to find username:\n{}", html);
+            }
+
+            std::thread::sleep(Duration::from_secs(60));
+            return Err(anyhow::anyhow!("Failed to find elements to login"));
         }
     }
 
@@ -600,82 +674,33 @@ async fn main() -> Result<()> {
     // Parse CLI arguments to override report_type and report_name
     // Usage: yasweb [--type "Report Type"] [--name "Report Name"]
     let args: Vec<String> = std::env::args().collect();
-    info!("CLI Arguments: {:?}", args);
     let mut config_updated = false;
 
     let mut i = 1;
     while i < args.len() {
-        let arg = &args[i];
-        if let Some((key, value)) = arg.split_once('=') {
-            match key {
-                "--type" | "-t" => {
-                    config.report_type = value.trim_matches(|c| c == '"' || c == '\'').to_string();
+        match args[i].as_str() {
+            "--type" => {
+                if i + 1 < args.len() {
+                    config.report_type = args[i + 1].clone();
                     config_updated = true;
-                }
-                "--name" | "-n" => {
-                    config.report_name = value.trim_matches(|c| c == '"' || c == '\'').to_string();
-                    config_updated = true;
-                }
-                _ => {
-                    if key.starts_with('-') {
-                        eprintln!("Warning: Unknown argument: {}", arg);
-                    }
+                    i += 1;
                 }
             }
-        } else {
-            match arg.as_str() {
-                "--type" | "-t" => {
-                    if i + 1 < args.len() {
-                        config.report_type = args[i + 1]
-                            .trim_matches(|c| c == '"' || c == '\'')
-                            .to_string();
-                        config_updated = true;
-                        i += 1;
-                    } else {
-                        eprintln!("Error: {} requires a value", arg);
-                        std::process::exit(1);
-                    }
-                }
-                "--name" | "-n" => {
-                    if i + 1 < args.len() {
-                        config.report_name = args[i + 1]
-                            .trim_matches(|c| c == '"' || c == '\'')
-                            .to_string();
-                        config_updated = true;
-                        i += 1;
-                    } else {
-                        eprintln!("Error: {} requires a value", arg);
-                        std::process::exit(1);
-                    }
-                }
-                "--help" | "-h" => {
-                    println!("Usage: yasweb [--type=\"Report Type\"] [--name=\"Report Name\"] [--headless]");
-                    println!("  --type, -t   The type of report to select (e.g., \"Report Manager\" or \"Standard Report\")");
-                    println!(
-                        "  --name, -n   The name of the report (required if type is provided)"
-                    );
-                    println!("  --headless   Run browser in headless mode");
-                    std::process::exit(0);
-                }
-                "--headless" => {
-                    config.headless = true;
+            "--name" => {
+                if i + 1 < args.len() {
+                    config.report_name = args[i + 1].clone();
                     config_updated = true;
-                }
-                _ => {
-                    if arg.starts_with('-') {
-                        eprintln!("Warning: Unknown argument: {}", arg);
-                    }
+                    i += 1;
                 }
             }
+            _ => {}
         }
         i += 1;
     }
 
     // Ensure the constraint: if report_type is provided, report_name must also be provided.
     if !config.report_type.is_empty() && config.report_name.is_empty() {
-        let err_msg = "Validation failed: report_type is provided but report_name is missing.";
-        error!("{}", err_msg);
-        eprintln!("{}", err_msg);
+        error!("Validation failed: report_type is provided but report_name is missing.");
         std::process::exit(1);
     }
 

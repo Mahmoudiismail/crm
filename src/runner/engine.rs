@@ -110,7 +110,7 @@ impl TaskLoggerInner {
         }
     }
 }
-\nstruct ExecutionPolicy {
+struct ExecutionPolicy {
     crm_config_path: String,
     crm_executable_path: String,
     allow_shell_tasks: bool,
@@ -126,7 +126,8 @@ pub struct RunnerHandle {
     pub runner_config_path: String,
 }
 
-pub fn start_scheduler(runner_config_path: String) -> RunnerHandle {\n    info!("Starting scheduler with config: {}", runner_config_path);
+pub fn start_scheduler(runner_config_path: String) -> RunnerHandle {
+    info!("Starting scheduler with config: {}", runner_config_path);
     let (tx, mut rx) = mpsc::channel::<RunnerCommand>(64);
     let status = Arc::new(Mutex::new(RunnerStatus {
         currently_running: false,
@@ -537,7 +538,7 @@ async fn run_task(
     st.currently_running = false;
 }
 
-async fn run_crm_command(logger: &TaskLogger, &logger,
+async fn run_crm_command(logger: &TaskLogger,
     executable_path: &str,
     config_path: &str,
     report: ReportType,
@@ -563,9 +564,9 @@ async fn run_crm_command(logger: &TaskLogger, &logger,
             resolved_executable.display()
         )
     })??;
-
     logger.log_bytes("STDOUT", &output.stdout).await;
-    logger.log_bytes("STDERR", &output.stderr).await;\n    if !output.status.success() {
+    logger.log_bytes("STDERR", &output.stderr).await;
+    if !output.status.success() {
         let stdout_excerpt = excerpt_utf8(&output.stdout);
         let stderr_excerpt = excerpt_utf8(&output.stderr);
         return Err(anyhow::anyhow!(
@@ -677,7 +678,6 @@ async fn run_post_run_script(logger: &TaskLogger, script_path: &str, timeout_sec
         _ => tokio::process::Command::new(script_path),
     };
     logger.log(&format!("Executing post-run script: {:?}", command)).await;
-    };
 
     let output = if timeout_seconds == 0 {
         command.output().await?
@@ -693,7 +693,8 @@ async fn run_post_run_script(logger: &TaskLogger, script_path: &str, timeout_sec
     };
 
     logger.log_bytes("STDOUT", &output.stdout).await;
-    logger.log_bytes("STDERR", &output.stderr).await;\n    if !output.status.success() {
+    logger.log_bytes("STDERR", &output.stderr).await;
+    if !output.status.success() {
         let stdout_excerpt = excerpt_utf8(&output.stdout);
         let stderr_excerpt = excerpt_utf8(&output.stderr);
         return Err(anyhow::anyhow!(
@@ -726,7 +727,8 @@ async fn run_shell_command(logger: &TaskLogger, command: &str, shell_timeout_sec
     };
 
     logger.log_bytes("STDOUT", &output.stdout).await;
-    logger.log_bytes("STDERR", &output.stderr).await;\n    if !output.status.success() {
+    logger.log_bytes("STDERR", &output.stderr).await;
+    if !output.status.success() {
         return Err(anyhow::anyhow!(
             "Command failed ({}): {}",
             output.status,
@@ -930,7 +932,9 @@ async fn run_shell_parallel(
             failures.join("; ")
         ))
     }
-}\n\nfn schedule_is_due(schedule: &TaskSchedule, now: DateTime<Utc>) -> bool {
+}
+
+fn schedule_is_due(schedule: &TaskSchedule, now: DateTime<Utc>) -> bool {
     if !schedule.enabled() {
         return false;
     }

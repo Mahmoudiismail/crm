@@ -4,16 +4,22 @@ use anyhow::{Context, Result};
 use crm_tool::runner::config::{ReportType, RunnerConfig};
 use crm_tool::runner::engine::{start_scheduler, RunnerCommand, RunnerHandle};
 use crm_tool::runner::gui::start_gui_server;
+#[cfg(target_os = "windows")]
 use muda::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tracing::{error, info};
 use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Layer};
+#[cfg(target_os = "windows")]
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
+#[cfg(target_os = "windows")]
 use winit::application::ApplicationHandler;
+#[cfg(target_os = "windows")]
 use winit::event::WindowEvent;
+#[cfg(target_os = "windows")]
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
+#[cfg(target_os = "windows")]
 use winit::window::WindowId;
 
 #[tokio::main]
@@ -55,11 +61,9 @@ async fn main() -> Result<()> {
         });
     }
 
-    #[cfg(target_os = "linux")]
-    if let Err(e) = gtk::init() {
-        error!("Failed to initialize GTK: {}", e);
-    }
+#[cfg(target_os = "windows")]
     let event_loop = EventLoop::new()?;
+#[cfg(target_os = "windows")]
     let mut app = App {
         tray_icon: None,
         menu_items: None,
@@ -67,10 +71,17 @@ async fn main() -> Result<()> {
         runner_gui_url: format!("http://{}:{}", runner_cfg.gui_host, runner_cfg.gui_port),
     };
 
+#[cfg(target_os = "windows")]
     event_loop.run_app(&mut app)?;
+#[cfg(not(target_os = "windows"))]
+    {
+        info!("Headless mode: scheduler and GUI server are running.");
+        loop { tokio::time::sleep(std::time::Duration::from_secs(3600)).await; }
+    }
     Ok(())
 }
 
+#[cfg(target_os = "windows")]
 struct App {
     tray_icon: Option<TrayIcon>,
     menu_items: Option<(
@@ -84,6 +95,7 @@ struct App {
     runner_gui_url: String,
 }
 
+#[cfg(target_os = "windows")]
 impl ApplicationHandler for App {
     fn resumed(&mut self, _event_loop: &ActiveEventLoop) {
         if self.tray_icon.is_some() {
@@ -173,6 +185,7 @@ impl ApplicationHandler for App {
     }
 }
 
+#[cfg(target_os = "windows")]
 fn load_icon() -> Icon {
     let width = 32;
     let height = 32;
