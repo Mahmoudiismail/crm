@@ -85,7 +85,7 @@ Dependencies are maintained at latest stable versions. Current pinned versions (
 - `tray-icon` 0.22 — system tray
 - `winit` 0.30.12 — windowing (for tray integration)
 
-See `Cargo.toml` for the complete dependency list.
+See `Cargo.toml` for the complete dependency list and [DEPENDENCY_AUDIT.md](DEPENDENCY_AUDIT.md) for a detailed reputation and trust report.
 
 ## Devcontainer Workspace
 

@@ -20,6 +20,7 @@ All AI coding agents must read repository-root `AGENTS.md` before making changes
 10. `DOCKER.md`
 11. `OPERATIONS.md`
 12. `AI_DOC_POLICY.md`
+13. `DEPENDENCY_AUDIT.md`
 
 ## Documentation Rules
 
