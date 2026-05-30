@@ -1,0 +1,73 @@
+name: Release Binaries
+
+on:
+  workflow_dispatch:
+    inputs:
+      binary:
+        description: 'Binary to release (crm, runner, or yasweb)'
+        required: true
+        default: 'crm'
+        type: choice
+        options:
+          - crm
+          - runner
+          - yasweb
+          - all
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and Publish Release
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        binary: ${{ fromJson(github.event.inputs.binary == 'all' ? '["crm", "runner", "yasweb"]' : format('[\"{}\")', github.event.inputs.binary)) }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache cargo artifacts
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: shared-cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            shared-cargo-${{ runner.os }}-
+
+      - name: Get version
+        shell: bash
+        run: |
+          VERSION=$(grep '^version =' Cargo.toml | head -n 1 | awk -F '"' '{print $2}')
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Build binary
+        run: cargo build --release --bin ${{ matrix.binary }}
+
+      - name: Prepare artifact zip
+        shell: pwsh
+        run: Compress-Archive -Path target/release/${{ matrix.binary }}.exe -DestinationPath ${{ matrix.binary }}_windows.zip
+
+      - name: Create or update GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: v${{ env.VERSION }}-${{ matrix.binary }}
+          name: Release v${{ env.VERSION }} (${{ matrix.binary }})
+          draft: false
+          prerelease: false
+          files: ${{ matrix.binary }}_windows.zip
+          overwrite_files: true
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
