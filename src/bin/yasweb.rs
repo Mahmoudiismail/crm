@@ -678,20 +678,17 @@ async fn main() -> Result<()> {
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
-            "--type" => {
-                if i + 1 < args.len() {
-                    config.report_type = args[i + 1].clone();
-                    config_updated = true;
-                    i += 1;
-                }
+            "--type" if i + 1 < args.len() => {
+                config.report_type = args[i + 1].clone();
+                config_updated = true;
+                i += 1;
             }
-            "--name" => {
-                if i + 1 < args.len() {
-                    config.report_name = args[i + 1].clone();
-                    config_updated = true;
-                    i += 1;
-                }
+            "--name" if i + 1 < args.len() => {
+                config.report_name = args[i + 1].clone();
+                config_updated = true;
+                i += 1;
             }
+            "--type" | "--name" => {}
             _ => {}
         }
         i += 1;
