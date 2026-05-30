@@ -16,18 +16,18 @@ path = "src/bin/crm.rs"
 
 [dependencies]
 # Async runtime — only the features we actually use
-tokio = { version = "1.52.0", default-features = false, features = ["rt-multi-thread", "macros", "fs", "io-util", "time", "sync", "net", "process"] }
+tokio = { version = "1.52.3", default-features = false, features = ["rt-multi-thread", "macros", "fs", "io-util", "time", "sync", "net", "process"] }
 # HTTP client — rustls for Windows TLS, streaming for CSV download
-reqwest = { version = "0.13.2", default-features = false, features = ["json", "stream", "rustls", "query"] }
+reqwest = { version = "0.13.4", default-features = false, features = ["json", "stream", "rustls", "query"] }
 # Serialization
 serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.149"
+serde_json = "1.0.150"
 # Error handling
 anyhow = "1.0.102"
 # Logging — minimal features
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt", "registry", "smallvec"] }
-tracing-appender = "0.2.4"
+tracing-appender = "0.2.5"
 # Date/time
 chrono = { version = "0.4.44", default-features = false, features = ["clock", "serde", "std"] }
 # Async utilities — only what we use (StreamExt, join_all)
@@ -35,15 +35,15 @@ futures-util = { version = "0.3.32", default-features = false, features = ["allo
 # SRP big integer math
 num-bigint = "0.4.6"
 # Cryptography
-sha2 = "0.11"
-hmac = "0.13"
+sha2 = "0.11.0"
+hmac = "0.13.0"
 hex = { version = "0.4.3", default-features = false, features = ["std"] }
 rand = "0.10.1"
 base64 = { version = "0.22.1", default-features = false, features = ["std"] }
 # URL decoding for CSV filenames
 urlencoding = "2.1.3"
 chrono-tz = "0.10.4"
-open = "5.3.3"
+open = "5.3.5"
 headless_chrome = "1.0.21"
 
 
@@ -61,6 +61,6 @@ name = "yasweb"
 path = "src/bin/yasweb.rs"
 
 [target.'cfg(target_os = "windows")'.dependencies]
-tray-icon = "0.22"
-muda = "0.17.2"
-winit = "0.30.12"
+tray-icon = "0.24.0"
+muda = "0.19.2"
+winit = "0.30.13"

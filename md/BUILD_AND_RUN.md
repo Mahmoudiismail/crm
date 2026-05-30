@@ -76,14 +76,14 @@ This approach provides reliability and simplicity without external job queue inf
 
 Dependencies are maintained at latest stable versions. Current pinned versions (as of April 2026):
 
-- `tokio` 1.52.0 — async runtime (includes time, sync modules for scheduler polling)
-- `reqwest` 0.13.2 — HTTP client with rustls
-- `serde` / `serde_json` 1.0.228 / 1.0.149 — serialization
+- `tokio` 1.52.3 — async runtime (includes time, sync modules for scheduler polling)
+- `reqwest` 0.13.4 — HTTP client with rustls
+- `serde` / `serde_json` 1.0.228 / 1.0.150 — serialization
 - `chrono` / `chrono-tz` 0.4.44 / 0.10.4 — date/time and cron-based schedule calculations
 - `tracing` / `tracing-subscriber` 0.1.44 / 0.3.23 — logging
 - `hmac` / `sha2` / `hex` / `base64` / `rand` — cryptography
-- `tray-icon` 0.22 — system tray
-- `winit` 0.30.12 — windowing (for tray integration)
+- `tray-icon` 0.24.0 — system tray
+- `winit` 0.30.13 — windowing (for tray integration)
 
 See `Cargo.toml` for the complete dependency list.
 
