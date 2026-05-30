@@ -173,7 +173,7 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
     let mut username_found = false;
     for _ in 0..6 {
         // 6 * 5 = 30 seconds max wait
-        if let Ok(_) = tab.wait_for_element(username_selector) {
+        if tab.wait_for_element(username_selector).is_ok() {
             username_found = true;
             break;
         }
@@ -315,7 +315,7 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
             let mut menu_found = false;
             for _ in 0..10 {
                 // Wait up to 20 seconds (10 * 2s)
-                if let Ok(_) = tab.find_element("#menuPinnedBtn") {
+                if tab.find_element("#menuPinnedBtn").is_ok() {
                     menu_found = true;
                     break;
                 }
@@ -458,7 +458,7 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                         let mut mis_found = false;
                         for _ in 0..10 {
                             // Wait up to 20 seconds (10 * 2s)
-                            if let Ok(_) = tab.find_element(mis_selector) {
+                            if tab.find_element(mis_selector).is_ok() {
                                 mis_found = true;
                                 break;
                             }
@@ -492,7 +492,7 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
 
                                     for _ in 0..10 {
                                         // Wait up to 20 seconds (10 * 2s)
-                                        if let Ok(_) = tab.find_element_by_xpath(mis_reports_xpath)
+                                        if tab.find_element_by_xpath(mis_reports_xpath).is_ok()
                                         {
                                             mis_reports_found = true;
                                             break;

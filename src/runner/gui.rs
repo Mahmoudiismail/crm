@@ -310,7 +310,7 @@ fn render_dashboard(
         .join("");
 
     let toast_html = toast
-        .map(|message| render_toast(message))
+        .map(render_toast)
         .unwrap_or_default();
 
     html_page(
@@ -1239,11 +1239,11 @@ fn parse_duration_token(token: &str) -> Result<u64> {
 }
 
 fn compact_duration(seconds: u64) -> String {
-    if seconds % 86_400 == 0 {
+    if seconds.is_multiple_of(86_400) {
         format!("{}d", seconds / 86_400)
-    } else if seconds % 3_600 == 0 {
+    } else if seconds.is_multiple_of(3_600) {
         format!("{}h", seconds / 3_600)
-    } else if seconds % 60 == 0 {
+    } else if seconds.is_multiple_of(60) {
         format!("{}m", seconds / 60)
     } else {
         format!("{}s", seconds)
