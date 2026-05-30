@@ -492,8 +492,7 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
 
                                     for _ in 0..10 {
                                         // Wait up to 20 seconds (10 * 2s)
-                                        if tab.find_element_by_xpath(mis_reports_xpath).is_ok()
-                                        {
+                                        if tab.find_element_by_xpath(mis_reports_xpath).is_ok() {
                                             mis_reports_found = true;
                                             break;
                                         }

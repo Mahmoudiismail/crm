@@ -169,7 +169,6 @@ impl ReportType {
     }
 }
 
-
 impl Default for TaskKind {
     fn default() -> Self {
         Self::CrmFetch {
