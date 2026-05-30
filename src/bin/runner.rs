@@ -1,14 +1,13 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 use anyhow::{Context, Result};
-use crm_tool::runner::config::{ReportType, RunnerConfig};
-use crm_tool::runner::engine::{start_scheduler, RunnerCommand, RunnerHandle};
+use crm_tool::runner::config::RunnerConfig;
+use crm_tool::runner::engine::{start_scheduler, RunnerCommand};
 use crm_tool::runner::gui::start_gui_server;
 #[cfg(target_os = "windows")]
 use muda::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use std::path::{Path, PathBuf};
-use std::time::Duration;
-use tracing::{error, info};
+use tracing::info;
 use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Layer};
 #[cfg(target_os = "windows")]
@@ -61,9 +60,9 @@ async fn main() -> Result<()> {
         });
     }
 
-#[cfg(target_os = "windows")]
+    #[cfg(target_os = "windows")]
     let event_loop = EventLoop::new()?;
-#[cfg(target_os = "windows")]
+    #[cfg(target_os = "windows")]
     let mut app = App {
         tray_icon: None,
         menu_items: None,
@@ -71,14 +70,18 @@ async fn main() -> Result<()> {
         runner_gui_url: format!("http://{}:{}", runner_cfg.gui_host, runner_cfg.gui_port),
     };
 
-#[cfg(target_os = "windows")]
-    event_loop.run_app(&mut app)?;
-#[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "windows")]
+    {
+        event_loop.run_app(&mut app)?;
+        Ok(())
+    }
+    #[cfg(not(target_os = "windows"))]
     {
         info!("Headless mode: scheduler and GUI server are running.");
-        loop { tokio::time::sleep(std::time::Duration::from_secs(3600)).await; }
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
+        }
     }
-    Ok(())
 }
 
 #[cfg(target_os = "windows")]

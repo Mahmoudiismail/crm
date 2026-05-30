@@ -147,7 +147,9 @@ pub enum ShellCommandMode {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum ReportType {
+    #[default]
     All,
     Tickets,
     Calls,
@@ -167,11 +169,6 @@ impl ReportType {
     }
 }
 
-impl Default for ReportType {
-    fn default() -> Self {
-        Self::All
-    }
-}
 
 impl Default for TaskKind {
     fn default() -> Self {
