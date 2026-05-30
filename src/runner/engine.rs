@@ -32,14 +32,12 @@ pub struct RunnerStatus {
 #[derive(Clone)]
 struct TaskLogger {
     inner: Arc<Mutex<TaskLoggerInner>>,
-    task_id: String,
 }
 
 impl TaskLogger {
     fn new(task_id: &str, task_name: &str) -> Self {
         Self {
             inner: Arc::new(Mutex::new(TaskLoggerInner::new(task_id, task_name))),
-            task_id: task_id.to_string(),
         }
     }
 
@@ -709,8 +707,20 @@ async fn run_post_run_script(logger: &TaskLogger, script_path: &str, timeout_sec
 }
 
 async fn run_shell_command(logger: &TaskLogger, command: &str, shell_timeout_seconds: u64) -> Result<()> {
-    let mut cmd = tokio::process::Command::new("bash");
-    cmd.arg("-lc").arg(command);
+    #[cfg(target_os = "windows")]
+    let mut cmd = {
+        let mut c = tokio::process::Command::new("cmd.exe");
+        c.arg("/c").arg(command);
+        c
+    };
+
+    #[cfg(not(target_os = "windows"))]
+    let mut cmd = {
+        let mut c = tokio::process::Command::new("bash");
+        c.arg("-lc").arg(command);
+        c
+    };
+
     logger.log(&format!("Executing shell command: {}", command)).await;
 
     let output = if shell_timeout_seconds == 0 {
