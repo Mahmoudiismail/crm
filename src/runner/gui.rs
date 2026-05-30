@@ -309,9 +309,7 @@ fn render_dashboard(
         .collect::<Vec<_>>()
         .join("");
 
-    let toast_html = toast
-        .map(render_toast)
-        .unwrap_or_default();
+    let toast_html = toast.map(render_toast).unwrap_or_default();
 
     html_page(
         "Runner GUI",

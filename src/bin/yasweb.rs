@@ -492,8 +492,7 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
 
                                     for _ in 0..10 {
                                         // Wait up to 20 seconds (10 * 2s)
-                                        if tab.find_element_by_xpath(mis_reports_xpath).is_ok()
-                                        {
+                                        if tab.find_element_by_xpath(mis_reports_xpath).is_ok() {
                                             mis_reports_found = true;
                                             break;
                                         }
@@ -679,20 +678,17 @@ async fn main() -> Result<()> {
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
-            "--type" => {
-                if i + 1 < args.len() {
-                    config.report_type = args[i + 1].clone();
-                    config_updated = true;
-                    i += 1;
-                }
+            "--type" if i + 1 < args.len() => {
+                config.report_type = args[i + 1].clone();
+                config_updated = true;
+                i += 1;
             }
-            "--name" => {
-                if i + 1 < args.len() {
-                    config.report_name = args[i + 1].clone();
-                    config_updated = true;
-                    i += 1;
-                }
+            "--name" if i + 1 < args.len() => {
+                config.report_name = args[i + 1].clone();
+                config_updated = true;
+                i += 1;
             }
+            "--type" | "--name" => {}
             _ => {}
         }
         i += 1;
