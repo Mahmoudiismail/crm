@@ -4,9 +4,9 @@ use anyhow::{Context, Result};
 #[cfg(target_os = "windows")]
 use crm_tool::runner::config::ReportType;
 use crm_tool::runner::config::RunnerConfig;
-use crm_tool::runner::engine::{start_scheduler, RunnerCommand};
 #[cfg(target_os = "windows")]
 use crm_tool::runner::engine::RunnerHandle;
+use crm_tool::runner::engine::{start_scheduler, RunnerCommand};
 use crm_tool::runner::gui::start_gui_server;
 #[cfg(target_os = "windows")]
 use muda::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem};
