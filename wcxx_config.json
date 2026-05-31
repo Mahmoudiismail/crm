@@ -1,5 +1,5 @@
 {
   "base_url": "https://api.wxcc-us1.cisco.com/v1",
-  "org_id": "",
-  "token": "YOUR_BEARER_TOKEN_HERE"
+  "org_id": "ab9e3569-50cf-472a-8c72-da962103ec5f",
+  "token": "OTU5NTQxNjktODA0Zi00ODIzLTg0Y2EtNjExY2YyODY2MDRmZDJmOGQ2M2QtMmE5_PA71_ab9e3569-50cf-472a-8c72-da962103ec5f"
 }
