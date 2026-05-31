@@ -60,6 +60,10 @@ overflow-checks = false
 name = "yasweb"
 path = "src/bin/yasweb.rs"
 
+[[bin]]
+name = "wcxx"
+path = "src/bin/wcxx.rs"
+
 [target.'cfg(target_os = "windows")'.dependencies]
 tray-icon = "0.22"
 muda = "0.17.2"

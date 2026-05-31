@@ -1,0 +1,5 @@
+{
+  "base_url": "https://api.wxcc-us1.cisco.com/v1",
+  "org_id": "",
+  "token": "YOUR_BEARER_TOKEN_HERE"
+}

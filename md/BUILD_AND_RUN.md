@@ -37,6 +37,7 @@ For one optimized application binary:
 cargo build --release --bin runner
 cargo build --release --bin crm
 cargo build --release --bin yasweb
+cargo build --release --bin wcxx
 ```
 
 ## Run
@@ -45,10 +46,12 @@ cargo build --release --bin yasweb
 cargo run --bin runner
 cargo run --bin crm
 cargo run --bin yasweb
+cargo run --bin wcxx
 ```
 
 - `runner` starts tray + scheduler + GUI.
 - `crm` runs one CRM cycle and exits.
+- `wcxx` runs one Webex Contact Center fetch cycle, opens browser, and exits.
 - Both binaries resolve config files under their executable directory by default.
 - At first runner start, `runner_config.json` is auto-created if missing.
 - Runner also ensures CRM `config.json` exists if missing (by invoking `crm --config <path> --report none`).
@@ -103,6 +106,7 @@ Output binary:
 - `target/x86_64-pc-windows-gnu/release/runner.exe`
 - `target/x86_64-pc-windows-gnu/release/crm.exe`
 - `target/x86_64-pc-windows-gnu/release/yasweb.exe`
+- `target/x86_64-pc-windows-gnu/release/wcxx.exe`
 
 ## Windows-target validation in Linux dev container
 
@@ -128,7 +132,8 @@ Release workflow behavior:
 - `release-runner.yml` builds `cargo build --release --bin runner` and uploads `runner_windows.zip`.
 - `release-crm.yml` builds `cargo build --release --bin crm` and uploads `crm_windows.zip`.
 - `release-yasweb.yml` builds `cargo build --release --bin yasweb` and uploads `yasweb_windows.zip`.
-- All three release workflows publish to tag `v<package version>` from `Cargo.toml` and can update the same GitHub release with separate assets.
+- (And similarly for wcxx when added to workflows).
+- All release workflows publish to tag `v<package version>` from `Cargo.toml` and can update the same GitHub release with separate assets.
 
 All workflows use one shared cargo cache key strategy:
 

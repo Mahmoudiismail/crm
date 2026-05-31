@@ -7,7 +7,8 @@ src/
 ├── lib.rs
 ├── bin/
 │   ├── runner.rs
-│   └── crm.rs
+│   ├── crm.rs
+│   └── wcxx.rs
 ├── crm/
 │   ├── auth.rs
 │   ├── config.rs
@@ -43,6 +44,14 @@ src/
 - Logging initialization.
 - Accepts runtime arguments (`--report`, `--config`).
 - Executes one CRM cycle then exits.
+
+### `src/bin/wcxx.rs`
+
+- Reads `wcxx_config.json` via `--config`.
+- Creates a template config if missing.
+- Iterates over predefined `/organization/` endpoints for Webex CC metric data.
+- Generates an HTML artifact encompassing JSON output.
+- Logs natively to `wcxx.log` and automatically opens system browser.
 
 ### `src/lib.rs`
 
