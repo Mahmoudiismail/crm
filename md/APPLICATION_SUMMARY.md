@@ -2,13 +2,14 @@
 
 ## What It Does
 
-This project ships three Rust executables:
+This project ships four Rust executables:
 
 - `runner`: tray scheduler + GUI + task engine
 - `crm`: one-shot CRM fetch executable
 - `yasweb`: headless browser automation tool for Yasweb login
+- `wcxx`: fetching tool for Webex Contact Center data (calendars, agents, teams, queues, skills)
 
-Release builds are optimized for maximum runtime performance and minimal file size through the Cargo release profile (`opt-level=3`, `lto=fat`, `strip=symbols`, `panic=abort`). GitHub release publishing is split by executable so `runner_windows.zip`, `crm_windows.zip`, and `yasweb_windows.zip` can be built and uploaded independently.
+Release builds are optimized for maximum runtime performance and minimal file size through the Cargo release profile (`opt-level=3`, `lto=fat`, `strip=symbols`, `panic=abort`). GitHub release publishing is split by executable so `runner_windows.zip`, `crm_windows.zip`, `yasweb_windows.zip`, and `wcxx_windows.zip` can be built and uploaded independently.
 
 Together they:
 
@@ -18,12 +19,14 @@ Together they:
 - Extract signed download URLs from response JSON.
 - Download CSV files to a local folder.
 - Run automatically on task schedule and manually from tray + GUI.
+- Fetch Webex CC metrics securely using an OAuth Access Token.
 
 ## Runtime Style
 
 - `runner` is tray-oriented (`#![windows_subsystem = "windows"]` on Windows).
 - `crm` is a console-style one-shot command.
 - `yasweb` runs headless browser automation using `headless_chrome`.
+- `wcxx` is a CLI tool that opens an HTML export dynamically in the browser.
 - Single-instance lock via TCP bind on `127.0.0.1:14592`.
 - Async orchestration with `tokio`.
 - Non-blocking logs to file + stdout.
@@ -78,12 +81,25 @@ CRM always performs login.
 11. Click the MIS Reports button and, if configured, locate and select the target report type inside the resulting iframe.
 12. Logs are written to the `yasweblog` file. HTML content is extracted and logged heavily across all stages (successes and failures) for debugging purposes. Certificate errors are ignored during browser instantiation.
 
+## Main Workflow (wcxx)
+
+1. Parse CLI arguments (`--config` to specify the config file path, defaulting to `wcxx_config.json`).
+2. Read the `wcxx_config.json` configuration for the Webex Contact Center base URL, optional org ID, and Bearer token.
+3. Automatically generate a template `wcxx_config.json` and exit if none exists.
+4. Using the provided token, iterate over the organization endpoints (`/calendars`, `/agents`, `/teams`, `/queues`, `/skills`) and fetch the data asynchronously using `reqwest`.
+5. Aggregate the responses into a single JSON map.
+6. Generate a temporary HTML file embedding the JSON data payload formatted nicely.
+7. Use the default system web browser to view the retrieved data via the HTML file.
+8. Logs all operations strictly to a flat file `wcxx.log` via tracing.
+
 ## Primary Outputs
 
 - `runner.log` for runner executable.\n- `logs/<task_name>/YYYYMMDD_HHMMSS_<task_name>_<task_id>.log` for detailed per-task execution logs.
 - `crm.log` for crm executable.
 - `yasweblog` for yasweb executable containing network request events.
+- `wcxx.log` for wcxx execution logs.
 - `Downloads/*.csv` in executable directory.
+- `wcxx_output.html` (in OS temp dir) for browser presentation.
 
 ## Modules
 
@@ -91,6 +107,7 @@ CRM always performs login.
 - `src/bin/runner.rs`
 - `src/bin/crm.rs`
 - `src/bin/yasweb.rs`
+- `src/bin/wcxx.rs`
 - `src/runner/config.rs`
 - `src/runner/engine.rs`
 - `src/runner/gui.rs`

@@ -1,10 +1,11 @@
 # Configuration
 
-The application now uses three config files:
+The application now uses four config files:
 
 - `runner_config.json` (runner behavior, task storage, GUI host/port)
 - `config.json` (CRM auth/report settings and token cache)
 - `yasweb_config.json` (Yasweb browser automation target and credentials)
+- `wcxx_config.json` (Webex Contact Center integration base URL and auth token)
 
 Runner behavior is config-driven. CRM executable behavior is controlled via CLI args. Yasweb runs headlessly according to its config file.
 
@@ -232,3 +233,19 @@ Note: If a `report_type` is provided, a `report_name` MUST also be provided. The
 
 ### `yasweb_chrome_data/` Directory
 The `yasweb` executable creates and manages this directory alongside the executable to persist Chrome profile data and caching. This directory speeds up repeated headless automation tasks.
+
+## 4) Wcxx Config (`wcxx_config.json`)
+
+Used strictly by the `wcxx` executable to authenticate to Webex CC and target the correct cluster environment. This file is auto-generated if missing.
+
+```json
+{
+  "base_url": "https://api.wxcc-us1.cisco.com/v1",
+  "org_id": "",
+  "token": "YOUR_BEARER_TOKEN_HERE"
+}
+```
+
+- **`base_url`**: The regional Webex CC API base URL. Defaults to `https://api.wxcc-us1.cisco.com/v1`.
+- **`org_id`**: Optional string. When provided and not empty, passed as `?orgId=` to the API endpoints.
+- **`token`**: The OAuth Access Token to authenticate. Must be supplied by the user. Wcxx execution will safely error if left as the default placeholder.
