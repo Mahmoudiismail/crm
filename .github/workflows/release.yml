@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       binary:
-        description: 'Binary to release (crm, runner, or yasweb)'
+        description: 'Binary to release (crm, runner, yasweb, or wcxx)'
         required: true
         default: 'crm'
         type: choice
@@ -12,6 +12,7 @@ on:
           - crm
           - runner
           - yasweb
+          - wcxx
           - all
 
 permissions:
@@ -23,7 +24,7 @@ jobs:
     runs-on: windows-latest
     strategy:
       matrix:
-        binary: ${{ fromJson(github.event.inputs.binary == 'all' ? '["crm", "runner", "yasweb"]' : format('[\"{}\")', github.event.inputs.binary)) }}
+        binary: ${{ fromJson(github.event.inputs.binary == 'all' ? '["crm", "runner", "yasweb", "wcxx"]' : format('[\"{}\")', github.event.inputs.binary)) }}
 
     steps:
       - name: Checkout code
