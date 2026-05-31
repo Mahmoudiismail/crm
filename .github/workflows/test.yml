@@ -36,6 +36,9 @@ jobs:
           restore-keys: |
             test-cargo-${{ runner.os }}-
 
+      - name: Build all models and binaries
+        run: cargo build --workspace --all-targets
+
       - name: Run tests
         run: cargo test --workspace
 
