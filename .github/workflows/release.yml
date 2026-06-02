@@ -57,8 +57,8 @@ jobs:
         run: cargo build --release --bin ${{ matrix.binary }}
 
       - name: Prepare artifact zip
-        shell: pwsh
-        run: Compress-Archive -Path target/release/${{ matrix.binary }}.exe -DestinationPath ${{ matrix.binary }}_windows.zip
+        shell: bash
+        run: 7z a -v15m ${{ matrix.binary }}_windows.zip target/release/${{ matrix.binary }}.exe
 
       - name: Create or update GitHub release
         uses: softprops/action-gh-release@v3
@@ -67,7 +67,7 @@ jobs:
           name: Release v${{ env.VERSION }} (${{ matrix.binary }})
           draft: false
           prerelease: false
-          files: ${{ matrix.binary }}_windows.zip
+          files: ${{ matrix.binary }}_windows.zip*
           overwrite_files: true
           generate_release_notes: true
         env:

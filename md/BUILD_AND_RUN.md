@@ -129,9 +129,9 @@ GitHub Actions are split into:
 
 Release workflow behavior:
 
-- `release-runner.yml` builds `cargo build --release --bin runner` and uploads `runner_windows.zip`.
-- `release-crm.yml` builds `cargo build --release --bin crm` and uploads `crm_windows.zip`.
-- `release-yasweb.yml` builds `cargo build --release --bin yasweb` and uploads `yasweb_windows.zip`.
+- `release-runner.yml` builds `cargo build --release --bin runner` and uploads `runner_windows.zip` parts split into max 15MB sizes (`.zip.001`, `.zip.002`, etc).
+- `release-crm.yml` builds `cargo build --release --bin crm` and uploads `crm_windows.zip` parts split into max 15MB sizes.
+- `release-yasweb.yml` builds `cargo build --release --bin yasweb` and uploads `yasweb_windows.zip` parts split into max 15MB sizes.
 - (And similarly for wcxx when added to workflows).
 - All release workflows publish to tag `v<package version>` from `Cargo.toml` and can update the same GitHub release with separate assets.
 
