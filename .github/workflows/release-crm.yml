@@ -42,8 +42,8 @@ jobs:
         run: cargo build --release --bin crm
 
       - name: Prepare CRM artifact zip
-        shell: pwsh
-        run: Compress-Archive -Path target/release/crm.exe -DestinationPath crm_windows.zip
+        shell: bash
+        run: 7z a -v15m crm_windows.zip target/release/crm.exe
 
       - name: Create or update GitHub release
         uses: softprops/action-gh-release@v3
@@ -52,7 +52,7 @@ jobs:
           name: Release v${{ env.VERSION }}
           draft: false
           prerelease: false
-          files: crm_windows.zip
+          files: crm_windows.zip*
           overwrite_files: true
           generate_release_notes: true
         env:

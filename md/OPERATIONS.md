@@ -168,8 +168,8 @@ Manual check example:
 
 GitHub release publishing is split by application:
 
-- Run `Release Runner` to publish `runner_windows.zip`.
-- Run `Release CRM` to publish `crm_windows.zip`.
+- Run `Release Runner` to publish `runner_windows.zip` parts (split into 15MB max files to fit restrictions).
+- Run `Release CRM` to publish `crm_windows.zip` parts (split into 15MB max files to fit restrictions).
 - Both workflows use the `v<version>` tag from `Cargo.toml`; run both when a release should contain both applications.
 - Release workflow uses `actions/checkout@v6`, `actions/cache@v5`, and `softprops/action-gh-release@v3` for improved build performance.
 

@@ -42,8 +42,8 @@ jobs:
         run: cargo build --release --bin yasweb
 
       - name: Prepare yasweb artifact zip
-        shell: pwsh
-        run: Compress-Archive -Path target/release/yasweb.exe -DestinationPath yasweb_windows.zip
+        shell: bash
+        run: 7z a -v15m yasweb_windows.zip target/release/yasweb.exe
 
       - name: Create or update GitHub release
         uses: softprops/action-gh-release@v3
@@ -52,7 +52,7 @@ jobs:
           name: Release v${{ env.VERSION }}
           draft: false
           prerelease: false
-          files: yasweb_windows.zip
+          files: yasweb_windows.zip*
           overwrite_files: true
           generate_release_notes: true
         env:
