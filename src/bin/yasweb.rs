@@ -331,7 +331,7 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                 return Err(anyhow::anyhow!("Menu wait timeout"));
             }
 
-            info!("Opening menu via #menuPinnedBtn...");
+            info!("Attempting to open menu and find MIS module...");
             let js_click_menu = r#"
                 (function() {
                     try {
@@ -353,126 +353,73 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                 })();
             "#;
 
-            let mut menu_clicked = false;
-            if let Ok(eval_result) = tab.evaluate(js_click_menu, true) {
-                if let Some(val) = eval_result.value {
-                    if let Some(val_str) = val.as_str() {
-                        if val_str == "CLICKED" {
-                            info!("Successfully clicked #menuPinnedBtn via JS.");
-                            menu_clicked = true;
-                        } else {
-                            error!("Failed to click #menuPinnedBtn via JS: {}", val_str);
-                        }
-                    }
-                }
-            }
+            let mis_selector = ".menu-grid-item.misManagement";
+            let mut mis_found = false;
 
-            if !menu_clicked {
-                // Fallback to native click
-                match tab.wait_for_element("#menuPinnedBtn") {
-                    Ok(menu_btn) => {
-                        if let Err(e) = menu_btn.click() {
-                            error!("Failed to click #menuPinnedBtn: {:?}", e);
-                            if let Ok(html) = tab.get_content() {
-                                error!(
-                                    "Page HTML after failed #menuPinnedBtn click:
-{}",
-                                    html
-                                );
-                            }
-                        } else {
-                            info!("Successfully clicked #menuPinnedBtn (fallback native).");
-                            menu_clicked = true;
-                        }
-                    }
-                    Err(e) => {
-                        error!("Failed to find #menuPinnedBtn for fallback click: {:?}", e);
-                        if let Ok(html) = tab.get_content() {
-                            error!(
-                                "Page HTML at failure to find #menuPinnedBtn:
-{}",
-                                html
-                            );
-                        }
-                    }
-                }
-            }
+            for attempt in 1..=10 {
+                info!("Menu open attempt {}/10...", attempt);
+                let mut menu_clicked = false;
 
-            if menu_clicked {
-                // Wait for menuPinnedBtn to have 'active' class
-                info!("Waiting for #menuPinnedBtn to have 'active' class...");
-                let mut is_active = false;
-                let check_active_js = r#"
-                    (function() {
-                        var btn = document.querySelector('#menuPinnedBtn');
-                        if (btn && btn.classList.contains("active")) {
-                            return "ACTIVE";
-                        }
-                        return "NOT_ACTIVE";
-                    })();
-                "#;
-
-                for _ in 0..10 {
-                    if let Ok(eval_result) = tab.evaluate(check_active_js, true) {
-                        if let Some(val) = eval_result.value {
-                            if let Some(val_str) = val.as_str() {
-                                if val_str == "ACTIVE" {
-                                    is_active = true;
-                                    break;
-                                }
+                if let Ok(eval_result) = tab.evaluate(js_click_menu, true) {
+                    if let Some(val) = eval_result.value {
+                        if let Some(val_str) = val.as_str() {
+                            if val_str == "CLICKED" {
+                                info!("Successfully clicked #menuPinnedBtn via JS.");
+                                menu_clicked = true;
+                            } else {
+                                error!("Failed to click #menuPinnedBtn via JS: {}", val_str);
                             }
                         }
                     }
-                    std::thread::sleep(Duration::from_secs(2));
                 }
 
-                if !is_active {
-                    error!("#menuPinnedBtn did not become active after wait.");
-                    if let Ok(html) = tab.get_content() {
-                        error!(
-                            "Page HTML at menu active timeout:
-{}",
-                            html
-                        );
+                if !menu_clicked {
+                    // Fallback to native click
+                    match tab.wait_for_element("#menuPinnedBtn") {
+                        Ok(menu_btn) => {
+                            if let Err(e) = menu_btn.click() {
+                                error!("Failed to click #menuPinnedBtn: {:?}", e);
+                            } else {
+                                info!("Successfully clicked #menuPinnedBtn (fallback native).");
+                                menu_clicked = true;
+                            }
+                        }
+                        Err(e) => {
+                            error!("Failed to find #menuPinnedBtn for fallback click: {:?}", e);
+                        }
                     }
-                    std::thread::sleep(Duration::from_secs(60));
-                    return Err(anyhow::anyhow!("Menu active state wait timeout"));
                 }
 
-                info!("Menu is active.");
+                if menu_clicked {
+                    // Wait for MIS module to appear
+                    info!("Waiting for MIS module to appear in menu (up to 10 seconds)...");
+                    for _ in 0..5 {
+                        if tab.find_element(mis_selector).is_ok() {
+                            mis_found = true;
+                            break;
+                        }
+                        std::thread::sleep(Duration::from_secs(2));
+                    }
+                }
 
-                // Keep structure same to close out match
-                // We fake the `match` structure to minimize changes required at the end of the block
+                if mis_found {
+                    break;
+                } else {
+                    info!("MIS module not found in attempt {}, retrying...", attempt);
+                }
             }
 
             // Re-creating the original match to not break the brace structure down below
             match Ok::<(), ()>(()) {
                 Ok(_) => {
-                    if !menu_clicked {
-                        error!("Menu was not clicked");
+                    if !mis_found {
+                        error!("MIS module not found after all attempts.");
+                        if let Ok(html) = tab.get_content() {
+                            error!("Page HTML at MIS module wait timeout:\n{}", html);
+                        }
+                        std::thread::sleep(Duration::from_secs(60));
+                        return Err(anyhow::anyhow!("MIS module wait timeout"));
                     } else {
-                        // Wait for MIS module to appear
-                        info!("Waiting for MIS module to appear in menu...");
-                        std::thread::sleep(Duration::from_secs(2)); // Short delay
-                        let mis_selector = ".menu-grid-item.misManagement";
-                        let mut mis_found = false;
-                        for _ in 0..10 {
-                            // Wait up to 20 seconds (10 * 2s)
-                            if tab.find_element(mis_selector).is_ok() {
-                                mis_found = true;
-                                break;
-                            }
-                            std::thread::sleep(Duration::from_secs(2));
-                        }
-                        if !mis_found {
-                            error!("MIS module not found after wait.");
-                            if let Ok(html) = tab.get_content() {
-                                error!("Page HTML at MIS module wait timeout:\n{}", html);
-                            }
-
-                            std::thread::sleep(Duration::from_secs(60));
-                            return Err(anyhow::anyhow!("MIS module wait timeout"));
-                        }
                         match tab.wait_for_element(mis_selector) {
                             Ok(mis_module) => {
                                 info!("Clicking on MIS module...");
