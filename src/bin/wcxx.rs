@@ -14,10 +14,19 @@ struct Config {
     token: String,
     #[serde(default)]
     org_id: Option<String>,
+    #[serde(default)]
+    #[allow(dead_code)]
+    client_id: Option<String>,
+    #[serde(default)]
+    #[allow(dead_code)]
+    client_secret: Option<String>,
+    #[serde(default)]
+    #[allow(dead_code)]
+    refresh_token: Option<String>,
 }
 
 fn default_base_url() -> String {
-    "https://api.wxcc-us1.cisco.com/v1".to_string()
+    "https://webexapis.com/v1".to_string()
 }
 
 #[tokio::main]
@@ -38,9 +47,12 @@ async fn main() -> Result<()> {
     if !config_path.exists() {
         // Create a default config file if it doesn't exist
         let default_config = serde_json::json!({
-            "base_url": "https://api.wxcc-us1.cisco.com/v1",
+            "base_url": "https://webexapis.com/v1",
             "token": "YOUR_BEARER_TOKEN_HERE",
-            "org_id": ""
+            "org_id": "",
+            "client_id": "",
+            "client_secret": "",
+            "refresh_token": ""
         });
         fs::write(&config_path, serde_json::to_string_pretty(&default_config)?)
             .context("Failed to write default wcxx_config.json")?;
