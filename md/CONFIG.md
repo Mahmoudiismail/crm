@@ -41,13 +41,15 @@ Implementation: `src/runner/config.rs`
 - `post_run_script`: path to an optional script that executes only upon a successful task completion (`.vbs`, `.txt`, `.bat`, `.cmd`, `.ps1`, or direct executable).
 - `last_run_at`: last run timestamp
 - `last_status`: last run result message
+- `shell_timeout_seconds`: optional override for max runtime per shell task (overrides top-level `shell_timeout_seconds`).
+- `post_run_timeout_seconds`: optional override for max runtime for post-run scripts (overrides top-level `post_run_timeout_seconds`).
 
 ### Schedule fields and cron-based evaluation
 
 Each `schedules` item has a `type`:
 
 - `once`: runs once at `next_run_at`; empty `next_run_at` means immediate. After execution, `enabled` is set to `false`.
-- `interval`: runs every `every_seconds`; `next_run_at` stores the next due time. After execution, `next_run_at` advances by `every_seconds`.
+- `interval`: runs every `every_seconds`; `next_run_at` stores the next due time. After execution, `next_run_at` advances by `every_seconds`. It can also accept an optional `working_hours` map to constrain executions to specific days and time windows.
 - `daily_times`: runs at one or more local machine times in `times` (`HH:MM`); `next_run_at` stores the next calculated due time. After execution, `next_run_at` is recalculated for the next matching time.
 - `weekly`: runs on a specific day of the week; `day_of_week` is day name (Monday, Tuesday, etc.), `at_time` is optional (`HH:MM` default 09:00). After execution, `next_run_at` advances to the next week.
 - `monthly`: runs on a specific day of the month; `day_of_month` is 1-31, `at_time` is optional (`HH:MM` default 09:00). After execution, `next_run_at` advances to the next month.
@@ -87,7 +89,8 @@ daily: 09:00, 13:00, 18:30
 The GUI create/update forms now provide a simpler task editor:
 
 - schedule rows with `Interval`, `Once`, `Daily`, `Weekly`, or `Monthly` options
-- interval dropdown of common durations: `15m`, `30m`, `1h`, `2h`, `4h`, `8h`, `12h`, `24h`, `2d`, `7d`
+- interval dropdown of common durations: `1m`, `5m`, `10m`, `15m`, `30m`, `1h`, `2h`, `4h`, `8h`, `12h`, `24h`, `2d`, `3d`, `4d`, `5d`, `6d`, `7d`, `14d`, `30d`
+- optional working hours constraints (start/end time per selected days of the week) for the Interval schedule
 - a date/time picker for one-time schedules
 - day-of-week selector for weekly schedules
 - day-of-month selector (1-31) for monthly schedules

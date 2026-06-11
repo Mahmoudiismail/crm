@@ -72,7 +72,7 @@ Check:
 
 - task `enabled=true`
 - legacy task `next_run_at` format (RFC3339) or empty for immediate run
-- `schedules` entries, especially enabled state, per-schedule `next_run_at`, interval seconds, and daily `HH:MM` local times
+- `schedules` entries, especially enabled state, per-schedule `next_run_at`, interval seconds, optional working hours, and daily `HH:MM` local times
 - legacy `repetition`/`frequency_seconds` values when `schedules` is absent or empty
 - `poll_interval_seconds`
 
@@ -184,6 +184,6 @@ When executing the `yasweb` headless browser:
 
 ## Timeout Management
 
-The runner supports configurable timeouts for both shell tasks (`shell_timeout_seconds`) and post-run scripts (`post_run_timeout_seconds`).
+The runner supports configurable timeouts for both shell tasks (`shell_timeout_seconds`) and post-run scripts (`post_run_timeout_seconds`). Tasks can optionally override these global defaults with their own specific timeouts (`shell_timeout_seconds` and `post_run_timeout_seconds` fields on the task object).
 - Default timeout is 900 seconds (15 minutes).
 - Setting a timeout to `0` enables **unlimited execution time**. Use this with caution, as a hanging script will block the task from completing and may prevent the runner from starting new tasks.
