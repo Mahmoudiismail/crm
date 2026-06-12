@@ -43,7 +43,7 @@ jobs:
 
       - name: Prepare runner artifact zip
         shell: bash
-        run: 7z a -v15m runner_windows.zip target/release/runner.exe
+        run: 7z a runner_windows.zip target/release/runner.exe
 
       - name: Create or update GitHub release
         uses: softprops/action-gh-release@v3
@@ -52,7 +52,7 @@ jobs:
           name: Release v${{ env.VERSION }}
           draft: false
           prerelease: false
-          files: runner_windows.zip*
+          files: runner_windows.zip
           overwrite_files: true
           generate_release_notes: true
         env:

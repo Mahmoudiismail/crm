@@ -72,7 +72,7 @@ src/
 - **Poll interval**: configurable `poll_interval_seconds` (default 30s, minimum 5s), set in `runner_config.json`.
 - **Schedule evaluation**: `schedule_is_due()` function compares current UTC time against `next_run_at` (RFC3339 timestamp).
 - **Supported schedule types**:
-  - **Interval**: runs every N seconds (next runtime = `last_run_at + interval_seconds`)
+  - **Interval**: runs every N seconds (with optional working hours constraints per day of week; next runtime = `last_run_at + interval_seconds`)
   - **Once**: runs at specified RFC3339 timestamp (cleared after execution)
   - **Daily**: runs at one or more local times each day (e.g., 09:00, 13:00); next run calculated via `find_next_daily_run()`
   - **Weekly**: runs on specified day of week at optional time (defaults 09:00); wraps to next week if needed
@@ -83,7 +83,7 @@ src/
   - **Per-command control**: `continue_on_error` flag determines if task halts on first failure
   - **Multi-schedule advancement**: after execution, *all* due schedules call `advance_schedule()` to compute next `next_run_at`
 - **Metadata updates**: sets `last_run_at` (current UTC), `last_status` (success/error code), and per-schedule `next_run_at`
-- **Safety**: child process spawning with timeout/error handling; status lock prevents concurrent task execution
+- **Safety**: child process spawning with timeout/error handling (using per-task or global fallback timeouts); status lock prevents concurrent task execution
 
 ### `src/runner/gui.rs`
 
