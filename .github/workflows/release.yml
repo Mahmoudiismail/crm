@@ -24,7 +24,7 @@ jobs:
     runs-on: windows-latest
     strategy:
       matrix:
-        binary: ${{ fromJson(github.event.inputs.binary == 'all' ? '["crm", "runner", "yasweb", "wcxx"]' : format('[\"{}\")', github.event.inputs.binary)) }}
+        binary: ${{ fromJson(github.event.inputs.binary == 'all' && '["crm", "runner", "yasweb", "wcxx"]' || format('["{0}"]', github.event.inputs.binary)) }}
 
     steps:
       - name: Checkout code
