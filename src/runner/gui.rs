@@ -472,6 +472,12 @@ fn render_task_form(
     let name = task.map(|t| t.name.as_str()).unwrap_or_default();
     let enabled = task.map(|t| t.enabled).unwrap_or(true);
     let post_run_script = task.map(|t| t.post_run_script.as_str()).unwrap_or_default();
+    let timeout_seconds = task.map(|t| t.timeout_seconds).unwrap_or(0);
+    let timeout_seconds_str = if timeout_seconds > 0 {
+        timeout_seconds.to_string()
+    } else {
+        String::new()
+    };
     let (task_type, report) = match task.map(|t| &t.kind) {
         Some(TaskKind::ShellCommand { .. }) => ("shell_command", "all"),
         Some(TaskKind::CrmFetch { report }) => (
@@ -515,6 +521,11 @@ fn render_task_form(
                     <input class='mt-1 block w-full rounded border border-gray-300 px-3 py-2' type='text' name='post_run_script' value='{}' placeholder='C:\\Scripts\\after_fetch.vbs'>\
                     <p class='text-xs text-gray-500 mt-1'>Runs a script after a task successfully completes (.txt/.vbs using cscript, .ps1, .bat, etc.)</p>\
                 </label>\
+                <label class='block mb-4'>\
+                    <span class='text-sm font-semibold text-gray-700'>Timeout (Seconds)</span>\
+                    <input class='mt-1 block w-full md:w-1/4 rounded border border-gray-300 px-3 py-2' type='number' name='timeout_seconds' value='{}' placeholder='0 (Global default)'>\
+                    <p class='text-xs text-gray-500 mt-1'>Overrides the global timeout for this task and its post run script. Leave blank or 0 to use the global timeout.</p>\
+                </label>\
                 {}\
                 {}\
                 <button class='rounded bg-emerald-600 text-white px-4 py-2 text-sm font-semibold' type='submit'>{}</button>\
@@ -529,6 +540,7 @@ fn render_task_form(
         select_task_type(task_type),
         select_report(report),
         escape_html(post_run_script),
+        escape_html(&timeout_seconds_str),
         schedule_editor_html(task),
         shell_command_editor_html(task),
         escape_html(submit_label)
@@ -541,7 +553,7 @@ fn schedule_editor_html(task: Option<&RunnerTask>) -> String {
     let rows = if let Some(task) = task {
         schedule_rows_html(task)
     } else {
-        schedule_row_html(0, "interval", "1h", "", "", "", "")
+        schedule_row_html(0, "interval", "1h", "", "", "", "", None)
     };
 
     format!(
@@ -608,7 +620,11 @@ fn schedule_rows_html(task: &RunnerTask) -> String {
     let mut index = 0;
     for schedule in &task.schedules {
         match schedule {
-            TaskSchedule::Interval { every_seconds, .. } => {
+            TaskSchedule::Interval {
+                every_seconds,
+                working_hours,
+                ..
+            } => {
                 rows.push(schedule_row_html(
                     index,
                     "interval",
@@ -617,6 +633,7 @@ fn schedule_rows_html(task: &RunnerTask) -> String {
                     "",
                     "",
                     "",
+                    working_hours.as_ref(),
                 ));
                 index += 1;
             }
@@ -629,6 +646,7 @@ fn schedule_rows_html(task: &RunnerTask) -> String {
                     "",
                     "",
                     "",
+                    None,
                 ));
                 index += 1;
             }
@@ -641,6 +659,7 @@ fn schedule_rows_html(task: &RunnerTask) -> String {
                     &times.join(", "),
                     "",
                     "",
+                    None,
                 ));
                 index += 1;
             }
@@ -653,6 +672,7 @@ fn schedule_rows_html(task: &RunnerTask) -> String {
                     "",
                     day_of_week,
                     "",
+                    None,
                 ));
                 index += 1;
             }
@@ -665,13 +685,14 @@ fn schedule_rows_html(task: &RunnerTask) -> String {
                     "",
                     "",
                     &day_of_month.to_string(),
+                    None,
                 ));
                 index += 1;
             }
         }
     }
     if rows.is_empty() {
-        rows.push(schedule_row_html(0, "interval", "1h", "", "", "", ""));
+        rows.push(schedule_row_html(0, "interval", "1h", "", "", "", "", None));
     }
     rows.join("")
 }
@@ -694,6 +715,7 @@ fn shell_command_rows_html(task: &RunnerTask) -> String {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn schedule_row_html(
     index: usize,
     kind: &str,
@@ -702,6 +724,7 @@ fn schedule_row_html(
     daily_value: &str,
     weekly_value: &str,
     monthly_value: &str,
+    working_hours: Option<&std::collections::HashMap<String, crate::runner::config::WorkingHours>>,
 ) -> String {
     let interval_hidden = if kind == "interval" { "" } else { "hidden" };
     let once_hidden = if kind == "once" { "" } else { "hidden" };
@@ -748,8 +771,26 @@ fn schedule_row_html(
     .collect::<Vec<_>>()
     .join("");
 
+    let mut working_hours_html = String::new();
+    if let Some(wh) = working_hours {
+        for (day, hours) in wh {
+            let day_options = days_of_week_options(day);
+            working_hours_html.push_str(&format!(
+                "<div class='flex gap-2 items-center mt-2' data-wh-row>\
+                    <select class='rounded border border-gray-300 px-2 py-1 text-sm wh-day'>{}</select>\
+                    <input class='rounded border border-gray-300 px-2 py-1 text-sm w-24 wh-start' type='time' value='{}'>\
+                    <span class='text-xs text-gray-500'>to</span>\
+                    <input class='rounded border border-gray-300 px-2 py-1 text-sm w-24 wh-end' type='time' value='{}'>\
+                    <button type='button' class='remove-wh rounded bg-red-100 px-2 py-1 text-xs font-semibold text-red-700'>&times;</button>\
+                </div>",
+                day_options, hours.start, hours.end
+            ));
+        }
+    }
+
     format!(
-        "<div class='grid md:grid-cols-5 gap-2 p-3 border border-gray-200 rounded items-end' data-schedule-row>\
+        "<div class='p-3 border border-gray-200 rounded mb-2' data-schedule-row>\
+          <div class='grid md:grid-cols-5 gap-2 items-end'>\
             <label class='block'>\
                 <span class='text-xs font-semibold text-gray-700'>Type</span>\
                 <select class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm schedule-kind' name='schedule_kind_{}'>\
@@ -784,6 +825,14 @@ fn schedule_row_html(
                 <input class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' type='number' name='schedule_monthly_at_{}' value='{}' min='1' max='31'>\
             </label>\
             <button type='button' class='remove-schedule rounded border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700'>Remove</button>\
+          </div>\
+          <div class='mt-3 schedule-wh {}'>\
+              <div class='flex items-center justify-between'>\
+                  <span class='text-xs font-semibold text-gray-700'>Working Hours (Optional)</span>\
+                  <button type='button' class='add-wh-row rounded border border-gray-300 bg-white px-2 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50'>+ Add Day</button>\
+              </div>\
+              <div class='wh-rows'>{}</div>\
+          </div>\
         </div>",
         index,
         if kind == "interval" { "selected" } else { "" },
@@ -805,8 +854,33 @@ fn schedule_row_html(
         days_of_week,
         monthly_hidden,
         index,
-        escape_html(monthly_value)
+        escape_html(monthly_value),
+        interval_hidden,
+        working_hours_html,
     )
+}
+
+fn days_of_week_options(selected_day: &str) -> String {
+    [
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+        "Sunday",
+    ]
+    .iter()
+    .map(|day| {
+        format!(
+            "<option value='{}' {}>{}</option>",
+            day,
+            if selected_day == *day { "selected" } else { "" },
+            day
+        )
+    })
+    .collect::<Vec<_>>()
+    .join("")
 }
 
 fn command_row_html(index: usize, command: &str, continue_on_error: bool) -> String {
@@ -1029,6 +1103,11 @@ fn build_task_from_values(
         .map(|v| v.trim().to_string())
         .unwrap_or_default();
 
+    let timeout_seconds = values
+        .get("timeout_seconds")
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .unwrap_or(0);
+
     let schedules = values
         .get("schedules")
         .map(|value| parse_schedules_text(value))
@@ -1077,6 +1156,7 @@ fn build_task_from_values(
         last_run_at: String::new(),
         last_status: String::new(),
         post_run_script,
+        timeout_seconds,
     })
 }
 
@@ -1135,12 +1215,35 @@ fn parse_schedules_text(value: &str) -> Result<Vec<TaskSchedule>> {
 
         match kind.as_str() {
             "interval" => {
-                let rest = rest.strip_prefix("every").unwrap_or(rest).trim();
+                let mut every_str = rest;
+                let mut working_hours = None;
+                if let Some((e, wh_str)) = rest.split_once("; wh:") {
+                    every_str = e.trim();
+                    let mut wh_map = std::collections::HashMap::new();
+                    for part in wh_str.split(',') {
+                        if let Some((day, times)) = part.split_once('=') {
+                            if let Some((start, end)) = times.split_once('-') {
+                                wh_map.insert(
+                                    day.trim().to_string(),
+                                    crate::runner::config::WorkingHours {
+                                        start: start.trim().to_string(),
+                                        end: end.trim().to_string(),
+                                    },
+                                );
+                            }
+                        }
+                    }
+                    if !wh_map.is_empty() {
+                        working_hours = Some(wh_map);
+                    }
+                }
+
+                let every_str = every_str.strip_prefix("every").unwrap_or(every_str).trim();
                 schedules.push(TaskSchedule::Interval {
                     enabled: true,
-                    every_seconds: parse_duration_text(rest)?,
+                    every_seconds: parse_duration_text(every_str)?,
                     next_run_at: Utc::now().to_rfc3339(),
-                    working_hours: None,
+                    working_hours,
                 });
             }
             "daily" => {
@@ -1298,7 +1401,38 @@ mod tests {
         .unwrap();
         assert_eq!(schedules.len(), 3);
         match &schedules[0] {
-            TaskSchedule::Interval { every_seconds, .. } => assert_eq!(*every_seconds, 3_600),
+            TaskSchedule::Interval {
+                every_seconds,
+                working_hours,
+                ..
+            } => {
+                assert_eq!(*every_seconds, 3_600);
+                assert!(working_hours.is_none());
+            }
+            _ => panic!("expected interval"),
+        }
+    }
+
+    #[test]
+    fn parses_schedule_text_with_working_hours() {
+        let schedules =
+            parse_schedules_text("interval: every 2h; wh: Monday=09:00-17:00,Friday=10:00-15:00\n")
+                .unwrap();
+        assert_eq!(schedules.len(), 1);
+        match &schedules[0] {
+            TaskSchedule::Interval {
+                every_seconds,
+                working_hours,
+                ..
+            } => {
+                assert_eq!(*every_seconds, 7_200);
+                let wh = working_hours.as_ref().unwrap();
+                assert_eq!(wh.len(), 2);
+                assert_eq!(wh.get("Monday").unwrap().start, "09:00");
+                assert_eq!(wh.get("Monday").unwrap().end, "17:00");
+                assert_eq!(wh.get("Friday").unwrap().start, "10:00");
+                assert_eq!(wh.get("Friday").unwrap().end, "15:00");
+            }
             _ => panic!("expected interval"),
         }
     }

@@ -360,6 +360,7 @@ async fn run_adhoc_crm(
         last_run_at: String::new(),
         last_status: String::new(),
         post_run_script: String::new(),
+        timeout_seconds: 0,
     };
 
     run_task(&mut task, &policy, status).await;
@@ -495,6 +496,18 @@ async fn run_task(
         st.last_task_id = task.id.clone();
     }
 
+    let effective_shell_timeout = if task.timeout_seconds > 0 {
+        task.timeout_seconds
+    } else {
+        policy.shell_timeout_seconds
+    };
+
+    let effective_post_run_timeout = if task.timeout_seconds > 0 {
+        task.timeout_seconds
+    } else {
+        policy.post_run_timeout_seconds
+    };
+
     let result = match &task.kind {
         TaskKind::CrmFetch { report } => {
             run_crm_command(
@@ -502,7 +515,7 @@ async fn run_task(
                 &policy.crm_executable_path,
                 &policy.crm_config_path,
                 *report,
-                policy.shell_timeout_seconds,
+                effective_shell_timeout,
             )
             .await
         }
@@ -514,10 +527,10 @@ async fn run_task(
             } else {
                 match mode {
                     ShellCommandMode::Sequential => {
-                        run_shell_sequential(&logger, commands, policy.shell_timeout_seconds).await
+                        run_shell_sequential(&logger, commands, effective_shell_timeout).await
                     }
                     ShellCommandMode::Parallel => {
-                        run_shell_parallel(&logger, commands, policy.shell_timeout_seconds).await
+                        run_shell_parallel(&logger, commands, effective_shell_timeout).await
                     }
                 }
             }
@@ -530,7 +543,7 @@ async fn run_task(
                 match run_post_run_script(
                     &logger,
                     &task.post_run_script,
-                    policy.post_run_timeout_seconds,
+                    effective_post_run_timeout,
                 )
                 .await
                 {
@@ -1078,6 +1091,7 @@ mod tests {
             last_run_at: String::new(),
             last_status: String::new(),
             post_run_script: String::new(),
+            timeout_seconds: 0,
         };
 
         assert!(task.due_now(Utc::now()));

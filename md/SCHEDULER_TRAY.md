@@ -89,6 +89,6 @@ CRUD operations persist directly to `runner_config.json` and return validation e
 ## Safety Controls
 
 - `allow_shell_tasks=false` blocks all `shell_command` task execution.
-- `shell_timeout_seconds` terminates long-running shell tasks by timeout (this can also be overridden per task).
+- `shell_timeout_seconds` terminates long-running shell tasks by timeout (this can also be overridden per task via `timeout_seconds`).
 - `min_task_interval_seconds` prevents repeat tasks from running too frequently.
 - `shell_command` tasks use `bash -lc` for each command. A command with `continue_on_error=true` does not fail its task.

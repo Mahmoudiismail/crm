@@ -50,6 +50,8 @@ pub struct RunnerTask {
     pub last_status: String,
     #[serde(default)]
     pub post_run_script: String,
+    #[serde(default)]
+    pub timeout_seconds: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -203,6 +205,7 @@ impl Default for RunnerConfig {
                 last_run_at: String::new(),
                 last_status: String::new(),
                 post_run_script: String::new(),
+                timeout_seconds: 0,
             }],
         }
     }
@@ -774,6 +777,7 @@ mod tests {
             last_run_at: String::new(),
             last_status: String::new(),
             post_run_script: String::new(),
+            timeout_seconds: 0,
         };
 
         let cfg = RunnerConfig {
@@ -842,6 +846,7 @@ mod tests {
             last_run_at: String::new(),
             last_status: String::new(),
             post_run_script: String::new(),
+            timeout_seconds: 0,
         };
 
         let cfg = RunnerConfig {
@@ -902,6 +907,7 @@ mod tests {
                 last_run_at: String::new(),
                 last_status: String::new(),
                 post_run_script: String::new(),
+                timeout_seconds: 0,
             },
             RunnerTask {
                 id: "shell_task".to_string(),
@@ -924,6 +930,7 @@ mod tests {
                 last_run_at: String::new(),
                 last_status: String::new(),
                 post_run_script: String::new(),
+                timeout_seconds: 0,
             },
         ];
 
