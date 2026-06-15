@@ -15,6 +15,36 @@
         row.querySelector('.schedule-daily').classList.toggle('hidden', kind !== 'daily');
         row.querySelector('.schedule-weekly').classList.toggle('hidden', kind !== 'weekly');
         row.querySelector('.schedule-monthly').classList.toggle('hidden', kind !== 'monthly');
+        const whContainer = row.querySelector('.schedule-wh');
+        if (whContainer) {
+            whContainer.classList.toggle('hidden', kind !== 'interval');
+        }
+    }
+
+    function createWhRow() {
+        const row = document.createElement('div');
+        row.className = 'flex gap-2 items-center mt-2';
+        row.setAttribute('data-wh-row', '');
+        const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+        row.innerHTML = `
+            <select class='rounded border border-gray-300 px-2 py-1 text-sm wh-day'>
+                ${daysOfWeek.map(day => `<option value='${day}'>${day}</option>`).join('')}
+            </select>
+            <input class='rounded border border-gray-300 px-2 py-1 text-sm w-24 wh-start' type='time' value='09:00'>
+            <span class='text-xs text-gray-500'>to</span>
+            <input class='rounded border border-gray-300 px-2 py-1 text-sm w-24 wh-end' type='time' value='17:00'>
+            <button type='button' class='remove-wh rounded bg-red-100 px-2 py-1 text-xs font-semibold text-red-700'>&times;</button>
+        `;
+        return row;
+    }
+
+    function attachWhEvents(row) {
+        const removeBtn = row.querySelector('.remove-wh');
+        if (removeBtn) {
+            removeBtn.addEventListener('click', function() {
+                row.remove();
+            });
+        }
     }
 
     function attachScheduleEvents(row) {
@@ -24,6 +54,16 @@
         row.querySelector('.remove-schedule').addEventListener('click', function() {
             row.remove();
         });
+        const addWhBtn = row.querySelector('.add-wh-row');
+        if (addWhBtn) {
+            addWhBtn.addEventListener('click', function() {
+                const whRows = row.querySelector('.wh-rows');
+                const whRow = createWhRow();
+                whRows.appendChild(whRow);
+                attachWhEvents(whRow);
+            });
+        }
+        Array.from(row.querySelectorAll('[data-wh-row]')).forEach(attachWhEvents);
     }
 
     function attachCommandEvents(row) {
@@ -73,6 +113,14 @@
                 <input class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' type='number' value='${monthly}' min='1' max='31'>
             </label>
             <button type='button' class='remove-schedule rounded border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700'>Remove</button>
+          </div>
+          <div class='mt-3 schedule-wh ${kind === 'interval' ? '' : 'hidden'}'>
+              <div class='flex items-center justify-between'>
+                  <span class='text-xs font-semibold text-gray-700'>Working Hours (Optional)</span>
+                  <button type='button' class='add-wh-row rounded border border-gray-300 bg-white px-2 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50'>+ Add Day</button>
+              </div>
+              <div class='wh-rows'></div>
+          </div>
         `;
         return row;
     }
@@ -139,7 +187,21 @@
             const kind = row.querySelector('.schedule-kind').value;
             if (kind === 'interval') {
                 const interval = row.querySelector('.schedule-interval select').value;
-                return 'interval: every ' + interval;
+                const whRows = Array.from(row.querySelectorAll('[data-wh-row]')).map(whRow => {
+                    const day = whRow.querySelector('.wh-day').value;
+                    const start = whRow.querySelector('.wh-start').value;
+                    const end = whRow.querySelector('.wh-end').value;
+                    if (day && start && end) {
+                        return `${day}=${start}-${end}`;
+                    }
+                    return null;
+                }).filter(Boolean).join(',');
+
+                if (whRows) {
+                    return 'interval: every ' + interval + '; wh: ' + whRows;
+                } else {
+                    return 'interval: every ' + interval;
+                }
             }
             if (kind === 'once') {
                 const value = row.querySelector('.schedule-once input').value;

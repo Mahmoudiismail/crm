@@ -39,10 +39,9 @@ Implementation: `src/runner/config.rs`
   - `crm_fetch` with `report` (`all`, `tickets`, `calls`, `leads`, `none`)
   - `shell_command` with execution `mode` and `commands`
 - `post_run_script`: path to an optional script that executes only upon a successful task completion (`.vbs`, `.txt`, `.bat`, `.cmd`, `.ps1`, or direct executable).
+- `timeout_seconds`: optional max execution timeout (in seconds) for this task's shell execution or post run script. When greater than 0, it overrides the global default from `shell_timeout_seconds` or `post_run_timeout_seconds` in the config file.
 - `last_run_at`: last run timestamp
 - `last_status`: last run result message
-- `shell_timeout_seconds`: optional override for max runtime per shell task (overrides top-level `shell_timeout_seconds`).
-- `post_run_timeout_seconds`: optional override for max runtime for post-run scripts (overrides top-level `post_run_timeout_seconds`).
 
 ### Schedule fields and cron-based evaluation
 
