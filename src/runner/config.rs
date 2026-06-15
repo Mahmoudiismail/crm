@@ -473,9 +473,10 @@ pub fn is_within_working_hours(
                 return current_time >= start || current_time <= end;
             }
         }
+        return false;
     }
 
-    true
+    working_hours.is_empty()
 }
 
 pub fn human_duration(seconds: u64) -> String {
@@ -1165,5 +1166,86 @@ mod tests {
             relative_time(now + chrono::TimeDelta::seconds(86400 + 7200), now),
             "in 1 day 2 hours"
         );
+    }
+
+    #[test]
+    fn test_is_within_working_hours() {
+        use chrono::{Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone};
+        use std::collections::HashMap;
+
+        let mut working_hours = HashMap::new();
+        working_hours.insert(
+            "Monday".to_string(),
+            WorkingHours {
+                start: "09:00".to_string(),
+                end: "17:00".to_string(),
+            },
+        );
+        working_hours.insert(
+            "Friday".to_string(),
+            WorkingHours {
+                start: "10:00".to_string(),
+                end: "15:00".to_string(),
+            },
+        );
+
+        // Note: tests depend on local timezone if we construct UTC then to Local, so it's easier to mock "now"
+        // Actually `is_within_working_hours` converts input Utc to Local inside the function.
+        // To strictly test it, let's create a known local datetime, convert to UTC, and pass it in.
+
+        // Let's create a Monday 10:00 AM local time.
+        // 2026-06-15 is a Monday.
+        let date_mon = NaiveDate::from_ymd_opt(2026, 6, 15).unwrap();
+
+        let time_10am = NaiveTime::from_hms_opt(10, 0, 0).unwrap();
+        let dt_mon_10am = Local
+            .from_local_datetime(&NaiveDateTime::new(date_mon, time_10am))
+            .single()
+            .unwrap()
+            .with_timezone(&Utc);
+
+        let time_8am = NaiveTime::from_hms_opt(8, 0, 0).unwrap();
+        let dt_mon_8am = Local
+            .from_local_datetime(&NaiveDateTime::new(date_mon, time_8am))
+            .single()
+            .unwrap()
+            .with_timezone(&Utc);
+
+        let time_6pm = NaiveTime::from_hms_opt(18, 0, 0).unwrap();
+        let dt_mon_6pm = Local
+            .from_local_datetime(&NaiveDateTime::new(date_mon, time_6pm))
+            .single()
+            .unwrap()
+            .with_timezone(&Utc);
+
+        assert!(is_within_working_hours(&working_hours, dt_mon_10am)); // Inside hours
+        assert!(!is_within_working_hours(&working_hours, dt_mon_8am)); // Before hours
+        assert!(!is_within_working_hours(&working_hours, dt_mon_6pm)); // After hours
+
+        // 2026-06-16 is a Tuesday (not in working hours map)
+        let date_tue = NaiveDate::from_ymd_opt(2026, 6, 16).unwrap();
+        let dt_tue_10am = Local
+            .from_local_datetime(&NaiveDateTime::new(date_tue, time_10am))
+            .single()
+            .unwrap()
+            .with_timezone(&Utc);
+
+        assert!(!is_within_working_hours(&working_hours, dt_tue_10am)); // Tuesday is not configured
+
+        // Friday
+        let date_fri = NaiveDate::from_ymd_opt(2026, 6, 19).unwrap();
+        let dt_fri_10am = Local
+            .from_local_datetime(&NaiveDateTime::new(date_fri, time_10am))
+            .single()
+            .unwrap()
+            .with_timezone(&Utc);
+        let dt_fri_8am = Local
+            .from_local_datetime(&NaiveDateTime::new(date_fri, time_8am))
+            .single()
+            .unwrap()
+            .with_timezone(&Utc);
+
+        assert!(is_within_working_hours(&working_hours, dt_fri_10am)); // 10:00 is exactly start (inclusive)
+        assert!(!is_within_working_hours(&working_hours, dt_fri_8am)); // 08:00 is before 10:00
     }
 }

@@ -243,18 +243,12 @@ Used strictly by the `wcxx` executable to authenticate to Webex CC and target th
 
 ```json
 {
-  "base_url": "https://webexapis.com/v1",
+  "base_url": "https://api.wxcc-us1.cisco.com/v1",
   "org_id": "",
-  "token": "YOUR_BEARER_TOKEN_HERE",
-  "client_id": "",
-  "client_secret": "",
-  "refresh_token": ""
+  "token": "YOUR_BEARER_TOKEN_HERE"
 }
 ```
 
-- **`base_url`**: The regional Webex CC API base URL. Defaults to `https://webexapis.com/v1`.
+- **`base_url`**: The regional Webex CC API base URL. Defaults to `https://api.wxcc-us1.cisco.com/v1`.
 - **`org_id`**: Optional string. When provided and not empty, passed as `?orgId=` to the API endpoints.
 - **`token`**: The OAuth Access Token to authenticate. Must be supplied by the user. Wcxx execution will safely error if left as the default placeholder.
-- **`client_id`**: Optional string. Used for token refresh.
-- **`client_secret`**: Optional string. Used for token refresh.
-- **`refresh_token`**: Optional string. Used for token refresh.
