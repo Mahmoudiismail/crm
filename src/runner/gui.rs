@@ -650,7 +650,11 @@ fn schedule_rows_html(task: &RunnerTask) -> String {
                 ));
                 index += 1;
             }
-            TaskSchedule::DailyTimes { times, .. } => {
+            TaskSchedule::DailyTimes {
+                times,
+                working_hours,
+                ..
+            } => {
                 rows.push(schedule_row_html(
                     index,
                     "daily",
@@ -659,7 +663,7 @@ fn schedule_rows_html(task: &RunnerTask) -> String {
                     &times.join(", "),
                     "",
                     "",
-                    None,
+                    working_hours.as_ref(),
                 ));
                 index += 1;
             }
@@ -1247,16 +1251,40 @@ fn parse_schedules_text(value: &str) -> Result<Vec<TaskSchedule>> {
                 });
             }
             "daily" => {
-                let times = rest
+                let mut times_str = rest;
+                let mut working_hours = None;
+                if let Some((t, wh_str)) = rest.split_once("; wh:") {
+                    times_str = t.trim();
+                    let mut wh_map = std::collections::HashMap::new();
+                    for part in wh_str.split(',') {
+                        if let Some((day, day_times)) = part.split_once('=') {
+                            if let Some((start, end)) = day_times.split_once('-') {
+                                wh_map.insert(
+                                    day.trim().to_string(),
+                                    crate::runner::config::WorkingHours {
+                                        start: start.trim().to_string(),
+                                        end: end.trim().to_string(),
+                                    },
+                                );
+                            }
+                        }
+                    }
+                    if !wh_map.is_empty() {
+                        working_hours = Some(wh_map);
+                    }
+                }
+
+                let times = times_str
                     .split(',')
                     .map(|part| part.trim().to_string())
                     .filter(|part| !part.is_empty())
                     .collect::<Vec<_>>();
-                let next_run_at = next_daily_run_after(&times, Utc::now())?;
+                let next_run_at = next_daily_run_after(&times, Utc::now(), working_hours.as_ref())?;
                 schedules.push(TaskSchedule::DailyTimes {
                     enabled: true,
                     times,
                     next_run_at,
+                    working_hours,
                 });
             }
             "weekly" => {

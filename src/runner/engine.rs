@@ -825,7 +825,10 @@ fn normalize_and_validate_schedules(
                 *next_run_at = next.to_rfc3339();
             }
             TaskSchedule::DailyTimes {
-                times, next_run_at, ..
+                times,
+                next_run_at,
+                working_hours,
+                ..
             } => {
                 times.retain(|time| !time.trim().is_empty());
                 for time in times.iter_mut() {
@@ -840,7 +843,7 @@ fn normalize_and_validate_schedules(
                 }
                 *next_run_at = next_run_at.trim().to_string();
                 if next_run_at.is_empty() {
-                    *next_run_at = next_daily_run_after(times, Utc::now())?;
+                    *next_run_at = next_daily_run_after(times, Utc::now(), working_hours.as_ref())?;
                 } else {
                     parse_rfc3339_utc(next_run_at).with_context(|| {
                         format!(
@@ -927,8 +930,11 @@ fn advance_schedule(
             *next_run_at = next.to_rfc3339();
         }
         TaskSchedule::DailyTimes {
-            times, next_run_at, ..
-        } => match next_daily_run_after(times, now) {
+            times,
+            next_run_at,
+            working_hours,
+            ..
+        } => match next_daily_run_after(times, now, working_hours.as_ref()) {
             Ok(next) => *next_run_at = next,
             Err(e) => *next_run_at = format!("invalid: {}", e),
         },
@@ -1037,14 +1043,30 @@ fn schedule_is_due(schedule: &TaskSchedule, now: DateTime<Utc>) -> bool {
                 false
             }
         }
-        TaskSchedule::DailyTimes { next_run_at, .. } => {
-            if next_run_at.is_empty() {
+        TaskSchedule::DailyTimes {
+            next_run_at,
+            working_hours,
+            ..
+        } => {
+            let is_due = if next_run_at.is_empty() {
                 false
             } else {
                 match parse_rfc3339_utc(next_run_at) {
                     Ok(next_time) => now >= next_time,
                     Err(_) => false,
                 }
+            };
+
+            if is_due {
+                if let Some(wh) = working_hours {
+                    // For DailyTimes, working_hours implies "working_days". If the *day*
+                    // is a working day, we execute. If not, it shouldn't execute.
+                    crate::runner::config::is_working_day(wh, now)
+                } else {
+                    true
+                }
+            } else {
+                false
             }
         }
         TaskSchedule::Weekly { next_run_at, .. } => {
@@ -1106,7 +1128,8 @@ mod tests {
     #[test]
     fn daily_local_schedule_gets_future_next_run() {
         let now = Utc::now();
-        let next = next_daily_run_after(&["00:00".to_string(), "23:59".to_string()], now).unwrap();
+        let next =
+            next_daily_run_after(&["00:00".to_string(), "23:59".to_string()], now, None).unwrap();
         let next = parse_rfc3339_utc(&next).unwrap();
         assert!(next > now);
     }

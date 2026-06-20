@@ -106,6 +106,8 @@ pub enum TaskSchedule {
         enabled: bool,
         #[serde(default)]
         times: Vec<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        working_hours: Option<std::collections::HashMap<String, WorkingHours>>,
         #[serde(default)]
         next_run_at: String,
     },
@@ -540,7 +542,11 @@ pub fn parse_rfc3339_utc(value: &str) -> Result<DateTime<Utc>> {
         .with_context(|| format!("Invalid RFC3339 timestamp '{}'", value))
 }
 
-pub fn next_daily_run_after(times: &[String], now: DateTime<Utc>) -> Result<String> {
+pub fn next_daily_run_after(
+    times: &[String],
+    now: DateTime<Utc>,
+    working_hours: Option<&std::collections::HashMap<String, WorkingHours>>,
+) -> Result<String> {
     let now_local = now.with_timezone(&Local);
     let today = now_local.date_naive();
     let mut candidates = Vec::new();
@@ -548,7 +554,11 @@ pub fn next_daily_run_after(times: &[String], now: DateTime<Utc>) -> Result<Stri
     for raw in times {
         let time = NaiveTime::parse_from_str(raw.trim(), "%H:%M")
             .with_context(|| format!("Invalid daily time '{}'. Use HH:MM", raw))?;
-        for day_offset in [0_i64, 1] {
+
+        // Look ahead up to 14 days to find the next valid working day,
+        // to avoid infinite loops if configuration is somehow completely disjoint,
+        // though typically it would just look ahead a couple days at most.
+        for day_offset in 0_i64..14 {
             let date = today + chrono::TimeDelta::days(day_offset);
             let local_dt = date.and_time(time);
             let candidate = Local
@@ -557,8 +567,17 @@ pub fn next_daily_run_after(times: &[String], now: DateTime<Utc>) -> Result<Stri
                 .or_else(|| Local.from_local_datetime(&local_dt).latest())
                 .with_context(|| format!("Local time '{}' could not be resolved", raw))?
                 .with_timezone(&Utc);
+
             if candidate > now {
-                candidates.push(candidate);
+                if let Some(wh) = working_hours {
+                    if is_working_day(wh, candidate) {
+                        candidates.push(candidate);
+                        break; // Only need the first valid future candidate for this specific time
+                    }
+                } else {
+                    candidates.push(candidate);
+                    break;
+                }
             }
         }
     }
@@ -567,7 +586,67 @@ pub fn next_daily_run_after(times: &[String], now: DateTime<Utc>) -> Result<Stri
         .into_iter()
         .min()
         .map(|dt| dt.to_rfc3339())
-        .ok_or_else(|| anyhow::anyhow!("daily_times schedule requires at least one HH:MM time"))
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "daily_times schedule requires at least one HH:MM time that falls on a working day"
+            )
+        })
+}
+
+pub fn is_working_day(
+    working_hours: &std::collections::HashMap<String, WorkingHours>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> bool {
+    let now_local = now.with_timezone(&chrono::Local);
+    let current_day_idx = now_local.weekday().num_days_from_monday();
+
+    let parse_day = |day: &str| -> Option<u32> {
+        match day {
+            "Mon" | "Monday" | "mon" => Some(0),
+            "Tue" | "Tuesday" | "tue" => Some(1),
+            "Wed" | "Wednesday" | "wed" => Some(2),
+            "Thu" | "Thursday" | "thu" => Some(3),
+            "Fri" | "Friday" | "fri" => Some(4),
+            "Sat" | "Saturday" | "sat" => Some(5),
+            "Sun" | "Sunday" | "sun" => Some(6),
+            _ => None,
+        }
+    };
+
+    let weekday_str = match now_local.weekday() {
+        chrono::Weekday::Mon => "Mon",
+        chrono::Weekday::Tue => "Tue",
+        chrono::Weekday::Wed => "Wed",
+        chrono::Weekday::Thu => "Thu",
+        chrono::Weekday::Fri => "Fri",
+        chrono::Weekday::Sat => "Sat",
+        chrono::Weekday::Sun => "Sun",
+    };
+
+    for days_str in working_hours.keys() {
+        let parts: Vec<&str> = days_str.split('-').map(|s| s.trim()).collect();
+        let is_match = if parts.len() == 2 {
+            let start_day = parse_day(parts[0]);
+            let end_day = parse_day(parts[1]);
+            if let (Some(s), Some(e)) = (start_day, end_day) {
+                if s <= e {
+                    current_day_idx >= s && current_day_idx <= e
+                } else {
+                    current_day_idx >= s || current_day_idx <= e
+                }
+            } else {
+                false
+            }
+        } else {
+            days_str == weekday_str || parse_day(days_str) == Some(current_day_idx)
+        };
+
+        if is_match {
+            return true;
+        }
+    }
+
+    working_hours.is_empty()
 }
 
 pub fn next_weekly_run_after(
@@ -992,7 +1071,7 @@ mod tests {
 
         // 1. Same day, future time
         let times = vec!["15:00".to_string()];
-        let res = next_daily_run_after(&times, base_now).unwrap();
+        let res = next_daily_run_after(&times, base_now, None).unwrap();
         let dt = DateTime::parse_from_rfc3339(&res).unwrap();
         // It should be strictly after base_now
         assert!(dt.with_timezone(&Utc) > base_now);
@@ -1001,7 +1080,7 @@ mod tests {
 
         // 2. Same day, past time (should wrap to next day)
         let times = vec!["10:00".to_string()];
-        let res = next_daily_run_after(&times, base_now).unwrap();
+        let res = next_daily_run_after(&times, base_now, None).unwrap();
         let dt2 = DateTime::parse_from_rfc3339(&res).unwrap();
         assert!(dt2.with_timezone(&Utc) > base_now);
         // It should be approximately 22 hours later (24 hours minus 2 hours)
@@ -1012,7 +1091,7 @@ mod tests {
             "15:00".to_string(),
             "18:00".to_string(),
         ];
-        let res = next_daily_run_after(&times, base_now).unwrap();
+        let res = next_daily_run_after(&times, base_now, None).unwrap();
         let dt3 = DateTime::parse_from_rfc3339(&res).unwrap();
         assert!(dt3.with_timezone(&Utc) > base_now);
         // It should pick "15:00" as it's the earliest future time
@@ -1020,14 +1099,14 @@ mod tests {
 
         // 4. Empty times array
         let empty_times: Vec<String> = vec![];
-        assert!(next_daily_run_after(&empty_times, base_now).is_err());
+        assert!(next_daily_run_after(&empty_times, base_now, None).is_err());
 
         // 5. Invalid time formats
         let invalid_times = vec!["25:00".to_string()];
-        assert!(next_daily_run_after(&invalid_times, base_now).is_err());
+        assert!(next_daily_run_after(&invalid_times, base_now, None).is_err());
 
         let invalid_format = vec!["3 PM".to_string()];
-        assert!(next_daily_run_after(&invalid_format, base_now).is_err());
+        assert!(next_daily_run_after(&invalid_format, base_now, None).is_err());
     }
 
     #[test]

@@ -17,7 +17,7 @@
         row.querySelector('.schedule-monthly').classList.toggle('hidden', kind !== 'monthly');
         const whContainer = row.querySelector('.schedule-wh');
         if (whContainer) {
-            whContainer.classList.toggle('hidden', kind !== 'interval');
+            whContainer.classList.toggle('hidden', kind !== 'interval' && kind !== 'daily');
         }
     }
 
@@ -114,7 +114,7 @@
             </label>
             <button type='button' class='remove-schedule rounded border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700'>Remove</button>
           </div>
-          <div class='mt-3 schedule-wh ${kind === 'interval' ? '' : 'hidden'}'>
+          <div class='mt-3 schedule-wh ${kind === 'interval' || kind === 'daily' ? '' : 'hidden'}'>
               <div class='flex items-center justify-between'>
                   <span class='text-xs font-semibold text-gray-700'>Working Hours (Optional)</span>
                   <button type='button' class='add-wh-row rounded border border-gray-300 bg-white px-2 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50'>+ Add Day</button>
@@ -209,7 +209,21 @@
             }
             if (kind === 'daily') {
                 const value = row.querySelector('.schedule-daily input').value.trim();
-                return value ? 'daily: ' + value : '';
+                const whRows = Array.from(row.querySelectorAll('[data-wh-row]')).map(whRow => {
+                    const day = whRow.querySelector('.wh-day').value;
+                    const start = whRow.querySelector('.wh-start').value;
+                    const end = whRow.querySelector('.wh-end').value;
+                    if (day && start && end) {
+                        return `${day}=${start}-${end}`;
+                    }
+                    return null;
+                }).filter(Boolean).join(',');
+
+                if (whRows) {
+                    return value ? 'daily: ' + value + '; wh: ' + whRows : '';
+                } else {
+                    return value ? 'daily: ' + value : '';
+                }
             }
             if (kind === 'weekly') {
                 const value = row.querySelector('[data-weekly-day]').value;
