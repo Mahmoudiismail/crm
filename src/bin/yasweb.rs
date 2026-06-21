@@ -95,6 +95,8 @@ fn run_browser(
         std::ffi::OsStr::new("--ignore-certificate-errors"),
         std::ffi::OsStr::new("--start-maximized"),
         std::ffi::OsStr::new("--disable-web-security"),
+        std::ffi::OsStr::new("--disable-site-isolation-trials"),
+        std::ffi::OsStr::new("--disable-features=IsolateOrigins,site-per-process"),
     ];
 
     let launch_options = LaunchOptions::default_builder()
@@ -602,7 +604,7 @@ fn run_browser(
                                             for (let i = 0; i < 20; i++) {{
                                                 let divs = doc.querySelectorAll('div.fw-semibold');
                                                 for (let d of divs) {{
-                                                    if (d.textContent.includes('Report Manger') || d.textContent.includes(reportType) || d.textContent.includes('Enquiry')) {{
+                                                    if (d.textContent.includes('Report Manager') || d.textContent.includes('Report Manger') || d.textContent.includes(reportType) || d.textContent.includes('Enquiry')) {{
                                                         listLoaded = true; break;
                                                     }}
                                                 }}
@@ -633,7 +635,7 @@ fn run_browser(
                                                     reportFound = true;
                                                     break;
                                                 }}
-                                                await sleep(500);
+                                                await sleep(1500);
                                             }}
 
                                             if (!reportFound) return "ERROR: Report name not found: " + reportName;
@@ -648,7 +650,7 @@ fn run_browser(
                                                     }}
                                                 }}
                                                 if (reportBound) break;
-                                                await sleep(500);
+                                                await sleep(1500);
                                             }}
 
                                             // 3. Fill Dynamic Filters
@@ -661,7 +663,17 @@ fn run_browser(
                                                             let inputId = labelParent.getAttribute('for');
                                                             let input = doc.getElementById(inputId);
                                                             if (input && input.tagName === 'INPUT') {{
-                                                                await simulateTyping(input, value);
+                                                                let v = value;
+                                                                if (key.toLowerCase().includes('date') && v.includes('-')) {{
+                                                                    let parts = v.split(' ')[0].split('-');
+                                                                    if (parts.length === 3) {{
+                                                                        let d = parts[0].padStart(2, '0');
+                                                                        let m = parts[1].padStart(2, '0');
+                                                                        let y = parts[2];
+                                                                        v = d + "-" + m + "-" + y + (v.includes(' ') ? ' ' + v.split(' ').slice(1).join(' ') : '');
+                                                                    }}
+                                                                }}
+                                                                await simulateTyping(input, v);
                                                                 break;
                                                             }}
                                                         }}
@@ -677,18 +689,18 @@ fn run_browser(
                                             for(let i=0; i<10; i++) {{
                                                 let loader = doc.querySelector('.loading-screen-wrapper, mat-progress-bar');
                                                 if (loader && loader.offsetParent !== null) {{ loaderAppeared = true; break; }}
-                                                await sleep(500);
+                                                await sleep(1000);
                                             }}
 
                                             if (loaderAppeared) {{
                                                 for(let i=0; i<120; i++) {{
                                                     let loader = doc.querySelector('.loading-screen-wrapper, mat-progress-bar');
                                                     if (!loader || loader.offsetParent === null) break;
-                                                    await sleep(500);
+                                                    await sleep(1500);
                                                 }}
                                             }}
 
-                                            await sleep(1000);
+                                            await sleep(2000);
                                             let exportBtn = null;
                                             let dxButtons = doc.querySelectorAll('.dx-button-text');
                                             for (let btn of dxButtons) {{
@@ -771,14 +783,39 @@ fn run_browser(
 async fn main() -> Result<()> {
     setup_logging()?;
 
-    let mut config_path = std::env::current_exe().context("Failed to get executable path")?;
-    config_path.pop();
-    config_path.push("yasweb_config.json");
+    let args: Vec<String> = std::env::args().collect();
+
+    let mut config_path = None;
+    let mut j = 1;
+    while j < args.len() {
+        if args[j] == "--config" && j + 1 < args.len() {
+            config_path = Some(PathBuf::from(&args[j + 1]));
+            break;
+        }
+        j += 1;
+    }
+
+    let config_path = match config_path {
+        Some(p) => {
+            if p.is_absolute() {
+                p
+            } else {
+                let mut exe_dir =
+                    std::env::current_exe().context("Failed to get executable path")?;
+                exe_dir.pop();
+                exe_dir.join(p)
+            }
+        }
+        None => {
+            let mut default_path =
+                std::env::current_exe().context("Failed to get executable path")?;
+            default_path.pop();
+            default_path.push("yasweb_config.json");
+            default_path
+        }
+    };
 
     let mut config = load_or_create_config(&config_path).await?;
-
-    // Parse CLI arguments
-    let args: Vec<String> = std::env::args().collect();
     let mut config_updated = false;
 
     let mut active_report_name = String::new();
@@ -788,6 +825,9 @@ async fn main() -> Result<()> {
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
+            "--config" if i + 1 < args.len() => {
+                i += 1;
+            }
             "--type" if i + 1 < args.len() => {
                 active_report_type = args[i + 1].clone();
                 i += 1;
@@ -809,7 +849,7 @@ async fn main() -> Result<()> {
                 }
                 i += 1;
             }
-            "--type" | "--name" | "--filters" => {}
+            "--type" | "--name" | "--filters" | "--config" => {}
             _ => {}
         }
         i += 1;
