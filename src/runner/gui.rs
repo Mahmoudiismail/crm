@@ -418,7 +418,11 @@ fn render_task_row(task: &RunnerTask) -> String {
                 mode_str
             )
         }
-        TaskKind::Yasweb { report_type, report_name, .. } => {
+        TaskKind::Yasweb {
+            report_type,
+            report_name,
+            ..
+        } => {
             format!("Yasweb {} ({})", report_name, report_type)
         }
     };
@@ -487,7 +491,11 @@ fn render_task_form(
 
     let (task_type, report) = match task.map(|t| &t.kind) {
         Some(TaskKind::ShellCommand { .. }) => ("shell_command", "all"),
-        Some(TaskKind::Yasweb { report_type, report_name, filters }) => {
+        Some(TaskKind::Yasweb {
+            report_type,
+            report_name,
+            filters,
+        }) => {
             yasweb_type = report_type.clone();
             yasweb_name = report_name.clone();
             yasweb_filters = serde_json::to_string_pretty(filters).unwrap_or_default();
@@ -1168,15 +1176,25 @@ fn build_task_from_values(
             )?,
         }
     } else if task_type == "yasweb" {
-        let filters_str = values.get("yasweb_filters").map(String::as_str).unwrap_or("{}");
+        let filters_str = values
+            .get("yasweb_filters")
+            .map(String::as_str)
+            .unwrap_or("{}");
         let filters = if filters_str.trim().is_empty() {
             std::collections::HashMap::new()
         } else {
-            serde_json::from_str(filters_str).with_context(|| format!("Invalid filters JSON: {}", filters_str))?
+            serde_json::from_str(filters_str)
+                .with_context(|| format!("Invalid filters JSON: {}", filters_str))?
         };
         TaskKind::Yasweb {
-            report_type: values.get("yasweb_type").map(|s| s.trim().to_string()).unwrap_or_default(),
-            report_name: values.get("yasweb_name").map(|s| s.trim().to_string()).unwrap_or_default(),
+            report_type: values
+                .get("yasweb_type")
+                .map(|s| s.trim().to_string())
+                .unwrap_or_default(),
+            report_name: values
+                .get("yasweb_name")
+                .map(|s| s.trim().to_string())
+                .unwrap_or_default(),
             filters,
         }
     } else {

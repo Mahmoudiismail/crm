@@ -536,7 +536,11 @@ async fn run_task(
                 }
             }
         }
-        TaskKind::Yasweb { report_type, report_name, filters } => {
+        TaskKind::Yasweb {
+            report_type,
+            report_name,
+            filters,
+        } => {
             run_yasweb_command(
                 &logger,
                 report_type,
