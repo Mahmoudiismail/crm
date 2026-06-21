@@ -250,6 +250,7 @@
     const taskTypeSelect = document.getElementById('task-type-select');
     const crmReportContainer = document.getElementById('crm-report-container');
     const shellCommandContainer = document.getElementById('shell-command-container');
+    const yaswebContainer = document.getElementById('yasweb-container');
 
     function updateTaskTypeVisibility() {
         if (!taskTypeSelect) return;
@@ -259,6 +260,9 @@
         }
         if (shellCommandContainer) {
             shellCommandContainer.classList.toggle('hidden', type !== 'shell_command');
+        }
+        if (yaswebContainer) {
+            yaswebContainer.classList.toggle('hidden', type !== 'yasweb');
         }
     }
 

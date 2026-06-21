@@ -74,6 +74,12 @@ pub enum TaskKind {
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         commands: Vec<ShellCommandSpec>,
     },
+    Yasweb {
+        report_type: String,
+        report_name: String,
+        #[serde(default)]
+        filters: std::collections::HashMap<String, String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

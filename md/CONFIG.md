@@ -38,6 +38,7 @@ Implementation: `src/runner/config.rs`
 - `kind`: tagged task payload
   - `crm_fetch` with `report` (`all`, `tickets`, `calls`, `leads`, `none`)
   - `shell_command` with execution `mode` and `commands`
+  - `yasweb` with `report_type`, `report_name`, and `filters` (a map of key-value parameters passed dynamically)
 - `post_run_script`: path to an optional script that executes only upon a successful task completion (`.vbs`, `.txt`, `.bat`, `.cmd`, `.ps1`, or direct executable).
 - `timeout_seconds`: optional max execution timeout (in seconds) for this task's shell execution or post run script. When greater than 0, it overrides the global default from `shell_timeout_seconds` or `post_run_timeout_seconds` in the config file.
 - `last_run_at`: last run timestamp
@@ -101,6 +102,11 @@ Shell commands can be added as separate command rows:
 - `Command` input field for the shell command
 - `Mode` dropdown: `Run` (halt on error, default) or `Continue` (ignore errors and proceed)
 - a `+ Add command` button to add more commands
+
+Yasweb configurations can be specified when selecting Yasweb as task type:
+- `Report Type`: The UI module or type of report (e.g. "Standard Report")
+- `Report Name`: The specific report name (e.g. "Appointment List")
+- `Filters (JSON)`: A text area that accepts JSON-formatted filters corresponding to the application's required input labels (e.g. `{"From Date": "21-Jun-2025 00:00"}`)
 
 ### Runner -> CRM invocation contract
 
@@ -218,20 +224,17 @@ The `yasweb` binary stores its target URL and automation credentials in `yasweb_
   "username": "",
   "password": null,
   "headless": false,
-  "report_type": "",
-  "report_name": ""
+  "reports": {}
 }
 ```
 
 This configuration file is used by the headless browser automation tool to navigate to the target application and fill in the login form fields (`input[name='username']`, `input[type='password']`).
 
-The `report_type` and `report_name` can also be supplied dynamically via the CLI, which will automatically save them to the configuration file for future runs. The CLI supports both space-separated and equals-separated values.
-Example: `yasweb --type="Report Manager" --name="My Daily Report" --headless`
+The `report_type`, `report_name`, and JSON `filters` can be supplied dynamically via the CLI, which will automatically save them to the configuration file under the `reports` map for future runs. If run without parameters except `--name`, `yasweb` will pull the cached configuration parameters for that specific report.
 
-Short flags are also supported:
-`yasweb -t="Report Manager" -n="Standard"`
+Example: `yasweb --type "Standard Report" --name "Appointment List" --filters '{"From Date": "21-Jun-2025 00:00"}'`
 
-Note: If a `report_type` is provided, a `report_name` MUST also be provided. The script automatically searches inside the report iframe to find and click the radio button or button corresponding to `report_type`.
+Note: A `report_name` MUST be provided. The script automatically searches inside the report iframe to find and click the button corresponding to `report_type`, dynamically enters the filters by searching for exact `mat-label` texts, waits for the loaders to disappear, and clicks Export -> XLSX.
 
 ### `yasweb_chrome_data/` Directory
 The `yasweb` executable creates and manages this directory alongside the executable to persist Chrome profile data and caching. This directory speeds up repeated headless automation tasks.

@@ -183,6 +183,8 @@ When executing the `yasweb` headless browser:
 - The automation re-uses the initially launched browser tab instead of opening new ones to conserve memory.
 - Wait loops dynamically poll for specific success (`.usr-id`) or failure (`.alert-danger`) elements, allowing the tool to fail-fast upon invalid logins without arbitrary delays.
 - A mandatory 60-second delay is enforced at the end of the script before exiting. This pause occurs regardless of whether the run was successful or failed, allowing operators time to visually inspect the final browser state when running in non-headless mode.
+- The application executes cross-origin JavaScript on iframes using Chrome DevTools Protocol (`--disable-web-security`). It uses simulated keystrokes via `KeyboardEvent`s to insert custom dynamic filters (like `From Date` and `To Date`) to trick Angular input bindings into properly updating their state.
+- Yasweb can be configured and run directly from the `runner` GUI via the new `Yasweb Report` task type.
 
 ## Timeout Management
 
