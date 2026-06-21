@@ -338,12 +338,7 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                         var clicked = false;
                         var btn = document.querySelector('#menuPinnedBtn');
                         if (btn) {
-                            btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-                            clicked = true;
-                        }
-                        var innerBtn = document.querySelector('#menuPinnedBtn > div.icon.font-icon.mod-triger > i.bi.bi-plus.second');
-                        if (innerBtn) {
-                            innerBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+                            btn.click();
                             clicked = true;
                         }
                         return clicked ? "CLICKED" : "NOT_FOUND";
@@ -391,16 +386,21 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                 }
 
                 if menu_clicked {
-                    // Wait for the menu to visually open (body gets toggle-sidebar class)
-                    info!("Waiting for the pinned menu to fully open (toggle-sidebar class)...");
+                    // Wait for the menu to visually open (menuModules gets show-modules class)
+                    info!("Waiting for the pinned menu to fully open (show-modules class)...");
                     let mut sidebar_toggled = false;
                     for check_idx in 0..15 {
-                        let check_js = "document.body.classList.contains('toggle-sidebar')";
+                        let check_js = r#"
+                            (function() {
+                                var menuModules = document.querySelector('.menuModules');
+                                return menuModules && menuModules.classList.contains('show-modules');
+                            })();
+                        "#;
                         if let Ok(eval_result) = tab.evaluate(check_js, true) {
                             if let Some(val) = eval_result.value {
                                 if let Some(is_toggled) = val.as_bool() {
                                     info!(
-                                        "Check {} for toggle-sidebar: {}",
+                                        "Check {} for show-modules: {}",
                                         check_idx + 1,
                                         is_toggled
                                     );
@@ -415,17 +415,17 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                     }
 
                     if !sidebar_toggled {
-                        warn!("Sidebar 'toggle-sidebar' class not found after waiting. MIS Reports might be inaccessible.");
-                        let log_classes_js = "document.body.className";
+                        warn!("Menu '.menuModules' did not receive 'show-modules' class after waiting. MIS Reports might be inaccessible.");
+                        let log_classes_js = "document.querySelector('.menuModules') ? document.querySelector('.menuModules').className : 'NOT_FOUND'";
                         if let Ok(eval_result) = tab.evaluate(log_classes_js, true) {
                             if let Some(val) = eval_result.value {
                                 if let Some(classes) = val.as_str() {
-                                    warn!("Current body classes: {}", classes);
+                                    warn!("Current .menuModules classes: {}", classes);
                                 }
                             }
                         }
                     } else {
-                        info!("Sidebar successfully toggled.");
+                        info!("Menu successfully opened.");
                     }
 
                     // Wait for MIS module to appear in DOM (it usually is there, but just to be sure)
