@@ -126,7 +126,9 @@ If action buttons appear invisible or have low contrast:
 
 ### 8) Yasweb browser automation issues
 
-If the browser is unable to render elements, `yasweb` currently implements long wait times, loops, and aggressive HTML extraction. Inspect `yasweblog` to view the page HTML before/after steps if elements fail to appear. Certificate errors are ignored by default via launch options. The menu button (`#menuPinnedBtn`) interaction is optimized to avoid double-clicking and provides diagnostic class list logging on failure. The menu button (`#menuPinnedBtn`) interaction is optimized to avoid double-clicking and provides diagnostic class list logging on failure.
+If the browser is unable to render elements, `yasweb` currently implements long wait times, loops, and aggressive HTML extraction. Inspect `yasweblog` to view the page HTML before/after steps if elements fail to appear. Certificate errors are ignored by default via launch options.
+
+**Pinned Menu Interaction**: The menu button (`#menuPinnedBtn`) is engaged via a native `MouseEvent('click')` dispatcher to ensure proper event bubbling. Because elements inside the menu (like `MIS Reports`) exist invisibly in the DOM at all times, the automation correctly waits for the visual toggle (specifically, the `toggle-sidebar` class applied to the `<body>` element) to verify that the menu has opened completely before proceeding. Extensive `tracing::info` logging captures diagnostic states for optimization.
 
 Check:
 

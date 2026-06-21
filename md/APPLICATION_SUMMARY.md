@@ -76,9 +76,9 @@ CRM always performs login.
 6. Wait briefly for external data to load, then fill the password.
 7. Submit the login form.
 8. Verify login success by checking if the username appears in the header.
-9. Open menu via "#menuPinnedBtn" (preferring the inner plus icon to ensure reliable single click).
-10. Click the pinned menu button and select the MIS module.
-11. Click the MIS Reports button and, if configured, locate and select the target report type inside the resulting iframe.
+9. Open menu via "#menuPinnedBtn", dispatching a native `MouseEvent('click')` to ensure successful bubbling.
+10. Wait for the `<body>` element to receive the `toggle-sidebar` class, confirming the menu is visibly open.
+11. Click the MIS Reports module and, if configured, locate and select the target report type inside the resulting iframe.
 12. Logs are written to the `yasweblog` file. HTML content is extracted and logged heavily across all stages (successes and failures) for debugging purposes. Certificate errors are ignored during browser instantiation.
 
 ## Main Workflow (wcxx)

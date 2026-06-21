@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::fs;
-use tracing::{error, info, Level};
+use tracing::{error, info, warn, Level};
 use tracing_subscriber::FmtSubscriber;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -338,12 +338,12 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                         var clicked = false;
                         var btn = document.querySelector('#menuPinnedBtn');
                         if (btn) {
-                            btn.click();
+                            btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
                             clicked = true;
                         }
                         var innerBtn = document.querySelector('#menuPinnedBtn > div.icon.font-icon.mod-triger > i.bi.bi-plus.second');
                         if (innerBtn) {
-                            innerBtn.click();
+                            innerBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
                             clicked = true;
                         }
                         return clicked ? "CLICKED" : "NOT_FOUND";
@@ -391,14 +391,51 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                 }
 
                 if menu_clicked {
-                    // Wait for MIS module to appear
-                    info!("Waiting for MIS module to appear in menu (up to 10 seconds)...");
+                    // Wait for the menu to visually open (body gets toggle-sidebar class)
+                    info!("Waiting for the pinned menu to fully open (toggle-sidebar class)...");
+                    let mut sidebar_toggled = false;
+                    for check_idx in 0..15 {
+                        let check_js = "document.body.classList.contains('toggle-sidebar')";
+                        if let Ok(eval_result) = tab.evaluate(check_js, true) {
+                            if let Some(val) = eval_result.value {
+                                if let Some(is_toggled) = val.as_bool() {
+                                    info!(
+                                        "Check {} for toggle-sidebar: {}",
+                                        check_idx + 1,
+                                        is_toggled
+                                    );
+                                    if is_toggled {
+                                        sidebar_toggled = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        std::thread::sleep(Duration::from_millis(1000));
+                    }
+
+                    if !sidebar_toggled {
+                        warn!("Sidebar 'toggle-sidebar' class not found after waiting. MIS Reports might be inaccessible.");
+                        let log_classes_js = "document.body.className";
+                        if let Ok(eval_result) = tab.evaluate(log_classes_js, true) {
+                            if let Some(val) = eval_result.value {
+                                if let Some(classes) = val.as_str() {
+                                    warn!("Current body classes: {}", classes);
+                                }
+                            }
+                        }
+                    } else {
+                        info!("Sidebar successfully toggled.");
+                    }
+
+                    // Wait for MIS module to appear in DOM (it usually is there, but just to be sure)
+                    info!("Waiting for MIS module to be present in DOM...");
                     for _ in 0..5 {
                         if tab.find_element(mis_selector).is_ok() {
                             mis_found = true;
                             break;
                         }
-                        std::thread::sleep(Duration::from_secs(2));
+                        std::thread::sleep(Duration::from_secs(1));
                     }
                 }
 
