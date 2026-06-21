@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use headless_chrome::protocol::cdp::types::Event;
 use headless_chrome::{Browser, LaunchOptions};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -9,7 +10,14 @@ use tokio::fs;
 use tracing::{error, info, warn, Level};
 use tracing_subscriber::FmtSubscriber;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct ReportConfig {
+    report_type: String,
+    #[serde(default)]
+    filters: HashMap<String, String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 struct YaswebConfig {
     url: String,
     username: String,
@@ -17,9 +25,7 @@ struct YaswebConfig {
     #[serde(default)]
     headless: bool,
     #[serde(default)]
-    report_type: String,
-    #[serde(default)]
-    report_name: String,
+    reports: HashMap<String, ReportConfig>,
 }
 
 impl Default for YaswebConfig {
@@ -29,8 +35,7 @@ impl Default for YaswebConfig {
             username: "3245".to_string(),
             password: Some("Soso@2350181".to_string()),
             headless: false,
-            report_type: "".to_string(),
-            report_name: "".to_string(),
+            reports: HashMap::new(),
         }
     }
 }
@@ -76,7 +81,12 @@ fn setup_logging() -> Result<()> {
     Ok(())
 }
 
-fn run_browser(config: &YaswebConfig) -> Result<()> {
+fn run_browser(
+    config: &YaswebConfig,
+    active_report_name: &str,
+    active_report_type: &str,
+    active_filters: &HashMap<String, String>,
+) -> Result<()> {
     let mut user_data_dir = std::env::current_exe().unwrap_or_default();
     user_data_dir.pop();
     user_data_dir.push("yasweb_chrome_data");
@@ -84,6 +94,7 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
     let args = vec![
         std::ffi::OsStr::new("--ignore-certificate-errors"),
         std::ffi::OsStr::new("--start-maximized"),
+        std::ffi::OsStr::new("--disable-web-security"),
     ];
 
     let launch_options = LaunchOptions::default_builder()
@@ -506,103 +517,215 @@ fn run_browser(config: &YaswebConfig) -> Result<()> {
                                         );
                                     }
 
-                                    // If a report_type is provided, find and click the corresponding radio button
-                                    if !config.report_type.is_empty() {
-                                        info!("Selecting report type: {}", config.report_type);
+                                    // Let the page settle
+                                    std::thread::sleep(Duration::from_secs(2));
 
-                                        // The report UI is inside an iframe. We must evaluate JS to find and click the radio button.
-                                        let js_eval = format!(
-                                            r#"
-                                            (function() {{
-                                                var iframes = document.querySelectorAll('iframe');
-                                                for (var i = 0; i < iframes.length; i++) {{
-                                                    try {{
-                                                        var doc = iframes[i].contentWindow.document;
+                                    // Find iframe
+                                    info!("Searching for auto-login iframe...");
+                                    let mut iframe_node_id = None;
 
-                                                        // Look for mat-radio-button containing the text
-                                                        var xpath = "//*[contains(text(), '{}')]/ancestor-or-self::mat-radio-button";
-                                                        var result = doc.evaluate(xpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-                                                        var node = result.singleNodeValue;
+                                    // Give it a moment to load
+                                    for _ in 0..5 {
+                                        if let Ok(iframe_node) = tab.find_element("iframe") {
+                                            iframe_node_id = Some(iframe_node.node_id);
+                                            break;
+                                        }
+                                        std::thread::sleep(Duration::from_secs(2));
+                                    }
 
-                                                        if (node) {{
-                                                            node.click();
-                                                            return "CLICKED_RADIO";
-                                                        }}
+                                    if iframe_node_id.is_none() {
+                                        error!("Could not find iframe.");
+                                        return Err(anyhow::anyhow!("Iframe not found"));
+                                    }
 
-                                                        // Fallback to finding label
-                                                        var fallbackXpath = "//label[contains(text(), '{}')]";
-                                                        var fallbackResult = doc.evaluate(fallbackXpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-                                                        var fallbackNode = fallbackResult.singleNodeValue;
+                                    info!("Running full JS automation sequence...");
 
-                                                        if (fallbackNode) {{
-                                                            fallbackNode.click();
-                                                            return "CLICKED_LABEL";
-                                                        }}
-                                                    }} catch (e) {{
-                                                        // Ignore cross-origin frame errors or other exceptions
+                                    let filters_json = serde_json::to_string(active_filters)
+                                        .unwrap_or_else(|_| "{}".to_string());
+
+                                    // We will use evaluate but because of cross origin, we need the
+                                    // `--disable-web-security` flag to work, or we try to run it inside the specific frame.
+                                    // Since we added `--disable-web-security`, accessing `iframe.contentWindow.document` should work!
+
+                                    let js_script = format!(
+                                        r#"
+                                        (async function(reportType, reportName, filters) {{
+                                            function sleep(ms) {{ return new Promise(r => setTimeout(r, ms)); }}
+
+                                            async function simulateTyping(inputElem, text) {{
+                                                inputElem.focus();
+                                                inputElem.value = ''; // clear first
+
+                                                for (let i = 0; i < text.length; i++) {{
+                                                    inputElem.value += text[i];
+                                                    inputElem.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                                                    await sleep(10);
+                                                }}
+
+                                                inputElem.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                                                inputElem.dispatchEvent(new KeyboardEvent('keydown', {{ key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }}));
+                                                inputElem.dispatchEvent(new KeyboardEvent('keyup', {{ key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }}));
+                                                inputElem.blur();
+                                                inputElem.dispatchEvent(new Event('blur', {{ bubbles: true }}));
+                                            }}
+
+                                            let iframe = document.querySelector('iframe');
+                                            if (!iframe) return "ERROR: No iframe found.";
+                                            let doc;
+                                            try {{
+                                                doc = iframe.contentWindow.document;
+                                            }} catch (e) {{
+                                                return "ERROR: Cross origin blocked.";
+                                            }}
+
+                                            // 1. Select Report Type
+                                            let xpathType = `//*[contains(text(), '${{reportType}}')]/ancestor-or-self::mat-radio-button`;
+                                            let resultType = doc.evaluate(xpathType, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                                            let matRadioButton = resultType.singleNodeValue;
+
+                                            let clickedType = false;
+                                            if (matRadioButton) {{
+                                                let innerInput = matRadioButton.querySelector('input[type="radio"]');
+                                                if (innerInput) {{ innerInput.click(); clickedType = true; }}
+                                                else {{ matRadioButton.click(); clickedType = true; }}
+                                            }} else {{
+                                                let fallbackXpath = `//label[contains(text(), '${{reportType}}')]`;
+                                                let fallbackResult = doc.evaluate(fallbackXpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                                                let labelNode = fallbackResult.singleNodeValue;
+                                                if (labelNode) {{ labelNode.click(); clickedType = true; }}
+                                            }}
+
+                                            if (!clickedType) return "ERROR: Report type not found: " + reportType;
+
+                                            // Wait for list
+                                            let listLoaded = false;
+                                            for (let i = 0; i < 20; i++) {{
+                                                let divs = doc.querySelectorAll('div.fw-semibold');
+                                                for (let d of divs) {{
+                                                    if (d.textContent.includes('Report Manger') || d.textContent.includes(reportType) || d.textContent.includes('Enquiry')) {{
+                                                        listLoaded = true; break;
                                                     }}
                                                 }}
-                                                return "NOT_FOUND";
-                                            }})();
+                                                if (listLoaded) break;
+                                                await sleep(500);
+                                            }}
+
+                                            if (!listLoaded) return "ERROR: Report list timeout.";
+
+                                            // 2. Search Report Name
+                                            await sleep(1000);
+                                            let searchInputList = doc.querySelector('input[formcontrolname="searchInput"], input[placeholder="Search"]');
+                                            if (searchInputList) {{
+                                                searchInputList.value = reportName;
+                                                searchInputList.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                                                searchInputList.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                                                searchInputList.dispatchEvent(new KeyboardEvent('keyup', {{ bubbles: true }}));
+                                            }}
+
+                                            let reportFound = false;
+                                            for (let i = 0; i < 20; i++) {{
+                                                let itemXpath = `//li[contains(@class, 'sub-list-items')]//span[contains(text(), '${{reportName}}')]`;
+                                                let itemResult = doc.evaluate(itemXpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                                                let reportSpan = itemResult.singleNodeValue;
+                                                if (reportSpan) {{
+                                                    let liElement = reportSpan.closest('li.sub-list-items');
+                                                    if (liElement) liElement.click(); else reportSpan.click();
+                                                    reportFound = true;
+                                                    break;
+                                                }}
+                                                await sleep(500);
+                                            }}
+
+                                            if (!reportFound) return "ERROR: Report name not found: " + reportName;
+
+                                            // Wait binding
+                                            let reportBound = false;
+                                            for (let i = 0; i < 30; i++) {{
+                                                let selects = doc.querySelectorAll('mat-select');
+                                                for (let s of selects) {{
+                                                    if (s.innerText.includes(reportName) || s.textContent.includes(reportName)) {{
+                                                        reportBound = true; break;
+                                                    }}
+                                                }}
+                                                if (reportBound) break;
+                                                await sleep(500);
+                                            }}
+
+                                            // 3. Fill Dynamic Filters
+                                            let labels = doc.querySelectorAll('mat-label');
+                                            for (const [key, value] of Object.entries(filters)) {{
+                                                for (let lbl of labels) {{
+                                                    if (lbl.innerText.trim().toLowerCase() === key.toLowerCase()) {{
+                                                        let labelParent = lbl.closest('label');
+                                                        if (labelParent && labelParent.hasAttribute('for')) {{
+                                                            let inputId = labelParent.getAttribute('for');
+                                                            let input = doc.getElementById(inputId);
+                                                            if (input && input.tagName === 'INPUT') {{
+                                                                await simulateTyping(input, value);
+                                                                break;
+                                                            }}
+                                                        }}
+                                                    }}
+                                                }}
+                                            }}
+
+                                            await sleep(1000);
+                                            let searchBtnIcon = doc.querySelector('button.btn-primary i.bi-search');
+                                            if (searchBtnIcon) searchBtnIcon.closest('button').click();
+
+                                            let loaderAppeared = false;
+                                            for(let i=0; i<10; i++) {{
+                                                let loader = doc.querySelector('.loading-screen-wrapper, mat-progress-bar');
+                                                if (loader && loader.offsetParent !== null) {{ loaderAppeared = true; break; }}
+                                                await sleep(500);
+                                            }}
+
+                                            if (loaderAppeared) {{
+                                                for(let i=0; i<120; i++) {{
+                                                    let loader = doc.querySelector('.loading-screen-wrapper, mat-progress-bar');
+                                                    if (!loader || loader.offsetParent === null) break;
+                                                    await sleep(500);
+                                                }}
+                                            }}
+
+                                            await sleep(1000);
+                                            let exportBtn = null;
+                                            let dxButtons = doc.querySelectorAll('.dx-button-text');
+                                            for (let btn of dxButtons) {{
+                                                if (btn.textContent.trim() === 'Export') {{ exportBtn = btn.closest('div[role=\"button\"]'); break; }}
+                                            }}
+
+                                            if (exportBtn) {{
+                                                exportBtn.click();
+                                                await sleep(1000);
+                                                let xlsxOption = null;
+                                                let listItems = doc.querySelectorAll('.dx-list-item-content');
+                                                for (let item of listItems) {{
+                                                    if (item.textContent.trim() === 'XLSX') {{ xlsxOption = item.closest('.dx-list-item'); break; }}
+                                                }}
+                                                if (xlsxOption) xlsxOption.click();
+                                            }}
+                                            return "SUCCESS: Automation Complete";
+                                        }})('{}', '{}', {});
                                         "#,
-                                            config.report_type, config.report_type
-                                        );
+                                        active_report_type, active_report_name, filters_json
+                                    );
 
-                                        let mut radio_found = false;
-                                        for _ in 0..10 {
-                                            if let Ok(eval_result) = tab.evaluate(&js_eval, true) {
-                                                if let Some(val) = eval_result.value {
-                                                    if let Some(val_str) = val.as_str() {
-                                                        if val_str == "CLICKED_RADIO"
-                                                            || val_str == "CLICKED_LABEL"
-                                                        {
-                                                            info!("Successfully clicked report type: {}", config.report_type);
-                                                            radio_found = true;
-                                                            break;
-                                                        }
-                                                    }
+                                    info!("Evaluating JS to execute automation sequence...");
+                                    match tab.evaluate(&js_script, true) {
+                                        Ok(res) => {
+                                            if let Some(v) = res.value {
+                                                let v_str = v.as_str().unwrap_or("");
+                                                info!("JS Result: {}", v_str);
+                                                if v_str == "ERROR: Cross origin blocked." {
+                                                    error!("Cross origin blocked. --disable-web-security failed.");
                                                 }
                                             }
-                                            std::thread::sleep(Duration::from_secs(2));
                                         }
-
-                                        if !radio_found {
-                                            error!("Failed to find or click report type '{}' inside iframe.", config.report_type);
-                                            if let Ok(html) = tab.get_content() {
-                                                error!("Main Page HTML at failure to click report type:\n{}", html);
-                                            }
-
-                                            // Optional: Try to dump iframe content for debugging
-                                            let dump_iframe_js = r#"
-                                            (function() {
-                                                var iframes = document.querySelectorAll('iframe');
-                                                if (iframes.length > 0) {
-                                                    try {
-                                                        return iframes[0].contentWindow.document.body.innerHTML;
-                                                    } catch (e) {
-                                                        return "IFRAME_ACCESS_ERROR: " + e.message;
-                                                    }
-                                                }
-                                                return "NO_IFRAMES_FOUND";
-                                            })();
-                                            "#;
-                                            if let Ok(iframe_eval) =
-                                                tab.evaluate(dump_iframe_js, true)
-                                            {
-                                                if let Some(iframe_val) = iframe_eval.value {
-                                                    if let Some(iframe_html) = iframe_val.as_str() {
-                                                        error!(
-                                                            "First IFrame HTML:\n{}",
-                                                            iframe_html
-                                                        );
-                                                    }
-                                                }
-                                            }
-                                        } else {
-                                            // Wait a bit to let the selection propagate
-                                            std::thread::sleep(Duration::from_secs(2));
-                                        }
+                                        Err(e) => error!("Evaluate typing failed: {}", e),
                                     }
+
+                                    std::thread::sleep(Duration::from_secs(5));
                                 }
                             }
                             Err(e) => {
@@ -654,34 +777,73 @@ async fn main() -> Result<()> {
 
     let mut config = load_or_create_config(&config_path).await?;
 
-    // Parse CLI arguments to override report_type and report_name
-    // Usage: yasweb [--type "Report Type"] [--name "Report Name"]
+    // Parse CLI arguments
     let args: Vec<String> = std::env::args().collect();
     let mut config_updated = false;
+
+    let mut active_report_name = String::new();
+    let mut active_report_type = String::new();
+    let mut active_filters = HashMap::new();
 
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
             "--type" if i + 1 < args.len() => {
-                config.report_type = args[i + 1].clone();
-                config_updated = true;
+                active_report_type = args[i + 1].clone();
                 i += 1;
             }
             "--name" if i + 1 < args.len() => {
-                config.report_name = args[i + 1].clone();
-                config_updated = true;
+                active_report_name = args[i + 1].clone();
                 i += 1;
             }
-            "--type" | "--name" => {}
+            "--filters" if i + 1 < args.len() => {
+                let filters_str = args[i + 1].clone();
+                match serde_json::from_str::<HashMap<String, String>>(&filters_str) {
+                    Ok(parsed_filters) => {
+                        active_filters = parsed_filters;
+                    }
+                    Err(e) => {
+                        error!("Failed to parse filters JSON: {}", e);
+                        std::process::exit(1);
+                    }
+                }
+                i += 1;
+            }
+            "--type" | "--name" | "--filters" => {}
             _ => {}
         }
         i += 1;
     }
 
-    // Ensure the constraint: if report_type is provided, report_name must also be provided.
-    if !config.report_type.is_empty() && config.report_name.is_empty() {
-        error!("Validation failed: report_type is provided but report_name is missing.");
+    if active_report_name.is_empty() {
+        error!("Validation failed: --name is required.");
         std::process::exit(1);
+    }
+
+    // Determine configuration to use
+    if !active_report_type.is_empty() || !active_filters.is_empty() {
+        // We received details from CLI.
+        let report_conf = ReportConfig {
+            report_type: active_report_type.clone(),
+            filters: active_filters.clone(),
+        };
+        config
+            .reports
+            .insert(active_report_name.clone(), report_conf);
+        config_updated = true;
+    } else {
+        // Retrieve from config
+        if let Some(cached) = config.reports.get(&active_report_name) {
+            info!("Found cached configuration for '{}'", active_report_name);
+            active_report_type = cached.report_type.clone();
+            active_filters = cached.filters.clone();
+        } else {
+            error!(
+                "Report '{}' not found in config and no --type/--filters provided via CLI.",
+                active_report_name
+            );
+            std::process::exit(1);
+        }
     }
 
     if config_updated {
@@ -697,7 +859,12 @@ async fn main() -> Result<()> {
 
     // Run browser logic in a blocking task since headless_chrome is synchronous
     tokio::task::spawn_blocking(move || {
-        if let Err(e) = run_browser(&config) {
+        if let Err(e) = run_browser(
+            &config,
+            &active_report_name,
+            &active_report_type,
+            &active_filters,
+        ) {
             error!("Browser automation failed: {:?}", e);
             eprintln!("Browser automation failed: {:?}", e);
         }

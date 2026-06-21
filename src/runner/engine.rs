@@ -431,6 +431,7 @@ fn normalize_and_validate_task(task: &mut RunnerTask, cfg: &RunnerConfig) -> Res
                 ));
             }
         }
+        TaskKind::Yasweb { .. } => {}
     }
 
     Ok(())
@@ -535,6 +536,16 @@ async fn run_task(
                 }
             }
         }
+        TaskKind::Yasweb { report_type, report_name, filters } => {
+            run_yasweb_command(
+                &logger,
+                report_type,
+                report_name,
+                filters,
+                effective_shell_timeout,
+            )
+            .await
+        }
     };
 
     match result {
@@ -570,6 +581,63 @@ async fn run_task(
     let mut st = status.lock().await;
     st.last_run_at = Utc::now().to_rfc3339();
     st.currently_running = false;
+}
+
+async fn run_yasweb_command(
+    logger: &TaskLogger,
+    report_type: &str,
+    report_name: &str,
+    filters: &std::collections::HashMap<String, String>,
+    timeout_seconds: u64,
+) -> Result<()> {
+    let mut exe_path = std::env::current_exe().unwrap_or_default();
+    exe_path.pop();
+    #[cfg(windows)]
+    exe_path.push("yasweb.exe");
+    #[cfg(not(windows))]
+    exe_path.push("yasweb");
+
+    let mut command = tokio::process::Command::new(&exe_path);
+    if !report_type.is_empty() {
+        command.arg("--type").arg(report_type);
+    }
+    if !report_name.is_empty() {
+        command.arg("--name").arg(report_name);
+    }
+    if !filters.is_empty() {
+        if let Ok(filters_json) = serde_json::to_string(filters) {
+            command.arg("--filters").arg(filters_json);
+        }
+    }
+
+    logger
+        .log(&format!("Executing yasweb command: {:?}", command))
+        .await;
+
+    let output = tokio::time::timeout(
+        Duration::from_secs(timeout_seconds.max(1)),
+        command.output(),
+    )
+    .await
+    .with_context(|| {
+        format!(
+            "yasweb command timed out after {}s ({})",
+            timeout_seconds,
+            exe_path.display()
+        )
+    })??;
+
+    logger.log_bytes("STDOUT", &output.stdout).await;
+    logger.log_bytes("STDERR", &output.stderr).await;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!(
+            "yasweb task failed with exit code: {:?}",
+            output.status.code()
+        ))
+    }
 }
 
 async fn run_crm_command(
