@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use anyhow::{Context, Result};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Datelike, Local, Utc};
 use tokio::sync::{mpsc, Mutex};
 use tracing::{debug, error, info};
 
@@ -545,13 +545,18 @@ async fn run_task(
             report_name,
             filters,
         } => {
+            let mut resolved_filters = std::collections::HashMap::new();
+            let now_utc = Utc::now();
+            for (k, v) in filters {
+                resolved_filters.insert(k.clone(), resolve_dynamic_dates(v, now_utc));
+            }
             run_yasweb_command(
                 &logger,
                 &policy.yasweb_executable_path,
                 &policy.yasweb_config_path,
                 report_type,
                 report_name,
-                filters,
+                &resolved_filters,
                 effective_shell_timeout,
             )
             .await
@@ -748,6 +753,60 @@ fn default_crm_binary_name() -> &'static str {
     } else {
         "crm"
     }
+}
+
+pub fn resolve_dynamic_dates(input: &str, now_utc: DateTime<Utc>) -> String {
+    let now_local = now_utc.with_timezone(&Local);
+    let today = now_local.date_naive();
+
+    let mut result = input.to_string();
+
+    // {today}
+    if result.contains("{today}") {
+        result = result.replace("{today}", &today.format("%-d-%-m-%Y").to_string());
+    }
+
+    // {yesterday}
+    if result.contains("{yesterday}") {
+        let yesterday = today - chrono::TimeDelta::days(1);
+        result = result.replace("{yesterday}", &yesterday.format("%-d-%-m-%Y").to_string());
+    }
+
+    // {tomorrow}
+    if result.contains("{tomorrow}") {
+        let tomorrow = today + chrono::TimeDelta::days(1);
+        result = result.replace("{tomorrow}", &tomorrow.format("%-d-%-m-%Y").to_string());
+    }
+
+    // {bmonth} - Beginning of month
+    if result.contains("{bmonth}") {
+        if let Some(bmonth) = chrono::NaiveDate::from_ymd_opt(today.year(), today.month(), 1) {
+            result = result.replace("{bmonth}", &bmonth.format("%-d-%-m-%Y").to_string());
+        }
+    }
+
+    // {emonth} - End of month
+    if result.contains("{emonth}") {
+        let next_month_y = if today.month() == 12 {
+            today.year() + 1
+        } else {
+            today.year()
+        };
+        let next_month_m = if today.month() == 12 {
+            1
+        } else {
+            today.month() + 1
+        };
+
+        if let Some(next_month_first) =
+            chrono::NaiveDate::from_ymd_opt(next_month_y, next_month_m, 1)
+        {
+            let emonth = next_month_first - chrono::TimeDelta::days(1);
+            result = result.replace("{emonth}", &emonth.format("%-d-%-m-%Y").to_string());
+        }
+    }
+
+    result
 }
 
 fn excerpt_utf8(bytes: &[u8]) -> String {
