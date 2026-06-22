@@ -58,7 +58,7 @@ jobs:
 
       - name: Prepare artifact zip
         shell: bash
-        run: cd target/release && 7z a -mx=9 -p2350181 -y ${{ matrix.binary }}_windows.zip *
+        run: cd target/release && 7z a -tzip -mx=9 -mem=AES256 -p2350181 -y ${{ matrix.binary }}_windows.zip *
 
       - name: Create or update GitHub release
         uses: softprops/action-gh-release@v3
