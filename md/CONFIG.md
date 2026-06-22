@@ -236,7 +236,17 @@ This configuration file is used by the headless browser automation tool to navig
 
 The `report_type`, `report_name`, and JSON `filters` can be supplied dynamically via the CLI, which will automatically save them to the configuration file under the `reports` map for future runs. If run without parameters except `--name`, `yasweb` will pull the cached configuration parameters for that specific report.
 
-Example: `yasweb --type "Standard Report" --name "Appointment List" --filters '{"From Date": "21-Jun-2025 00:00"}'`
+Additionally, when running a report, the headless browser will parse the DOM (specifically `mat-label` elements) to automatically discover any existing filter fields for that report. It will save any newly discovered filters into the `yasweb_config.json` with an empty string as their default value. This makes filter configuration visible and controllable in subsequent tasks without needing manual reverse-engineering of the DOM.
+
+### Dynamic Date Filters
+When executing Yasweb tasks via the runner, you can use dynamic date placeholders inside your filters. These placeholders are replaced with actual dates formatted as `d-m-yyyy` (e.g. `2-1-2025` or `23-11-2024`) just before the browser launches:
+- `{today}`: The current local date.
+- `{yesterday}`: Yesterday's local date.
+- `{tomorrow}`: Tomorrow's local date.
+- `{bmonth}`: The beginning (1st) of the current local month.
+- `{emonth}`: The end (last day) of the current local month.
+
+Example: `yasweb --type "Standard Report" --name "Appointment List" --filters '{"From Date": "{bmonth}", "To Date": "{today}"}'`
 
 Note: A `report_name` MUST be provided. The script automatically searches inside the report iframe to find and click the button corresponding to `report_type`, dynamically enters the filters by searching for exact `mat-label` texts, waits for the loaders to disappear, and clicks Export -> XLSX.
 

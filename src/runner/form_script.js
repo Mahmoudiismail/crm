@@ -251,6 +251,73 @@
     const crmReportContainer = document.getElementById('crm-report-container');
     const shellCommandContainer = document.getElementById('shell-command-container');
     const yaswebContainer = document.getElementById('yasweb-container');
+    const yaswebReportSelect = document.getElementById('yasweb-report-select');
+
+    let yaswebConfigData = null;
+
+    async function fetchYaswebConfig() {
+        try {
+            const res = await fetch('/api/yasweb-config');
+            if (res.ok) {
+                yaswebConfigData = await res.json();
+                populateYaswebReports();
+            }
+        } catch (e) {
+            console.error('Failed to fetch yasweb config', e);
+        }
+    }
+
+    function populateYaswebReports() {
+        if (!yaswebConfigData || !yaswebConfigData.reports || !yaswebReportSelect) return;
+
+        const reports = Object.keys(yaswebConfigData.reports);
+        const currentVal = yaswebReportSelect.getAttribute('data-initial-value');
+
+        // Check if there's an ad-hoc typed report that isn't in config
+        if (currentVal && !reports.includes(currentVal) && currentVal.trim() !== '') {
+            reports.push(currentVal);
+        }
+
+        yaswebReportSelect.innerHTML = '<option value="">-- Select Report --</option>';
+        reports.forEach(reportName => {
+            const option = document.createElement('option');
+            option.value = reportName;
+            option.textContent = reportName;
+            if (reportName === currentVal) {
+                option.selected = true;
+            }
+            yaswebReportSelect.appendChild(option);
+        });
+
+        handleYaswebReportChange();
+    }
+
+    function handleYaswebReportChange() {
+        if (!yaswebConfigData || !yaswebConfigData.reports) return;
+        const reportName = yaswebReportSelect.value;
+        const typeInput = document.querySelector('input[name="yasweb_type"]');
+        const filtersInput = document.querySelector('textarea[name="yasweb_filters"]');
+        const nameInput = document.querySelector('input[name="yasweb_name"]');
+
+        if (nameInput) {
+            nameInput.value = reportName;
+        }
+
+        // Only override type and filters if they exist in config
+        if (reportName && yaswebConfigData.reports[reportName]) {
+            const reportConf = yaswebConfigData.reports[reportName];
+            if (typeInput) {
+                typeInput.value = reportConf.report_type || '';
+            }
+            if (filtersInput) {
+                filtersInput.value = JSON.stringify(reportConf.filters || {}, null, 2);
+            }
+        }
+    }
+
+    if (yaswebReportSelect) {
+        yaswebReportSelect.addEventListener('change', handleYaswebReportChange);
+    }
 
     function updateTaskTypeVisibility() {
         if (!taskTypeSelect) return;
@@ -263,6 +330,9 @@
         }
         if (yaswebContainer) {
             yaswebContainer.classList.toggle('hidden', type !== 'yasweb');
+            if (type === 'yasweb' && !yaswebConfigData) {
+                fetchYaswebConfig();
+            }
         }
     }
 

@@ -314,6 +314,15 @@ async fn route_request(
         ));
     }
 
+    if request.method == "GET" && route_path == "/api/yasweb-config" {
+        let cfg = RunnerConfig::load(&handle.runner_config_path)?;
+        let path = crate::runner::engine::resolve_relative_to_exe_dir(&cfg.yasweb_config_path);
+        let config_str = tokio::fs::read_to_string(&path)
+            .await
+            .unwrap_or_else(|_| "{}".to_string());
+        return Ok((200, "application/json", config_str));
+    }
+
     Ok((
         404,
         "text/html; charset=utf-8",
@@ -576,6 +585,12 @@ fn render_task_form(
                 {}\
                 <div id='yasweb-container' class='hidden space-y-4 p-4 border border-blue-200 bg-blue-50 rounded'>\
                     <h3 class='text-lg font-semibold text-blue-800'>Yasweb Configuration</h3>\
+                    <label class='block'>\
+                        <span class='text-sm font-semibold text-gray-800'>Select Configured Report</span>\
+                        <select id='yasweb-report-select' class='mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm' data-initial-value='{}'>\
+                            <option value=''>-- Loading Reports --</option>\
+                        </select>\
+                    </label>\
                     <div class='grid md:grid-cols-2 gap-4'>\
                         <label class='block'><span class='text-sm font-semibold text-gray-800'>Report Type</span><input class='mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm' type='text' name='yasweb_type' value='{}'></label>\
                         <label class='block'><span class='text-sm font-semibold text-gray-800'>Report Name</span><input class='mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm' type='text' name='yasweb_name' value='{}'></label>\
@@ -597,6 +612,7 @@ fn render_task_form(
         escape_html(&timeout_seconds_str),
         schedule_editor_html(task),
         shell_command_editor_html(task),
+        escape_html(&yasweb_name),
         escape_html(&yasweb_type),
         escape_html(&yasweb_name),
         escape_html(&yasweb_filters),
