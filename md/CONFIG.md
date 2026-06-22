@@ -20,6 +20,8 @@ Implementation: `src/runner/config.rs`
 - `poll_interval_seconds`: scheduler tick interval (default `30`)
 - `crm_config_path`: path to CRM config file (default `config.json`)
 - `crm_executable_path`: crm executable file/path used by runner (default `crm.exe` on Windows, `crm` on non-Windows)
+- `yasweb_config_path`: path to Yasweb config file (default `yasweb_config.json`)
+- `yasweb_executable_path`: yasweb executable file/path used by runner (default `yasweb.exe` on Windows, `yasweb` on non-Windows)
 - `allow_shell_tasks`: allow `shell_command` tasks (default `false`)
 - `shell_timeout_seconds`: max runtime per shell task (default `900`). A value of `0` means unlimited.
 - `post_run_timeout_seconds`: max runtime for post-run scripts (default `900`). A value of `0` means unlimited.
@@ -128,6 +130,8 @@ Runner resolves relative `crm_config_path` and `crm_executable_path` from execut
   "poll_interval_seconds": 30,
   "crm_config_path": "config.json",
   "crm_executable_path": "crm",
+  "yasweb_config_path": "yasweb_config.json",
+  "yasweb_executable_path": "yasweb",
   "allow_shell_tasks": false,
   "shell_timeout_seconds": 900,
   "post_run_timeout_seconds": 900,

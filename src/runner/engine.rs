@@ -129,6 +129,8 @@ impl TaskLoggerInner {
 struct ExecutionPolicy {
     crm_config_path: String,
     crm_executable_path: String,
+    yasweb_config_path: String,
+    yasweb_executable_path: String,
     allow_shell_tasks: bool,
     shell_timeout_seconds: u64,
     post_run_timeout_seconds: u64,
@@ -471,6 +473,8 @@ fn policy_from_config(cfg: &RunnerConfig) -> ExecutionPolicy {
     ExecutionPolicy {
         crm_config_path: cfg.crm_config_path.clone(),
         crm_executable_path: cfg.crm_executable_path.clone(),
+        yasweb_config_path: cfg.yasweb_config_path.clone(),
+        yasweb_executable_path: cfg.yasweb_executable_path.clone(),
         allow_shell_tasks: cfg.allow_shell_tasks,
         shell_timeout_seconds: cfg.shell_timeout_seconds,
         post_run_timeout_seconds: cfg.post_run_timeout_seconds,
@@ -543,6 +547,8 @@ async fn run_task(
         } => {
             run_yasweb_command(
                 &logger,
+                &policy.yasweb_executable_path,
+                &policy.yasweb_config_path,
                 report_type,
                 report_name,
                 filters,
@@ -589,19 +595,18 @@ async fn run_task(
 
 async fn run_yasweb_command(
     logger: &TaskLogger,
+    executable_path: &str,
+    config_path: &str,
     report_type: &str,
     report_name: &str,
     filters: &std::collections::HashMap<String, String>,
     timeout_seconds: u64,
 ) -> Result<()> {
-    let mut exe_path = std::env::current_exe().unwrap_or_default();
-    exe_path.pop();
-    #[cfg(windows)]
-    exe_path.push("yasweb.exe");
-    #[cfg(not(windows))]
-    exe_path.push("yasweb");
+    let resolved_executable = resolve_executable(executable_path);
+    let resolved_config_path = resolve_relative_to_exe_dir(config_path);
 
-    let mut command = tokio::process::Command::new(&exe_path);
+    let mut command = tokio::process::Command::new(&resolved_executable);
+    command.arg("--config").arg(&resolved_config_path);
     if !report_type.is_empty() {
         command.arg("--type").arg(report_type);
     }
@@ -627,7 +632,7 @@ async fn run_yasweb_command(
         format!(
             "yasweb command timed out after {}s ({})",
             timeout_seconds,
-            exe_path.display()
+            resolved_executable.display()
         )
     })??;
 
@@ -651,7 +656,7 @@ async fn run_crm_command(
     report: ReportType,
     timeout_seconds: u64,
 ) -> Result<()> {
-    let resolved_executable = resolve_crm_executable(executable_path);
+    let resolved_executable = resolve_executable(executable_path);
     let resolved_config_path = resolve_relative_to_exe_dir(config_path);
 
     let mut command = tokio::process::Command::new(&resolved_executable);
@@ -690,7 +695,7 @@ async fn run_crm_command(
     Ok(())
 }
 
-fn resolve_crm_executable(configured: &str) -> std::path::PathBuf {
+fn resolve_executable(configured: &str) -> std::path::PathBuf {
     let configured = configured.trim();
     let configured_name = if configured.is_empty() {
         default_crm_binary_name().to_string()

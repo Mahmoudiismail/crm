@@ -155,6 +155,30 @@ async fn route_request(
         return Ok((200, "text/html; charset=utf-8", html));
     }
 
+    if request.method == "GET" && route_path == "/config" {
+        let cfg = RunnerConfig::load(&handle.runner_config_path)?;
+        let html = render_config_form(&cfg, None);
+        return Ok((200, "text/html; charset=utf-8", html));
+    }
+
+    if request.method == "POST" && route_path == "/config" {
+        let values = parse_query_string(&request.body);
+        match update_global_config(&handle.runner_config_path, &values).await {
+            Ok(_) => {
+                return Ok((
+                    200,
+                    "text/html; charset=utf-8",
+                    render_redirect_to_dashboard("Configuration updated"),
+                ));
+            }
+            Err(e) => {
+                let cfg = RunnerConfig::load(&handle.runner_config_path)?;
+                let html = render_config_form(&cfg, Some(&e.to_string()));
+                return Ok((200, "text/html; charset=utf-8", html));
+            }
+        }
+    }
+
     if request.method == "GET" && route_path.starts_with("/edit/") {
         let task_id = route_path.trim_start_matches("/edit/");
         let cfg = RunnerConfig::load(&handle.runner_config_path)?;
@@ -320,6 +344,7 @@ fn render_dashboard(
                     <div class='flex flex-wrap gap-2'>\
                         <a class='rounded bg-gray-900 text-white px-4 py-2 text-sm font-semibold' href='/run-all'>Run All Now</a>\
                         <a class='rounded border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-800' href='/run-tickets'>Run CRM Tickets</a>\
+                        <a class='rounded bg-gray-600 text-white px-4 py-2 text-sm font-semibold mr-2' href='/config'>Settings</a>\
                         <a class='rounded bg-emerald-600 text-white px-4 py-2 text-sm font-semibold' href='/new-task'>New Task</a>\
                     </div>\
                 </div>\
@@ -1472,6 +1497,68 @@ fn escape_html(value: &str) -> String {
         .replace('"', "&quot;")
 }
 
+async fn update_global_config(
+    path: &str,
+    values: &std::collections::HashMap<String, String>,
+) -> anyhow::Result<()> {
+    let mut cfg = crate::runner::config::RunnerConfig::load(path)?;
+    if let Some(v) = values.get("crm_executable_path") {
+        cfg.crm_executable_path = v.to_string();
+    }
+    if let Some(v) = values.get("crm_config_path") {
+        cfg.crm_config_path = v.to_string();
+    }
+    if let Some(v) = values.get("yasweb_executable_path") {
+        cfg.yasweb_executable_path = v.to_string();
+    }
+    if let Some(v) = values.get("yasweb_config_path") {
+        cfg.yasweb_config_path = v.to_string();
+    }
+    cfg.save(path)?;
+    Ok(())
+}
+
+fn render_config_form(cfg: &crate::runner::config::RunnerConfig, error: Option<&str>) -> String {
+    let error_html = if let Some(e) = error {
+        format!(
+            "<div class='mb-4 rounded bg-red-100 p-3 text-red-700'>{}</div>",
+            escape_html(e)
+        )
+    } else {
+        "".to_string()
+    };
+
+    format!(
+        "<!DOCTYPE html>\
+        <html>\
+        <head>\
+            <title>Edit Settings</title>\
+            <link href='https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css' rel='stylesheet'>\
+        </head>\
+        <body class='bg-gray-100 text-gray-900'>\
+            <div class='mx-auto max-w-xl py-10'>\
+                <h1 class='mb-6 text-2xl font-bold'>Settings</h1>\
+                {}\
+                <form method='POST' action='/config' class='space-y-4 rounded bg-white p-6 shadow'>\
+                    {}\
+                    {}\
+                    {}\
+                    {}\
+                    <div class='flex gap-4'>\
+                        <button class='rounded bg-blue-600 text-white px-4 py-2 font-semibold' type='submit'>Save Settings</button>\
+                        <a href='/' class='rounded bg-gray-200 text-gray-800 px-4 py-2 font-semibold text-center'>Cancel</a>\
+                    </div>\
+                </form>\
+            </div>\
+        </body>\
+        </html>",
+        error_html,
+        input_field("CRM Executable Path", "crm_executable_path", &cfg.crm_executable_path),
+        input_field("CRM Config Path", "crm_config_path", &cfg.crm_config_path),
+        input_field("Yasweb Executable Path", "yasweb_executable_path", &cfg.yasweb_executable_path),
+        input_field("Yasweb Config Path", "yasweb_config_path", &cfg.yasweb_config_path),
+    )
+}
 #[cfg(test)]
 mod tests {
     use super::*;

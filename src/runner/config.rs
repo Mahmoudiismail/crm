@@ -14,6 +14,10 @@ pub struct RunnerConfig {
     pub crm_config_path: String,
     #[serde(default = "default_crm_executable_path")]
     pub crm_executable_path: String,
+    #[serde(default = "default_yasweb_config_path")]
+    pub yasweb_config_path: String,
+    #[serde(default = "default_yasweb_executable_path")]
+    pub yasweb_executable_path: String,
     #[serde(default = "default_allow_shell_tasks")]
     pub allow_shell_tasks: bool,
     #[serde(default = "default_shell_timeout")]
@@ -195,6 +199,8 @@ impl Default for RunnerConfig {
             poll_interval_seconds: default_poll_interval(),
             crm_config_path: default_crm_config_path(),
             crm_executable_path: default_crm_executable_path(),
+            yasweb_config_path: default_yasweb_config_path(),
+            yasweb_executable_path: default_yasweb_executable_path(),
             allow_shell_tasks: default_allow_shell_tasks(),
             shell_timeout_seconds: default_shell_timeout(),
             post_run_timeout_seconds: default_post_run_timeout(),
@@ -804,6 +810,18 @@ fn default_crm_executable_path() -> String {
         "crm.exe".to_string()
     } else {
         "crm".to_string()
+    }
+}
+
+fn default_yasweb_config_path() -> String {
+    "yasweb_config.json".to_string()
+}
+
+fn default_yasweb_executable_path() -> String {
+    if cfg!(target_os = "windows") {
+        "yasweb.exe".to_string()
+    } else {
+        "yasweb".to_string()
     }
 }
 
