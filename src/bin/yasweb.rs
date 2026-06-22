@@ -63,7 +63,9 @@ async fn load_or_create_config(path: &PathBuf) -> Result<YaswebConfig> {
 static mut _LOG_GUARD: Option<tracing_appender::non_blocking::WorkerGuard> = None;
 
 fn setup_logging() -> Result<()> {
-    let file_appender = tracing_appender::rolling::never(".", "yasweblog");
+    let mut log_dir = std::env::current_exe().context("Failed to get executable path")?;
+    log_dir.pop();
+    let file_appender = tracing_appender::rolling::never(log_dir, "yasweblog");
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 
     // Save guard to static so it isn't dropped immediately
@@ -86,7 +88,8 @@ fn run_browser(
     active_report_name: &str,
     active_report_type: &str,
     active_filters: &HashMap<String, String>,
-) -> Result<()> {
+) -> Result<Vec<String>> {
+    let mut discovered_filters = Vec::new();
     let mut user_data_dir = std::env::current_exe().unwrap_or_default();
     user_data_dir.pop();
     user_data_dir.push("yasweb_chrome_data");
@@ -653,8 +656,16 @@ fn run_browser(
                                                 await sleep(1500);
                                             }}
 
-                                            // 3. Fill Dynamic Filters
+                                            // 3. Extract Dynamic Filters
                                             let labels = doc.querySelectorAll('mat-label');
+                                            let discoveredFilters = [];
+                                            for (let lbl of labels) {{
+                                                if (lbl.innerText) {{
+                                                    discoveredFilters.push(lbl.innerText.trim());
+                                                }}
+                                            }}
+
+                                            // 4. Fill Dynamic Filters
                                             for (const [key, value] of Object.entries(filters)) {{
                                                 for (let lbl of labels) {{
                                                     if (lbl.innerText.trim().toLowerCase() === key.toLowerCase()) {{
@@ -717,7 +728,12 @@ fn run_browser(
                                                 }}
                                                 if (xlsxOption) xlsxOption.click();
                                             }}
-                                            return "SUCCESS: Automation Complete";
+
+                                            let finalResult = {{
+                                                status: "SUCCESS: Automation Complete",
+                                                discovered_filters: discoveredFilters
+                                            }};
+                                            return JSON.stringify(finalResult);
                                         }})('{}', '{}', {});
                                         "#,
                                         active_report_type, active_report_name, filters_json
@@ -731,6 +747,32 @@ fn run_browser(
                                                 info!("JS Result: {}", v_str);
                                                 if v_str == "ERROR: Cross origin blocked." {
                                                     error!("Cross origin blocked. --disable-web-security failed.");
+                                                } else if v_str.starts_with("ERROR") {
+                                                    error!("JS Automation Error: {}", v_str);
+                                                } else {
+                                                    // Parse the JSON result
+                                                    if let Ok(parsed_res) =
+                                                        serde_json::from_str::<serde_json::Value>(
+                                                            v_str,
+                                                        )
+                                                    {
+                                                        if let Some(filters_arr) = parsed_res
+                                                            .get("discovered_filters")
+                                                            .and_then(|f| f.as_array())
+                                                        {
+                                                            for filter in filters_arr {
+                                                                if let Some(f_str) = filter.as_str()
+                                                                {
+                                                                    discovered_filters
+                                                                        .push(f_str.to_string());
+                                                                }
+                                                            }
+                                                            info!(
+                                                                "Discovered filters natively: {:?}",
+                                                                discovered_filters
+                                                            );
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
@@ -776,7 +818,7 @@ fn run_browser(
         .context("Failed to remove listener")?;
 
     std::thread::sleep(Duration::from_secs(60));
-    Ok(())
+    Ok(discovered_filters)
 }
 
 #[tokio::main]
@@ -897,19 +939,47 @@ async fn main() -> Result<()> {
 
     info!("Loaded config for URL: {}", config.url);
 
+    let config_path_clone = config_path.clone();
+    let mut config_clone = config.clone();
+    let active_report_name_clone = active_report_name.clone();
+
     // Run browser logic in a blocking task since headless_chrome is synchronous
-    tokio::task::spawn_blocking(move || {
-        if let Err(e) = run_browser(
+    let discovered_filters = tokio::task::spawn_blocking(move || {
+        match run_browser(
             &config,
             &active_report_name,
             &active_report_type,
             &active_filters,
         ) {
-            error!("Browser automation failed: {:?}", e);
-            eprintln!("Browser automation failed: {:?}", e);
+            Ok(filters) => filters,
+            Err(e) => {
+                error!("Browser automation failed: {:?}", e);
+                eprintln!("Browser automation failed: {:?}", e);
+                Vec::new()
+            }
         }
     })
     .await?;
+
+    if !discovered_filters.is_empty() {
+        if let Some(report) = config_clone.reports.get_mut(&active_report_name_clone) {
+            let mut updated_filters = false;
+            for f in discovered_filters {
+                if let std::collections::hash_map::Entry::Vacant(e) = report.filters.entry(f) {
+                    e.insert("".to_string());
+                    updated_filters = true;
+                }
+            }
+            if updated_filters {
+                info!("Updating yasweb_config.json with newly discovered filters...");
+                let content = serde_json::to_string_pretty(&config_clone)
+                    .context("Failed to serialize updated yasweb config")?;
+                fs::write(&config_path_clone, content)
+                    .await
+                    .context("Failed to write updated yasweb_config.json")?;
+            }
+        }
+    }
 
     Ok(())
 }

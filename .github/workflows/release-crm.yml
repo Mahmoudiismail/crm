@@ -43,7 +43,7 @@ jobs:
 
       - name: Prepare CRM artifact zip
         shell: bash
-        run: 7z a crm_windows.zip target/release/crm.exe
+        run: cd target/release && 7z a ../../crm_windows.zip *
 
       - name: Create or update GitHub release
         uses: softprops/action-gh-release@v3

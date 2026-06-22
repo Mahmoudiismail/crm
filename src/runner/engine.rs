@@ -727,7 +727,7 @@ fn resolve_executable(configured: &str) -> std::path::PathBuf {
     configured_path
 }
 
-fn resolve_relative_to_exe_dir(path: &str) -> std::path::PathBuf {
+pub fn resolve_relative_to_exe_dir(path: &str) -> std::path::PathBuf {
     let p = std::path::PathBuf::from(path);
     if p.is_absolute() {
         return p;
