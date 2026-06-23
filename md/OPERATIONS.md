@@ -182,7 +182,7 @@ When executing the `yasweb` headless browser:
 - Chrome's user data and cache are persisted to a `yasweb_chrome_data` directory alongside the executable, significantly reducing load times on subsequent runs.
 - The automation re-uses the initially launched browser tab instead of opening new ones to conserve memory.
 - Wait loops dynamically poll for specific success (`.usr-id`) or failure (`.alert-danger`) elements, allowing the tool to fail-fast upon invalid logins without arbitrary delays.
-- A mandatory 60-second delay is enforced at the end of the script before exiting. This pause occurs regardless of whether the run was successful or failed, allowing operators time to visually inspect the final browser state when running in non-headless mode.
+- A 60-second delay can optionally be enforced at key points (e.g. before exiting) by setting `keep_open: true` in the configuration. This allows operators time to visually inspect the final browser state when debugging in non-headless mode, while normal executions skip this wait for better performance.
 - The application executes cross-origin JavaScript on iframes using Chrome DevTools Protocol (`--disable-web-security`). It uses simulated keystrokes via `KeyboardEvent`s to insert custom dynamic filters (like `From Date` and `To Date`) to trick Angular input bindings into properly updating their state.
 - During navigation, the headless browser automatically discovers the report's filters by scanning for `mat-label` elements and auto-updates the `yasweb_config.json` file.
 - Yasweb can be configured and run directly from the `runner` GUI via the new `Yasweb Report` task type, which automatically fetches and populates dynamically discovered reports and filters from `yasweb_config.json`.
