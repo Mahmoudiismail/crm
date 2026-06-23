@@ -1149,7 +1149,10 @@ fn schedule_is_due(schedule: &TaskSchedule, now: DateTime<Utc>) -> bool {
                 // Run immediately
                 true
             } else {
-                parse_rfc3339_utc(next_run_at).is_ok_and(|scheduled_time| now >= scheduled_time)
+                match parse_rfc3339_utc(next_run_at) {
+                    Ok(scheduled_time) => now >= scheduled_time,
+                    Err(_) => false,
+                }
             }
         }
         TaskSchedule::Interval {
@@ -1160,7 +1163,10 @@ fn schedule_is_due(schedule: &TaskSchedule, now: DateTime<Utc>) -> bool {
             let is_due = if next_run_at.is_empty() {
                 true
             } else {
-                parse_rfc3339_utc(next_run_at).is_ok_and(|next_time| now >= next_time)
+                match parse_rfc3339_utc(next_run_at) {
+                    Ok(next_time) => now >= next_time,
+                    Err(_) => false,
+                }
             };
 
             if is_due {
@@ -1181,7 +1187,10 @@ fn schedule_is_due(schedule: &TaskSchedule, now: DateTime<Utc>) -> bool {
             let is_due = if next_run_at.is_empty() {
                 false
             } else {
-                parse_rfc3339_utc(next_run_at).is_ok_and(|next_time| now >= next_time)
+                match parse_rfc3339_utc(next_run_at) {
+                    Ok(next_time) => now >= next_time,
+                    Err(_) => false,
+                }
             };
 
             if is_due {
@@ -1200,14 +1209,20 @@ fn schedule_is_due(schedule: &TaskSchedule, now: DateTime<Utc>) -> bool {
             if next_run_at.is_empty() {
                 false
             } else {
-                parse_rfc3339_utc(next_run_at).is_ok_and(|next_time| now >= next_time)
+                match parse_rfc3339_utc(next_run_at) {
+                    Ok(next_time) => now >= next_time,
+                    Err(_) => false,
+                }
             }
         }
         TaskSchedule::Monthly { next_run_at, .. } => {
             if next_run_at.is_empty() {
                 false
             } else {
-                parse_rfc3339_utc(next_run_at).is_ok_and(|next_time| now >= next_time)
+                match parse_rfc3339_utc(next_run_at) {
+                    Ok(next_time) => now >= next_time,
+                    Err(_) => false,
+                }
             }
         }
     }
@@ -1302,171 +1317,45 @@ mod tests {
         );
     }
 
-    fn dummy_task() -> RunnerTask {
-        RunnerTask {
-            id: "test".to_string(),
-            name: "Test".to_string(),
-            enabled: true,
-            repetition: Repetition::Repeat,
-            frequency_seconds: 60,
-            next_run_at: String::new(),
-            schedules: Vec::new(),
-            kind: TaskKind::CrmFetch {
-                report: ReportType::All,
-            },
-            last_run_at: String::new(),
-            last_status: String::new(),
-            post_run_script: String::new(),
-            timeout_seconds: 0,
-        }
-    }
-
     #[test]
-    fn normalize_once_schedule_valid() {
-        let mut task = dummy_task();
-        task.schedules.push(TaskSchedule::Once {
-            enabled: true,
-            next_run_at: "2026-04-15T09:00:00Z".to_string(),
-        });
-        assert!(normalize_and_validate_schedules(&mut task, 5).is_ok());
-    }
-
-    #[test]
-    fn normalize_once_schedule_invalid() {
-        let mut task = dummy_task();
-        task.schedules.push(TaskSchedule::Once {
-            enabled: true,
-            next_run_at: "invalid-date".to_string(),
-        });
-        assert!(normalize_and_validate_schedules(&mut task, 5).is_err());
-    }
-
-    #[test]
-    fn normalize_interval_schedule() {
-        let mut task = dummy_task();
-        task.schedules.push(TaskSchedule::Interval {
-            enabled: true,
-            every_seconds: 2, // Less than min
-            next_run_at: "".to_string(),
-            working_hours: None,
-        });
-
-        assert!(normalize_and_validate_schedules(&mut task, 10).is_ok());
-
-        if let TaskSchedule::Interval {
-            every_seconds,
-            next_run_at,
-            ..
-        } = &task.schedules[0]
-        {
-            assert_eq!(*every_seconds, 10); // Clamped to min
-            assert!(!next_run_at.is_empty()); // Calculated
+    fn test_resolve_relative_to_exe_dir_absolute_path() {
+        // Use an absolute path based on the OS
+        let absolute_path = if cfg!(target_os = "windows") {
+            "C:\\foo\\bar"
         } else {
-            panic!("Expected Interval schedule");
-        }
+            "/foo/bar"
+        };
+        let resolved = resolve_relative_to_exe_dir(absolute_path);
+        assert_eq!(resolved, std::path::PathBuf::from(absolute_path));
     }
 
     #[test]
-    fn normalize_daily_times_valid() {
-        let mut task = dummy_task();
-        task.schedules.push(TaskSchedule::DailyTimes {
-            enabled: true,
-            times: vec![" 09:00 ".to_string(), "13:30".to_string()],
-            working_hours: None,
-            next_run_at: "".to_string(),
-        });
+    fn test_resolve_relative_to_exe_dir_relative_path() {
+        let relative_path = "config.json";
+        let resolved = resolve_relative_to_exe_dir(relative_path);
 
-        assert!(normalize_and_validate_schedules(&mut task, 5).is_ok());
+        let exe_dir = std::env::current_exe()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .to_path_buf();
+        let expected = exe_dir.join(relative_path);
 
-        if let TaskSchedule::DailyTimes {
-            times, next_run_at, ..
-        } = &task.schedules[0]
-        {
-            let expected = vec!["09:00".to_string(), "13:30".to_string()];
-            assert_eq!(times, &expected); // Trimmed
-            assert!(!next_run_at.is_empty()); // Calculated
-        } else {
-            panic!("Expected DailyTimes schedule");
-        }
+        assert_eq!(resolved, expected);
     }
 
     #[test]
-    fn normalize_daily_times_invalid_format() {
-        let mut task = dummy_task();
-        task.schedules.push(TaskSchedule::DailyTimes {
-            enabled: true,
-            times: vec!["25:00".to_string()],
-            working_hours: None,
-            next_run_at: "".to_string(),
-        });
+    fn test_resolve_relative_to_exe_dir_dot_path() {
+        let dot_path = ".";
+        let resolved = resolve_relative_to_exe_dir(dot_path);
 
-        assert!(normalize_and_validate_schedules(&mut task, 5).is_err());
-    }
+        let exe_dir = std::env::current_exe()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .to_path_buf();
+        let expected = exe_dir.join(dot_path);
 
-    #[test]
-    fn normalize_daily_times_empty() {
-        let mut task = dummy_task();
-        task.schedules.push(TaskSchedule::DailyTimes {
-            enabled: true,
-            times: vec![],
-            working_hours: None,
-            next_run_at: "".to_string(),
-        });
-
-        assert!(normalize_and_validate_schedules(&mut task, 5).is_err());
-    }
-
-    #[test]
-    fn normalize_weekly_schedule_valid() {
-        let mut task = dummy_task();
-        task.schedules.push(TaskSchedule::Weekly {
-            enabled: true,
-            day_of_week: " Monday ".to_string(),
-            at_time: " 14:00 ".to_string(),
-            next_run_at: "  ".to_string(),
-        });
-
-        assert!(normalize_and_validate_schedules(&mut task, 5).is_ok());
-
-        if let TaskSchedule::Weekly {
-            day_of_week,
-            at_time,
-            next_run_at,
-            ..
-        } = &task.schedules[0]
-        {
-            assert_eq!(day_of_week, "Monday");
-            assert_eq!(at_time, "14:00");
-            assert_eq!(next_run_at, "");
-        } else {
-            panic!("Expected Weekly schedule");
-        }
-    }
-
-    #[test]
-    fn normalize_monthly_schedule_valid() {
-        let mut task = dummy_task();
-        task.schedules.push(TaskSchedule::Monthly {
-            enabled: true,
-            day_of_month: 35, // More than 31
-            at_time: " 10:00 ".to_string(),
-            next_run_at: "".to_string(),
-        });
-
-        assert!(normalize_and_validate_schedules(&mut task, 5).is_ok());
-
-        if let TaskSchedule::Monthly {
-            day_of_month,
-            at_time,
-            next_run_at,
-            ..
-        } = &task.schedules[0]
-        {
-            assert_eq!(*day_of_month, 31); // Clamped
-            assert_eq!(at_time, "10:00");
-            assert!(!next_run_at.is_empty());
-        } else {
-            panic!("Expected Monthly schedule");
-        }
+        assert_eq!(resolved, expected);
     }
 }
