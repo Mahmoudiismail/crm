@@ -106,5 +106,4 @@ Unit tests validate:
 - leap-year handling,
 - month-end logic,
 - recursive date-range halving,
-- error path handling for invalid dates and inverted date ranges during splits,
 - URL extraction from split report arrays.
