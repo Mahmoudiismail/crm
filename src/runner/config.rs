@@ -1,3 +1,10 @@
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct YaswebReportSpec {
+    pub report_type: String,
+    pub report_name: String,
+    #[serde(default)]
+    pub filters: std::collections::HashMap<String, String>,
+}
 use anyhow::{Context, Result};
 use chrono::{DateTime, Datelike, Local, NaiveTime, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
@@ -79,10 +86,8 @@ pub enum TaskKind {
         commands: Vec<ShellCommandSpec>,
     },
     Yasweb {
-        report_type: String,
-        report_name: String,
         #[serde(default)]
-        filters: std::collections::HashMap<String, String>,
+        reports: Vec<YaswebReportSpec>,
     },
 }
 

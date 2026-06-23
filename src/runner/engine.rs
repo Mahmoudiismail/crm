@@ -1,3 +1,9 @@
+#[derive(serde::Serialize, Clone)]
+pub struct RunSpec {
+    pub report_type: String,
+    pub report_name: String,
+    pub filters: std::collections::HashMap<String, String>,
+}
 use std::fs;
 use std::io::Write;
 use std::sync::Arc;
@@ -540,23 +546,29 @@ async fn run_task(
                 }
             }
         }
-        TaskKind::Yasweb {
-            report_type,
-            report_name,
-            filters,
-        } => {
-            let mut resolved_filters = std::collections::HashMap::new();
+        TaskKind::Yasweb { reports } => {
+            let mut runs = Vec::new();
             let now_utc = Utc::now();
-            for (k, v) in filters {
-                resolved_filters.insert(k.clone(), resolve_dynamic_dates(v, now_utc));
+            for report in reports {
+                let mut resolved_filters = std::collections::HashMap::new();
+                for (k, v) in &report.filters {
+                    resolved_filters.insert(
+                        k.clone(),
+                        resolve_dynamic_dates(v, now_utc, &report.report_type),
+                    );
+                }
+                runs.push(RunSpec {
+                    report_type: report.report_type.clone(),
+                    report_name: report.report_name.clone(),
+                    filters: resolved_filters,
+                });
             }
+
             run_yasweb_command(
                 &logger,
                 &policy.yasweb_executable_path,
                 &policy.yasweb_config_path,
-                report_type,
-                report_name,
-                &resolved_filters,
+                &runs,
                 effective_shell_timeout,
             )
             .await
@@ -602,9 +614,7 @@ async fn run_yasweb_command(
     logger: &TaskLogger,
     executable_path: &str,
     config_path: &str,
-    report_type: &str,
-    report_name: &str,
-    filters: &std::collections::HashMap<String, String>,
+    runs: &[RunSpec],
     timeout_seconds: u64,
 ) -> Result<()> {
     let resolved_executable = resolve_executable(executable_path);
@@ -612,16 +622,8 @@ async fn run_yasweb_command(
 
     let mut command = tokio::process::Command::new(&resolved_executable);
     command.arg("--config").arg(&resolved_config_path);
-    if !report_type.is_empty() {
-        command.arg("--type").arg(report_type);
-    }
-    if !report_name.is_empty() {
-        command.arg("--name").arg(report_name);
-    }
-    if !filters.is_empty() {
-        if let Ok(filters_json) = serde_json::to_string(filters) {
-            command.arg("--filters").arg(filters_json);
-        }
+    if let Ok(runs_json) = serde_json::to_string(runs) {
+        command.arg("--run").arg(runs_json);
     }
 
     logger
@@ -755,33 +757,39 @@ fn default_crm_binary_name() -> &'static str {
     }
 }
 
-pub fn resolve_dynamic_dates(input: &str, now_utc: DateTime<Utc>) -> String {
+pub fn resolve_dynamic_dates(input: &str, now_utc: DateTime<Utc>, report_type: &str) -> String {
     let now_local = now_utc.with_timezone(&Local);
     let today = now_local.date_naive();
 
     let mut result = input.to_string();
 
+    let date_format = if report_type == "Standard Report" {
+        "%-d-%-m-%Y"
+    } else {
+        "%d-%b-%Y"
+    };
+
     // {today}
     if result.contains("{today}") {
-        result = result.replace("{today}", &today.format("%-d-%-m-%Y").to_string());
+        result = result.replace("{today}", &today.format(date_format).to_string());
     }
 
     // {yesterday}
     if result.contains("{yesterday}") {
         let yesterday = today - chrono::TimeDelta::days(1);
-        result = result.replace("{yesterday}", &yesterday.format("%-d-%-m-%Y").to_string());
+        result = result.replace("{yesterday}", &yesterday.format(date_format).to_string());
     }
 
     // {tomorrow}
     if result.contains("{tomorrow}") {
         let tomorrow = today + chrono::TimeDelta::days(1);
-        result = result.replace("{tomorrow}", &tomorrow.format("%-d-%-m-%Y").to_string());
+        result = result.replace("{tomorrow}", &tomorrow.format(date_format).to_string());
     }
 
     // {bmonth} - Beginning of month
     if result.contains("{bmonth}") {
         if let Some(bmonth) = chrono::NaiveDate::from_ymd_opt(today.year(), today.month(), 1) {
-            result = result.replace("{bmonth}", &bmonth.format("%-d-%-m-%Y").to_string());
+            result = result.replace("{bmonth}", &bmonth.format(date_format).to_string());
         }
     }
 
@@ -802,7 +810,7 @@ pub fn resolve_dynamic_dates(input: &str, now_utc: DateTime<Utc>) -> String {
             chrono::NaiveDate::from_ymd_opt(next_month_y, next_month_m, 1)
         {
             let emonth = next_month_first - chrono::TimeDelta::days(1);
-            result = result.replace("{emonth}", &emonth.format("%-d-%-m-%Y").to_string());
+            result = result.replace("{emonth}", &emonth.format(date_format).to_string());
         }
     }
 

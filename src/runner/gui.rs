@@ -452,12 +452,8 @@ fn render_task_row(task: &RunnerTask) -> String {
                 mode_str
             )
         }
-        TaskKind::Yasweb {
-            report_type,
-            report_name,
-            ..
-        } => {
-            format!("Yasweb {} ({})", report_name, report_type)
+        TaskKind::Yasweb { reports } => {
+            format!("Yasweb tasks ({})", reports.len())
         }
     };
     let last_run = if task.last_run_at.is_empty() {
@@ -519,20 +515,13 @@ fn render_task_form(
     } else {
         String::new()
     };
-    let mut yasweb_type = String::new();
-    let mut yasweb_name = String::new();
-    let mut yasweb_filters = String::new();
+    let mut yasweb_reports_json = "[]".to_string();
 
     let (task_type, report) = match task.map(|t| &t.kind) {
         Some(TaskKind::ShellCommand { .. }) => ("shell_command", "all"),
-        Some(TaskKind::Yasweb {
-            report_type,
-            report_name,
-            filters,
-        }) => {
-            yasweb_type = report_type.clone();
-            yasweb_name = report_name.clone();
-            yasweb_filters = serde_json::to_string_pretty(filters).unwrap_or_default();
+        Some(TaskKind::Yasweb { reports }) => {
+            yasweb_reports_json =
+                serde_json::to_string(reports).unwrap_or_else(|_| "[]".to_string());
             ("yasweb", "all")
         }
         Some(TaskKind::CrmFetch { report }) => (
@@ -584,18 +573,12 @@ fn render_task_form(
                 {}\
                 {}\
                 <div id='yasweb-container' class='hidden space-y-4 p-4 border border-blue-200 bg-blue-50 rounded'>\
-                    <h3 class='text-lg font-semibold text-blue-800'>Yasweb Configuration</h3>\
-                    <label class='block'>\
-                        <span class='text-sm font-semibold text-gray-800'>Select Configured Report</span>\
-                        <select id='yasweb-report-select' class='mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm' data-initial-value='{}'>\
-                            <option value=''>-- Loading Reports --</option>\
-                        </select>\
-                    </label>\
-                    <div class='grid md:grid-cols-2 gap-4'>\
-                        <label class='block'><span class='text-sm font-semibold text-gray-800'>Report Type</span><input class='mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm' type='text' name='yasweb_type' value='{}'></label>\
-                        <label class='block'><span class='text-sm font-semibold text-gray-800'>Report Name</span><input class='mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm' type='text' name='yasweb_name' value='{}'></label>\
+                    <div class='flex items-center justify-between'>\
+                        <h3 class='text-lg font-semibold text-blue-800'>Yasweb Configuration</h3>\
+                        <button type='button' id='add-yasweb-report' class='rounded border border-gray-300 bg-emerald-600 text-white px-3 py-1 text-sm font-semibold hover:bg-emerald-700'>+ Add Report</button>\
                     </div>\
-                    <label class='block'><span class='text-sm font-semibold text-gray-800'>Filters (JSON)</span><textarea class='mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm font-mono' name='yasweb_filters' rows='4' placeholder='{{\"From Date\": \"21-Jun-2025 00:00\"}}'>{}</textarea></label>\
+                    <div id='yasweb-reports-list' class='space-y-4' data-initial-reports='{}'></div>\
+                    <input type='hidden' id='yasweb_reports_hidden' name='yasweb_reports' value=''>\
                 </div>\
                 <button class='rounded bg-emerald-600 text-white px-4 py-2 text-sm font-semibold' type='submit'>{}</button>\
             </form>\
@@ -612,10 +595,7 @@ fn render_task_form(
         escape_html(&timeout_seconds_str),
         schedule_editor_html(task),
         shell_command_editor_html(task),
-        escape_html(&yasweb_name),
-        escape_html(&yasweb_type),
-        escape_html(&yasweb_name),
-        escape_html(&yasweb_filters),
+        yasweb_reports_json.replace("'", "&#39;"),
         escape_html(submit_label)
     );
     let page_html = form_html + &form_script();
@@ -1217,27 +1197,14 @@ fn build_task_from_values(
             )?,
         }
     } else if task_type == "yasweb" {
-        let filters_str = values
-            .get("yasweb_filters")
-            .map(String::as_str)
-            .unwrap_or("{}");
-        let filters = if filters_str.trim().is_empty() {
-            std::collections::HashMap::new()
-        } else {
-            serde_json::from_str(filters_str)
-                .with_context(|| format!("Invalid filters JSON: {}", filters_str))?
-        };
-        TaskKind::Yasweb {
-            report_type: values
-                .get("yasweb_type")
-                .map(|s| s.trim().to_string())
-                .unwrap_or_default(),
-            report_name: values
-                .get("yasweb_name")
-                .map(|s| s.trim().to_string())
-                .unwrap_or_default(),
-            filters,
-        }
+        let reports_json = values
+            .get("yasweb_reports")
+            .map(|s| s.as_str())
+            .unwrap_or("[]");
+        let reports: Vec<crate::runner::config::YaswebReportSpec> =
+            serde_json::from_str(reports_json)
+                .with_context(|| format!("Invalid yasweb reports JSON: {}", reports_json))?;
+        TaskKind::Yasweb { reports }
     } else {
         TaskKind::CrmFetch {
             report: parse_report_type(values.get("report")),
