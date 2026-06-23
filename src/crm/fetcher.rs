@@ -507,6 +507,32 @@ mod tests {
     }
 
     #[test]
+    fn test_split_monthly_invalid_from_date() {
+        let err = split_monthly("invalid-date", "2026-01-20").unwrap_err();
+        assert!(err.to_string().contains("Invalid from_date: invalid-date"));
+
+        let err = split_monthly("2026-13-01", "2026-01-20").unwrap_err();
+        assert!(err.to_string().contains("Invalid from_date: 2026-13-01"));
+    }
+
+    #[test]
+    fn test_split_monthly_invalid_to_date() {
+        let err = split_monthly("2026-01-05", "invalid-date").unwrap_err();
+        assert!(err.to_string().contains("Invalid to_date: invalid-date"));
+
+        let err = split_monthly("2026-01-05", "2026-01-32").unwrap_err();
+        assert!(err.to_string().contains("Invalid to_date: 2026-01-32"));
+    }
+
+    #[test]
+    fn test_split_monthly_from_after_to() {
+        let err = split_monthly("2026-02-01", "2026-01-31").unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("from_date (2026-02-01) is after to_date (2026-01-31)"));
+    }
+
+    #[test]
     fn test_split_monthly_leap_year() {
         let batches = split_monthly("2024-02-01", "2024-02-29").unwrap();
         assert_eq!(batches.len(), 1);
@@ -523,6 +549,32 @@ mod tests {
             last_day_of_month(2025, 2),
             NaiveDate::from_ymd_opt(2025, 2, 28)
         );
+    }
+
+    #[test]
+    fn test_split_range_in_half_invalid_from_date() {
+        let err = split_range_in_half("invalid-date", "2026-01-20").unwrap_err();
+        assert!(err.to_string().contains("Invalid from_date: invalid-date"));
+
+        let err = split_range_in_half("2026-13-01", "2026-01-20").unwrap_err();
+        assert!(err.to_string().contains("Invalid from_date: 2026-13-01"));
+    }
+
+    #[test]
+    fn test_split_range_in_half_invalid_to_date() {
+        let err = split_range_in_half("2026-01-05", "invalid-date").unwrap_err();
+        assert!(err.to_string().contains("Invalid to_date: invalid-date"));
+
+        let err = split_range_in_half("2026-01-05", "2026-01-32").unwrap_err();
+        assert!(err.to_string().contains("Invalid to_date: 2026-01-32"));
+    }
+
+    #[test]
+    fn test_split_range_in_half_from_after_to() {
+        let err = split_range_in_half("2026-02-01", "2026-01-31").unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("from_date (2026-02-01) is after to_date (2026-01-31)"));
     }
 
     #[test]
