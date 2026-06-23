@@ -68,3 +68,6 @@ path = "src/bin/wcxx.rs"
 tray-icon = "0.24.0"
 muda = "0.19.2"
 winit = "0.30.13"
+
+[dev-dependencies]
+tempfile = "3.10.1"

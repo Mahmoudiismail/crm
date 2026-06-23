@@ -210,3 +210,105 @@ fn strip_nulls(value: &mut Value) {
         _ => {}
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    #[test]
+    fn test_load_creates_default_file_if_missing() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let config_path = temp_dir.path().join("missing_config.json");
+        let path_str = config_path.to_str().unwrap();
+
+        // Ensure file does not exist
+        assert!(!config_path.exists());
+
+        // Load config, which should create the file with defaults
+        let config = AppConfig::load(path_str).expect("Failed to load config");
+
+        // Verify default values
+        assert_eq!(config.region, "ap-south-1");
+        assert_eq!(config.username, "+201155520811");
+
+        // Verify the file was actually created
+        assert!(config_path.exists());
+
+        // Verify we can parse the created file back and it matches
+        let loaded_again = AppConfig::load(path_str).expect("Failed to load newly created config");
+        assert_eq!(config.region, loaded_again.region);
+    }
+
+    #[test]
+    fn test_load_merges_partial_config() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+
+        // Write a partial config with only a few fields
+        let partial_json = r#"{
+            "region": "us-east-1",
+            "download_csv": false
+        }"#;
+        temp_file.write_all(partial_json.as_bytes()).unwrap();
+        let path_str = temp_file.path().to_str().unwrap();
+
+        let config = AppConfig::load(path_str).expect("Failed to load partial config");
+
+        // Overridden values
+        assert_eq!(config.region, "us-east-1");
+        assert_eq!(config.download_csv, false);
+
+        // Default values should be filled in
+        assert_eq!(config.username, "+201155520811");
+        assert_eq!(config.no_verify_ssl, true);
+    }
+
+    #[test]
+    fn test_load_returns_error_on_invalid_json() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+
+        // Write invalid JSON
+        let invalid_json = r#"{ "region": "us-east-1", "#;
+        temp_file.write_all(invalid_json.as_bytes()).unwrap();
+        let path_str = temp_file.path().to_str().unwrap();
+
+        let result = AppConfig::load(path_str);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("Failed to parse config file"));
+    }
+
+    #[test]
+    fn test_save_strips_secrets_when_remember_secrets_is_false() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let config_path = temp_dir.path().join("save_config.json");
+        let path_str = config_path.to_str().unwrap();
+
+        let mut config = AppConfig::default();
+        config.remember_secrets = false;
+        config.password = "my_super_secret_password".to_string();
+        config.access_token = "some_token".to_string();
+
+        config.save(path_str).expect("Failed to save config");
+
+        // Read the raw JSON
+        let raw_json = std::fs::read_to_string(path_str).unwrap();
+        let parsed_json: serde_json::Value = serde_json::from_str(&raw_json).unwrap();
+
+        // Verify secrets are missing
+        if let serde_json::Value::Object(map) = parsed_json {
+            assert!(!map.contains_key("password"), "Password should be stripped");
+            assert!(
+                !map.contains_key("access_token"),
+                "Access token should be stripped"
+            );
+            assert!(
+                map.contains_key("region"),
+                "Non-secret fields should remain"
+            );
+        } else {
+            panic!("Expected JSON object");
+        }
+    }
+}
