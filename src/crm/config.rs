@@ -257,11 +257,11 @@ mod tests {
 
         // Overridden values
         assert_eq!(config.region, "us-east-1");
-        assert_eq!(config.download_csv, false);
+        assert!(!config.download_csv);
 
         // Default values should be filled in
         assert_eq!(config.username, "+201155520811");
-        assert_eq!(config.no_verify_ssl, true);
+        assert!(config.no_verify_ssl);
     }
 
     #[test]
@@ -285,10 +285,12 @@ mod tests {
         let config_path = temp_dir.path().join("save_config.json");
         let path_str = config_path.to_str().unwrap();
 
-        let mut config = AppConfig::default();
-        config.remember_secrets = false;
-        config.password = "my_super_secret_password".to_string();
-        config.access_token = "some_token".to_string();
+        let config = AppConfig {
+            remember_secrets: false,
+            password: "my_super_secret_password".to_string(),
+            access_token: "some_token".to_string(),
+            ..AppConfig::default()
+        };
 
         config.save(path_str).expect("Failed to save config");
 
