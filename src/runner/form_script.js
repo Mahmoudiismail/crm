@@ -251,7 +251,9 @@
     const crmReportContainer = document.getElementById('crm-report-container');
     const shellCommandContainer = document.getElementById('shell-command-container');
     const yaswebContainer = document.getElementById('yasweb-container');
-    const yaswebReportSelect = document.getElementById('yasweb-report-select');
+    const yaswebReportsList = document.getElementById('yasweb-reports-list');
+    const addYaswebReportBtn = document.getElementById('add-yasweb-report');
+    const yaswebReportsHidden = document.getElementById('yasweb_reports_hidden');
 
     let yaswebConfigData = null;
 
@@ -267,56 +269,155 @@
         }
     }
 
-    function populateYaswebReports() {
-        if (!yaswebConfigData || !yaswebConfigData.reports || !yaswebReportSelect) return;
+    function createYaswebReportRow(reportData) {
+        const row = document.createElement('div');
+        row.setAttribute('data-yasweb-report-row', '');
+        row.className = 'p-3 border border-blue-300 rounded bg-white relative';
 
-        const reports = Object.keys(yaswebConfigData.reports);
-        const currentVal = yaswebReportSelect.getAttribute('data-initial-value');
+        const reportName = reportData ? reportData.report_name : '';
+        const reportType = reportData ? reportData.report_type : '';
+        const filters = reportData ? reportData.filters : {};
 
-        // Check if there's an ad-hoc typed report that isn't in config
-        if (currentVal && !reports.includes(currentVal) && currentVal.trim() !== '') {
-            reports.push(currentVal);
+        let optionsHtml = '<option value="">-- Select Report --</option>';
+        if (yaswebConfigData && yaswebConfigData.reports) {
+            const reports = Object.keys(yaswebConfigData.reports);
+            if (reportName && !reports.includes(reportName)) {
+                reports.push(reportName);
+            }
+            reports.forEach(name => {
+                optionsHtml += `<option value="${name}" ${name === reportName ? 'selected' : ''}>${name}</option>`;
+            });
         }
 
-        yaswebReportSelect.innerHTML = '<option value="">-- Select Report --</option>';
-        reports.forEach(reportName => {
-            const option = document.createElement('option');
-            option.value = reportName;
-            option.textContent = reportName;
-            if (reportName === currentVal) {
-                option.selected = true;
+        row.innerHTML = `
+            <button type="button" class="remove-yasweb-report absolute top-2 right-2 text-red-600 hover:text-red-800 font-bold">&times;</button>
+            <div class="grid md:grid-cols-2 gap-4 mb-3">
+                <label class="block">
+                    <span class="text-sm font-semibold text-gray-800">Select Configured Report</span>
+                    <select class="yasweb-report-select mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm">
+                        ${optionsHtml}
+                    </select>
+                </label>
+                <div class="flex items-end mb-1">
+                    <button type="button" class="refresh-filters rounded border border-gray-300 bg-blue-100 text-blue-800 px-3 py-1.5 text-sm font-semibold hover:bg-blue-200">Refresh Filters</button>
+                </div>
+            </div>
+            <div class="grid md:grid-cols-2 gap-4 mb-3">
+                <label class="block"><span class="text-sm font-semibold text-gray-800">Report Type</span><input class="yasweb-type-input mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm" type="text" value="${reportType}"></label>
+                <label class="block"><span class="text-sm font-semibold text-gray-800">Report Name</span><input class="yasweb-name-input mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm" type="text" value="${reportName}"></label>
+            </div>
+            <div class="yasweb-filters-container space-y-2">
+                <h4 class="text-sm font-semibold text-gray-700 border-b pb-1">Filters</h4>
+                <div class="yasweb-filters-list grid md:grid-cols-2 gap-2"></div>
+            </div>
+        `;
+
+        const filtersList = row.querySelector('.yasweb-filters-list');
+
+        function renderFilters(currentFilters) {
+            filtersList.innerHTML = '';
+            for (const [key, value] of Object.entries(currentFilters)) {
+                const filterDiv = document.createElement('div');
+                filterDiv.className = 'flex flex-col';
+                filterDiv.innerHTML = `
+                    <label class="text-xs font-semibold text-gray-600">${key}</label>
+                    <input type="text" data-filter-key="${key}" value="${value}" class="yasweb-filter-input rounded border border-gray-300 px-2 py-1 text-sm">
+                `;
+                filtersList.appendChild(filterDiv);
             }
-            yaswebReportSelect.appendChild(option);
+        }
+
+        renderFilters(filters);
+
+        row.querySelector('.yasweb-report-select').addEventListener('change', function(e) {
+            const selectedName = e.target.value;
+            const nameInput = row.querySelector('.yasweb-name-input');
+            const typeInput = row.querySelector('.yasweb-type-input');
+            nameInput.value = selectedName;
+
+            if (selectedName && yaswebConfigData && yaswebConfigData.reports[selectedName]) {
+                const conf = yaswebConfigData.reports[selectedName];
+                typeInput.value = conf.report_type || '';
+                renderFilters(conf.filters || {});
+            }
         });
 
-        handleYaswebReportChange();
+        row.querySelector('.refresh-filters').addEventListener('click', function() {
+            const selectedName = row.querySelector('.yasweb-name-input').value;
+            if (selectedName && yaswebConfigData && yaswebConfigData.reports[selectedName]) {
+                const conf = yaswebConfigData.reports[selectedName];
+
+                const currentFilters = {};
+                Array.from(row.querySelectorAll('.yasweb-filter-input')).forEach(inp => {
+                    currentFilters[inp.getAttribute('data-filter-key')] = inp.value;
+                });
+
+                const newFilters = { ...conf.filters };
+                for (const k in currentFilters) {
+                    if (newFilters.hasOwnProperty(k)) {
+                        newFilters[k] = currentFilters[k];
+                    }
+                }
+
+                renderFilters(newFilters);
+            }
+        });
+
+        row.querySelector('.remove-yasweb-report').addEventListener('click', function() {
+            row.remove();
+        });
+
+        return row;
     }
 
-    function handleYaswebReportChange() {
-        if (!yaswebConfigData || !yaswebConfigData.reports) return;
-        const reportName = yaswebReportSelect.value;
-        const typeInput = document.querySelector('input[name="yasweb_type"]');
-        const filtersInput = document.querySelector('textarea[name="yasweb_filters"]');
-        const nameInput = document.querySelector('input[name="yasweb_name"]');
+    function populateYaswebReports() {
+        if (!yaswebReportsList) return;
 
-        if (nameInput) {
-            nameInput.value = reportName;
-        }
-
-        // Only override type and filters if they exist in config
-        if (reportName && yaswebConfigData.reports[reportName]) {
-            const reportConf = yaswebConfigData.reports[reportName];
-            if (typeInput) {
-                typeInput.value = reportConf.report_type || '';
+        Array.from(yaswebReportsList.querySelectorAll('.yasweb-report-select')).forEach(select => {
+            const currentVal = select.value;
+            let optionsHtml = '<option value="">-- Select Report --</option>';
+            if (yaswebConfigData && yaswebConfigData.reports) {
+                const reports = Object.keys(yaswebConfigData.reports);
+                if (currentVal && !reports.includes(currentVal)) {
+                    reports.push(currentVal);
+                }
+                reports.forEach(name => {
+                    optionsHtml += `<option value="${name}" ${name === currentVal ? 'selected' : ''}>${name}</option>`;
+                });
             }
-            if (filtersInput) {
-                filtersInput.value = JSON.stringify(reportConf.filters || {}, null, 2);
-            }
-        }
+            select.innerHTML = optionsHtml;
+        });
     }
 
-    if (yaswebReportSelect) {
-        yaswebReportSelect.addEventListener('change', handleYaswebReportChange);
+    if (addYaswebReportBtn) {
+        addYaswebReportBtn.addEventListener('click', function() {
+            if (!yaswebReportsList) return;
+            const row = createYaswebReportRow(null);
+            yaswebReportsList.appendChild(row);
+        });
+    }
+
+    function buildYaswebReports() {
+        if (!yaswebReportsList) return '[]';
+        const reports = [];
+        Array.from(yaswebReportsList.querySelectorAll('[data-yasweb-report-row]')).forEach(row => {
+            const reportName = row.querySelector('.yasweb-name-input').value.trim();
+            const reportType = row.querySelector('.yasweb-type-input').value.trim();
+            const filters = {};
+            Array.from(row.querySelectorAll('.yasweb-filter-input')).forEach(inp => {
+                const key = inp.getAttribute('data-filter-key');
+                filters[key] = inp.value;
+            });
+
+            if (reportName) {
+                reports.push({
+                    report_name: reportName,
+                    report_type: reportType,
+                    filters: filters
+                });
+            }
+        });
+        return JSON.stringify(reports);
     }
 
     function updateTaskTypeVisibility() {
@@ -341,11 +442,28 @@
         updateTaskTypeVisibility();
     }
 
+    if (yaswebReportsList) {
+        try {
+            const initialReportsStr = yaswebReportsList.getAttribute('data-initial-reports');
+            if (initialReportsStr && initialReportsStr !== '{}' && initialReportsStr !== '[]' && initialReportsStr !== '') {
+                const initialReports = JSON.parse(initialReportsStr);
+                if (Array.isArray(initialReports)) {
+                    initialReports.forEach(rep => {
+                        yaswebReportsList.appendChild(createYaswebReportRow(rep));
+                    });
+                }
+            }
+        } catch (e) {
+            console.error('Failed to parse initial yasweb reports', e);
+        }
+    }
+
     const form = document.querySelector('form');
     if (form) {
         form.addEventListener('submit', function() {
-            schedulesHidden.value = buildSchedules();
-            commandsHidden.value = buildCommands();
+            if (schedulesHidden) schedulesHidden.value = buildSchedules();
+            if (commandsHidden) commandsHidden.value = buildCommands();
+            if (yaswebReportsHidden) yaswebReportsHidden.value = buildYaswebReports();
         });
     }
 })();
