@@ -25,6 +25,8 @@ struct YaswebConfig {
     #[serde(default)]
     headless: bool,
     #[serde(default)]
+    keep_open: bool,
+    #[serde(default)]
     reports: HashMap<String, ReportConfig>,
 }
 
@@ -35,6 +37,7 @@ impl Default for YaswebConfig {
             username: "3245".to_string(),
             password: Some("Soso@2350181".to_string()),
             headless: false,
+            keep_open: false,
             reports: HashMap::new(),
         }
     }
@@ -202,7 +205,9 @@ fn run_browser(
             error!("Page HTML at failure to find username:\n{}", html);
         }
 
-        std::thread::sleep(Duration::from_secs(60));
+        if config.keep_open {
+            std::thread::sleep(Duration::from_secs(60));
+        }
         return Err(anyhow::anyhow!("Failed to find elements to login"));
     }
 
@@ -214,7 +219,9 @@ fn run_browser(
                 if let Ok(html) = tab.get_content() {
                     error!("Page HTML at failure to type username:\n{}", html);
                 }
-                std::thread::sleep(Duration::from_secs(60));
+                if config.keep_open {
+                    std::thread::sleep(Duration::from_secs(60));
+                }
                 return Err(anyhow::anyhow!("Failed to type username"));
             }
             info!("Successfully typed username.");
@@ -233,7 +240,9 @@ fn run_browser(
                             if let Ok(html) = tab.get_content() {
                                 error!("Page HTML at failure to type password:\n{}", html);
                             }
-                            std::thread::sleep(Duration::from_secs(60));
+                            if config.keep_open {
+                                std::thread::sleep(Duration::from_secs(60));
+                            }
                             return Err(anyhow::anyhow!("Failed to type password"));
                         }
                         info!("Successfully typed password.");
@@ -243,7 +252,9 @@ fn run_browser(
                         if let Ok(html) = tab.get_content() {
                             error!("Page HTML at failure to find password input:\n{}", html);
                         }
-                        std::thread::sleep(Duration::from_secs(60));
+                        if config.keep_open {
+                            std::thread::sleep(Duration::from_secs(60));
+                        }
                         return Err(anyhow::anyhow!("Failed to find password input"));
                     }
                 }
@@ -260,7 +271,9 @@ fn run_browser(
                             error!("Page HTML after failed login click:\n{}", html);
                         }
 
-                        std::thread::sleep(Duration::from_secs(60));
+                        if config.keep_open {
+                            std::thread::sleep(Duration::from_secs(60));
+                        }
                         return Err(anyhow::anyhow!("Failed to click login button"));
                     }
                     info!("Successfully clicked login button.");
@@ -273,7 +286,9 @@ fn run_browser(
                     if let Ok(html) = tab.get_content() {
                         error!("Page HTML at failure to find login button:\n{}", html);
                     }
-                    std::thread::sleep(Duration::from_secs(60));
+                    if config.keep_open {
+                        std::thread::sleep(Duration::from_secs(60));
+                    }
                     return Err(anyhow::anyhow!("Failed to find login button"));
                 }
             }
@@ -289,7 +304,9 @@ fn run_browser(
                         error!("Page HTML after failed login:\n{}", html);
                     }
 
-                    std::thread::sleep(Duration::from_secs(60));
+                    if config.keep_open {
+                        std::thread::sleep(Duration::from_secs(60));
+                    }
                     return Err(anyhow::anyhow!("Login failed: {}", msg.trim()));
                 }
 
@@ -322,7 +339,9 @@ fn run_browser(
                     error!("Page HTML at dashboard timeout:\n{}", html);
                 }
 
-                std::thread::sleep(Duration::from_secs(60));
+                if config.keep_open {
+                    std::thread::sleep(Duration::from_secs(60));
+                }
                 return Err(anyhow::anyhow!("Dashboard timeout"));
             }
 
@@ -343,7 +362,9 @@ fn run_browser(
                     error!("Page HTML at menu wait timeout:\n{}", html);
                 }
 
-                std::thread::sleep(Duration::from_secs(60));
+                if config.keep_open {
+                    std::thread::sleep(Duration::from_secs(60));
+                }
                 return Err(anyhow::anyhow!("Menu wait timeout"));
             }
 
@@ -470,7 +491,9 @@ fn run_browser(
                         if let Ok(html) = tab.get_content() {
                             error!("Page HTML at MIS module wait timeout:\n{}", html);
                         }
-                        std::thread::sleep(Duration::from_secs(60));
+                        if config.keep_open {
+                            std::thread::sleep(Duration::from_secs(60));
+                        }
                         return Err(anyhow::anyhow!("MIS module wait timeout"));
                     } else {
                         match tab.wait_for_element(mis_selector) {
@@ -507,7 +530,9 @@ fn run_browser(
                                                 html
                                             );
                                         }
-                                        std::thread::sleep(Duration::from_secs(60));
+                                        if config.keep_open {
+                                            std::thread::sleep(Duration::from_secs(60));
+                                        }
                                         return Err(anyhow::anyhow!(
                                             "MIS Reports button wait timeout"
                                         ));
@@ -808,7 +833,9 @@ fn run_browser(
                 error!("Page HTML at failure to find username:\n{}", html);
             }
 
-            std::thread::sleep(Duration::from_secs(60));
+            if config.keep_open {
+                std::thread::sleep(Duration::from_secs(60));
+            }
             return Err(anyhow::anyhow!("Failed to find elements to login"));
         }
     }
@@ -817,7 +844,9 @@ fn run_browser(
     tab.remove_event_listener(&events)
         .context("Failed to remove listener")?;
 
-    std::thread::sleep(Duration::from_secs(60));
+    if config.keep_open {
+        std::thread::sleep(Duration::from_secs(60));
+    }
     Ok(discovered_filters)
 }
 

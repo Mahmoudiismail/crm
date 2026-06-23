@@ -228,11 +228,14 @@ The `yasweb` binary stores its target URL and automation credentials in `yasweb_
   "username": "",
   "password": null,
   "headless": false,
+  "keep_open": false,
   "reports": {}
 }
 ```
 
 This configuration file is used by the headless browser automation tool to navigate to the target application and fill in the login form fields (`input[name='username']`, `input[type='password']`).
+
+The `keep_open` flag defaults to `false`. When enabled (`true`), it bypasses performance optimizations and intentionally hangs the browser execution for 60 seconds at major lifecycle events (such as prior to an error return or upon script completion). This is intended strictly for debugging purposes to allow developers time to inspect the browser state.
 
 The `report_type`, `report_name`, and JSON `filters` can be supplied dynamically via the CLI, which will automatically save them to the configuration file under the `reports` map for future runs. If run without parameters except `--name`, `yasweb` will pull the cached configuration parameters for that specific report.
 
