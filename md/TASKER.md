@@ -2,6 +2,10 @@
 
 `tasker` is a lightweight, stateless task runner binary part of the CRM Tool suite. It is designed to be executed by the `runner` and can process various configured tasks in a single pass before exiting. Because it operates cleanly and exits, it can safely be invoked multiple times in parallel by the runner scheduler without deadlocks, provided tasks are configured with different targets.
 
+## Note for AI Agents (AGENTS.md Addendum)
+
+> **Important**: If any modifications are made to the `csv_analysis` task within `tasker`, you MUST run the validation test using the provided raw dataset (from the user's pastebin) and compare it to the expected output before submitting the PR to ensure regressions are avoided.
+
 ## Configuration
 
 `tasker` looks for a `tasker_config.json` file in the current working directory by default. You can override this by passing the path as the first argument:
