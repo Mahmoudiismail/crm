@@ -1,0 +1,19 @@
+{
+  "tasks": [
+    {
+      "type": "csv_analysis",
+      "download_path": "./downloads",
+      "users_file": "./users.csv",
+      "assignment_settings_file": "./assignments.csv",
+      "minutes_ago": 15,
+      "exclude_branches": [
+        "Dr. Soliman Fakeeh Hospital Madinah",
+        "Medical Fakeeh"
+      ],
+      "exclude_categories": [
+        "incomplete reservation"
+      ],
+      "output_file": "./results.csv"
+    }
+  ]
+}
