@@ -1216,7 +1216,7 @@ fn schedule_is_due(schedule: &TaskSchedule, now: DateTime<Utc>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::runner::config::{human_duration, next_daily_run_after};
+    use crate::runner::config::next_daily_run_after;
 
     #[test]
     fn legacy_repeat_task_is_due_without_next_run() {
@@ -1238,12 +1238,6 @@ mod tests {
         };
 
         assert!(task.due_now(Utc::now()));
-    }
-
-    #[test]
-    fn human_duration_uses_largest_units() {
-        assert_eq!(human_duration(3_660), "1 hour 1 minute");
-        assert_eq!(human_duration(86_400), "1 day");
     }
 
     #[test]

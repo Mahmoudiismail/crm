@@ -859,6 +859,12 @@ mod tests {
     use std::fs;
 
     #[test]
+    fn human_duration_uses_largest_units() {
+        assert_eq!(human_duration(3_660), "1 hour 1 minute");
+        assert_eq!(human_duration(86_400), "1 day");
+    }
+
+    #[test]
     fn test_interval_schedule_persistence() {
         // Create a task with an interval schedule
         let task = RunnerTask {
