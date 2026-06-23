@@ -8,9 +8,30 @@
 
 ## Configuration
 
-`tasker` looks for a `tasker_config.json` file in the current working directory by default. You can override this by passing the path as the first argument:
-```bash
-./tasker path/to/my_config.json
+`tasker` looks for a `tasker_config.json` file in the current working directory by default. You can override this by passing the path as the first argument, or using explicit flags.
+
+### CLI Arguments
+- `--config <PATH>`: Overrides the default `tasker_config.json` path. (Legacy support also allows passing just the path without the flag).
+- `--task <INDEX>`: Executes only a specific task from the configuration (1-based index). For example, `--task 1` runs only the first task in the config array.
+- `--only-call-center`: When provided, the task skips generating per-team and per-branch emails, and *only* processes and sends the Call Center email logic for the target task.
+
+**Example: Scheduling in runner_config.json**
+To schedule these separately in the `runner`, you can configure two different tasks in `runner_config.json`:
+```json
+{
+  "tasks": [
+    {
+      "name": "Standard Reports",
+      "command": "tasker.exe",
+      "args": ["--task", "1"]
+    },
+    {
+      "name": "Call Center Report Only",
+      "command": "tasker.exe",
+      "args": ["--task", "1", "--only-call-center"]
+    }
+  ]
+}
 ```
 
 The configuration file is a JSON object with a `tasks` array.

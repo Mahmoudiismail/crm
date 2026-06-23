@@ -28,8 +28,11 @@ pub struct AssignmentSettings {
     pub auto_agent_team_assignment: Option<String>,
 }
 
-pub fn run(config: &CsvAnalysisConfig) -> Result<()> {
-    info!("Starting csv_analysis task...");
+pub fn run(config: &CsvAnalysisConfig, only_call_center: bool) -> Result<()> {
+    info!(
+        "Starting csv_analysis task (only_call_center: {})...",
+        only_call_center
+    );
 
     // 1. Load users (Table11)
     info!("Loading users file from {}", config.users_file);
@@ -410,15 +413,12 @@ pub fn run(config: &CsvAnalysisConfig) -> Result<()> {
     );
 
     if let Some(email_cfg) = &config.email_config {
-        // Prepare headers for the email processing
-        if let Some((_, _first_record)) = all_records.first() {
-            let _h_record = csv::StringRecord::new();
-            // We just need a dummy for length matching, but the easiest is to read them back.
-            // Actually `email::process_emails` will just read the file anyway.
-            info!("Email config present, starting email processing...");
-            if let Err(e) = crate::tasker::email::process_emails(&config.output_file, email_cfg) {
-                error!("Error processing emails: {}", e);
-            }
+        // Start email processing
+        info!("Email config present, starting email processing...");
+        if let Err(e) =
+            crate::tasker::email::process_emails(&config.output_file, email_cfg, only_call_center)
+        {
+            error!("Error processing emails: {}", e);
         }
     }
 

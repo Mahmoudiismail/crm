@@ -24,20 +24,47 @@ fn main() -> Result<()> {
 
     info!("Tasker started.");
 
-    // Determine config path from args, default to "tasker_config.json"
-    // And ensure the tasker looks for the configuration file in the same directory as the executable
+    // Parse arguments
     let args: Vec<String> = env::args().collect();
+    let mut config_path_arg = None;
+    let mut task_filter: Option<usize> = None;
+    let mut only_call_center = false;
+
+    let mut i = 1;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--config" => {
+                if i + 1 < args.len() {
+                    config_path_arg = Some(std::path::PathBuf::from(&args[i + 1]));
+                    i += 1;
+                }
+            }
+            "--task" => {
+                if i + 1 < args.len() {
+                    if let Ok(idx) = args[i + 1].parse::<usize>() {
+                        task_filter = Some(idx);
+                    }
+                    i += 1;
+                }
+            }
+            "--only-call-center" => {
+                only_call_center = true;
+            }
+            // Support the legacy positional config path if they don't provide a flag
+            val if !val.starts_with("--") && config_path_arg.is_none() => {
+                config_path_arg = Some(std::path::PathBuf::from(val));
+            }
+            _ => {}
+        }
+        i += 1;
+    }
 
     let default_config_path = env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(|p| p.join("tasker_config.json")))
         .unwrap_or_else(|| std::path::PathBuf::from("tasker_config.json"));
 
-    let config_path = if args.len() > 1 {
-        std::path::PathBuf::from(&args[1])
-    } else {
-        default_config_path
-    };
+    let config_path = config_path_arg.unwrap_or(default_config_path);
 
     info!("Loading configuration from: {}", config_path.display());
     let config_content = fs::read_to_string(&config_path)
@@ -47,10 +74,18 @@ fn main() -> Result<()> {
         .with_context(|| "Failed to parse tasker_config.json")?;
 
     for (i, task) in config.tasks.iter().enumerate() {
-        info!("Running task #{}", i + 1);
+        let task_idx = i + 1;
+
+        if let Some(filter) = task_filter {
+            if task_idx != filter {
+                continue;
+            }
+        }
+
+        info!("Running task #{}", task_idx);
         match task {
             TaskConfig::CsvAnalysis(csv_config) => {
-                if let Err(e) = csv_task::run(csv_config) {
+                if let Err(e) = csv_task::run(csv_config, only_call_center) {
                     error!("Error running CsvAnalysis task: {:?}", e);
                 }
             }

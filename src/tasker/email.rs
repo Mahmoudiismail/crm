@@ -288,10 +288,14 @@ fn generate_pivot_html(rows: &[TicketRow], statuses: &[String], include_team_col
     html
 }
 
-pub fn process_emails(results_file: &str, config: &EmailConfig) -> Result<()> {
+pub fn process_emails(
+    results_file: &str,
+    config: &EmailConfig,
+    only_call_center: bool,
+) -> Result<()> {
     info!(
-        "Starting email processing module. Reading output from {}",
-        results_file
+        "Starting email processing module. Reading output from {} (only_call_center: {})",
+        results_file, only_call_center
     );
 
     // 1. Load the team mapping file
@@ -453,7 +457,8 @@ pub fn process_emails(results_file: &str, config: &EmailConfig) -> Result<()> {
         .iter()
         .map(|s| s.to_lowercase())
         .collect();
-    let send_cc = config.send_call_center.unwrap_or(false);
+    // Force sending CC if only_call_center flag is passed via CLI, otherwise use config
+    let send_cc = only_call_center || config.send_call_center.unwrap_or(false);
 
     let mut per_team_buckets: HashMap<String, Vec<TicketRow>> = HashMap::new(); // Key: Team name
     let mut per_branch_buckets: HashMap<String, Vec<TicketRow>> = HashMap::new(); // Key: Branch name
@@ -470,7 +475,7 @@ pub fn process_emails(results_file: &str, config: &EmailConfig) -> Result<()> {
 
         if is_cc && send_cc && allowed_branch {
             call_center_bucket.push(row);
-        } else if !is_cc {
+        } else if !is_cc && !only_call_center {
             if send_per_team_branches.contains(&b_low) {
                 per_team_buckets
                     .entry(row.team.clone())
