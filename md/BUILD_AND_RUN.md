@@ -37,6 +37,7 @@ For one optimized application binary:
 cargo build --release --bin runner
 cargo build --release --bin crm
 cargo build --release --bin yasweb
+cargo build --release --bin tasker
 cargo build --release --bin wcxx
 ```
 
@@ -132,7 +133,8 @@ Release workflow behavior:
 
 - `release-runner.yml` builds `cargo build --release --bin runner` and uploads `runner_windows.zip`.
 - `release-crm.yml` builds `cargo build --release --bin crm` and uploads `crm_windows.zip`.
-- `release-yasweb.yml` builds `cargo build --release --bin yasweb` and uploads `yasweb_windows.zip`.
+- `release-yasweb.yml` builds `cargo build --release --bin yasweb
+cargo build --release --bin tasker` and uploads `yasweb_windows.zip`.
 - `release.yml` allows on-demand compilation of specific applications (`crm`, `runner`, `yasweb`, `wcxx`) or all at once via a manual `workflow_dispatch` trigger.
 - All release workflows publish to tag `v<package version>` from `Cargo.toml` and can update the same GitHub release with separate assets. They compress the entire `target/release/` directory to ensure config files or metadata alongside binaries are packaged accurately.
 

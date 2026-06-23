@@ -19,3 +19,6 @@ Reference policy: `md/AI_DOC_POLICY.md`
 ## Completion Criteria
 
 A task is not complete unless code and docs are both updated where behavior changed.
+
+## `csv_analysis` Task Testing
+If you modify `src/tasker/csv_task.rs` or any logic related to the `csv_analysis` task, you **MUST** run a test mapping user pastebin inputs to their expected output file before submitting the Pull Request. Validate that joins, columns, filters, and row-counts map effectively using the provided datasets.

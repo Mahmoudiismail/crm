@@ -8,6 +8,7 @@ This project consists of three main binaries:
 - **runner**: Orchestrates and executes configured tasks
 - **crm**: One-shot CRM execution with CLI argument support
 - **yasweb**: Web automation and headless Chrome integration
+- **tasker**: Stateless task runner for configured background workflows
 
 ## 🚀 Quick Start
 
@@ -26,6 +27,7 @@ cargo build --release
 cargo build --release --bin crm
 cargo build --release --bin runner
 cargo build --release --bin yasweb
+cargo build --release --bin tasker
 ```
 
 ### Run
@@ -39,6 +41,9 @@ cargo build --release --bin yasweb
 
 # Run Yasweb
 ./target/release/yasweb.exe
+
+# Run Tasker
+./target/release/tasker.exe
 ```
 
 ### CLI Arguments
@@ -63,6 +68,7 @@ For detailed information, see the documentation in the `md/` folder:
 10. [`DOCKER.md`](./md/DOCKER.md) - Docker setup
 11. [`OPERATIONS.md`](./md/OPERATIONS.md) - Operations guide
 12. [`AI_DOC_POLICY.md`](./md/AI_DOC_POLICY.md) - Documentation policy
+13. [`TASKER.md`](./md/TASKER.md) - Tasker application
 
 ## 🏗️ Project Structure
 
@@ -70,6 +76,7 @@ For detailed information, see the documentation in the `md/` folder:
 .
 ├── src/
 │   ├── bin/
+│   │   ├── tasker.rs      # Configured tasks execution entry point
 │   │   ├── runner.rs      # Runner orchestration entry point
 │   │   ├── crm.rs         # CRM one-shot execution entry point
 │   │   └── yasweb.rs      # Web automation entry point
@@ -130,6 +137,7 @@ Releases are automatically built and published via GitHub Actions:
 - **release-crm.yml**: Builds and publishes the CRM binary
 - **release-runner.yml**: Builds and publishes the Runner binary
 - **release-yasweb.yml**: Builds and publishes the Yasweb binary
+- **release-tasker.yml**: Builds and publishes the Tasker binary
 
 All binaries use the same version from `Cargo.toml`.
 

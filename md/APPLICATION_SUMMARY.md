@@ -2,7 +2,7 @@
 
 ## What It Does
 
-This project ships four Rust executables:
+This project ships five Rust executables:
 
 - `runner`: tray scheduler + GUI + task engine
 - `crm`: one-shot CRM fetch executable

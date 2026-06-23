@@ -9,6 +9,7 @@ src/
 │   ├── runner.rs
 │   ├── crm.rs
 │   └── wcxx.rs
+│   └── tasker.rs
 ├── crm/
 │   ├── auth.rs
 │   ├── config.rs
@@ -114,3 +115,9 @@ src/
 - Fatal startup issues: process exits.
 - Runtime operation issues: logged with context.
 - Per-report fetch errors: captured as JSON error entries, not full-run abort.
+
+### `src/bin/tasker.rs`
+- Stateless task runner executable.
+- Processes tasks defined in `tasker_config.json`.
+- Supports specific automation workflows like `csv_analysis`.
+- Exits after one pass.
