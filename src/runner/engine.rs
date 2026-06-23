@@ -1322,4 +1322,46 @@ mod tests {
                 .is_err()
         );
     }
+
+    #[test]
+    fn test_resolve_relative_to_exe_dir_absolute_path() {
+        // Use an absolute path based on the OS
+        let absolute_path = if cfg!(target_os = "windows") {
+            "C:\\foo\\bar"
+        } else {
+            "/foo/bar"
+        };
+        let resolved = resolve_relative_to_exe_dir(absolute_path);
+        assert_eq!(resolved, std::path::PathBuf::from(absolute_path));
+    }
+
+    #[test]
+    fn test_resolve_relative_to_exe_dir_relative_path() {
+        let relative_path = "config.json";
+        let resolved = resolve_relative_to_exe_dir(relative_path);
+
+        let exe_dir = std::env::current_exe()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .to_path_buf();
+        let expected = exe_dir.join(relative_path);
+
+        assert_eq!(resolved, expected);
+    }
+
+    #[test]
+    fn test_resolve_relative_to_exe_dir_dot_path() {
+        let dot_path = ".";
+        let resolved = resolve_relative_to_exe_dir(dot_path);
+
+        let exe_dir = std::env::current_exe()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .to_path_buf();
+        let expected = exe_dir.join(dot_path);
+
+        assert_eq!(resolved, expected);
+    }
 }
