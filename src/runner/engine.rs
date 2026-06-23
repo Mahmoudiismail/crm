@@ -1149,10 +1149,7 @@ fn schedule_is_due(schedule: &TaskSchedule, now: DateTime<Utc>) -> bool {
                 // Run immediately
                 true
             } else {
-                match parse_rfc3339_utc(next_run_at) {
-                    Ok(scheduled_time) => now >= scheduled_time,
-                    Err(_) => false,
-                }
+                parse_rfc3339_utc(next_run_at).is_ok_and(|scheduled_time| now >= scheduled_time)
             }
         }
         TaskSchedule::Interval {
@@ -1163,10 +1160,7 @@ fn schedule_is_due(schedule: &TaskSchedule, now: DateTime<Utc>) -> bool {
             let is_due = if next_run_at.is_empty() {
                 true
             } else {
-                match parse_rfc3339_utc(next_run_at) {
-                    Ok(next_time) => now >= next_time,
-                    Err(_) => false,
-                }
+                parse_rfc3339_utc(next_run_at).is_ok_and(|next_time| now >= next_time)
             };
 
             if is_due {
@@ -1187,10 +1181,7 @@ fn schedule_is_due(schedule: &TaskSchedule, now: DateTime<Utc>) -> bool {
             let is_due = if next_run_at.is_empty() {
                 false
             } else {
-                match parse_rfc3339_utc(next_run_at) {
-                    Ok(next_time) => now >= next_time,
-                    Err(_) => false,
-                }
+                parse_rfc3339_utc(next_run_at).is_ok_and(|next_time| now >= next_time)
             };
 
             if is_due {
@@ -1209,20 +1200,14 @@ fn schedule_is_due(schedule: &TaskSchedule, now: DateTime<Utc>) -> bool {
             if next_run_at.is_empty() {
                 false
             } else {
-                match parse_rfc3339_utc(next_run_at) {
-                    Ok(next_time) => now >= next_time,
-                    Err(_) => false,
-                }
+                parse_rfc3339_utc(next_run_at).is_ok_and(|next_time| now >= next_time)
             }
         }
         TaskSchedule::Monthly { next_run_at, .. } => {
             if next_run_at.is_empty() {
                 false
             } else {
-                match parse_rfc3339_utc(next_run_at) {
-                    Ok(next_time) => now >= next_time,
-                    Err(_) => false,
-                }
+                parse_rfc3339_utc(next_run_at).is_ok_and(|next_time| now >= next_time)
             }
         }
     }
