@@ -13,6 +13,18 @@ pub enum TaskConfig {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct EmailConfig {
+    pub team_mapping_file: String,
+    pub initial_cc: String,
+    pub ending_cc: String,
+    pub send_emails: Option<bool>,
+    pub default_to_email: String,
+    pub send_per_team_branches: Vec<String>,
+    pub send_per_branch_branches: Vec<String>,
+    pub send_call_center: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CsvAnalysisConfig {
     pub download_path: String,
     pub users_file: String,
@@ -21,4 +33,5 @@ pub struct CsvAnalysisConfig {
     pub exclude_branches: Vec<String>,
     pub exclude_categories: Vec<String>,
     pub output_file: String,
+    pub email_config: Option<EmailConfig>,
 }

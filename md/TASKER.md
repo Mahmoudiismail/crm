@@ -8,9 +8,30 @@
 
 ## Configuration
 
-`tasker` looks for a `tasker_config.json` file in the current working directory by default. You can override this by passing the path as the first argument:
-```bash
-./tasker path/to/my_config.json
+`tasker` looks for a `tasker_config.json` file in the current working directory by default. You can override this by passing the path as the first argument, or using explicit flags.
+
+### CLI Arguments
+- `--config <PATH>`: Overrides the default `tasker_config.json` path. (Legacy support also allows passing just the path without the flag).
+- `--task <INDEX>`: Executes only a specific task from the configuration (1-based index). For example, `--task 1` runs only the first task in the config array.
+- `--only-call-center`: When provided, the task skips generating per-team and per-branch emails, and *only* processes and sends the Call Center email logic for the target task.
+
+**Example: Scheduling in runner_config.json**
+To schedule these separately in the `runner`, you can configure two different tasks in `runner_config.json`:
+```json
+{
+  "tasks": [
+    {
+      "name": "Standard Reports",
+      "command": "tasker.exe",
+      "args": ["--task", "1"]
+    },
+    {
+      "name": "Call Center Report Only",
+      "command": "tasker.exe",
+      "args": ["--task", "1", "--only-call-center"]
+    }
+  ]
+}
 ```
 
 The configuration file is a JSON object with a `tasks` array.
@@ -36,7 +57,17 @@ This task is designed to process multiple ticket report CSV files and augment th
       "exclude_categories": [
         "incomplete reservation"
       ],
-      "output_file": "./results.csv"
+      "output_file": "./results.csv",
+      "email_config": {
+        "team_mapping_file": "./teams.csv",
+        "initial_cc": "initial@example.com",
+        "ending_cc": "ending@example.com",
+        "send_emails": false,
+        "default_to_email": "fallback@example.com",
+        "send_per_team_branches": ["Dr. Soliman Fakeeh Hospital"],
+        "send_per_branch_branches": ["dsfmc", "DSFMH"],
+        "send_call_center": true
+      }
     }
   ]
 }
@@ -51,6 +82,14 @@ This task is designed to process multiple ticket report CSV files and augment th
 - `exclude_branches`: Array of strings. Tickets belonging to these branches will be excluded from the final output (case-insensitive).
 - `exclude_categories`: Array of strings. Tickets belonging to these categories will be excluded from the final output (case-insensitive).
 - `output_file`: Destination file path to write the combined, joined, and augmented CSV output.
+- `email_config`: (Optional) Specifies automated email configuration via Microsoft Outlook.
+  - `team_mapping_file`: Path to CSV configuring email recipients per Team or Branch Name (Requires headers `Team Name`, `To Emails`, `CC`).
+  - `initial_cc` / `ending_cc`: Static CC emails appended to every sent mail.
+  - `send_emails`: Boolean, if `false` emails are left open as drafts (using `.Display()`) for manual review. If `true` uses `.Send()`.
+  - `default_to_email`: Fallback email if team mapped isn't found, and also used to send exception/error reports.
+  - `send_per_team_branches`: List of branches that should send distinct emails for each *team* within the branch.
+  - `send_per_branch_branches`: List of branches that will receive *one email for the entire branch* instead of separated by team.
+  - `send_call_center`: Boolean, if true unifies the "Call Center" tickets from all allowed branches into a single email instead of being grouped with the others.
 
 #### Processing Logic
 1. **User Maps:** Loads the user mapping file. Looks for columns matching `cognito_username` and `UserDepartmentName / Team Name` to create a `Position` list and define the primary assignee team.
@@ -62,3 +101,13 @@ This task is designed to process multiple ticket report CSV files and augment th
     - Joins data to calculate the exact `Position` and `team`.
     - Adds `Day` and `Month` tracking columns.
 4. **Sort and Output:** Sorts numerically by `Ticket Id` and streams everything efficiently to the `output_file`.
+5. **Email Automation:** (If `email_config` is defined)
+    - Re-reads the generated output. Filters out any "Closed" tickets.
+    - Groups remaining tickets by either branch or team as defined in `send_per_team_branches` and `send_per_branch_branches`, separating "Call Center" tickets if configured.
+    - Uses `rust_xlsxwriter` to create a `.xlsx` data file for each group.
+    - Generates a heavily styled HTML Pivot Table counting occurrences by dynamically resolved Status per Subtype/Category.
+    - Executes a background PowerShell script to automate Microsoft Outlook (`New-Object -ComObject Outlook.Application`), appending the Excel attachment and drafting/sending the result.
+
+## Logging
+
+`tasker` includes detailed logging for auditing and debugging. It leverages the `tracing` framework to output logs both to STDOUT and to a rolling log file `task_csv_analysis.log` situated in the same folder as the executable. Every step (config parsing, file reading, row counting, filtering, pivot creation, and Outlook automation) is rigorously tracked in this file.

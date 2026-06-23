@@ -5,6 +5,7 @@ use csv::{ReaderBuilder, StringRecord, WriterBuilder};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
+use tracing::{error, info, warn};
 use walkdir::WalkDir;
 
 // --- Data Models ---
@@ -27,10 +28,14 @@ pub struct AssignmentSettings {
     pub auto_agent_team_assignment: Option<String>,
 }
 
-pub fn run(config: &CsvAnalysisConfig) -> Result<()> {
-    println!("Starting csv_analysis task...");
+pub fn run(config: &CsvAnalysisConfig, only_call_center: bool) -> Result<()> {
+    info!(
+        "Starting csv_analysis task (only_call_center: {})...",
+        only_call_center
+    );
 
     // 1. Load users (Table11)
+    info!("Loading users file from {}", config.users_file);
     let mut assignee_map: HashMap<String, UserInfo> = HashMap::new();
     let users_file = File::open(&config.users_file)
         .with_context(|| format!("Failed to open users file: {}", config.users_file))?;
@@ -74,11 +79,16 @@ pub fn run(config: &CsvAnalysisConfig) -> Result<()> {
                 );
             }
         }
+        info!("Loaded {} user mappings.", assignee_map.len());
     } else {
-        println!("Warning: Could not find required columns in users file.");
+        warn!("Could not find required columns in users file (cognito_username, UserDepartmentName / Team Name).");
     }
 
     // 2. Load assignment settings
+    info!(
+        "Loading assignment settings from {}",
+        config.assignment_settings_file
+    );
     let mut assignment_map: HashMap<(String, String, String), String> = HashMap::new();
     let assignment_file = File::open(&config.assignment_settings_file).with_context(|| {
         format!(
@@ -107,8 +117,13 @@ pub fn run(config: &CsvAnalysisConfig) -> Result<()> {
             }
         }
     }
+    info!("Loaded {} assignment settings.", assignment_map.len());
 
     // 3. Find target tickets CSVs
+    info!(
+        "Scanning for target ticket CSVs in {} (modified in last {} min)",
+        config.download_path, config.minutes_ago
+    );
     let now = Local::now().naive_local();
     let threshold = now - Duration::minutes(config.minutes_ago);
     let mut target_files = Vec::new();
@@ -135,12 +150,13 @@ pub fn run(config: &CsvAnalysisConfig) -> Result<()> {
     }
 
     if target_files.is_empty() {
-        println!(
+        info!(
             "No target files found modified in the last {} minutes.",
             config.minutes_ago
         );
         return Ok(());
     }
+    info!("Found {} target ticket files.", target_files.len());
 
     // Prepare exclusion filters
     let exclude_branches: HashSet<String> = config
@@ -187,11 +203,18 @@ pub fn run(config: &CsvAnalysisConfig) -> Result<()> {
         None
     }
 
+    info!(
+        "Processing ticket files and writing to output: {}",
+        config.output_file
+    );
     let mut output_writer = WriterBuilder::new().from_path(&config.output_file)?;
     let mut all_records = Vec::new();
     let mut wrote_headers = false;
+    let mut total_filtered_rows = 0;
+    let mut total_deduped_rows = 0;
 
     for file_path in target_files {
+        info!("Processing file: {}", file_path.display());
         let file = File::open(&file_path)?;
         let mut rdr = ReaderBuilder::new().has_headers(true).from_reader(file);
 
@@ -276,6 +299,7 @@ pub fn run(config: &CsvAnalysisConfig) -> Result<()> {
                 .unwrap_or("")
                 .to_string();
             if seen_tickets.contains(&ticket_id_val) {
+                total_deduped_rows += 1;
                 continue;
             }
             seen_tickets.insert(ticket_id_val.clone());
@@ -287,6 +311,7 @@ pub fn run(config: &CsvAnalysisConfig) -> Result<()> {
                 .trim()
                 .to_lowercase();
             if exclude_branches.contains(&branch_val) {
+                total_filtered_rows += 1;
                 continue;
             }
 
@@ -296,6 +321,7 @@ pub fn run(config: &CsvAnalysisConfig) -> Result<()> {
                 .trim()
                 .to_lowercase();
             if exclude_categories.contains(&cat_val) {
+                total_filtered_rows += 1;
                 continue;
             }
 
@@ -369,15 +395,32 @@ pub fn run(config: &CsvAnalysisConfig) -> Result<()> {
         }
     });
 
-    for (_, record) in all_records {
-        output_writer.write_record(&record)?;
+    info!(
+        "Writing {} joined records to output file (deduped: {}, filtered: {}).",
+        all_records.len(),
+        total_deduped_rows,
+        total_filtered_rows
+    );
+
+    for (_, record) in &all_records {
+        output_writer.write_record(record)?;
     }
 
     output_writer.flush()?;
-    println!(
+    info!(
         "csv_analysis task completed successfully. Output written to {}",
         config.output_file
     );
+
+    if let Some(email_cfg) = &config.email_config {
+        // Start email processing
+        info!("Email config present, starting email processing...");
+        if let Err(e) =
+            crate::tasker::email::process_emails(&config.output_file, email_cfg, only_call_center)
+        {
+            error!("Error processing emails: {}", e);
+        }
+    }
 
     Ok(())
 }
