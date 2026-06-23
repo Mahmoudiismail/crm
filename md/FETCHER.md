@@ -107,3 +107,7 @@ Unit tests validate:
 - month-end logic,
 - recursive date-range halving,
 - URL extraction from split report arrays.
+
+## Performance Optimization
+
+To minimize performance overhead from reference counting when setting up many asynchronous batch tasks, task context variables (`token`, `base_url`, `email`, `account_id`, `application_id`, `tz`) are consolidated into a single `FetchContext` struct, requiring only one `Arc` wrapper to be cloned per spawned task.

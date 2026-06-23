@@ -10,6 +10,19 @@ use crate::crm::config::AppConfig;
 use crate::crm::types::ReportType;
 
 // ──────────────────────────────────────────────────────────────
+// Fetch Context Context
+// ──────────────────────────────────────────────────────────────
+
+struct FetchContext {
+    token: String,
+    base_url: String,
+    email: String,
+    account_id: String,
+    application_id: String,
+    tz: String,
+}
+
+// ──────────────────────────────────────────────────────────────
 // Report definitions
 // ──────────────────────────────────────────────────────────────
 
@@ -72,12 +85,14 @@ pub async fn fetch_reports(
     // Build task list
     let mut handles: Vec<tokio::task::JoinHandle<(String, Value)>> = Vec::new();
 
-    let token_arc = Arc::new(token.to_string());
-    let base_url_arc = Arc::new(config.base_url.clone());
-    let email_arc = Arc::new(config.email.clone());
-    let account_id_arc = Arc::new(config.account_id.clone());
-    let application_id_arc = Arc::new(config.application_id.clone());
-    let tz_arc = Arc::new(config.app_timezone_plus_minutes.clone());
+    let context = Arc::new(FetchContext {
+        token: token.to_string(),
+        base_url: config.base_url.clone(),
+        email: config.email.clone(),
+        account_id: config.account_id.clone(),
+        application_id: config.application_id.clone(),
+        tz: config.app_timezone_plus_minutes.clone(),
+    });
 
     for def in defs {
         if !should_fetch(def.key) {
@@ -99,26 +114,21 @@ pub async fn fetch_reports(
 
             for (batch_from, batch_to) in batches {
                 let client = client.clone();
-                let token = Arc::clone(&token_arc);
-                let base_url = Arc::clone(&base_url_arc);
-                let email = Arc::clone(&email_arc);
-                let account_id = Arc::clone(&account_id_arc);
-                let application_id = Arc::clone(&application_id_arc);
-                let tz = Arc::clone(&tz_arc);
+                let context = Arc::clone(&context);
 
                 handles.push(tokio::spawn(async move {
                     let key = format!("calls_{}_{}", batch_from, batch_to);
                     let params = FetchParams {
-                        base_url: &base_url,
-                        email: &email,
-                        account_id: &account_id,
-                        application_id: &application_id,
-                        tz: &tz,
+                        base_url: &context.base_url,
+                        email: &context.email,
+                        account_id: &context.account_id,
+                        application_id: &context.application_id,
+                        tz: &context.tz,
                         extra_params: extra,
                     };
                     let v = fetch_with_signed_url_split(
                         &client,
-                        &token,
+                        &context.token,
                         endpoint,
                         &batch_from,
                         &batch_to,
@@ -137,27 +147,27 @@ pub async fn fetch_reports(
             // Tickets / Leads: try the full range first, then split if the
             // backend refuses to generate a signed URL for a large file.
             let client = client.clone();
-            let token = Arc::clone(&token_arc);
-            let base_url = Arc::clone(&base_url_arc);
-            let email = Arc::clone(&email_arc);
+            let context = Arc::clone(&context);
             let from_date = config.from_date.clone();
             let to_date = config.to_date.clone();
-            let account_id = Arc::clone(&account_id_arc);
-            let application_id = Arc::clone(&application_id_arc);
-            let tz = Arc::clone(&tz_arc);
             let key = def.key.to_string();
 
             handles.push(tokio::spawn(async move {
                 let params = FetchParams {
-                    base_url: &base_url,
-                    email: &email,
-                    account_id: &account_id,
-                    application_id: &application_id,
-                    tz: &tz,
+                    base_url: &context.base_url,
+                    email: &context.email,
+                    account_id: &context.account_id,
+                    application_id: &context.application_id,
+                    tz: &context.tz,
                     extra_params: extra,
                 };
                 let v = fetch_with_signed_url_split(
-                    &client, &token, endpoint, &from_date, &to_date, &params,
+                    &client,
+                    &context.token,
+                    endpoint,
+                    &from_date,
+                    &to_date,
+                    &params,
                 )
                 .await
                 .unwrap_or_else(|e| {
