@@ -338,7 +338,9 @@
             if (selectedName && yaswebConfigData && yaswebConfigData.reports[selectedName]) {
                 const conf = yaswebConfigData.reports[selectedName];
                 typeInput.value = conf.report_type || '';
-                renderFilters(conf.filters || {});
+                if (!reportData || reportData.report_name !== selectedName) {
+                    renderFilters(conf.filters || {});
+                }
             }
         });
 
@@ -373,8 +375,11 @@
     function populateYaswebReports() {
         if (!yaswebReportsList) return;
 
-        Array.from(yaswebReportsList.querySelectorAll('.yasweb-report-select')).forEach(select => {
-            const currentVal = select.value;
+        Array.from(yaswebReportsList.querySelectorAll('[data-yasweb-report-row]')).forEach(row => {
+            const select = row.querySelector('.yasweb-report-select');
+            const nameInput = row.querySelector('.yasweb-name-input');
+            const currentVal = nameInput.value;
+
             let optionsHtml = '<option value="">-- Select Report --</option>';
             if (yaswebConfigData && yaswebConfigData.reports) {
                 const reports = Object.keys(yaswebConfigData.reports);
@@ -386,6 +391,9 @@
                 });
             }
             select.innerHTML = optionsHtml;
+            if (currentVal) {
+                select.value = currentVal;
+            }
         });
     }
 
