@@ -428,8 +428,8 @@ pub fn run(config: &CsvAnalysisConfig, only_call_center: bool) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use crate::tasker::config::CsvAnalysisConfig;
-    use std::io::Write;
     use std::fs::File;
+    use std::io::Write;
     use tempfile::NamedTempFile;
 
     #[test]
@@ -439,11 +439,16 @@ mod tests {
         writeln!(users_file, "alice,Team A").unwrap();
 
         let mut assignments_file = NamedTempFile::new().unwrap();
-        writeln!(assignments_file, "Category,Type,Subtype,Auto agent/team assignment").unwrap();
+        writeln!(
+            assignments_file,
+            "Category,Type,Subtype,Auto agent/team assignment"
+        )
+        .unwrap();
         writeln!(assignments_file, "Cat1,Type1,Sub1,Team A").unwrap();
 
         let download_dir = tempfile::tempdir().unwrap();
-        let mut ticket_file = File::create(download_dir.path().join("ticket_report_test.csv")).unwrap();
+        let mut ticket_file =
+            File::create(download_dir.path().join("ticket_report_test.csv")).unwrap();
         writeln!(
             ticket_file,
             "Ticket Id,Branch Name,Category,Type,Subtype,Status,Creation Date,Assignee"
