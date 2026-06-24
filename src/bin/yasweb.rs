@@ -62,19 +62,11 @@ async fn load_or_create_config(path: &PathBuf) -> Result<YaswebConfig> {
     }
 }
 
-// We hold a global guard so logs aren't dropped. In a real app we'd pass it back to main.
-static mut _LOG_GUARD: Option<tracing_appender::non_blocking::WorkerGuard> = None;
-
-fn setup_logging() -> Result<()> {
+fn setup_logging() -> Result<tracing_appender::non_blocking::WorkerGuard> {
     let mut log_dir = std::env::current_exe().context("Failed to get executable path")?;
     log_dir.pop();
     let file_appender = tracing_appender::rolling::never(log_dir, "yasweblog");
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
-
-    // Save guard to static so it isn't dropped immediately
-    unsafe {
-        _LOG_GUARD = Some(guard);
-    }
 
     let subscriber = FmtSubscriber::builder()
         .with_max_level(Level::INFO)
@@ -83,7 +75,7 @@ fn setup_logging() -> Result<()> {
 
     tracing::subscriber::set_global_default(subscriber)
         .context("Setting default subscriber failed")?;
-    Ok(())
+    Ok(guard)
 }
 
 fn run_browser(
@@ -852,7 +844,7 @@ fn run_browser(
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    setup_logging()?;
+    let _guard = setup_logging()?;
 
     let args: Vec<String> = std::env::args().collect();
 
@@ -915,7 +907,7 @@ async fn main() -> Result<()> {
                     }
                     Err(e) => {
                         error!("Failed to parse filters JSON: {}", e);
-                        std::process::exit(1);
+                        anyhow::bail!("Failed to parse filters JSON: {}", e);
                     }
                 }
                 i += 1;
@@ -928,7 +920,7 @@ async fn main() -> Result<()> {
 
     if active_report_name.is_empty() {
         error!("Validation failed: --name is required.");
-        std::process::exit(1);
+        anyhow::bail!("Validation failed: --name is required.");
     }
 
     // Determine configuration to use
@@ -953,7 +945,10 @@ async fn main() -> Result<()> {
                 "Report '{}' not found in config and no --type/--filters provided via CLI.",
                 active_report_name
             );
-            std::process::exit(1);
+            anyhow::bail!(
+                "Report '{}' not found in config and no --type/--filters provided via CLI.",
+                active_report_name
+            );
         }
     }
 
