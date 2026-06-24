@@ -620,46 +620,80 @@ async fn run_yasweb_command(
     let resolved_executable = resolve_executable(executable_path);
     let resolved_config_path = resolve_relative_to_exe_dir(config_path);
 
-    for run in runs {
-        let mut command = tokio::process::Command::new(&resolved_executable);
-        command.arg("--config").arg(&resolved_config_path);
+    let handles = runs
+        .iter()
+        .map(|run| {
+            let run = run.clone();
+            let executable = resolved_executable.clone();
+            let config_path = resolved_config_path.clone();
+            let l = logger.clone();
 
-        command.arg("--name").arg(&run.report_name);
-        command.arg("--type").arg(&run.report_type);
-        if let Ok(filters_json) = serde_json::to_string(&run.filters) {
-            command.arg("--filters").arg(filters_json);
-        }
+            tokio::spawn(async move {
+                let mut command = tokio::process::Command::new(&executable);
+                command.arg("--config").arg(&config_path);
 
-        logger
-            .log(&format!("Executing yasweb command: {:?}", command))
-            .await;
+                command.arg("--name").arg(&run.report_name);
+                command.arg("--type").arg(&run.report_type);
+                if let Ok(filters_json) = serde_json::to_string(&run.filters) {
+                    command.arg("--filters").arg(filters_json);
+                }
 
-        let output = tokio::time::timeout(
-            Duration::from_secs(timeout_seconds.max(1)),
-            command.output(),
-        )
-        .await
-        .with_context(|| {
-            format!(
-                "yasweb command timed out after {}s ({})",
-                timeout_seconds,
-                resolved_executable.display()
-            )
-        })??;
+                l.log(&format!("Executing yasweb command: {:?}", command))
+                    .await;
 
-        logger.log_bytes("STDOUT", &output.stdout).await;
-        logger.log_bytes("STDERR", &output.stderr).await;
+                let output_result = tokio::time::timeout(
+                    Duration::from_secs(timeout_seconds.max(1)),
+                    command.output(),
+                )
+                .await
+                .with_context(|| {
+                    format!(
+                        "yasweb command timed out after {}s ({})",
+                        timeout_seconds,
+                        executable.display()
+                    )
+                });
+                (run.report_name, output_result)
+            })
+        })
+        .collect::<Vec<_>>();
 
-        if !output.status.success() {
-            return Err(anyhow::anyhow!(
-                "yasweb task failed for report '{}' with exit code: {:?}",
-                run.report_name,
-                output.status.code()
-            ));
+    let mut failures = Vec::new();
+    for handle in handles {
+        let (report_name, result) = handle
+            .await
+            .context("parallel yasweb command task join failed")?;
+        let result = result?; // unpack the timeout context error
+        match result {
+            Ok(output) => {
+                logger
+                    .log_bytes(&format!("STDOUT ({})", report_name), &output.stdout)
+                    .await;
+                logger
+                    .log_bytes(&format!("STDERR ({})", report_name), &output.stderr)
+                    .await;
+                if !output.status.success() {
+                    failures.push(format!(
+                        "report '{}' failed with exit code: {:?}",
+                        report_name,
+                        output.status.code()
+                    ));
+                }
+            }
+            Err(e) => {
+                failures.push(format!("report '{}' failed: {}", report_name, e));
+            }
         }
     }
 
-    Ok(())
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!(
+            "yasweb task failed: {}",
+            failures.join("; ")
+        ))
+    }
 }
 
 async fn run_crm_command(

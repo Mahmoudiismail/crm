@@ -24,6 +24,7 @@ Together they:
 ## Runtime Style
 
 - `runner` is tray-oriented (`#![windows_subsystem = "windows"]` on Windows).
+- Multiple `yasweb` reports inside a single task now run concurrently in parallel, spawning separate `yasweb.exe` processes.
 - `crm` is a console-style one-shot command.
 - `yasweb` runs headless browser automation using `headless_chrome`.
 - `wcxx` is a CLI tool that opens an HTML export dynamically in the browser.
