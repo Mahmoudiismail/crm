@@ -424,3 +424,61 @@ pub fn run(config: &CsvAnalysisConfig, only_call_center: bool) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::tasker::config::CsvAnalysisConfig;
+    use std::fs::File;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    #[test]
+    fn test_csv_analysis_mapping() {
+        let mut users_file = NamedTempFile::new().unwrap();
+        writeln!(users_file, "cognito_username,Team Name").unwrap();
+        writeln!(users_file, "alice,Team A").unwrap();
+
+        let mut assignments_file = NamedTempFile::new().unwrap();
+        writeln!(
+            assignments_file,
+            "Category,Type,Subtype,Auto agent/team assignment"
+        )
+        .unwrap();
+        writeln!(assignments_file, "Cat1,Type1,Sub1,Team A").unwrap();
+
+        let download_dir = tempfile::tempdir().unwrap();
+        let mut ticket_file =
+            File::create(download_dir.path().join("ticket_report_test.csv")).unwrap();
+        writeln!(
+            ticket_file,
+            "Ticket Id,Branch Name,Category,Type,Subtype,Status,Creation Date,Assignee"
+        )
+        .unwrap();
+        writeln!(
+            ticket_file,
+            "1001,Main Branch,Cat1,Type1,Sub1,Open,01/01/2026 12:00:00,alice"
+        )
+        .unwrap();
+
+        let output_file = NamedTempFile::new().unwrap();
+
+        let config = CsvAnalysisConfig {
+            download_path: download_dir.path().to_str().unwrap().to_string(),
+            users_file: users_file.path().to_str().unwrap().to_string(),
+            assignment_settings_file: assignments_file.path().to_str().unwrap().to_string(),
+            minutes_ago: 60 * 24 * 365 * 10, // Ensure it picks up
+            exclude_branches: vec![],
+            exclude_categories: vec![],
+            output_file: output_file.path().to_str().unwrap().to_string(),
+            email_config: None,
+        };
+
+        // Run the task
+        super::run(&config, false).unwrap();
+
+        // Validate the output file was created and contains expected headers
+        let output_content = std::fs::read_to_string(config.output_file).unwrap();
+        assert!(output_content.contains("Ticket Id"));
+        assert!(output_content.contains("1001"));
+    }
+}

@@ -8,10 +8,10 @@
 
 ## Configuration
 
-`tasker` looks for a `tasker_config.json` file in the current working directory by default. You can override this by passing the path as the first argument, or using explicit flags.
+`tasker` looks for a `tasker_config.json` file in the same directory as the executable by default. You can override this by passing the path as the first argument, or using explicit flags. If the targeted configuration file does not exist, `tasker` will automatically generate a default configuration file with a template `csv_analysis` task and log a message to inform the user before attempting to run.
 
 ### CLI Arguments
-- `--config <PATH>`: Overrides the default `tasker_config.json` path. (Legacy support also allows passing just the path without the flag).
+- `--config <PATH>`: Overrides the default `tasker_config.json` path. (Legacy support also allows passing just the path without the flag, as long as it does not start with `-`).
 - `--task <INDEX>`: Executes only a specific task from the configuration (1-based index). For example, `--task 1` runs only the first task in the config array.
 - `--only-call-center`: When provided, the task skips generating per-team and per-branch emails, and *only* processes and sends the Call Center email logic for the target task.
 
