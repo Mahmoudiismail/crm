@@ -4,7 +4,6 @@ use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, NaiveDateTime, Naiv
 use csv::{ReaderBuilder, StringRecord, WriterBuilder};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
-use std::fs::File;
 use tracing::{error, info, warn};
 use walkdir::WalkDir;
 
@@ -37,11 +36,12 @@ pub fn run(config: &CsvAnalysisConfig, only_call_center: bool) -> Result<()> {
     // 1. Load users (Table11)
     info!("Loading users file from {}", config.users_file);
     let mut assignee_map: HashMap<String, UserInfo> = HashMap::new();
-    let users_file = File::open(&config.users_file)
-        .with_context(|| format!("Failed to open users file: {}", config.users_file))?;
+    let users_bytes = std::fs::read(&config.users_file)
+        .with_context(|| format!("Failed to read users file: {}", config.users_file))?;
+    let users_content = String::from_utf8_lossy(&users_bytes);
     let mut users_rdr = ReaderBuilder::new()
         .has_headers(true)
-        .from_reader(users_file);
+        .from_reader(users_content.as_bytes());
 
     let headers = users_rdr.headers()?.clone();
     let mut cognito_idx = None;
@@ -90,15 +90,16 @@ pub fn run(config: &CsvAnalysisConfig, only_call_center: bool) -> Result<()> {
         config.assignment_settings_file
     );
     let mut assignment_map: HashMap<(String, String, String), String> = HashMap::new();
-    let assignment_file = File::open(&config.assignment_settings_file).with_context(|| {
+    let assignment_bytes = std::fs::read(&config.assignment_settings_file).with_context(|| {
         format!(
-            "Failed to open assignment file: {}",
+            "Failed to read assignment file: {}",
             config.assignment_settings_file
         )
     })?;
+    let assignment_content = String::from_utf8_lossy(&assignment_bytes);
     let mut assign_rdr = ReaderBuilder::new()
         .has_headers(true)
-        .from_reader(assignment_file);
+        .from_reader(assignment_content.as_bytes());
 
     for result in assign_rdr.deserialize::<AssignmentSettings>() {
         match result {
@@ -215,8 +216,11 @@ pub fn run(config: &CsvAnalysisConfig, only_call_center: bool) -> Result<()> {
 
     for file_path in target_files {
         info!("Processing file: {}", file_path.display());
-        let file = File::open(&file_path)?;
-        let mut rdr = ReaderBuilder::new().has_headers(true).from_reader(file);
+        let file_bytes = std::fs::read(&file_path)?;
+        let file_content = String::from_utf8_lossy(&file_bytes);
+        let mut rdr = ReaderBuilder::new()
+            .has_headers(true)
+            .from_reader(file_content.as_bytes());
 
         let headers = rdr.headers()?.clone();
 
