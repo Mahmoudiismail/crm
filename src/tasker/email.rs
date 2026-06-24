@@ -38,15 +38,23 @@ struct TicketRow {
     original_row: csv::StringRecord,
 }
 
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+static SCRIPT_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
 fn run_powershell(script: &str) -> Result<()> {
     let tmp_dir = std::env::temp_dir();
+    let count = SCRIPT_COUNTER.fetch_add(1, Ordering::Relaxed);
     let script_path = tmp_dir.join(format!(
-        "send_email_{}.ps1",
-        Local::now().timestamp_nanos_opt().unwrap_or(0)
+        "send_email_{}_{}.ps1",
+        Local::now().timestamp_nanos_opt().unwrap_or(0),
+        count
     ));
 
     let mut file = File::create(&script_path)?;
     file.write_all(script.as_bytes())?;
+    file.sync_all()?;
+    drop(file);
 
     let status = std::process::Command::new("powershell")
         .arg("-ExecutionPolicy")
