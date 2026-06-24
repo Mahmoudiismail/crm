@@ -624,7 +624,8 @@ fn run_browser(
                                             for (let i = 0; i < 20; i++) {{
                                                 let divs = doc.querySelectorAll('div.fw-semibold');
                                                 for (let d of divs) {{
-                                                    if (d.textContent.includes('Report Manager') || d.textContent.includes('Report Manger') || d.textContent.includes(reportType) || d.textContent.includes('Enquiry')) {{
+                                                    let textLower = d.textContent.toLowerCase();
+                                                    if (textLower.includes('report manager') || textLower.includes('report manger') || textLower.includes(reportType.toLowerCase()) || textLower.includes('enquiry') || textLower.includes('standard report')) {{
                                                         listLoaded = true; break;
                                                     }}
                                                 }}
