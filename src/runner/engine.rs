@@ -620,40 +620,46 @@ async fn run_yasweb_command(
     let resolved_executable = resolve_executable(executable_path);
     let resolved_config_path = resolve_relative_to_exe_dir(config_path);
 
-    let mut command = tokio::process::Command::new(&resolved_executable);
-    command.arg("--config").arg(&resolved_config_path);
-    if let Ok(runs_json) = serde_json::to_string(runs) {
-        command.arg("--run").arg(runs_json);
-    }
+    for run in runs {
+        let mut command = tokio::process::Command::new(&resolved_executable);
+        command.arg("--config").arg(&resolved_config_path);
 
-    logger
-        .log(&format!("Executing yasweb command: {:?}", command))
-        .await;
+        command.arg("--name").arg(&run.report_name);
+        command.arg("--type").arg(&run.report_type);
+        if let Ok(filters_json) = serde_json::to_string(&run.filters) {
+            command.arg("--filters").arg(filters_json);
+        }
 
-    let output = tokio::time::timeout(
-        Duration::from_secs(timeout_seconds.max(1)),
-        command.output(),
-    )
-    .await
-    .with_context(|| {
-        format!(
-            "yasweb command timed out after {}s ({})",
-            timeout_seconds,
-            resolved_executable.display()
+        logger
+            .log(&format!("Executing yasweb command: {:?}", command))
+            .await;
+
+        let output = tokio::time::timeout(
+            Duration::from_secs(timeout_seconds.max(1)),
+            command.output(),
         )
-    })??;
+        .await
+        .with_context(|| {
+            format!(
+                "yasweb command timed out after {}s ({})",
+                timeout_seconds,
+                resolved_executable.display()
+            )
+        })??;
 
-    logger.log_bytes("STDOUT", &output.stdout).await;
-    logger.log_bytes("STDERR", &output.stderr).await;
+        logger.log_bytes("STDOUT", &output.stdout).await;
+        logger.log_bytes("STDERR", &output.stderr).await;
 
-    if output.status.success() {
-        Ok(())
-    } else {
-        Err(anyhow::anyhow!(
-            "yasweb task failed with exit code: {:?}",
-            output.status.code()
-        ))
+        if !output.status.success() {
+            return Err(anyhow::anyhow!(
+                "yasweb task failed for report '{}' with exit code: {:?}",
+                run.report_name,
+                output.status.code()
+            ));
+        }
     }
+
+    Ok(())
 }
 
 async fn run_crm_command(
