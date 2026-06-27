@@ -85,7 +85,9 @@ Operational impact:
 
 ## URL Extraction
 
-`extract_urls(results)` recursively scans payloads and arrays for `data.url` and returns `(report_key, url)` tuples for downloader usage.
+`extract_urls(results)` scans payloads and arrays for `data.url` and returns `(report_key, url)` tuples for downloader usage.
+
+For performance and memory safety, URL extraction leverages an iterative stack algorithm. The array iteration logic includes a pre-filtering mechanism that skips primitive values (numbers, booleans, strings, nulls) when traversing `Value::Array`, mitigating recursive function overhead and preventing performance regressions or stack overflows when dealing with deeply nested JSON structures or multi-megabyte scalar arrays.
 
 This supports both normal single-payload reports and split reports such as:
 

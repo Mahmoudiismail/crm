@@ -423,14 +423,19 @@ pub fn extract_urls(results: &Value) -> Vec<(String, String)> {
 }
 
 fn extract_urls_for_key(key: &str, val: &Value, urls: &mut Vec<(String, String)>) {
-    if let Some(url) = extract_data_url(val) {
-        urls.push((key.to_string(), url));
-        return;
-    }
+    let mut stack = vec![val];
+    while let Some(current) = stack.pop() {
+        if let Some(url) = extract_data_url(current) {
+            urls.push((key.to_string(), url));
+            continue;
+        }
 
-    if let Value::Array(arr) = val {
-        for item in arr {
-            extract_urls_for_key(key, item, urls);
+        if let Value::Array(arr) = current {
+            for item in arr.iter().rev() {
+                if item.is_object() || item.is_array() {
+                    stack.push(item);
+                }
+            }
         }
     }
 }
