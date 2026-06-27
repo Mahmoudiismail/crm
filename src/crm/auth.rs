@@ -110,44 +110,27 @@ struct AuthTokens {
     expires_in: u64,
 }
 
-async fn cognito_srp_login(config: &AppConfig, client: &reqwest::Client) -> Result<AuthTokens> {
-    let n = BigUint::parse_bytes(N_HEX.as_bytes(), 16).context("Failed to parse N_HEX")?;
-    let g = BigUint::parse_bytes(G_HEX.as_bytes(), 16).context("Failed to parse G_HEX")?;
+struct ChallengeParams {
+    srp_b_hex: String,
+    salt_hex: String,
+    secret_block_b64: String,
+    user_id: String,
+}
 
-    // k = H('00' + N_hex + '0' + g_hex) — matches Python warrant exactly
-    let k = compute_k()?;
-
-    // Generate random `a` (128 random bytes, then mod N — matches Python warrant)
-    let mut a_bytes = [0u8; 128];
-    rand::rng().fill_bytes(&mut a_bytes);
-    let a = BigUint::from_bytes_be(&a_bytes) % &n;
-
-    // A = g^a mod N
-    let big_a = g.modpow(&a, &n);
-
-    // Validate A % N != 0
-    if &big_a % &n == BigUint::ZERO {
-        bail!("SRP A mod N is zero — invalid state");
-    }
-
-    // Python sends long_to_hex(A) which is lowercase hex, no leading zeros
-    let big_a_hex = long_to_hex(&big_a);
-
-    // Pool ID without the region prefix  (e.g. "ap-south-1_wjZE70ShT" → "wjZE70ShT")
-    let pool_name = config
-        .user_pool_id
-        .split('_')
-        .nth(1)
-        .unwrap_or(&config.user_pool_id);
-
-    // ──── Step 1: InitiateAuth ────
-    let initiate_url = format!("https://cognito-idp.{}.amazonaws.com/", config.region);
+async fn initiate_auth(
+    client: &reqwest::Client,
+    region: &str,
+    client_id: &str,
+    username: &str,
+    big_a_hex: &str,
+) -> Result<ChallengeParams> {
+    let initiate_url = format!("https://cognito-idp.{}.amazonaws.com/", region);
 
     let initiate_body = serde_json::json!({
         "AuthFlow": "USER_SRP_AUTH",
-        "ClientId": config.client_id,
+        "ClientId": client_id,
         "AuthParameters": {
-            "USERNAME": config.username,
+            "USERNAME": username,
             "SRP_A": big_a_hex
         }
     });
@@ -186,61 +169,43 @@ async fn cognito_srp_login(config: &AppConfig, client: &reqwest::Client) -> Resu
 
     let srp_b_hex = challenge_params["SRP_B"]
         .as_str()
-        .context("Missing SRP_B")?;
-    let salt_hex = challenge_params["SALT"].as_str().context("Missing SALT")?;
+        .context("Missing SRP_B")?
+        .to_string();
+    let salt_hex = challenge_params["SALT"]
+        .as_str()
+        .context("Missing SALT")?
+        .to_string();
     let secret_block_b64 = challenge_params["SECRET_BLOCK"]
         .as_str()
-        .context("Missing SECRET_BLOCK")?;
+        .context("Missing SECRET_BLOCK")?
+        .to_string();
     let user_id = challenge_params["USER_ID_FOR_SRP"]
         .as_str()
-        .context("Missing USER_ID_FOR_SRP")?;
+        .context("Missing USER_ID_FOR_SRP")?
+        .to_string();
 
-    let big_b = BigUint::parse_bytes(srp_b_hex.as_bytes(), 16).context("Failed to parse SRP_B")?;
+    Ok(ChallengeParams {
+        srp_b_hex,
+        salt_hex,
+        secret_block_b64,
+        user_id,
+    })
+}
 
-    // Validate B % N != 0
-    if &big_b % &n == BigUint::ZERO {
-        bail!("SRP B mod N is zero — server sent invalid value");
-    }
+async fn respond_to_auth_challenge(
+    client: &reqwest::Client,
+    region: &str,
+    client_id: &str,
+    user_id: &str,
+    secret_block_b64: &str,
+    signature: &str,
+    timestamp: &str,
+) -> Result<AuthTokens> {
+    let challenge_url = format!("https://cognito-idp.{}.amazonaws.com/", region);
 
-    // ──── Step 2: Compute the password claim ────
-
-    // u = H(pad_hex(A) || pad_hex(B))  — operates on hex strings
-    let u = compute_u(&big_a, &big_b)?;
-    if u == BigUint::ZERO {
-        bail!("SRP u is zero — invalid state");
-    }
-
-    // x = H(pad_hex(salt) || H(poolName || userId || ":" || password))
-    let x = compute_x(pool_name, user_id, &config.password, salt_hex)?;
-
-    // S = (B - k * g^x) ^ (a + u * x) mod N
-    let s = compute_s(&big_b, &k, &g, &x, &a, &u, &n);
-
-    // HKDF key — manual HMAC-based KDF matching Python warrant exactly
-    let hkdf_key = compute_hkdf(&s, &u)?;
-
-    // Timestamp (must match Cognito's expected format exactly)
-    let now = Utc::now();
-    // Python: re.sub(r" 0(\d) ", r" \1 ", datetime.utcnow().strftime("%a %b %d %H:%M:%S UTC %Y"))
-    // This strips the leading zero from day — chrono's %-d does this
-    let timestamp = now.format("%a %b %-d %H:%M:%S UTC %Y").to_string();
-
-    // Signature = HMAC_SHA256(hkdf_key, poolName | userId | secretBlock | timestamp)
-    let secret_block_bytes = B64.decode(secret_block_b64)?;
-    let mut msg = Vec::new();
-    msg.extend_from_slice(pool_name.as_bytes());
-    msg.extend_from_slice(user_id.as_bytes());
-    msg.extend_from_slice(&secret_block_bytes);
-    msg.extend_from_slice(timestamp.as_bytes());
-
-    let mut mac = HmacSha256::new_from_slice(&hkdf_key).context("Failed to create HMAC")?;
-    mac.update(&msg);
-    let signature = B64.encode(mac.finalize().into_bytes());
-
-    // ──── Step 3: RespondToAuthChallenge ────
     let challenge_body = serde_json::json!({
         "ChallengeName": "PASSWORD_VERIFIER",
-        "ClientId": config.client_id,
+        "ClientId": client_id,
         "ChallengeResponses": {
             "USERNAME": user_id,
             "PASSWORD_CLAIM_SECRET_BLOCK": secret_block_b64,
@@ -255,7 +220,7 @@ async fn cognito_srp_login(config: &AppConfig, client: &reqwest::Client) -> Resu
     );
 
     let resp = client
-        .post(&initiate_url)
+        .post(&challenge_url)
         .header("Content-Type", "application/x-amz-json-1.1")
         .header(
             "X-Amz-Target",
@@ -304,6 +269,107 @@ async fn cognito_srp_login(config: &AppConfig, client: &reqwest::Client) -> Resu
         refresh_token,
         expires_in,
     })
+}
+
+async fn cognito_srp_login(config: &AppConfig, client: &reqwest::Client) -> Result<AuthTokens> {
+    let n = BigUint::parse_bytes(N_HEX.as_bytes(), 16).context("Failed to parse N_HEX")?;
+    let g = BigUint::parse_bytes(G_HEX.as_bytes(), 16).context("Failed to parse G_HEX")?;
+
+    // k = H('00' + N_hex + '0' + g_hex) — matches Python warrant exactly
+    let k = compute_k()?;
+
+    // Generate random `a` (128 random bytes, then mod N — matches Python warrant)
+    let mut a_bytes = [0u8; 128];
+    rand::rng().fill_bytes(&mut a_bytes);
+    let a = BigUint::from_bytes_be(&a_bytes) % &n;
+
+    // A = g^a mod N
+    let big_a = g.modpow(&a, &n);
+
+    // Validate A % N != 0
+    if &big_a % &n == BigUint::ZERO {
+        bail!("SRP A mod N is zero — invalid state");
+    }
+
+    // Python sends long_to_hex(A) which is lowercase hex, no leading zeros
+    let big_a_hex = long_to_hex(&big_a);
+
+    // Pool ID without the region prefix  (e.g. "ap-south-1_wjZE70ShT" → "wjZE70ShT")
+    let pool_name = config
+        .user_pool_id
+        .split('_')
+        .nth(1)
+        .unwrap_or(&config.user_pool_id);
+
+    // ──── Step 1: InitiateAuth ────
+    let challenge_params = initiate_auth(
+        client,
+        &config.region,
+        &config.client_id,
+        &config.username,
+        &big_a_hex,
+    )
+    .await?;
+
+    let big_b = BigUint::parse_bytes(challenge_params.srp_b_hex.as_bytes(), 16)
+        .context("Failed to parse SRP_B")?;
+
+    // Validate B % N != 0
+    if &big_b % &n == BigUint::ZERO {
+        bail!("SRP B mod N is zero — server sent invalid value");
+    }
+
+    // ──── Step 2: Compute the password claim ────
+
+    // u = H(pad_hex(A) || pad_hex(B))  — operates on hex strings
+    let u = compute_u(&big_a, &big_b)?;
+    if u == BigUint::ZERO {
+        bail!("SRP u is zero — invalid state");
+    }
+
+    // x = H(pad_hex(salt) || H(poolName || userId || ":" || password))
+    let x = compute_x(
+        pool_name,
+        &challenge_params.user_id,
+        &config.password,
+        &challenge_params.salt_hex,
+    )?;
+
+    // S = (B - k * g^x) ^ (a + u * x) mod N
+    let s = compute_s(&big_b, &k, &g, &x, &a, &u, &n);
+
+    // HKDF key — manual HMAC-based KDF matching Python warrant exactly
+    let hkdf_key = compute_hkdf(&s, &u)?;
+
+    // Timestamp (must match Cognito's expected format exactly)
+    let now = Utc::now();
+    // Python: re.sub(r" 0(\d) ", r" \1 ", datetime.utcnow().strftime("%a %b %d %H:%M:%S UTC %Y"))
+    // This strips the leading zero from day — chrono's %-d does this
+    let timestamp = now.format("%a %b %-d %H:%M:%S UTC %Y").to_string();
+
+    // Signature = HMAC_SHA256(hkdf_key, poolName | userId | secretBlock | timestamp)
+    let secret_block_bytes = B64.decode(&challenge_params.secret_block_b64)?;
+    let mut msg = Vec::new();
+    msg.extend_from_slice(pool_name.as_bytes());
+    msg.extend_from_slice(challenge_params.user_id.as_bytes());
+    msg.extend_from_slice(&secret_block_bytes);
+    msg.extend_from_slice(timestamp.as_bytes());
+
+    let mut mac = HmacSha256::new_from_slice(&hkdf_key).context("Failed to create HMAC")?;
+    mac.update(&msg);
+    let signature = B64.encode(mac.finalize().into_bytes());
+
+    // ──── Step 3: RespondToAuthChallenge ────
+    respond_to_auth_challenge(
+        client,
+        &config.region,
+        &config.client_id,
+        &challenge_params.user_id,
+        &challenge_params.secret_block_b64,
+        &signature,
+        &timestamp,
+    )
+    .await
 }
 
 // ──────────────────────────────────────────────────────────────
