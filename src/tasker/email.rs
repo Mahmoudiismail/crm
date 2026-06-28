@@ -592,7 +592,14 @@ pub fn process_emails(
 <body style="font-family: Arial, sans-serif;">
     Dear All,<br/>
     &nbsp;&nbsp;&nbsp;&nbsp;Kindly find below the list of open tickets in {bucket_name} for the period from {from_date_str} until {today_str}.<br/><br/>
-    {html_table}
+    <table border="0" cellpadding="0" cellspacing="0">
+        <tr>
+            <td width="20"></td>
+            <td>
+                {html_table}
+            </td>
+        </tr>
+    </table>
 </body>
 </html>"#;
                 if let Err(e) = std::fs::write(template_path, default_template) {
@@ -638,7 +645,11 @@ pub fn process_emails(
             (extracted_subject, wrapped_body)
         } else {
             let body = format!(
-                "<html><body style=\"font-family: Arial, sans-serif;\">Dear All,<br/>&nbsp;&nbsp;&nbsp;&nbsp;Kindly find below the list of open tickets in {} for the period from {} until {}.<br/><br/>{}</body></html>",
+                "<html><body style=\"font-family: Arial, sans-serif;\">Dear All,<br/>&nbsp;&nbsp;&nbsp;&nbsp;Kindly find below the list of open tickets in {} for the period from {} until {}.<br/><br/>\
+                <table border=\"0\" cellpadding=\"0\" cellspacing=\"0\"><tr><td width=\"20\"></td><td>\
+                {}\
+                </td></tr></table>\
+                </body></html>",
                 bucket_name, from_date_str, today_str, html_table
             );
             let subject = format!("Open TKTs - {}", bucket_name);
