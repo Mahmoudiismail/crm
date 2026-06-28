@@ -10,7 +10,8 @@ async fn main() -> Result<()> {
     let _log_guard = setup_logging()?;
 
     let options = parse_args()?;
-    let config_path = resolve_config_path(options.config.as_deref());
+    let exe_dir = executable_dir();
+    let config_path = resolve_config_path(options.config.as_deref(), &exe_dir);
 
     info!("==================================================");
     info!("CRM - One-shot run started");
@@ -79,20 +80,17 @@ fn parse_report(value: &str) -> Result<ReportType> {
     }
 }
 
-fn resolve_config_path(config_arg: Option<&str>) -> String {
+fn resolve_config_path(config_arg: Option<&str>, base_dir: &std::path::Path) -> String {
     match config_arg {
         Some(path) => {
             let p = std::path::PathBuf::from(path);
             if p.is_absolute() {
                 p.to_string_lossy().to_string()
             } else {
-                executable_dir().join(p).to_string_lossy().to_string()
+                base_dir.join(p).to_string_lossy().to_string()
             }
         }
-        None => executable_dir()
-            .join("config.json")
-            .to_string_lossy()
-            .to_string(),
+        None => base_dir.join("config.json").to_string_lossy().to_string(),
     }
 }
 
@@ -135,4 +133,42 @@ fn setup_logging() -> Result<tracing_appender::non_blocking::WorkerGuard> {
         .init();
 
     Ok(guard)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_resolve_config_path_none() {
+        let base_dir = PathBuf::from("/fake/base/dir");
+        let result = resolve_config_path(None, &base_dir);
+        let expected = base_dir.join("config.json").to_string_lossy().to_string();
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_resolve_config_path_relative() {
+        let base_dir = PathBuf::from("/fake/base/dir");
+        let result = resolve_config_path(Some("my_config.json"), &base_dir);
+        let expected = base_dir
+            .join("my_config.json")
+            .to_string_lossy()
+            .to_string();
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_resolve_config_path_absolute() {
+        let base_dir = PathBuf::from("/fake/base/dir");
+        // Use a cross-platform approach for absolute paths
+        let abs_path = if cfg!(windows) {
+            "C:\\absolute\\path\\config.json"
+        } else {
+            "/absolute/path/config.json"
+        };
+        let result = resolve_config_path(Some(abs_path), &base_dir);
+        assert_eq!(result, abs_path);
+    }
 }
