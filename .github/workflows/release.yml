@@ -73,34 +73,3 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Send release email via Resend
-        shell: bash
-        run: |
-          cd "target/release"
-          base64 ${{ matrix.binary }}_windows.zip | tr -d '\n' | tr -d '\r' > b64.txt
-
-          jq -n \
-            --arg from "onboarding@resend.dev" \
-            --arg to "miismail@fakeeh.care" \
-            --arg subject "Release for ${{ matrix.binary }}" \
-            --arg html "<strong>${{ matrix.binary }}</strong> release is attached. <br/> Password for the zip file is: 123456" \
-            --arg filename "${{ matrix.binary }}_windows.zip" \
-            --rawfile content b64.txt \
-            '{
-              from: $from,
-              to: [$to],
-              subject: $subject,
-              html: $html,
-              attachments: [
-                {
-                  filename: $filename,
-                  content: $content
-                }
-              ]
-            }' > payload.json
-
-          curl -s -X POST "https://api.resend.com/emails" \
-            -H "Authorization: Bearer ${{ secrets.RESEND_API_KEY }}" \
-            -H "Content-Type: application/json" \
-            -d @payload.json
