@@ -380,11 +380,6 @@ pub fn process_emails(
             .trim()
             .to_string();
 
-        // Exclude closed
-        if status.eq_ignore_ascii_case("closed") {
-            continue;
-        }
-
         let branch = branch_idx
             .and_then(|idx| record.get(idx))
             .unwrap_or("")
@@ -446,13 +441,32 @@ pub fn process_emails(
         });
     }
 
-    info!(
-        "Loaded {} non-closed tickets for email evaluation.",
-        ticket_rows.len()
-    );
+    info!("Loaded {} tickets for email evaluation.", ticket_rows.len());
 
-    let mut statuses_vec: Vec<String> = dynamic_statuses.into_iter().collect();
-    statuses_vec.sort();
+    let mut statuses_vec: Vec<String> = dynamic_statuses
+        .into_iter()
+        .filter(|s| !s.eq_ignore_ascii_case("closed"))
+        .collect();
+    // Sort logic: open, follow-up, on-hold, then alphabetical
+    statuses_vec.sort_by(|a, b| {
+        let a_ord = match a.as_str() {
+            "open" => 0,
+            "follow-up" | "followup" => 1,
+            "on-hold" | "onhold" => 2,
+            _ => 3,
+        };
+        let b_ord = match b.as_str() {
+            "open" => 0,
+            "follow-up" | "followup" => 1,
+            "on-hold" | "onhold" => 2,
+            _ => 3,
+        };
+        if a_ord == b_ord {
+            a.cmp(b)
+        } else {
+            a_ord.cmp(&b_ord)
+        }
+    });
 
     // Grouping
     // We have 3 buckets: per_team, per_branch, and call_center
@@ -561,7 +575,9 @@ pub fn process_emails(
 
         let html_table = generate_pivot_html(rows, &statuses_vec, is_branch);
 
-        let (subject, body) = if let Some(template_path) = &config.body_template_file {
+        let (subject, body) = if bucket_name.eq_ignore_ascii_case("Call Center") {
+            (format!("Open TKTs - {}", bucket_name), "".to_string())
+        } else if let Some(template_path) = &config.body_template_file {
             let template_content = if std::path::Path::new(template_path).exists() {
                 std::fs::read_to_string(template_path).unwrap_or_else(|e| {
                     error!("Failed to read template file {}: {}", template_path, e);
