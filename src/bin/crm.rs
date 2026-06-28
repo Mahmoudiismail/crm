@@ -136,3 +136,41 @@ fn setup_logging() -> Result<tracing_appender::non_blocking::WorkerGuard> {
 
     Ok(guard)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_resolve_config_path_none() {
+        let expected = executable_dir()
+            .join("config.json")
+            .to_string_lossy()
+            .to_string();
+        assert_eq!(resolve_config_path(None), expected);
+    }
+
+    #[test]
+    fn test_resolve_config_path_some_relative() {
+        let relative_path = "custom_config.json";
+        let expected = executable_dir()
+            .join(relative_path)
+            .to_string_lossy()
+            .to_string();
+        assert_eq!(resolve_config_path(Some(relative_path)), expected);
+    }
+
+    #[test]
+    fn test_resolve_config_path_some_absolute() {
+        // Use an OS-appropriate absolute path
+        let absolute_path = if cfg!(windows) {
+            "C:\\foo\\bar\\config.json"
+        } else {
+            "/foo/bar/config.json"
+        };
+
+        let expected = PathBuf::from(absolute_path).to_string_lossy().to_string();
+        assert_eq!(resolve_config_path(Some(absolute_path)), expected);
+    }
+}
