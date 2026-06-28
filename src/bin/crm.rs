@@ -142,33 +142,33 @@ mod tests {
 
     #[test]
     fn test_resolve_config_path_none() {
-        let base_dir = PathBuf::from("/fake/base/dir");
-        let result = resolve_config_path(None, &base_dir);
-        let expected = base_dir.join("config.json").to_string_lossy().to_string();
-        assert_eq!(result, expected);
-    }
-
-    #[test]
-    fn test_resolve_config_path_relative() {
-        let base_dir = PathBuf::from("/fake/base/dir");
-        let result = resolve_config_path(Some("my_config.json"), &base_dir);
-        let expected = base_dir
-            .join("my_config.json")
+        let expected = executable_dir()
+            .join("config.json")
             .to_string_lossy()
             .to_string();
-        assert_eq!(result, expected);
+        assert_eq!(resolve_config_path(None), expected);
     }
 
     #[test]
-    fn test_resolve_config_path_absolute() {
-        let base_dir = PathBuf::from("/fake/base/dir");
-        // Use a cross-platform approach for absolute paths
-        let abs_path = if cfg!(windows) {
-            "C:\\absolute\\path\\config.json"
+    fn test_resolve_config_path_some_relative() {
+        let relative_path = "custom_config.json";
+        let expected = executable_dir()
+            .join(relative_path)
+            .to_string_lossy()
+            .to_string();
+        assert_eq!(resolve_config_path(Some(relative_path)), expected);
+    }
+
+    #[test]
+    fn test_resolve_config_path_some_absolute() {
+        // Use an OS-appropriate absolute path
+        let absolute_path = if cfg!(windows) {
+            "C:\\foo\\bar\\config.json"
         } else {
-            "/absolute/path/config.json"
+            "/foo/bar/config.json"
         };
-        let result = resolve_config_path(Some(abs_path), &base_dir);
-        assert_eq!(result, abs_path);
+
+        let expected = PathBuf::from(absolute_path).to_string_lossy().to_string();
+        assert_eq!(resolve_config_path(Some(absolute_path)), expected);
     }
 }
