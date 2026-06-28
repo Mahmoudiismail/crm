@@ -76,9 +76,17 @@ fn run_app() -> Result<()> {
       "exclude_categories": [
         "incomplete reservation"
       ],
+      "category_exceptions": [
+        {
+          "category": "incomplete reservation",
+          "branch": "",
+          "team": ""
+        }
+      ],
       "output_file": "./results.csv",
       "email_config": {
         "team_mapping_file": "./teams.csv",
+        "body_template_file": "./email_template.html",
         "initial_cc": "initial@example.com",
         "ending_cc": "ending@example.com",
         "send_emails": false,

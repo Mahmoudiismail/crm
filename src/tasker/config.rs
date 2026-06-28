@@ -15,6 +15,7 @@ pub enum TaskConfig {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct EmailConfig {
     pub team_mapping_file: String,
+    pub body_template_file: Option<String>,
     pub initial_cc: String,
     pub ending_cc: String,
     pub send_emails: Option<bool>,
@@ -25,6 +26,13 @@ pub struct EmailConfig {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct CategoryException {
+    pub category: String,
+    pub branch: Option<String>,
+    pub team: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CsvAnalysisConfig {
     pub download_path: String,
     pub users_file: String,
@@ -32,6 +40,7 @@ pub struct CsvAnalysisConfig {
     pub minutes_ago: i64,
     pub exclude_branches: Vec<String>,
     pub exclude_categories: Vec<String>,
+    pub category_exceptions: Option<Vec<CategoryException>>,
     pub output_file: String,
     pub email_config: Option<EmailConfig>,
 }
