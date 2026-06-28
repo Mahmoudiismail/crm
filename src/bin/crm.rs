@@ -10,7 +10,8 @@ async fn main() -> Result<()> {
     let _log_guard = setup_logging()?;
 
     let options = parse_args()?;
-    let config_path = resolve_config_path(options.config.as_deref());
+    let exe_dir = executable_dir();
+    let config_path = resolve_config_path(options.config.as_deref(), &exe_dir);
 
     info!("==================================================");
     info!("CRM - One-shot run started");
@@ -79,20 +80,17 @@ fn parse_report(value: &str) -> Result<ReportType> {
     }
 }
 
-fn resolve_config_path(config_arg: Option<&str>) -> String {
+fn resolve_config_path(config_arg: Option<&str>, base_dir: &std::path::Path) -> String {
     match config_arg {
         Some(path) => {
             let p = std::path::PathBuf::from(path);
             if p.is_absolute() {
                 p.to_string_lossy().to_string()
             } else {
-                executable_dir().join(p).to_string_lossy().to_string()
+                base_dir.join(p).to_string_lossy().to_string()
             }
         }
-        None => executable_dir()
-            .join("config.json")
-            .to_string_lossy()
-            .to_string(),
+        None => base_dir.join("config.json").to_string_lossy().to_string(),
     }
 }
 
