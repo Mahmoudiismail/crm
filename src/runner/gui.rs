@@ -1561,8 +1561,10 @@ mod tests {
             .unwrap()
             .port();
 
-        let mut cfg = RunnerConfig::default();
-        cfg.gui_port = port;
+        let cfg = RunnerConfig {
+            gui_port: port,
+            ..Default::default()
+        };
         cfg.save(&config_path).unwrap();
 
         let (tx, _rx) = mpsc::channel(1);
