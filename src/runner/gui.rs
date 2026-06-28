@@ -1545,6 +1545,71 @@ fn render_config_form(cfg: &crate::runner::config::RunnerConfig, error: Option<&
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::runner::engine::RunnerStatus;
+    use std::sync::Arc;
+    use std::time::Duration;
+    use tokio::sync::{mpsc, Mutex};
+
+    #[tokio::test]
+    async fn test_start_gui_server_routing() {
+        let temp_file = tempfile::NamedTempFile::new().unwrap();
+        let config_path = temp_file.path().to_str().unwrap().to_string();
+
+        let port = std::net::TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+
+        let cfg = RunnerConfig {
+            gui_port: port,
+            ..Default::default()
+        };
+        cfg.save(&config_path).unwrap();
+
+        let (tx, _rx) = mpsc::channel(1);
+        let status = Arc::new(Mutex::new(RunnerStatus {
+            currently_running: true,
+            last_error: "Test Error".to_string(),
+            last_task_id: "test_task".to_string(),
+            last_run_at: "2024-01-01T00:00:00Z".to_string(),
+        }));
+
+        let handle = RunnerHandle {
+            command_tx: tx,
+            status,
+            runner_config_path: config_path.clone(),
+        };
+
+        // Start the server
+        start_gui_server(handle);
+
+        // Give it a moment to start and bind
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let client = reqwest::Client::new();
+
+        // Test GET /
+        let res = client
+            .get(format!("http://127.0.0.1:{}/", port))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status().as_u16(), 200);
+        let text = res.text().await.unwrap();
+        assert!(text.contains("Task Dashboard"));
+
+        // Test GET /status
+        let res = client
+            .get(format!("http://127.0.0.1:{}/status", port))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status().as_u16(), 200);
+        let status_json: serde_json::Value = res.json().await.unwrap();
+        assert_eq!(status_json["last_task_id"], "test_task");
+        assert_eq!(status_json["last_error"], "Test Error");
+    }
 
     #[test]
     fn parses_schedule_text() {
