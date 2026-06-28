@@ -371,12 +371,16 @@ pub fn run(config: &CsvAnalysisConfig, only_call_center: bool) -> Result<()> {
                 if let Some(exceptions) = &config.category_exceptions {
                     for exc in exceptions {
                         if exc.category.trim().to_lowercase() == cat_val {
-                            let branch_matches = exc.branch.as_ref().map_or(true, |b| b.trim().is_empty() || b.trim().to_lowercase() == branch_val);
-                            let team_matches = exc.team.as_ref().map_or(true, |t| {
+                            let branch_matches = exc.branch.as_ref().is_none_or(|b| {
+                                b.trim().is_empty() || b.trim().to_lowercase() == branch_val
+                            });
+                            let team_matches = exc.team.as_ref().is_none_or(|t| {
                                 if t.trim().is_empty() {
                                     true
                                 } else {
-                                    team.as_ref().map_or(false, |tm| tm.trim().to_lowercase() == t.trim().to_lowercase())
+                                    team.as_ref().is_some_and(|tm| {
+                                        tm.trim().to_lowercase() == t.trim().to_lowercase()
+                                    })
                                 }
                             });
 

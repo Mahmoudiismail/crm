@@ -568,7 +568,10 @@ pub fn process_emails(
 </body>
 </html>"#;
                 if let Err(e) = std::fs::write(template_path, default_template) {
-                    error!("Failed to generate default template at {}: {}", template_path, e);
+                    error!(
+                        "Failed to generate default template at {}: {}",
+                        template_path, e
+                    );
                 }
                 default_template.to_string()
             };
@@ -591,7 +594,8 @@ pub fn process_emails(
             let mut extracted_body = template_content.clone();
             if let Some(start_idx) = template_content.find("<body>") {
                 if let Some(end_idx) = template_content[start_idx..].find("</body>") {
-                    extracted_body = template_content[start_idx + 6..start_idx + end_idx].to_string();
+                    extracted_body =
+                        template_content[start_idx + 6..start_idx + end_idx].to_string();
                 }
             }
 
