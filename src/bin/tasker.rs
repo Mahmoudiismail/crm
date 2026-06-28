@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use crm_tool::tasker::config::{TaskConfig, TaskerConfig};
 use crm_tool::tasker::csv_task;
+use serde_json::Value;
 use std::env;
 use std::fs;
 use tracing::{error, info};
@@ -56,12 +57,8 @@ fn run_app() -> Result<()> {
 
     let config_path = config_path_arg.unwrap_or(default_config_path);
 
-    if !config_path.exists() {
-        info!(
-            "Configuration file not found at {}. Generating default configuration.",
-            config_path.display()
-        );
-        let default_config_content = r#"{
+    let default_config_content = r#"{
+
   "tasks": [
     {
       "type": "csv_analysis",
@@ -103,6 +100,13 @@ fn run_app() -> Result<()> {
     }
   ]
 }"#;
+
+    if !config_path.exists() {
+        info!(
+            "Configuration file not found at {}. Generating default configuration.",
+            config_path.display()
+        );
+
         fs::write(&config_path, default_config_content).with_context(|| {
             format!(
                 "Failed to write default tasker config at {}",
@@ -115,8 +119,64 @@ fn run_app() -> Result<()> {
     let config_content = fs::read_to_string(&config_path)
         .with_context(|| format!("Failed to read tasker config at {}", config_path.display()))?;
 
-    let config: TaskerConfig = serde_json::from_str(&config_content)
-        .with_context(|| "Failed to parse tasker_config.json")?;
+    let mut current_config_val: Value = serde_json::from_str(&config_content)
+        .with_context(|| "Failed to parse tasker_config.json as JSON")?;
+
+    let default_config_val: Value = serde_json::from_str(default_config_content)
+        .with_context(|| "Failed to parse default config as JSON")?;
+
+    fn merge(a: &mut Value, b: &Value, changed: &mut bool) {
+        match (a, b) {
+            (Value::Object(a_obj), Value::Object(b_obj)) => {
+                for (k, v) in b_obj {
+                    if !a_obj.contains_key(k) {
+                        a_obj.insert(k.clone(), v.clone());
+                        *changed = true;
+                    } else {
+                        merge(a_obj.get_mut(k).unwrap(), v, changed);
+                    }
+                }
+            }
+            (Value::Array(a_arr), Value::Array(b_arr)) => {
+                // If it's the tasks array, we might want to merge into each task
+                // For simplicity, we just merge into existing elements up to the min length
+                // If the user's config has fewer tasks than default, we don't necessarily append defaults,
+                // but if we did, we'd add it. We'll leave array merging simple.
+                let len = std::cmp::min(a_arr.len(), b_arr.len());
+                for i in 0..len {
+                    merge(&mut a_arr[i], &b_arr[i], changed);
+                }
+            }
+            (a_val, b_val) => {
+                if a_val.is_null() && !b_val.is_null() {
+                    *a_val = b_val.clone();
+                    *changed = true;
+                }
+            }
+        }
+    }
+
+    let mut config_changed = false;
+    merge(
+        &mut current_config_val,
+        &default_config_val,
+        &mut config_changed,
+    );
+
+    if config_changed {
+        info!("Updated configuration file with missing default fields.");
+        let updated_content = serde_json::to_string_pretty(&current_config_val)
+            .with_context(|| "Failed to serialize updated config")?;
+        fs::write(&config_path, updated_content).with_context(|| {
+            format!(
+                "Failed to write updated tasker config at {}",
+                config_path.display()
+            )
+        })?;
+    }
+
+    let config: TaskerConfig = serde_json::from_value(current_config_val)
+        .with_context(|| "Failed to parse tasker_config.json into TaskerConfig")?;
 
     for (i, task) in config.tasks.iter().enumerate() {
         let task_idx = i + 1;

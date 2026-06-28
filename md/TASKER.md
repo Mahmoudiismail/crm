@@ -8,7 +8,7 @@
 
 ## Configuration
 
-`tasker` looks for a `tasker_config.json` file in the same directory as the executable by default. You can override this by passing the path as the first argument, or using explicit flags. If the targeted configuration file does not exist, `tasker` will automatically generate a default configuration file with a template `csv_analysis` task and log a message to inform the user before attempting to run.
+`tasker` looks for a `tasker_config.json` file in the same directory as the executable by default. You can override this by passing the path as the first argument, or using explicit flags. If the targeted configuration file does not exist, `tasker` will automatically generate a default configuration file with a template `csv_analysis` task and log a message to inform the user before attempting to run. Additionally, on each run, `tasker` will automatically scan the existing configuration and merge in any missing default configuration fields seamlessly to prevent breaking changes.
 
 ### CLI Arguments
 - `--config <PATH>`: Overrides the default `tasker_config.json` path. (Legacy support also allows passing just the path without the flag, as long as it does not start with `-`).

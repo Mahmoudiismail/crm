@@ -146,7 +146,7 @@ mod tests {
             .join("config.json")
             .to_string_lossy()
             .to_string();
-        assert_eq!(resolve_config_path(None), expected);
+        assert_eq!(resolve_config_path(None, &executable_dir()), expected);
     }
 
     #[test]
@@ -156,7 +156,10 @@ mod tests {
             .join(relative_path)
             .to_string_lossy()
             .to_string();
-        assert_eq!(resolve_config_path(Some(relative_path)), expected);
+        assert_eq!(
+            resolve_config_path(Some(relative_path), &executable_dir()),
+            expected
+        );
     }
 
     #[test]
@@ -169,6 +172,9 @@ mod tests {
         };
 
         let expected = PathBuf::from(absolute_path).to_string_lossy().to_string();
-        assert_eq!(resolve_config_path(Some(absolute_path)), expected);
+        assert_eq!(
+            resolve_config_path(Some(absolute_path), &executable_dir()),
+            expected
+        );
     }
 }
