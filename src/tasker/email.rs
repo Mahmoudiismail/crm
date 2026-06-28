@@ -90,12 +90,12 @@ fn generate_pivot_html(rows: &[TicketRow], statuses: &[String], include_team_col
     );
     for s in statuses {
         html.push_str(&format!(
-            "<th style='border: 1px solid black; padding: 2px; text-align: center;'>{}</th>",
+            "<th style='border: 1px solid black; padding: 8px 15px; text-align: center;'>{}</th>",
             s
         ));
     }
     html.push_str(
-        "<th style='border: 1px solid black; padding: 2px; text-align: center;'>Grand Total</th>",
+        "<th style='border: 1px solid black; padding: 8px 15px; text-align: center;'>Grand Total</th>",
     );
     html.push_str("</tr>");
 
@@ -207,12 +207,12 @@ fn generate_pivot_html(rows: &[TicketRow], statuses: &[String], include_team_col
                 "".to_string()
             };
             r_html.push_str(&format!(
-                "<td style='padding: 8px; text-align: center; border: 1px solid black;'>{}{}{}</td>",
+                "<td style='padding: 8px 15px; text-align: center; border: 1px solid black;'>{}{}{}</td>",
                 bold_tag, val, bold_end
             ));
         }
         r_html.push_str(&format!(
-            "<td style='padding: 8px; text-align: center; border: 1px solid black;'>{}{}{}</td>",
+            "<td style='padding: 8px 15px; text-align: center; border: 1px solid black;'>{}{}{}</td>",
             bold_tag, counts.total, bold_end
         ));
         r_html.push_str("</tr>");
@@ -262,26 +262,44 @@ fn generate_pivot_html(rows: &[TicketRow], statuses: &[String], include_team_col
         }
 
         let s_key = (t.clone(), a.clone(), s.clone());
+
+        let subtype_count = subtype_counts.get(&s_key).unwrap();
+        let mut subtype_has_non_closed = false;
+        for (st_key, st_cnt) in &subtype_count.status_counts {
+            if !st_key.eq_ignore_ascii_case("closed") && *st_cnt > 0 {
+                subtype_has_non_closed = true;
+                break;
+            }
+        }
+
+        if !subtype_has_non_closed {
+            continue;
+        }
+
         if !printed_subtypes.contains(&s_key) {
             let indent = if include_team_col { 2 } else { 1 };
-            html.push_str(&render_row(
-                &s,
-                indent,
-                false,
-                subtype_counts.get(&s_key).unwrap(),
-            ));
-            printed_subtypes.insert(s_key);
+            html.push_str(&render_row(&s, indent, false, subtype_count));
+            printed_subtypes.insert(s_key.clone());
         }
 
         let c_key = (t.clone(), a.clone(), s.clone(), c.clone());
+
+        let category_count = category_counts.get(&c_key).unwrap();
+        let mut category_has_non_closed = false;
+        for (st_key, st_cnt) in &category_count.status_counts {
+            if !st_key.eq_ignore_ascii_case("closed") && *st_cnt > 0 {
+                category_has_non_closed = true;
+                break;
+            }
+        }
+
+        if !category_has_non_closed {
+            continue;
+        }
+
         if !printed_categories.contains(&c_key) {
             let indent = if include_team_col { 3 } else { 2 };
-            html.push_str(&render_row(
-                &c,
-                indent,
-                false,
-                category_counts.get(&c_key).unwrap(),
-            ));
+            html.push_str(&render_row(&c, indent, false, category_count));
             printed_categories.insert(c_key);
         }
     }
@@ -299,12 +317,12 @@ fn generate_pivot_html(rows: &[TicketRow], statuses: &[String], include_team_col
             "".to_string()
         };
         html.push_str(&format!(
-            "<td style='padding: 8px; text-align: center; border: 1px solid black;'>{}</td>",
+            "<td style='padding: 8px 15px; text-align: center; border: 1px solid black;'>{}</td>",
             val
         ));
     }
     html.push_str(&format!(
-        "<td style='padding: 8px; text-align: center; border: 1px solid black;'>{}</td>",
+        "<td style='padding: 8px 15px; text-align: center; border: 1px solid black;'>{}</td>",
         grand_total
     ));
     html.push_str("</tr>");
@@ -536,6 +554,16 @@ pub fn process_emails(
                                  is_branch: bool|
      -> Result<()> {
         if rows.is_empty() {
+            return Ok(());
+        }
+
+        // Check if all tickets in the bucket are closed
+        let all_closed = rows.iter().all(|r| r.status.eq_ignore_ascii_case("closed"));
+        if all_closed {
+            info!(
+                "Skipping email for {} because all tickets are closed.",
+                raw_bucket_name
+            );
             return Ok(());
         }
 
