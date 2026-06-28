@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use chrono::{Local, NaiveDate};
+use chrono::{Datelike, Local, NaiveDate};
 use csv::ReaderBuilder;
 use rust_xlsxwriter::Workbook;
 use serde::Deserialize;
@@ -83,19 +83,19 @@ fn generate_pivot_html(rows: &[TicketRow], statuses: &[String], include_team_col
     //      category1         |      |     1     |         | ... |      1
 
     let mut html = String::new();
-    html.push_str("<table style='border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; border: 1px solid #ddd;'>");
-    html.push_str("<tr style='background-color: #34495e; color: white;'>");
+    html.push_str("<table style='border-collapse: collapse; width: max-content; font-family: Arial, sans-serif; border: 1px solid black; font-size: 14px;'>");
+    html.push_str("<tr style='background-color: #d9e1f2; color: black; font-weight: bold;'>");
     html.push_str(
-        "<th style='border: 1px solid #ddd; padding: 8px; text-align: left;'>Row Labels</th>",
+        "<th style='border: 1px solid black; padding: 8px; text-align: left;'>Row Labels</th>",
     );
     for s in statuses {
         html.push_str(&format!(
-            "<th style='border: 1px solid #ddd; padding: 8px; text-align: center;'>{}</th>",
+            "<th style='border: 1px solid black; padding: 8px; text-align: center;'>{}</th>",
             s
         ));
     }
     html.push_str(
-        "<th style='border: 1px solid #ddd; padding: 8px; text-align: center;'>Grand Total</th>",
+        "<th style='border: 1px solid black; padding: 8px; text-align: center;'>Grand Total</th>",
     );
     html.push_str("</tr>");
 
@@ -193,9 +193,9 @@ fn generate_pivot_html(rows: &[TicketRow], statuses: &[String], include_team_col
         let bold_tag = if is_bold { "<b>" } else { "" };
         let bold_end = if is_bold { "</b>" } else { "" };
 
-        r_html.push_str("<tr style='border-bottom: 1px solid #eee;'>");
+        r_html.push_str("<tr>");
         r_html.push_str(&format!(
-            "<td style='padding: 8px; padding-left: {}px;'>{}{}{}</td>",
+            "<td style='padding: 8px; padding-left: {}px; border: 1px solid black;'>{}{}{}</td>",
             indent_px, bold_tag, name, bold_end
         ));
 
@@ -207,12 +207,12 @@ fn generate_pivot_html(rows: &[TicketRow], statuses: &[String], include_team_col
                 "".to_string()
             };
             r_html.push_str(&format!(
-                "<td style='padding: 8px; text-align: center;'>{}{}{}</td>",
+                "<td style='padding: 8px; text-align: center; border: 1px solid black;'>{}{}{}</td>",
                 bold_tag, val, bold_end
             ));
         }
         r_html.push_str(&format!(
-            "<td style='padding: 8px; text-align: center;'>{}{}{}</td>",
+            "<td style='padding: 8px; text-align: center; border: 1px solid black;'>{}{}{}</td>",
             bold_tag, counts.total, bold_end
         ));
         r_html.push_str("</tr>");
@@ -272,8 +272,10 @@ fn generate_pivot_html(rows: &[TicketRow], statuses: &[String], include_team_col
     }
 
     // Grand total
-    html.push_str("<tr style='background-color: #34495e; color: white; font-weight: bold;'>");
-    html.push_str("<td style='padding: 8px;'>Grand Total</td>");
+    html.push_str("<tr style='background-color: #d9e1f2; color: black; font-weight: bold;'>");
+    html.push_str(
+        "<td style='padding: 8px; text-align: center; border: 1px solid black;'>Grand Total</td>",
+    );
     for st in statuses {
         let cnt = grand_total_by_status.get(st).copied().unwrap_or(0);
         let val = if cnt > 0 {
@@ -282,12 +284,12 @@ fn generate_pivot_html(rows: &[TicketRow], statuses: &[String], include_team_col
             "".to_string()
         };
         html.push_str(&format!(
-            "<td style='padding: 8px; text-align: center;'>{}</td>",
+            "<td style='padding: 8px; text-align: center; border: 1px solid black;'>{}</td>",
             val
         ));
     }
     html.push_str(&format!(
-        "<td style='padding: 8px; text-align: center;'>{}</td>",
+        "<td style='padding: 8px; text-align: center; border: 1px solid black;'>{}</td>",
         grand_total
     ));
     html.push_str("</tr>");
@@ -500,13 +502,16 @@ pub fn process_emails(
 
     let today_str = Local::now().format("%d %b %Y").to_string();
 
-    let send_email_for_bucket = |bucket_name: &str,
+    let send_email_for_bucket = |raw_bucket_name: &str,
                                  rows: &[TicketRow],
                                  is_branch: bool|
      -> Result<()> {
         if rows.is_empty() {
             return Ok(());
         }
+
+        let bucket_name_cleaned = raw_bucket_name.replace("ï¿½", "");
+        let bucket_name = bucket_name_cleaned.as_str();
 
         // Find min date
         let mut min_date = None;
@@ -522,8 +527,16 @@ pub fn process_emails(
             }
         }
         let from_date_str = min_date
-            .map(|d| d.format("%d %b").to_string())
-            .unwrap_or_else(|| "1 May".to_string());
+            .map(|d| {
+                let limit_date = NaiveDate::from_ymd_opt(2026, 5, 1).unwrap();
+                let use_date = if d < limit_date { d } else { limit_date };
+                if use_date.year() == chrono::Local::now().year() {
+                    use_date.format("%d %b").to_string()
+                } else {
+                    use_date.format("%d %b %Y").to_string()
+                }
+            })
+            .unwrap_or_else(|| "1 May 2026".to_string());
 
         info!(
             "Generating email for {} with {} rows.",
@@ -560,10 +573,9 @@ pub fn process_emails(
 <head>
     <title>Open TKTs - {bucket_name}</title>
 </head>
-<body>
-    <p>Dear Team,</p>
-    <p>Kindly find below the list of open tickets in {bucket_name} for the period from {from_date_str} until {today_str}.</p>
-    <br/>
+<body style="font-family: Arial, sans-serif;">
+    Dear All,<br/>
+    &nbsp;&nbsp;&nbsp;&nbsp;Kindly find below the list of open tickets in {bucket_name} for the period from {from_date_str} until {today_str}.<br/><br/>
     {html_table}
 </body>
 </html>"#;
@@ -610,7 +622,7 @@ pub fn process_emails(
             (extracted_subject, wrapped_body)
         } else {
             let body = format!(
-                "<html><body><p>Dear Team,</p><p>Kindly find below the list of open tickets in {} for the period from {} until {}.</p><br/>{}</body></html>",
+                "<html><body style=\"font-family: Arial, sans-serif;\">Dear All,<br/>&nbsp;&nbsp;&nbsp;&nbsp;Kindly find below the list of open tickets in {} for the period from {} until {}.<br/><br/>{}</body></html>",
                 bucket_name, from_date_str, today_str, html_table
             );
             let subject = format!("Open TKTs - {}", bucket_name);
