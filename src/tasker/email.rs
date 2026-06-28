@@ -86,16 +86,16 @@ fn generate_pivot_html(rows: &[TicketRow], statuses: &[String], include_team_col
     html.push_str("<table style='border-collapse: collapse; width: max-content; font-family: Arial, sans-serif; border: 1px solid black; font-size: 14px;'>");
     html.push_str("<tr style='background-color: #d9e1f2; color: black; font-weight: bold;'>");
     html.push_str(
-        "<th style='border: 1px solid black; padding: 8px; text-align: left;'>Row Labels</th>",
+        "<th style='border: 1px solid black; padding: 2px; text-align: left;'>Row Labels</th>",
     );
     for s in statuses {
         html.push_str(&format!(
-            "<th style='border: 1px solid black; padding: 8px; text-align: center;'>{}</th>",
+            "<th style='border: 1px solid black; padding: 2px; text-align: center;'>{}</th>",
             s
         ));
     }
     html.push_str(
-        "<th style='border: 1px solid black; padding: 8px; text-align: center;'>Grand Total</th>",
+        "<th style='border: 1px solid black; padding: 2px; text-align: center;'>Grand Total</th>",
     );
     html.push_str("</tr>");
 
@@ -229,12 +229,27 @@ fn generate_pivot_html(rows: &[TicketRow], statuses: &[String], include_team_col
         let s = r.ticket_subtype.clone();
         let c = r.ticket_category.clone();
 
+        let a_key = (t.clone(), a.clone());
+
+        // Skip employees who only have closed tickets
+        let assignee_count = assignee_counts.get(&a_key).unwrap();
+        let mut has_non_closed = false;
+        for (st_key, st_cnt) in &assignee_count.status_counts {
+            if !st_key.eq_ignore_ascii_case("closed") && *st_cnt > 0 {
+                has_non_closed = true;
+                break;
+            }
+        }
+
+        if !has_non_closed {
+            continue;
+        }
+
         if include_team_col && !printed_teams.contains(&t) {
             html.push_str(&render_row(&t, 0, true, team_counts.get(&t).unwrap()));
             printed_teams.insert(t.clone());
         }
 
-        let a_key = (t.clone(), a.clone());
         if !printed_assignees.contains(&a_key) {
             let indent = if include_team_col { 1 } else { 0 };
             html.push_str(&render_row(
@@ -524,7 +539,7 @@ pub fn process_emails(
             return Ok(());
         }
 
-        let bucket_name_cleaned = raw_bucket_name.replace("ï¿½", "");
+        let bucket_name_cleaned = raw_bucket_name.replace('\u{FFFD}', "").replace("ï¿½", "");
         let bucket_name = bucket_name_cleaned.as_str();
 
         // Find min date
