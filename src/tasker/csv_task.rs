@@ -308,26 +308,11 @@ pub fn run(config: &CsvAnalysisConfig, only_call_center: bool) -> Result<()> {
             }
             seen_tickets.insert(ticket_id_val.clone());
 
-            // Filters
             let branch_val = branch_idx
                 .and_then(|idx| record.get(idx))
                 .unwrap_or("")
                 .trim()
                 .to_lowercase();
-            if exclude_branches.contains(&branch_val) {
-                total_filtered_rows += 1;
-                continue;
-            }
-
-            let cat_val = cat_idx
-                .and_then(|idx| record.get(idx))
-                .unwrap_or("")
-                .trim()
-                .to_lowercase();
-            if exclude_categories.contains(&cat_val) {
-                total_filtered_rows += 1;
-                continue;
-            }
 
             // Keys
             let t_type = type_idx
@@ -367,6 +352,51 @@ pub fn run(config: &CsvAnalysisConfig, only_call_center: bool) -> Result<()> {
             } else {
                 (None, team2.clone())
             };
+
+            // Filters
+            if exclude_branches.contains(&branch_val) {
+                total_filtered_rows += 1;
+                continue;
+            }
+
+            let cat_val = cat_idx
+                .and_then(|idx| record.get(idx))
+                .unwrap_or("")
+                .trim()
+                .to_lowercase();
+
+            if exclude_categories.contains(&cat_val) {
+                // Check if this matches a category exception
+                let mut matches_exception = false;
+                if let Some(exceptions) = &config.category_exceptions {
+                    for exc in exceptions {
+                        if exc.category.trim().to_lowercase() == cat_val {
+                            let branch_matches = exc.branch.as_ref().is_none_or(|b| {
+                                b.trim().is_empty() || b.trim().to_lowercase() == branch_val
+                            });
+                            let team_matches = exc.team.as_ref().is_none_or(|t| {
+                                if t.trim().is_empty() {
+                                    true
+                                } else {
+                                    team.as_ref().is_some_and(|tm| {
+                                        tm.trim().to_lowercase() == t.trim().to_lowercase()
+                                    })
+                                }
+                            });
+
+                            if branch_matches && team_matches {
+                                matches_exception = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if !matches_exception {
+                    total_filtered_rows += 1;
+                    continue;
+                }
+            }
 
             // Date helpers
             let created_at_val = created_idx.and_then(|idx| record.get(idx)).unwrap_or("");
@@ -473,6 +503,7 @@ mod tests {
             minutes_ago: 60 * 24 * 365 * 10, // Ensure it picks up
             exclude_branches: vec![],
             exclude_categories: vec![],
+            category_exceptions: None,
             output_file: output_file.path().to_str().unwrap().to_string(),
             email_config: None,
         };

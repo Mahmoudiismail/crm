@@ -548,10 +548,74 @@ pub fn process_emails(
 
         let html_table = generate_pivot_html(rows, &statuses_vec, is_branch);
 
-        let body = format!(
-            "<html><body><p>Dear Team,</p><p>Kindly find below the list of open tickets in {} for the period from {} until {}.</p><br/>{}</body></html>",
-            bucket_name, from_date_str, today_str, html_table
-        );
+        let (subject, body) = if let Some(template_path) = &config.body_template_file {
+            let template_content = if std::path::Path::new(template_path).exists() {
+                std::fs::read_to_string(template_path).unwrap_or_else(|e| {
+                    error!("Failed to read template file {}: {}", template_path, e);
+                    "".to_string()
+                })
+            } else {
+                let default_template = r#"<!DOCTYPE html>
+<html>
+<head>
+    <title>Open TKTs - {bucket_name}</title>
+</head>
+<body>
+    <p>Dear Team,</p>
+    <p>Kindly find below the list of open tickets in {bucket_name} for the period from {from_date_str} until {today_str}.</p>
+    <br/>
+    {html_table}
+</body>
+</html>"#;
+                if let Err(e) = std::fs::write(template_path, default_template) {
+                    error!(
+                        "Failed to generate default template at {}: {}",
+                        template_path, e
+                    );
+                }
+                default_template.to_string()
+            };
+
+            // Extract title
+            let mut extracted_subject = format!("Open TKTs - {}", bucket_name);
+            if let Some(start_idx) = template_content.find("<title>") {
+                if let Some(end_idx) = template_content[start_idx..].find("</title>") {
+                    let title_content = &template_content[start_idx + 7..start_idx + end_idx];
+                    extracted_subject = title_content
+                        .replace("{bucket_name}", bucket_name)
+                        .replace("{from_date_str}", &from_date_str)
+                        .replace("{today_str}", &today_str)
+                        .trim()
+                        .to_string();
+                }
+            }
+
+            // Extract body
+            let mut extracted_body = template_content.clone();
+            if let Some(start_idx) = template_content.find("<body>") {
+                if let Some(end_idx) = template_content[start_idx..].find("</body>") {
+                    extracted_body =
+                        template_content[start_idx + 6..start_idx + end_idx].to_string();
+                }
+            }
+
+            // Replace placeholders
+            let final_body = extracted_body
+                .replace("{bucket_name}", bucket_name)
+                .replace("{from_date_str}", &from_date_str)
+                .replace("{today_str}", &today_str)
+                .replace("{html_table}", &html_table);
+
+            let wrapped_body = format!("<html><body>{}</body></html>", final_body);
+            (extracted_subject, wrapped_body)
+        } else {
+            let body = format!(
+                "<html><body><p>Dear Team,</p><p>Kindly find below the list of open tickets in {} for the period from {} until {}.</p><br/>{}</body></html>",
+                bucket_name, from_date_str, today_str, html_table
+            );
+            let subject = format!("Open TKTs - {}", bucket_name);
+            (subject, body)
+        };
 
         // Save Excel file
         let tmp_dir = std::env::temp_dir();
@@ -583,14 +647,14 @@ $Outlook = New-Object -ComObject Outlook.Application
 $Mail = $Outlook.CreateItem(0)
 $Mail.To = "{}"
 $Mail.CC = "{}"
-$Mail.Subject = "Open TKTs - {}"
+$Mail.Subject = "{}"
 $Mail.HTMLBody = '{}'
 $Mail.Attachments.Add("{}")
 $Mail.{}
 "#,
             to_emails,
             cc_list,
-            bucket_name,
+            subject.replace("\"", "'"), // basic sanitize for powershell string interpolation
             body.replace("'", "''"),
             xlsx_path.display(),
             display_or_send

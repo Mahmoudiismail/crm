@@ -57,9 +57,17 @@ This task is designed to process multiple ticket report CSV files and augment th
       "exclude_categories": [
         "incomplete reservation"
       ],
+      "category_exceptions": [
+        {
+          "category": "incomplete reservation",
+          "branch": "DSFH Jeddah",
+          "team": "Specific Team Name"
+        }
+      ],
       "output_file": "./results.csv",
       "email_config": {
         "team_mapping_file": "./teams.csv",
+        "body_template_file": "./task1/email_template.html",
         "initial_cc": "initial@example.com",
         "ending_cc": "ending@example.com",
         "send_emails": false,
@@ -81,9 +89,14 @@ This task is designed to process multiple ticket report CSV files and augment th
 - `minutes_ago`: Will only process ticket CSV files that have been modified within the last X minutes.
 - `exclude_branches`: Array of strings. Tickets belonging to these branches will be excluded from the final output (case-insensitive).
 - `exclude_categories`: Array of strings. Tickets belonging to these categories will be excluded from the final output (case-insensitive).
+- `category_exceptions`: (Optional) List of objects specifying conditional inclusions for otherwise excluded categories.
+  - `category`: The category string that normally would be excluded.
+  - `branch`: (Optional) Only allow the exception if the ticket branch matches this.
+  - `team`: (Optional) Only allow the exception if the assigned team matches this.
 - `output_file`: Destination file path to write the combined, joined, and augmented CSV output.
 - `email_config`: (Optional) Specifies automated email configuration via Microsoft Outlook.
   - `team_mapping_file`: Path to CSV configuring email recipients per Team or Branch Name (Requires headers `Team Name`, `To Emails`, `CC`).
+  - `body_template_file`: (Optional) Path to an HTML file to use as the email template. If it does not exist, `tasker` will auto-generate it. It extracts the subject from the `<title>` tag and the content from the `<body>` tag, replacing `{bucket_name}`, `{from_date_str}`, `{today_str}`, and `{html_table}` dynamically.
   - `initial_cc` / `ending_cc`: Static CC emails appended to every sent mail.
   - `send_emails`: Boolean, if `false` emails are left open as drafts (using `.Display()`) for manual review. If `true` uses `.Send()`.
   - `default_to_email`: Fallback email if team mapped isn't found, and also used to send exception/error reports.
