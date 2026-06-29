@@ -12,9 +12,11 @@ When a file changes, update docs as follows:
 
 - `src/bin/runner.rs` -> `APPLICATION_SUMMARY.md`, `ARCHITECTURE.md`, `SCHEDULER_TRAY.md`, `OPERATIONS.md`, `BUILD_AND_RUN.md`
 - `src/bin/crm.rs` -> `APPLICATION_SUMMARY.md`, `ARCHITECTURE.md`, `OPERATIONS.md`, `BUILD_AND_RUN.md`
+- `src/bin/tasker.rs` -> `APPLICATION_SUMMARY.md`, `ARCHITECTURE.md`, `OPERATIONS.md`
 - `src/lib.rs` -> `APPLICATION_SUMMARY.md`, `ARCHITECTURE.md`
 - `src/runner/*` -> `APPLICATION_SUMMARY.md`, `ARCHITECTURE.md`, `CONFIG.md`, `SCHEDULER_TRAY.md`, `OPERATIONS.md`
 - `src/crm/*` -> `ARCHITECTURE.md`, `CONFIG.md`, `AUTH_FLOW.md`, `FETCHER.md`, `DOWNLOADER.md`, `OPERATIONS.md`
+- `src/tasker/*` -> `ARCHITECTURE.md`, `CONFIG.md`
 - `Cargo.toml` / dependency changes -> `BUILD_AND_RUN.md`, `DOCKER.md`, `APPLICATION_SUMMARY.md`
 - `.github/workflows/*` -> `BUILD_AND_RUN.md`, `OPERATIONS.md`
 - `.devcontainer/*` -> `DOCKER.md`, `BUILD_AND_RUN.md`

@@ -117,3 +117,4 @@ CRM always performs login.
 - `src/crm/config.rs`
 - `src/crm/fetcher.rs`
 - `src/crm/downloader.rs`
+- `src/tasker/*`
