@@ -16,6 +16,7 @@ fn run_app() -> Result<()> {
     let mut config_path_arg = None;
     let mut task_filter: Option<usize> = None;
     let mut only_call_center = false;
+    let mut send_exceptions = false;
 
     let mut args_iter = args.into_iter().skip(1).peekable();
     while let Some(arg) = args_iter.next() {
@@ -41,6 +42,9 @@ fn run_app() -> Result<()> {
             }
             "--only-call-center" => {
                 only_call_center = true;
+            }
+            "--send-exceptions" => {
+                send_exceptions = true;
             }
             // Support the legacy positional config path if they don't provide a flag
             val if !val.starts_with("-") && config_path_arg.is_none() => {
@@ -190,7 +194,7 @@ fn run_app() -> Result<()> {
         info!("Running task #{}", task_idx);
         match task {
             TaskConfig::CsvAnalysis(csv_config) => {
-                if let Err(e) = csv_task::run(csv_config, only_call_center) {
+                if let Err(e) = csv_task::run(csv_config, only_call_center, send_exceptions) {
                     error!("Error running CsvAnalysis task: {:?}", e);
                 }
             }
