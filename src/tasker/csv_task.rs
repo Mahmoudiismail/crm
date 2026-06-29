@@ -59,7 +59,10 @@ pub fn parse_created_at(val: &str) -> Option<NaiveDateTime> {
     None
 }
 
-pub fn resolve_relative_to_base_dir(path: &str, base_dir: Option<&std::path::Path>) -> std::path::PathBuf {
+pub fn resolve_relative_to_base_dir(
+    path: &str,
+    base_dir: Option<&std::path::Path>,
+) -> std::path::PathBuf {
     let p = std::path::PathBuf::from(path);
     if p.is_absolute() {
         return p;
@@ -73,10 +76,11 @@ pub fn resolve_relative_to_base_dir(path: &str, base_dir: Option<&std::path::Pat
 }
 
 pub fn resolve_relative_to_exe_dir(path: &str) -> std::path::PathBuf {
-    let exe_dir = std::env::current_exe().ok().and_then(|e| e.parent().map(|p| p.to_path_buf()));
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|e| e.parent().map(|p| p.to_path_buf()));
     resolve_relative_to_base_dir(path, exe_dir.as_deref())
 }
-
 
 pub fn run(
     config: &CsvAnalysisConfig,
@@ -248,7 +252,6 @@ pub fn run(
 
     // Parse logic
 
-
     info!(
         "Processing ticket files and writing to output: {}",
         output_file_path.display()
@@ -332,9 +335,7 @@ pub fn run(
             record = new_record;
 
             // Deduplicate
-            let ticket_id_val = ticket_id_idx
-                .and_then(|idx| record.get(idx))
-                .unwrap_or("");
+            let ticket_id_val = ticket_id_idx.and_then(|idx| record.get(idx)).unwrap_or("");
 
             // Avoid string clone if we've seen it by querying with string slice first.
             if seen_tickets.contains(ticket_id_val) {
@@ -501,15 +502,14 @@ pub fn run(
     Ok(())
 }
 
-
 #[cfg(test)]
 mod tests {
+    use super::{parse_created_at, resolve_relative_to_base_dir};
     use crate::tasker::config::CsvAnalysisConfig;
+    use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
     use std::fs::File;
     use std::io::Write;
     use tempfile::NamedTempFile;
-    use super::{parse_created_at, resolve_relative_to_base_dir};
-    use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 
     #[test]
     fn test_csv_analysis_mapping() {
@@ -616,16 +616,30 @@ mod tests {
         let download_dir = tempfile::tempdir().unwrap();
         let output_file = NamedTempFile::new().unwrap();
 
-
         let client = reqwest::blocking::Client::new();
 
-        let agents_csv = client.get("https://paste.c-net.org/FreddoLocate").send().unwrap().text().unwrap();
+        let agents_csv = client
+            .get("https://paste.c-net.org/FreddoLocate")
+            .send()
+            .unwrap()
+            .text()
+            .unwrap();
         std::fs::write(users_file.path(), agents_csv).unwrap();
 
-        let assignment_csv = client.get("https://paste.c-net.org/HahahaBackpack").send().unwrap().text().unwrap();
+        let assignment_csv = client
+            .get("https://paste.c-net.org/HahahaBackpack")
+            .send()
+            .unwrap()
+            .text()
+            .unwrap();
         std::fs::write(assignments_file.path(), assignment_csv).unwrap();
 
-        let ticket_csv = client.get("https://paste.c-net.org/CalmedBrochure").send().unwrap().text().unwrap();
+        let ticket_csv = client
+            .get("https://paste.c-net.org/CalmedBrochure")
+            .send()
+            .unwrap()
+            .text()
+            .unwrap();
         std::fs::write(download_dir.path().join("ticket_report1.csv"), ticket_csv).unwrap();
 
         let config = CsvAnalysisConfig {
