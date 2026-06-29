@@ -27,6 +27,21 @@ pub struct AssignmentSettings {
     pub auto_agent_team_assignment: Option<String>,
 }
 
+pub fn resolve_relative_to_exe_dir(path: &str) -> std::path::PathBuf {
+    let p = std::path::PathBuf::from(path);
+    if p.is_absolute() {
+        return p;
+    }
+
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(exe_dir) = exe.parent() {
+            return exe_dir.join(p);
+        }
+    }
+
+    p
+}
+
 pub fn run(
     config: &CsvAnalysisConfig,
     only_call_center: bool,
@@ -37,11 +52,16 @@ pub fn run(
         only_call_center, send_exceptions, config
     );
 
+    let users_file_path = resolve_relative_to_exe_dir(&config.users_file);
+    let assignment_settings_path = resolve_relative_to_exe_dir(&config.assignment_settings_file);
+    let download_dir_path = resolve_relative_to_exe_dir(&config.download_path);
+    let output_file_path = resolve_relative_to_exe_dir(&config.output_file);
+
     // 1. Load users (Table11)
-    info!("Loading users file from {}", config.users_file);
+    info!("Loading users file from {}", users_file_path.display());
     let mut assignee_map: HashMap<String, UserInfo> = HashMap::new();
-    let users_bytes = std::fs::read(&config.users_file)
-        .with_context(|| format!("Failed to read users file: {}", config.users_file))?;
+    let users_bytes = std::fs::read(&users_file_path)
+        .with_context(|| format!("Failed to read users file: {}", users_file_path.display()))?;
     let users_content = String::from_utf8_lossy(&users_bytes);
     let mut users_rdr = ReaderBuilder::new()
         .has_headers(true)
@@ -91,13 +111,13 @@ pub fn run(
     // 2. Load assignment settings
     info!(
         "Loading assignment settings from {}",
-        config.assignment_settings_file
+        assignment_settings_path.display()
     );
     let mut assignment_map: HashMap<(String, String, String), String> = HashMap::new();
-    let assignment_bytes = std::fs::read(&config.assignment_settings_file).with_context(|| {
+    let assignment_bytes = std::fs::read(&assignment_settings_path).with_context(|| {
         format!(
             "Failed to read assignment file: {}",
-            config.assignment_settings_file
+            assignment_settings_path.display()
         )
     })?;
     let assignment_content = String::from_utf8_lossy(&assignment_bytes);
@@ -127,13 +147,14 @@ pub fn run(
     // 3. Find target tickets CSVs
     info!(
         "Scanning for target ticket CSVs in {} (modified in last {} min)",
-        config.download_path, config.minutes_ago
+        download_dir_path.display(),
+        config.minutes_ago
     );
     let now = Local::now().naive_local();
     let threshold = now - Duration::minutes(config.minutes_ago);
     let mut target_files = Vec::new();
 
-    for entry in WalkDir::new(&config.download_path)
+    for entry in WalkDir::new(&download_dir_path)
         .into_iter()
         .filter_map(|e| e.ok())
     {
@@ -161,6 +182,20 @@ pub fn run(
         );
         return Ok(());
     }
+
+    // Sort files with modification date newer first
+    target_files.sort_by(|a, b| {
+        let meta_a = a
+            .metadata()
+            .and_then(|m| m.modified())
+            .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+        let meta_b = b
+            .metadata()
+            .and_then(|m| m.modified())
+            .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+        meta_b.cmp(&meta_a)
+    });
+
     info!("Found {} target ticket files.", target_files.len());
 
     // Prepare exclusion filters
@@ -210,9 +245,9 @@ pub fn run(
 
     info!(
         "Processing ticket files and writing to output: {}",
-        config.output_file
+        output_file_path.display()
     );
-    let mut output_writer = WriterBuilder::new().from_path(&config.output_file)?;
+    let mut output_writer = WriterBuilder::new().from_path(&output_file_path)?;
     let mut all_records = Vec::new();
     let mut wrote_headers = false;
     let mut total_filtered_rows = 0;
@@ -452,14 +487,14 @@ pub fn run(
     output_writer.flush()?;
     info!(
         "csv_analysis task completed successfully. Output written to {}",
-        config.output_file
+        output_file_path.display()
     );
 
     if let Some(email_cfg) = &config.email_config {
         // Start email processing
         info!("Email config present, starting email processing...");
         if let Err(e) = crate::tasker::email::process_emails(
-            &config.output_file,
+            &output_file_path.to_string_lossy(),
             email_cfg,
             only_call_center,
             send_exceptions,

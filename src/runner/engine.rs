@@ -900,7 +900,19 @@ async fn run_post_run_script(
                 .arg(script_path);
             cmd
         }
-        _ => tokio::process::Command::new(script_path),
+        _ => {
+            let mut cmd = if cfg!(target_os = "windows") {
+                tokio::process::Command::new("cmd.exe")
+            } else {
+                tokio::process::Command::new("sh")
+            };
+            if cfg!(target_os = "windows") {
+                cmd.arg("/c").arg(script_path);
+            } else {
+                cmd.arg("-c").arg(script_path);
+            }
+            cmd
+        }
     };
     logger
         .log(&format!("Executing post-run script: {:?}", command))

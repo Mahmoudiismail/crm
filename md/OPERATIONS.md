@@ -152,6 +152,12 @@ Manual check example:
 - `crm --config <path> --report tickets`
 - `crm --config <path> --report none`
 
+### 10) Tasker `csv_analysis` exceptions not sending
+Check:
+- Ensure `is_exception_val` logic correctly flags the ticket as `"Yes"` based on the combination of `exclude_categories` and `category_exceptions`.
+- If older versions of the CSV files are evaluated first, the deduplication logic might keep a stale row, incorrectly flagging it. The application now sorts modified CSVs in descending order (newer first) to ensure the deduplication logic preserves the most updated row state, fixing situations where updated tickets were dropped.
+- The assignee correctly maps to `Unassigned` when the string is empty in the report, preventing blank fields in the final output.
+
 ## Safe Recovery Steps
 
 1. Stop app.

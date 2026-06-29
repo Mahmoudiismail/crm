@@ -342,11 +342,13 @@ pub fn process_emails(
         results_file, only_call_center, send_exceptions
     );
 
+    let team_mapping_path =
+        crate::tasker::csv_task::resolve_relative_to_exe_dir(&config.team_mapping_file);
     // 1. Load the team mapping file
     let mut team_maps: HashMap<String, TeamMapping> = HashMap::new();
-    let mapping_file = File::open(&config.team_mapping_file).context(format!(
+    let mapping_file = File::open(&team_mapping_path).context(format!(
         "Failed to open team mapping file: {}",
-        config.team_mapping_file
+        team_mapping_path.display()
     ))?;
     let mut map_rdr = ReaderBuilder::new()
         .has_headers(true)
@@ -467,15 +469,22 @@ pub fn process_emails(
             dynamic_statuses.insert(status.to_lowercase());
         }
 
+        let assignee_val = assignee_idx
+            .and_then(|idx| record.get(idx))
+            .unwrap_or("")
+            .trim();
+        let display_assignee = if assignee_val.is_empty() {
+            "Unassigned"
+        } else {
+            assignee_val
+        };
+
         ticket_rows.push(TicketRow {
             ticket_id: tkt_id_idx
                 .and_then(|idx| record.get(idx))
                 .unwrap_or("")
                 .to_string(),
-            assignee: assignee_idx
-                .and_then(|idx| record.get(idx))
-                .unwrap_or("")
-                .to_string(),
+            assignee: display_assignee.to_string(),
             ticket_type: type_idx
                 .and_then(|idx| record.get(idx))
                 .unwrap_or("")
@@ -642,10 +651,16 @@ pub fn process_emails(
 
         let (subject, body) = if bucket_name.eq_ignore_ascii_case("Call Center") {
             (format!("Open TKTs - {}", bucket_name), "".to_string())
-        } else if let Some(template_path) = &config.body_template_file {
-            let template_content = if std::path::Path::new(template_path).exists() {
-                std::fs::read_to_string(template_path).unwrap_or_else(|e| {
-                    error!("Failed to read template file {}: {}", template_path, e);
+        } else if let Some(template_path_str) = &config.body_template_file {
+            let template_path =
+                crate::tasker::csv_task::resolve_relative_to_exe_dir(template_path_str);
+            let template_content = if template_path.exists() {
+                std::fs::read_to_string(&template_path).unwrap_or_else(|e| {
+                    error!(
+                        "Failed to read template file {}: {}",
+                        template_path.display(),
+                        e
+                    );
                     "".to_string()
                 })
             } else {
@@ -667,10 +682,11 @@ pub fn process_emails(
     </table>
 </body>
 </html>"#;
-                if let Err(e) = std::fs::write(template_path, default_template) {
+                if let Err(e) = std::fs::write(&template_path, default_template) {
                     error!(
                         "Failed to generate default template at {}: {}",
-                        template_path, e
+                        template_path.display(),
+                        e
                     );
                 }
                 default_template.to_string()
