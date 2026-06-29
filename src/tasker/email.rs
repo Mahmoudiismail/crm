@@ -335,10 +335,11 @@ pub fn process_emails(
     results_file: &str,
     config: &EmailConfig,
     only_call_center: bool,
+    send_exceptions: bool,
 ) -> Result<()> {
     info!(
-        "Starting email processing module. Reading output from {} (only_call_center: {})",
-        results_file, only_call_center
+        "Starting email processing module. Reading output from {} (only_call_center: {}, send_exceptions: {})",
+        results_file, only_call_center, send_exceptions
     );
 
     // 1. Load the team mapping file
@@ -377,6 +378,7 @@ pub fn process_emails(
     let mut branch_idx = None;
     let mut team_idx = None;
     let mut created_at_idx = None;
+    let mut is_exception_idx = None;
 
     for (i, h) in headers.iter().enumerate() {
         let h_low = h.trim().to_lowercase();
@@ -398,6 +400,8 @@ pub fn process_emails(
             team_idx = Some(i);
         } else if h_low == "created at" {
             created_at_idx = Some(i);
+        } else if h_low == "is exception" {
+            is_exception_idx = Some(i);
         }
     }
 
@@ -406,6 +410,24 @@ pub fn process_emails(
 
     for result in rdr.records() {
         let record = result?;
+
+        let is_exception_val = is_exception_idx
+            .and_then(|idx| record.get(idx))
+            .unwrap_or("No")
+            .trim()
+            .to_lowercase();
+
+        let is_exception = is_exception_val == "yes";
+
+        if send_exceptions {
+            if !is_exception {
+                continue; // Only process exceptions
+            }
+        } else {
+            if is_exception {
+                continue; // Only process normal tickets
+            }
+        }
 
         let status = status_idx
             .and_then(|idx| record.get(idx))
@@ -707,13 +729,29 @@ pub fn process_emails(
         let mut workbook = Workbook::new();
         let worksheet = workbook.add_worksheet();
 
+        let mut out_col_idx = 0;
         for (i, h) in headers.iter().enumerate() {
-            worksheet.write_string(0, i as u16, h)?;
-        }
-        for (r_idx, row) in rows.iter().enumerate() {
-            for (c_idx, field) in row.original_row.iter().enumerate() {
-                worksheet.write_string((r_idx + 1) as u32, c_idx as u16, field)?;
+            if is_exception_idx == Some(i) {
+                continue;
             }
+            worksheet.write_string(0, out_col_idx, h)?;
+            out_col_idx += 1;
+        }
+
+        let mut write_r_idx = 1;
+        for row in rows.iter() {
+            if row.status.eq_ignore_ascii_case("closed") {
+                continue;
+            }
+            let mut out_c_idx = 0;
+            for (c_idx, field) in row.original_row.iter().enumerate() {
+                if is_exception_idx == Some(c_idx) {
+                    continue;
+                }
+                worksheet.write_string(write_r_idx as u32, out_c_idx, field)?;
+                out_c_idx += 1;
+            }
+            write_r_idx += 1;
         }
         workbook.save(&xlsx_path)?;
 

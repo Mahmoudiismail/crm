@@ -27,10 +27,14 @@ pub struct AssignmentSettings {
     pub auto_agent_team_assignment: Option<String>,
 }
 
-pub fn run(config: &CsvAnalysisConfig, only_call_center: bool) -> Result<()> {
+pub fn run(
+    config: &CsvAnalysisConfig,
+    only_call_center: bool,
+    send_exceptions: bool,
+) -> Result<()> {
     info!(
-        "Starting csv_analysis task (only_call_center: {})...",
-        only_call_center
+        "Starting CsvAnalysis task (only_call_center: {}, send_exceptions: {}). Config: {:?}",
+        only_call_center, send_exceptions, config
     );
 
     // 1. Load users (Table11)
@@ -257,6 +261,7 @@ pub fn run(config: &CsvAnalysisConfig, only_call_center: bool) -> Result<()> {
             out_headers.push_field("Month");
             out_headers.push_field("Position");
             out_headers.push_field("team");
+            out_headers.push_field("Is Exception");
             output_writer.write_record(&out_headers)?;
             wrote_headers = true;
         }
@@ -265,6 +270,7 @@ pub fn run(config: &CsvAnalysisConfig, only_call_center: bool) -> Result<()> {
 
         for result in rdr.records() {
             let mut record = result?;
+            let mut is_exception_val = "No";
 
             // Clean
             if let Some(idx) = assignee_idx {
@@ -396,6 +402,8 @@ pub fn run(config: &CsvAnalysisConfig, only_call_center: bool) -> Result<()> {
                     total_filtered_rows += 1;
                     continue;
                 }
+
+                is_exception_val = "Yes";
             }
 
             // Date helpers
@@ -413,6 +421,7 @@ pub fn run(config: &CsvAnalysisConfig, only_call_center: bool) -> Result<()> {
             record.push_field(&month_str);
             record.push_field(position.as_deref().unwrap_or(""));
             record.push_field(team.as_deref().unwrap_or(""));
+            record.push_field(is_exception_val);
 
             all_records.push((ticket_id_val, record));
         }
@@ -449,9 +458,12 @@ pub fn run(config: &CsvAnalysisConfig, only_call_center: bool) -> Result<()> {
     if let Some(email_cfg) = &config.email_config {
         // Start email processing
         info!("Email config present, starting email processing...");
-        if let Err(e) =
-            crate::tasker::email::process_emails(&config.output_file, email_cfg, only_call_center)
-        {
+        if let Err(e) = crate::tasker::email::process_emails(
+            &config.output_file,
+            email_cfg,
+            only_call_center,
+            send_exceptions,
+        ) {
             error!("Error processing emails: {}", e);
         }
     }
@@ -509,7 +521,7 @@ mod tests {
         };
 
         // Run the task
-        super::run(&config, false).unwrap();
+        super::run(&config, false, false).unwrap();
 
         // Validate the output file was created and contains expected headers
         let output_content = std::fs::read_to_string(config.output_file).unwrap();
