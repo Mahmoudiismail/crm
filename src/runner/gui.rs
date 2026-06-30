@@ -323,6 +323,129 @@ async fn route_request(
         return Ok((200, "application/json", config_str));
     }
 
+    // --- New App Registration Endpoints ---
+
+    if request.method == "GET" && route_path == "/apps" {
+        let cfg = RunnerConfig::load(&handle.runner_config_path)?;
+        let html = render_apps_page(&cfg.registered_apps);
+        return Ok((200, "text/html; charset=utf-8", html));
+    }
+
+    if request.method == "POST" && route_path == "/apps/create" {
+        let values = parse_query_string(&request.body);
+        let mut cfg = RunnerConfig::load(&handle.runner_config_path)?;
+        let app = crate::runner::config::RegisteredApp {
+            id: values
+                .get("id")
+                .unwrap_or(&String::new())
+                .trim()
+                .to_string(),
+            name: values
+                .get("name")
+                .unwrap_or(&String::new())
+                .trim()
+                .to_string(),
+            executable_path: values
+                .get("executable_path")
+                .unwrap_or(&String::new())
+                .trim()
+                .to_string(),
+            config_path: values
+                .get("config_path")
+                .unwrap_or(&String::new())
+                .trim()
+                .to_string(),
+        };
+
+        if app.id.is_empty() || app.name.is_empty() || app.executable_path.is_empty() {
+            return Ok((
+                400,
+                "text/html; charset=utf-8",
+                render_error_page(
+                    "Invalid app data",
+                    "ID, Name, and Executable Path are required.",
+                ),
+            ));
+        }
+
+        if cfg.registered_apps.iter().any(|a| a.id == app.id) {
+            return Ok((
+                400,
+                "text/html; charset=utf-8",
+                render_error_page("Invalid app data", "An app with this ID already exists."),
+            ));
+        }
+
+        cfg.registered_apps.push(app);
+        cfg.save(&handle.runner_config_path)?;
+        return Ok((
+            200,
+            "text/html; charset=utf-8",
+            render_redirect_to_dashboard("App registered successfully"),
+        ));
+    }
+
+    if request.method == "GET" && route_path.starts_with("/apps/delete/") {
+        let app_id = route_path.trim_start_matches("/apps/delete/").to_string();
+        let mut cfg = RunnerConfig::load(&handle.runner_config_path)?;
+        cfg.registered_apps.retain(|a| a.id != app_id);
+        cfg.save(&handle.runner_config_path)?;
+        return Ok((
+            200,
+            "text/html; charset=utf-8",
+            render_redirect_to_dashboard("App deleted"),
+        ));
+    }
+
+    if request.method == "GET" && route_path == "/api/apps/list" {
+        let cfg = RunnerConfig::load(&handle.runner_config_path)?;
+        let body = serde_json::to_string(&cfg.registered_apps)?;
+        return Ok((200, "application/json", body));
+    }
+
+    if request.method == "GET" && route_path == "/api/apps/manifest" {
+        let app_id = query.get("app_id").unwrap_or(&String::new()).to_string();
+        let cfg = RunnerConfig::load(&handle.runner_config_path)?;
+
+        if let Some(app) = cfg.registered_apps.iter().find(|a| a.id == app_id) {
+            let executable = crate::runner::engine::resolve_executable(&app.executable_path);
+            let output_result = tokio::process::Command::new(executable)
+                .arg("--manifest")
+                .output()
+                .await;
+
+            match output_result {
+                Ok(output) if output.status.success() => {
+                    let json = String::from_utf8_lossy(&output.stdout).to_string();
+                    return Ok((200, "application/json", json));
+                }
+                Ok(output) => {
+                    let err = String::from_utf8_lossy(&output.stderr);
+                    error!("App {} returned error for --manifest: {}", app.id, err);
+                    return Ok((
+                        500,
+                        "application/json",
+                        r#"{"error":"App returned non-zero status"}"#.to_string(),
+                    ));
+                }
+                Err(e) => {
+                    error!("Failed to execute app {} for --manifest: {}", app.id, e);
+                    return Ok((
+                        500,
+                        "application/json",
+                        r#"{"error":"Failed to execute app"}"#.to_string(),
+                    ));
+                }
+            }
+        } else {
+            return Ok((
+                404,
+                "application/json",
+                r#"{"error":"App not found"}"#.to_string(),
+            ));
+        }
+    }
+
     Ok((
         404,
         "text/html; charset=utf-8",
@@ -353,6 +476,7 @@ fn render_dashboard(
                     <div class='flex flex-wrap gap-2'>\
                         <a class='rounded bg-gray-900 text-white px-4 py-2 text-sm font-semibold' href='/run-all'>Run All Now</a>\
                         <a class='rounded border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-800' href='/run-tickets'>Run CRM Tickets</a>\
+                        <a class='rounded border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-800' href='/apps'>Apps</a>\
                         <a class='rounded bg-gray-600 text-white px-4 py-2 text-sm font-semibold mr-2' href='/config'>Settings</a>\
                         <a class='rounded bg-emerald-600 text-white px-4 py-2 text-sm font-semibold' href='/new-task'>New Task</a>\
                     </div>\
@@ -455,6 +579,9 @@ fn render_task_row(task: &RunnerTask) -> String {
         TaskKind::Yasweb { reports } => {
             format!("Yasweb tasks ({})", reports.len())
         }
+        TaskKind::ExternalApp { app_id, .. } => {
+            format!("External App ({})", app_id)
+        }
     };
     let last_run = if task.last_run_at.is_empty() {
         "Never".to_string()
@@ -517,6 +644,9 @@ fn render_task_form(
     };
     let mut yasweb_reports_json = "[]".to_string();
 
+    let mut ext_app_id = String::new();
+    let mut ext_app_args = String::new();
+
     let (task_type, report) = match task.map(|t| &t.kind) {
         Some(TaskKind::ShellCommand { .. }) => ("shell_command", "all"),
         Some(TaskKind::Yasweb { reports }) => {
@@ -534,6 +664,11 @@ fn render_task_form(
                 ReportType::None => "none",
             },
         ),
+        Some(TaskKind::ExternalApp { app_id, args }) => {
+            ext_app_id = app_id.clone();
+            ext_app_args = serde_json::to_string(args).unwrap_or_else(|_| "{}".to_string());
+            ("external_app", "all")
+        }
         None => ("crm_fetch", "all"),
     };
 
@@ -580,6 +715,13 @@ fn render_task_form(
                     <div id='yasweb-reports-list' class='space-y-4' data-initial-reports='{}'></div>\
                     <input type='hidden' id='yasweb_reports_hidden' name='yasweb_reports' value=''>\
                 </div>\
+                <div id='external-app-container' class='hidden space-y-4 p-4 border border-purple-200 bg-purple-50 rounded'>\
+                    <h3 class='text-lg font-semibold text-purple-800'>External Application</h3>\
+                    <div id='external-app-select-container' class='mb-4'></div>\
+                    <div id='external-app-dynamic-inputs' class='space-y-3'></div>\
+                    <input type='hidden' id='external_app_args' name='external_app_args' value='{}'>\
+                    <input type='hidden' id='external_app_id' name='external_app_id' value='{}'>\
+                </div>\
                 <button class='rounded bg-emerald-600 text-white px-4 py-2 text-sm font-semibold' type='submit'>{}</button>\
             </form>\
         </div>",
@@ -596,6 +738,8 @@ fn render_task_form(
         schedule_editor_html(task),
         shell_command_editor_html(task),
         yasweb_reports_json.replace("'", "&#39;"),
+        ext_app_args.replace("'", "&#39;"),
+        escape_html(&ext_app_id),
         escape_html(submit_label)
     );
     let page_html = form_html + &form_script();
@@ -993,10 +1137,11 @@ fn input_field(label: &str, name: &str, value: &str) -> String {
 
 fn select_task_type(value: &str) -> String {
     format!(
-        "<label class='block'><span class='text-sm font-semibold text-gray-800'>Task Type</span><select id='task-type-select' class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' name='task_type'><option value='crm_fetch' {}>CRM Fetch</option><option value='shell_command' {}>Shell Command</option><option value='yasweb' {}>Yasweb Report</option></select></label>",
+        "<label class='block'><span class='text-sm font-semibold text-gray-800'>Task Type</span><select id='task-type-select' class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' name='task_type'><option value='crm_fetch' {}>CRM Fetch</option><option value='shell_command' {}>Shell Command</option><option value='yasweb' {}>Yasweb Report</option><option value='external_app' {}>External App</option></select></label>",
         if value == "crm_fetch" { "selected" } else { "" },
         if value == "shell_command" { "selected" } else { "" },
-        if value == "yasweb" { "selected" } else { "" }
+        if value == "yasweb" { "selected" } else { "" },
+        if value == "external_app" { "selected" } else { "" }
     )
 }
 
@@ -1205,6 +1350,18 @@ fn build_task_from_values(
             serde_json::from_str(reports_json)
                 .with_context(|| format!("Invalid yasweb reports JSON: {}", reports_json))?;
         TaskKind::Yasweb { reports }
+    } else if task_type == "external_app" {
+        let app_id = values
+            .get("external_app_id")
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default();
+        let args_json = values
+            .get("external_app_args")
+            .map(|s| s.as_str())
+            .unwrap_or("{}");
+        let args: std::collections::HashMap<String, String> = serde_json::from_str(args_json)
+            .with_context(|| format!("Invalid external app args JSON: {}", args_json))?;
+        TaskKind::ExternalApp { app_id, args }
     } else {
         TaskKind::CrmFetch {
             report: parse_report_type(values.get("report")),
@@ -1499,6 +1656,76 @@ async fn update_global_config(
     }
     cfg.save(path)?;
     Ok(())
+}
+
+fn render_apps_page(apps: &[crate::runner::config::RegisteredApp]) -> String {
+    let rows = apps.iter().map(|app| {
+        format!(
+            "<tr>\
+                <td class='px-4 py-3 align-top font-semibold text-gray-900'>{}</td>\
+                <td class='px-4 py-3 align-top text-gray-700'>{}</td>\
+                <td class='px-4 py-3 align-top text-gray-700 font-mono text-xs'>{}</td>\
+                <td class='px-4 py-3 align-top text-gray-700 font-mono text-xs'>{}</td>\
+                <td class='px-4 py-3 align-top'>\
+                    <a class='rounded bg-red-600 text-white px-3 py-1 text-sm font-semibold hover:bg-red-700' href='/apps/delete/{}'>Delete</a>\
+                </td>\
+            </tr>",
+            escape_html(&app.name),
+            escape_html(&app.id),
+            escape_html(&app.executable_path),
+            escape_html(&app.config_path),
+            escape_html(&app.id)
+        )
+    }).collect::<Vec<_>>().join("");
+
+    html_page(
+        "Registered Apps",
+        &format!(
+            "<div class='max-w-5xl mx-auto space-y-6'>\
+                <div>\
+                    <a class='text-sm font-semibold text-emerald-700' href='/'>Back to dashboard</a>\
+                    <h1 class='text-3xl font-bold text-gray-900 mt-2'>Registered Applications</h1>\
+                    <p class='text-gray-600 mt-1'>Manage external applications that can be scheduled as tasks.</p>\
+                </div>\
+                \
+                <div class='bg-white border border-gray-200 rounded shadow-sm overflow-hidden'>\
+                    <div class='px-5 py-4 border-b border-gray-200'>\
+                        <h2 class='text-lg font-semibold text-gray-900'>App List</h2>\
+                    </div>\
+                    <div class='overflow-x-auto'>\
+                        <table class='min-w-full divide-y divide-gray-200 text-sm'>\
+                            <thead class='bg-gray-50'><tr>\
+                                <th class='px-4 py-3 text-left font-semibold text-gray-700'>Name</th>\
+                                <th class='px-4 py-3 text-left font-semibold text-gray-700'>ID</th>\
+                                <th class='px-4 py-3 text-left font-semibold text-gray-700'>Executable</th>\
+                                <th class='px-4 py-3 text-left font-semibold text-gray-700'>Config Path</th>\
+                                <th class='px-4 py-3 text-left font-semibold text-gray-700'>Actions</th>\
+                            </tr></thead>\
+                            <tbody class='bg-white divide-y divide-gray-100'>{}</tbody>\
+                        </table>\
+                    </div>\
+                </div>\
+                \
+                <div class='bg-white border border-gray-200 rounded shadow-sm p-5'>\
+                    <h2 class='text-lg font-semibold text-gray-900 mb-4'>Register New App</h2>\
+                    <form method='post' action='/apps/create' class='space-y-4 max-w-2xl'>\
+                        <div class='grid md:grid-cols-2 gap-4'>\
+                            {}\
+                            {}\
+                        </div>\
+                        {}\
+                        {}\
+                        <button class='rounded bg-emerald-600 text-white px-4 py-2 text-sm font-semibold' type='submit'>Register App</button>\
+                    </form>\
+                </div>\
+            </div>",
+            rows,
+            input_field("Name", "name", ""),
+            input_field("App ID", "id", ""),
+            input_field("Executable Path (e.g. tasker.exe)", "executable_path", ""),
+            input_field("Config Path (Optional override)", "config_path", "")
+        )
+    )
 }
 
 fn render_config_form(cfg: &crate::runner::config::RunnerConfig, error: Option<&str>) -> String {

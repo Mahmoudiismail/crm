@@ -141,6 +141,7 @@ struct ExecutionPolicy {
     shell_timeout_seconds: u64,
     post_run_timeout_seconds: u64,
     min_task_interval_seconds: u64,
+    registered_apps: Vec<crate::runner::config::RegisteredApp>,
 }
 
 #[derive(Clone)]
@@ -440,6 +441,11 @@ fn normalize_and_validate_task(task: &mut RunnerTask, cfg: &RunnerConfig) -> Res
             }
         }
         TaskKind::Yasweb { .. } => {}
+        TaskKind::ExternalApp { app_id, .. } => {
+            if app_id.is_empty() {
+                return Err(anyhow::anyhow!("External App tasks require an app_id"));
+            }
+        }
     }
 
     Ok(())
@@ -485,6 +491,7 @@ fn policy_from_config(cfg: &RunnerConfig) -> ExecutionPolicy {
         shell_timeout_seconds: cfg.shell_timeout_seconds,
         post_run_timeout_seconds: cfg.post_run_timeout_seconds,
         min_task_interval_seconds: cfg.min_task_interval_seconds.max(1),
+        registered_apps: cfg.registered_apps.clone(),
     }
 }
 
@@ -572,6 +579,16 @@ async fn run_task(
                 effective_shell_timeout,
             )
             .await
+        }
+        TaskKind::ExternalApp { app_id, args } => {
+            if let Some(app) = policy.registered_apps.iter().find(|a| &a.id == app_id) {
+                run_external_app(&logger, app, args, effective_shell_timeout).await
+            } else {
+                Err(anyhow::anyhow!(
+                    "Registered app with ID '{}' not found in config",
+                    app_id
+                ))
+            }
         }
     };
 
@@ -696,6 +713,66 @@ async fn run_yasweb_command(
     }
 }
 
+async fn run_external_app(
+    logger: &TaskLogger,
+    app: &crate::runner::config::RegisteredApp,
+    args: &std::collections::HashMap<String, String>,
+    timeout_seconds: u64,
+) -> Result<()> {
+    let resolved_executable = resolve_executable(&app.executable_path);
+    let mut command = tokio::process::Command::new(&resolved_executable);
+
+    if !app.config_path.trim().is_empty() {
+        let resolved_config = resolve_relative_to_exe_dir(&app.config_path);
+        command.arg("--config").arg(&resolved_config);
+    }
+
+    for (k, v) in args {
+        if v.eq_ignore_ascii_case("true") || v.eq_ignore_ascii_case("on") {
+            command.arg(k);
+        } else if v.eq_ignore_ascii_case("false") || v.eq_ignore_ascii_case("off") {
+            // omit
+        } else {
+            command.arg(k).arg(v);
+        }
+    }
+
+    logger
+        .log(&format!("Executing external app: {:?}", command))
+        .await;
+
+    let output = tokio::time::timeout(
+        Duration::from_secs(timeout_seconds.max(1)),
+        command.output(),
+    )
+    .await
+    .with_context(|| {
+        format!(
+            "external app '{}' timed out after {}s ({})",
+            app.name,
+            timeout_seconds,
+            resolved_executable.display()
+        )
+    })??;
+
+    logger.log_bytes("STDOUT", &output.stdout).await;
+    logger.log_bytes("STDERR", &output.stderr).await;
+    if !output.status.success() {
+        let stdout_excerpt = excerpt_utf8(&output.stdout);
+        let stderr_excerpt = excerpt_utf8(&output.stderr);
+        return Err(anyhow::anyhow!(
+            "app '{}' failed ({}) with status {:?}; stderr: {}; stdout: {}",
+            app.name,
+            resolved_executable.display(),
+            output.status.code(),
+            stderr_excerpt,
+            stdout_excerpt
+        ));
+    }
+
+    Ok(())
+}
+
 async fn run_crm_command(
     logger: &TaskLogger,
     executable_path: &str,
@@ -742,7 +819,7 @@ async fn run_crm_command(
     Ok(())
 }
 
-fn resolve_executable(configured: &str) -> std::path::PathBuf {
+pub fn resolve_executable(configured: &str) -> std::path::PathBuf {
     let configured = configured.trim();
     let configured_name = if configured.is_empty() {
         default_crm_binary_name().to_string()

@@ -35,6 +35,16 @@ pub struct RunnerConfig {
     pub min_task_interval_seconds: u64,
     #[serde(default)]
     pub tasks: Vec<RunnerTask>,
+    #[serde(default)]
+    pub registered_apps: Vec<RegisteredApp>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegisteredApp {
+    pub id: String,
+    pub name: String,
+    pub executable_path: String,
+    pub config_path: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -88,6 +98,12 @@ pub enum TaskKind {
     Yasweb {
         #[serde(default)]
         reports: Vec<YaswebReportSpec>,
+    },
+    ExternalApp {
+        #[serde(default)]
+        app_id: String,
+        #[serde(default)]
+        args: std::collections::HashMap<String, String>,
     },
 }
 
@@ -210,6 +226,7 @@ impl Default for RunnerConfig {
             shell_timeout_seconds: default_shell_timeout(),
             post_run_timeout_seconds: default_post_run_timeout(),
             min_task_interval_seconds: default_min_task_interval(),
+            registered_apps: Vec::new(),
             tasks: vec![RunnerTask {
                 id: "daily_all_reports".to_string(),
                 name: "Daily CRM Fetch (All Reports)".to_string(),

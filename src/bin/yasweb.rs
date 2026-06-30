@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use crm_tool::manifest::{AppArg, AppManifest, ArgType};
 use headless_chrome::protocol::cdp::types::Event;
 use headless_chrome::{Browser, LaunchOptions};
 use serde::{Deserialize, Serialize};
@@ -843,8 +844,56 @@ fn run_browser(
     Ok(discovered_filters)
 }
 
+fn print_manifest() {
+    let manifest = AppManifest {
+        name: "Yasweb Automation Engine".to_string(),
+        description: "Executes headless browser automation for web reporting.".to_string(),
+        arguments: vec![
+            AppArg {
+                name: "--config".to_string(),
+                arg_type: ArgType::String,
+                required: false,
+                default_value: None,
+                options: None,
+            },
+            AppArg {
+                name: "--name".to_string(),
+                arg_type: ArgType::String,
+                required: true,
+                default_value: None,
+                options: None,
+            },
+            AppArg {
+                name: "--type".to_string(),
+                arg_type: ArgType::String,
+                required: false,
+                default_value: None,
+                options: None,
+            },
+            AppArg {
+                name: "--filters".to_string(),
+                arg_type: ArgType::String,
+                required: false,
+                default_value: None,
+                options: None,
+            },
+        ],
+    };
+    if let Ok(json) = serde_json::to_string(&manifest) {
+        println!("{}", json);
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Intercept --manifest before anything else
+    for arg in std::env::args().skip(1) {
+        if arg == "--manifest" {
+            print_manifest();
+            std::process::exit(0);
+        }
+    }
+
     let _guard = setup_logging()?;
 
     let args: Vec<String> = std::env::args().collect();
