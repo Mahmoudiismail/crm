@@ -8,12 +8,14 @@ This project ships five Rust executables:
 - `crm`: one-shot CRM fetch executable
 - `yasweb`: headless browser automation tool for Yasweb login
 - `wcxx`: fetching tool for Webex Contact Center data (calendars, agents, teams, queues, skills)
+- `tasker`: background worker for CSV processing and emailing
 
 Release builds are optimized for maximum runtime performance and minimal file size through the Cargo release profile (`opt-level=3`, `lto=fat`, `strip=symbols`, `panic=abort`). GitHub release publishing is split by executable so `runner_windows.zip`, `crm_windows.zip`, `yasweb_windows.zip`, and `wcxx_windows.zip` can be built and uploaded independently.
 
 Together they:
 
 - Run a `runner` layer for scheduling and task execution.
+- Dynamically register and orchestrate apps using an `AppManifest` JSON schema.
 - Authenticate to AWS Cognito using SRP.
 - Fetch CRM report payloads (tickets, calls, leads).
 - Extract signed download URLs from response JSON.
@@ -24,6 +26,7 @@ Together they:
 ## Runtime Style
 
 - `runner` is tray-oriented (`#![windows_subsystem = "windows"]` on Windows).
+- Tasks can execute `ExternalApp` commands via `tokio::process`, mapping dynamically to apps registered in the GUI.
 - Multiple `yasweb` reports inside a single task now run concurrently in parallel, spawning separate `yasweb.exe` processes.
 - `crm` is a console-style one-shot command.
 - `yasweb` runs headless browser automation using `headless_chrome`.
@@ -38,13 +41,13 @@ Together they:
 1. Load/create `runner_config.json` under executable directory.
 2. Ensure CRM `config.json` exists under executable directory.
 3. Start scheduler loop and runner GUI server.
-4. Run tasks from runner config (`crm_fetch` and optional shell commands).
-5. For CRM tasks, invoke external `crm` executable with CLI args.
+4. Run tasks from runner config (`crm_fetch`, `yasweb`, `shell_command`, and `external_app`).
+5. For external app tasks, execute the dynamically registered binary utilizing `--config` and any extra args.
 6. Persist task run metadata (`next_run_at`, `last_status`, `last_run_at`).
 
 ## Main Workflow (crm)
 
-1. Parse runtime CLI args.
+1. Parse runtime CLI args (intercepts `--manifest` for app registration).
 2. Resolve/create `config.json` under executable directory (or provided path).
 3. Authenticate via Cognito SRP.
 4. Fetch requested report set.
@@ -53,6 +56,7 @@ Together they:
 
 Supported CRM args:
 
+- `--manifest`
 - `--report all|tickets|calls|leads|none`
 - `--config <path>`
 
@@ -69,22 +73,23 @@ CRM always performs login.
 
 ## Main Workflow (yasweb)
 
-1. Load/create `yasweb_config.json` under executable directory.
-2. Launch a headless Chrome browser.
-3. Attach Chrome DevTools Protocol network listeners to log events.
-4. Navigate to the configured Yasweb URL.
-5. Identify and fill the username.
-6. Wait briefly for external data to load, then fill the password.
-7. Submit the login form.
-8. Verify login success by checking if the username appears in the header.
-9. Open menu via "#menuPinnedBtn", using `.click()` to toggle the menu open.
-10. Wait for the `.menuModules` element to receive the `show-modules` class, confirming the menu is visibly open.
-11. Click the MIS Reports module and, if configured, locate and select the target report type inside the resulting iframe.
-12. Logs are written to the `yasweblog` file. HTML content is extracted and logged heavily across all stages (successes and failures) for debugging purposes. Certificate errors are ignored during browser instantiation.
+1. Parse CLI arguments (intercepts `--manifest` for app registration).
+2. Load/create `yasweb_config.json` under executable directory.
+3. Launch a headless Chrome browser.
+4. Attach Chrome DevTools Protocol network listeners to log events.
+5. Navigate to the configured Yasweb URL.
+6. Identify and fill the username.
+7. Wait briefly for external data to load, then fill the password.
+8. Submit the login form.
+9. Verify login success by checking if the username appears in the header.
+10. Open menu via "#menuPinnedBtn", using `.click()` to toggle the menu open.
+11. Wait for the `.menuModules` element to receive the `show-modules` class, confirming the menu is visibly open.
+12. Click the MIS Reports module and, if configured, locate and select the target report type inside the resulting iframe.
+13. Logs are written to the `yasweblog` file. HTML content is extracted and logged heavily across all stages (successes and failures) for debugging purposes. Certificate errors are ignored during browser instantiation.
 
 ## Main Workflow (wcxx)
 
-1. Parse CLI arguments (`--config` to specify the config file path, defaulting to `wcxx_config.json`).
+1. Parse CLI arguments (`--manifest` or `--config` to specify the config file path, defaulting to `wcxx_config.json`).
 2. Read the `wcxx_config.json` configuration for the Webex Contact Center base URL, optional org ID, and Bearer token.
 3. Automatically generate a template `wcxx_config.json` and exit if none exists.
 4. Using the provided token, iterate over the organization endpoints (`/calendars`, `/agents`, `/teams`, `/queues`, `/skills`) and fetch the data asynchronously using `reqwest`.
@@ -105,10 +110,12 @@ CRM always performs login.
 ## Modules
 
 - `src/lib.rs`
+- `src/manifest.rs`
 - `src/bin/runner.rs`
 - `src/bin/crm.rs`
 - `src/bin/yasweb.rs`
 - `src/bin/wcxx.rs`
+- `src/bin/tasker.rs`
 - `src/runner/config.rs`
 - `src/runner/engine.rs`
 - `src/runner/gui.rs`

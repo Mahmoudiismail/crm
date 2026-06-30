@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use crm_tool::manifest::{AppArg, AppManifest, ArgType};
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::Value;
@@ -29,8 +30,33 @@ fn default_base_url() -> String {
     "https://webexapis.com/v1".to_string()
 }
 
+fn print_manifest() {
+    let manifest = AppManifest {
+        name: "Webex Contact Center Fetcher".to_string(),
+        description: "Fetches data from the Webex Contact Center API.".to_string(),
+        arguments: vec![AppArg {
+            name: "--config".to_string(),
+            arg_type: ArgType::String,
+            required: false,
+            default_value: None,
+            options: None,
+        }],
+    };
+    if let Ok(json) = serde_json::to_string(&manifest) {
+        println!("{}", json);
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Intercept --manifest before anything else
+    for arg in env::args().skip(1) {
+        if arg == "--manifest" {
+            print_manifest();
+            std::process::exit(0);
+        }
+    }
+
     // Read command line arguments to find the config file path (default: wcxx_config.json)
     let args: Vec<String> = env::args().collect();
     let mut config_path = PathBuf::from("wcxx_config.json");

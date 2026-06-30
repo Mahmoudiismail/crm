@@ -1,175 +1,66 @@
-# Build and Run
+# Build & Run Guide
 
-## Requirements
+## Local Development Requirements
+- **Rust Toolchain**: Stable version (e.g. 1.75+). Install via [rustup](https://rustup.rs).
+- **Node.js/npm**: Used occasionally for frontend linting (e.g., Prettier).
 
-- Rust toolchain installed.
-- Access to Cognito + CRM endpoints.
-- Valid `runner_config.json` and `config.json` values (with correct authentication credentials).
+## Compiling
 
-## Local Build
-
-```bash
-cargo check
-cargo test
-cargo build
-```
-
-## Release Build
+The project consists of multiple bins. You can build all of them at once:
 
 ```bash
 cargo build --release
 ```
 
-Release builds use the `Cargo.toml` release profile tuned for maximum runtime optimization and minimal file size:
-
-- `opt-level = 3` — maximize runtime optimization
-- `lto = "fat"` — whole-program link-time optimization
-- `codegen-units = 1` — maximize optimization across crate
-- `strip = "symbols"` — strip symbols from release binaries
-- `panic = "abort"` — smaller than unwinding
-- `debug = false` — omit debug info in release artifacts
-- `incremental = false` — keep release builds fully optimized
-- `overflow-checks = false` — disable overflow checks
-
-For one optimized application binary:
+Or a specific binary:
 
 ```bash
 cargo build --release --bin runner
 cargo build --release --bin crm
 cargo build --release --bin yasweb
-cargo build --release --bin tasker
 cargo build --release --bin wcxx
+cargo build --release --bin tasker
 ```
 
-## Run
+Executables will be placed in `target/release/`.
+
+## Running the Architecture
+
+To run the full suite as a user would, you need to ensure the executables are placed together.
+
+1. Start the runner:
+   ```bash
+   cargo run --bin runner
+   ```
+2. The Runner GUI will be available at `http://127.0.0.1:8787`.
+3. You can configure your CRM, Yasweb, WCXX, and Tasker instances from the GUI, or add them via the **Apps** page for dynamic manifest orchestration.
+
+### Dynamic App Execution
+
+Executables supporting the `AppManifest` standard can be queried independently:
 
 ```bash
-cargo run --bin runner
-cargo run --bin crm
-cargo run --bin yasweb
-cargo run --bin wcxx
+cargo run --bin crm -- --manifest
+cargo run --bin yasweb -- --manifest
+cargo run --bin wcxx -- --manifest
+cargo run --bin tasker -- --manifest
 ```
 
-- `runner` starts tray + scheduler + GUI.
-- `crm` runs one CRM cycle and exits.
-- `wcxx` runs one Webex Contact Center fetch cycle, opens browser, and exits.
-- Both binaries resolve config files under their executable directory by default.
-- At first runner start, `runner_config.json` is auto-created if missing.
-- Runner also ensures CRM `config.json` exists if missing (by invoking `crm --config <path> --report none`).
-- The runner GUI loads Tailwind CSS from cdnjs at runtime. The scheduler and JSON endpoints still work if that stylesheet cannot be reached, but the dashboard will render without Tailwind styling.
+They will output a JSON representation of their arguments and exit.
 
-CRM CLI arguments:
+## Running Tests
 
-- `--report all|tickets|calls|leads|none`
-- `--config <path>`
+Standard Rust cargo tests:
+```bash
+cargo test
+```
 
-CRM always performs login when running.
+## Cross-Compiling for Windows (from Linux/WSL)
 
-## Scheduler Implementation
-
-The runner uses a **cron-based polling scheduler** implemented with standard chrono and Tokio:
-
-- **No external cron dependency**: The scheduler uses `DateTime` comparisons and RFC3339 timestamps
-- **Configurable poll interval**: `poll_interval_seconds` in `runner_config.json` (default 30 seconds, minimum 5)
-- **Supported schedule types**: interval, once, daily, weekly, monthly
-- **Next-run calculation**: after task execution, the `advance_schedule()` function computes the next `next_run_at` timestamp
-
-This approach provides reliability and simplicity without external job queue infrastructure.
-
-## Dependencies
-
-Dependencies are maintained at latest stable versions. Current pinned versions (as of April 2026):
-
-- `tokio` 1.52.3 — async runtime (includes time, sync modules for scheduler polling)
-- `reqwest` 0.13.4 — HTTP client with rustls
-- `serde` / `serde_json` 1.0.228 / 1.0.150 — serialization
-- `chrono` / `chrono-tz` 0.4.44 / 0.10.4 — date/time and cron-based schedule calculations
-- `tracing` / `tracing-subscriber` 0.1.44 / 0.3.23 — logging
-- `hmac` / `sha2` / `hex` / `base64` / `rand` — cryptography
-- `tray-icon` 0.24.0 — system tray
-- `winit` 0.30.13 — windowing (for tray integration)
-
-See `Cargo.toml` for the complete dependency list and [DEPENDENCY_AUDIT.md](DEPENDENCY_AUDIT.md) for a detailed reputation and trust report.
-
-## Devcontainer Workspace
-
-When opened through VS Code dev containers, `.devcontainer/devcontainer.json` attaches to the `dev` compose service and installs the project editor extensions: Rust Analyzer, CodeLLDB, crates, Even Better TOML, and OpenAI ChatGPT. This affects only the developer workspace; build and runtime commands remain the same as the local commands above.
-
-## Windows Cross-Compile
+Since the target environment is Windows and the runner uses Windows subsystem features:
 
 ```bash
 rustup target add x86_64-pc-windows-gnu
-cargo build --release --target x86_64-pc-windows-gnu
+sudo apt-get install mingw-w64
+cargo build --target x86_64-pc-windows-gnu --release
 ```
-
-Output binary:
-
-- `target/x86_64-pc-windows-gnu/release/runner.exe`
-- `target/x86_64-pc-windows-gnu/release/crm.exe`
-- `target/x86_64-pc-windows-gnu/release/yasweb.exe`
-- `target/x86_64-pc-windows-gnu/release/wcxx.exe`
-
-## Windows-target validation in Linux dev container
-
-Use these commands when Linux host lacks GTK tray system libraries:
-
-```bash
-cargo check --target x86_64-pc-windows-gnu
-cargo test --target x86_64-pc-windows-gnu --no-run
-```
-
-## Workflows
-
-GitHub Actions are split into:
-
-- `.github/workflows/ci.yml`
-- `.github/workflows/build-windows.yml`
-- `.github/workflows/release-runner.yml`
-- `.github/workflows/release-crm.yml`
-- `.github/workflows/release-yasweb.yml`
-- `.github/workflows/release.yml`
-
-Release workflow behavior:
-
-- `release-runner.yml` builds `cargo build --release --bin runner` and uploads `runner_windows.zip`.
-- `release-crm.yml` builds `cargo build --release --bin crm` and uploads `crm_windows.zip`.
-- `release-yasweb.yml` builds `cargo build --release --bin yasweb
-cargo build --release --bin tasker` and uploads `yasweb_windows.zip`.
-- `release.yml` allows on-demand compilation of specific applications (`crm`, `runner`, `yasweb`, `wcxx`) or all at once via a manual `workflow_dispatch` trigger.
-- All release workflows publish to tag `v<package version>` from `Cargo.toml` and can update the same GitHub release with separate assets. They compress the entire `target/release/` directory to ensure config files or metadata alongside binaries are packaged accurately.
-
-All workflows use one shared cargo cache key strategy:
-
-- `shared-cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}`
-
-Caching optimizes Rust build times using `actions/cache@v5`, which saves only specific Cargo directories (`~/.cargo/registry/index`, `~/.cargo/registry/cache`, `~/.cargo/git/db`) and `target` to reduce storage.
-The release workflows utilize `softprops/action-gh-release@v3` and `actions/checkout@v6`.
-
-## Quick Smoke Verification
-
-1. App starts and logs initialization banner.
-2. Runner GUI starts on configured host/port.
-3. Dashboard shows human-readable schedule, next-run, and last-run values.
-4. Task scheduler runs configured legacy tasks and multi-schedule tasks.
-5. Shell commands run sequentially or in parallel when `allow_shell_tasks=true`.
-6. CRM auth/fetch/download succeeds for CRM tasks.
-7. CSV files are created under `Downloads/` beside `crm` executable.
-
-### Yasweb Artifacts
-Executing `cargo run --bin yasweb` will generate a `yasweb_chrome_data/` folder in the executable's directory. This folder contains the persistent browser cache and should not be committed to version control.
-
-You can configure the reporting automation by passing CLI arguments:
-`cargo run --bin yasweb -- --type="Report Manager" --name="Standard" --headless`
-
-You can also use short flags or request help:
-`cargo run --bin yasweb -- --help`
-
-## Linux Support
-
-The application is primarily targetted at Windows. On Linux:
-- UI components (`tray-icon`, `muda`, `winit`) are disabled.
-- The `runner` binary runs in a headless mode, which still handles the task scheduler and the GUI server.
-- To run the runner on Linux without UI libraries:
-  ```bash
-  cargo run --bin runner
-  ```

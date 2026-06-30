@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use crm_tool::manifest::{AppArg, AppManifest, ArgType};
 use crm_tool::tasker::config::{TaskConfig, TaskerConfig};
 use crm_tool::tasker::csv_task;
 use serde_json::Value;
@@ -210,7 +211,57 @@ pub fn run_app(args: Vec<String>) -> Result<()> {
     Ok(())
 }
 
+fn print_manifest() {
+    let manifest = AppManifest {
+        name: "Tasker Reporting Tool".to_string(),
+        description:
+            "Executes configured background workflows such as CSV analysis and email dispatching."
+                .to_string(),
+        arguments: vec![
+            AppArg {
+                name: "--config".to_string(),
+                arg_type: ArgType::String,
+                required: false,
+                default_value: None,
+                options: None,
+            },
+            AppArg {
+                name: "--task".to_string(),
+                arg_type: ArgType::Number,
+                required: false,
+                default_value: None,
+                options: None,
+            },
+            AppArg {
+                name: "--only-call-center".to_string(),
+                arg_type: ArgType::Boolean,
+                required: false,
+                default_value: Some("false".to_string()),
+                options: None,
+            },
+            AppArg {
+                name: "--send-exceptions".to_string(),
+                arg_type: ArgType::Boolean,
+                required: false,
+                default_value: Some("false".to_string()),
+                options: None,
+            },
+        ],
+    };
+    if let Ok(json) = serde_json::to_string(&manifest) {
+        println!("{}", json);
+    }
+}
+
 fn main() -> Result<()> {
+    // Intercept --manifest before anything else
+    for arg in env::args().skip(1) {
+        if arg == "--manifest" {
+            print_manifest();
+            std::process::exit(0);
+        }
+    }
+
     // Setup file logging in the same directory as the executable
     let log_dir = env::current_exe()
         .ok()

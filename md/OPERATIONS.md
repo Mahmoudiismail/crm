@@ -1,201 +1,48 @@
-# Operations and Troubleshooting
+# Operations Guide
 
-## Logs
+## Managing the Runner
 
-### Per-Task Detailed Logging
+The `runner` application sits in the system tray (on Windows) and exposes a web GUI at `http://127.0.0.1:8787`.
 
-In addition to the main `runner.log`, the runner now creates detailed log files for each individual task execution:
-- **Location**: `<exe_dir>/logs/<task_name>/`
-- **File Name**: `YYYYMMDD_HHMMSS_<task_name>_<task_id>.log`
-- **Contents**:
-  - Execution metadata (Task ID, Name, Start Time).
-  - All standard output (STDOUT) and error output (STDERR) from the task command and any post-run scripts.
-  - Final execution status.
+### Managing Apps (Dynamic AppManifest Registration)
+You can seamlessly integrate external tools like `crm.exe`, `yasweb.exe`, `wcxx.exe`, and `tasker.exe` without editing code.
+1. Navigate to the `/apps` dashboard on the Runner GUI.
+2. Enter the executable path and an arbitrary name/ID.
+3. The runner will invoke the executable with `--manifest` and dynamically learn its command line argument requirements.
 
-These logs are invaluable for debugging script failures or inspecting the exact output of CRM fetch commands.
+### Managing Tasks
+1. Navigate to `/new-task`.
+2. Select your Task Type.
+   - For `External App`, the UI will fetch the manifest of your registered application and automatically generate the necessary inputs (checkboxes, dropdowns, strings).
+3. Set your schedules (e.g. Daily at 09:00, or Weekly on Mondays).
+4. Save the task.
 
+## Manual Executions
 
-- Primary runner log file: `<exe_dir>/runner.log`
-- Primary crm one-shot log file: `<exe_dir>/crm.log`
-- Stdout logs at INFO level.
+If you need to bypass the runner, invoke the apps directly:
 
-Key startup messages indicate:
+**CRM One-Shot:**
+```bash
+./crm --report tickets --config custom_config.json
+```
 
-- logging initialized,
-- runner scheduler started,
-- runner GUI bind address,
-- tray initialized,
-- task run activity.
+**Tasker Worker:**
+```bash
+./tasker --task 1 --only-call-center
+```
 
-## Health Checklist
+**Webex Fetch:**
+```bash
+./wcxx --config wcxx_config.json
+```
 
-1. Process is running once (single-instance lock not failing unexpectedly).
-2. Runner GUI is reachable on configured `gui_host:gui_port`.
-3. Task scheduler executes due tasks and updates `last_status`.
-4. Authentication either reuses valid token or logs successful fresh login.
-5. Fetch tasks complete with expected endpoints.
-6. CSV files appear in `<exe_dir>/Downloads`.
+## Logs and Debugging
 
-## Common Failure Scenarios
+Every application writes highly detailed tracing logs to local files in the same directory as the executables.
+- `runner.log` (Runner GUI & Engine)
+- `crm.log` (CRM fetch status)
+- `yasweblog` (Yasweb browser & CDP network events)
+- `wcxx.log` (Webex API fetch data)
+- `task_csv_analysis.log` (Tasker processing data)
 
-### 1) Authentication fails
-
-Check:
-
-- `region`, `user_pool_id`, `client_id`
-- `username` and `password`
-- local clock drift
-- network access to Cognito endpoint
-
-### 2) Report fetch errors
-
-Check:
-
-- `base_url`
-- `account_id`, `application_id`, `email`
-- date format (`YYYY-MM-DD`)
-- token validity
-
-If logs show `Failed to generate signed url`, the CRM fetcher automatically retries smaller date ranges by halving the failing range. A remaining failure after the range reaches one day means the backend cannot produce a signed URL for that single-day export.
-
-### 3) Download errors
-
-Check:
-
-- URL validity and expiry
-- write permissions in executable/Downloads directory
-- network timeout conditions
-
-### 4) Tasks not triggering
-
-Check:
-
-- task `enabled=true`
-- legacy task `next_run_at` format (RFC3339) or empty for immediate run
-- `schedules` entries, especially enabled state, per-schedule `next_run_at`, interval seconds, optional working hours, and daily `HH:MM` local times
-- legacy `repetition`/`frequency_seconds` values when `schedules` is absent or empty
-- `poll_interval_seconds`
-
-For `crm_fetch` tasks, verify `crm_executable_path` and `crm_config_path` in `runner_config.json` are correct.
-
-### 5) Runner GUI unavailable
-
-Check:
-
-- `gui_host` and `gui_port` in `runner_config.json`
-- firewall/local bind restrictions
-- logs for GUI bind failures
-
-### 6) Shell task blocked or timing out
-
-Check:
-
-- `allow_shell_tasks` in `runner_config.json`
-- `shell_timeout_seconds` value
-- `last_status` and runner `last_error` for timeout details
-- command correctness under `bash -lc`
-- shell command `mode` (`sequential` or `parallel`)
-- per-command `continue_on_error` when a failure should not fail the task
-
-### 7) Task create/update fails from GUI
-
-Check:
-
-- task `id` format (letters/numbers/`-`/`_` only)
-- `id` uniqueness (no duplicate IDs)
-- non-empty task `name`
-- valid RFC3339 `next_run_at` when provided
-- use the runner GUI schedule editor with interval/once rows and the + button to add more schedules
-- non-empty shell command text for `shell_command` tasks
-
-Note: As of the GUI improvements, the `+ Add schedule` and `+ Add command` buttons now have proper event listener scoping and will reliably add new rows to the form.
-
-Use `GET /tasks` to confirm persisted task state after edits.
-
-- Successful create/update/run/enable/disable/delete actions redirect back to the dashboard and show a toast notification.
-
-The GUI shows schedule, next-run, and last-run values in local human-readable time. Use `GET /tasks` when exact RFC3339 timestamps are needed for troubleshooting.
-
-### 8) GUI button visibility issues
-
-If action buttons appear invisible or have low contrast:
-
-- Update to a version with GUI improvements applied (buttons use `bg-emerald-600` with white text)
-- Check Tailwind CSS is loading from CDN (styles will degrade gracefully if unavailable)
-- Verify browser isn't applying custom CSS extensions that might override button styling
-
-### 8) Yasweb browser automation issues
-
-If the browser is unable to render elements, `yasweb` currently implements long wait times, loops, and aggressive HTML extraction. Inspect `yasweblog` to view the page HTML before/after steps if elements fail to appear. Certificate errors are ignored by default via launch options.
-
-**Pinned Menu Interaction**: The menu button (`#menuPinnedBtn`) is engaged via a simple `.click()` call. Because elements inside the menu (like `MIS Reports`) exist invisibly in the DOM at all times, the automation correctly waits for the visual toggle (specifically, the `show-modules` class applied to the `.menuModules` element) to verify that the menu has opened completely before proceeding. Extensive `tracing::info` logging captures diagnostic states for optimization.
-
-Check:
-
-- `yasweb_config.json` for target URL and credentials (username/password)
-- headless/visible mode setting
-- whether the page layout matches expected selectors (`span.usr-id`, `#menuPinnedBtn`, `.misManagement`) and iframe internal selectors (`#mat-input-0`)
-- the report selection logic requires navigating into an iframe; it searches for mat-radio-buttons matching the text, enters the report name into the search box (`#mat-input-0`), and simulates an "Enter" key press. If the iframe path or inner structure changes significantly, the JS evaluation block may need updates. The check for the loaded report list checks for `div.fw-semibold` elements containing specific keywords ("Report Manager", "Report Manger", the `reportType`, "Enquiry", or "Standard Report" case-insensitively).
-- the application includes a 2-second sleep after typing the username, to accommodate the login page fetching external data before the password field becomes available.
-
-### 9) Runner cannot execute CRM
-
-Check:
-
-- `crm_executable_path` points to valid `crm` binary (or default sibling executable)
-- execution permission for `crm` binary
-- runner timeout (`shell_timeout_seconds`) is sufficient
-- `crm` command works manually with same args
-
-Manual check example:
-
-- `crm --config <path> --report tickets`
-- `crm --config <path> --report none`
-
-### 10) Tasker `csv_analysis` exceptions not sending
-Check:
-- Ensure `is_exception_val` logic correctly flags the ticket as `"Yes"` based on the combination of `exclude_categories` and `category_exceptions`.
-- If older versions of the CSV files are evaluated first, the deduplication logic might keep a stale row, incorrectly flagging it. The application now sorts modified CSVs in descending order (newer first) to ensure the deduplication logic preserves the most updated row state, fixing situations where updated tickets were dropped.
-- The assignee correctly maps to `Unassigned` when the string is empty in the report, preventing blank fields in the final output.
-
-## Safe Recovery Steps
-
-1. Stop app.
-2. Backup `runner_config.json`, `config.json`, `runner.log`, and `crm.log`.
-3. Clear token fields in CRM config if you need a full re-authentication.
-4. Restart and validate auth + fetch flow.
-
-## Release Validation (Minimal)
-
-- `cargo check --target x86_64-pc-windows-gnu`
-- `cargo test --target x86_64-pc-windows-gnu --no-run`
-- `cargo build --release --bin runner`
-- `cargo build --release --bin crm`
-- one manual fetch run
-- verify logs and output artifacts
-
-GitHub release publishing is split by application:
-
-- Run `Release Runner` to publish `runner_windows.zip` parts (split into 15MB max files to fit restrictions).
-- Run `Release CRM` to publish `crm_windows.zip` parts (split into 15MB max files to fit restrictions).
-- Both workflows use the `v<version>` tag from `Cargo.toml`; run both when a release should contain both applications.
-- Release workflow uses `actions/checkout@v6`, `actions/cache@v5`, and `softprops/action-gh-release@v3` for improved build performance.
-
-### Yasweb Browser Automation
-
-When executing the `yasweb` headless browser:
-- The browser now starts maximized by default for consistent element rendering and visibility during debug runs.
-- Chrome's user data and cache are persisted to a `yasweb_chrome_data` directory alongside the executable, significantly reducing load times on subsequent runs.
-- The automation re-uses the initially launched browser tab instead of opening new ones to conserve memory.
-- Wait loops dynamically poll for specific success (`.usr-id`) or failure (`.alert-danger`) elements, allowing the tool to fail-fast upon invalid logins without arbitrary delays.
-- A 60-second delay can optionally be enforced at key points (e.g. before exiting) by setting `keep_open: true` in the configuration. This allows operators time to visually inspect the final browser state when debugging in non-headless mode, while normal executions skip this wait for better performance.
-- The application executes cross-origin JavaScript on iframes using Chrome DevTools Protocol (`--disable-web-security`). It uses simulated keystrokes via `KeyboardEvent`s to insert custom dynamic filters (like `From Date` and `To Date`) to trick Angular input bindings into properly updating their state.
-- During navigation, the headless browser automatically discovers the report's filters by scanning for `mat-label` elements and auto-updates the `yasweb_config.json` file.
-- Yasweb can be configured and run directly from the `runner` GUI via the new `Yasweb Report` task type, which automatically fetches and populates dynamically discovered reports and filters from `yasweb_config.json`.
-- Yasweb logs (`yasweblog`) are generated in the same directory as the executable.
-
-## Timeout Management
-
-The runner supports configurable timeouts for both shell tasks (`shell_timeout_seconds`) and post-run scripts (`post_run_timeout_seconds`). Tasks can optionally override these global defaults with their own specific timeouts (`shell_timeout_seconds` and `post_run_timeout_seconds` fields on the task object).
-- Default timeout is 900 seconds (15 minutes).
-- Setting a timeout to `0` enables **unlimited execution time**. Use this with caution, as a hanging script will block the task from completing and may prevent the runner from starting new tasks.
+If a task fails, open its specific log file generated by the `runner` inside the `logs/<task_name>` subdirectory for an exact stdout/stderr trace.

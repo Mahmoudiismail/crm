@@ -1,12 +1,21 @@
 use anyhow::Result;
 use crm_tool::crm;
 use crm_tool::crm::types::ReportType;
+use crm_tool::manifest::{AppArg, AppManifest, ArgType};
 use tracing::info;
 use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Intercept --manifest before anything else
+    for arg in std::env::args().skip(1) {
+        if arg == "--manifest" {
+            print_manifest();
+            std::process::exit(0);
+        }
+    }
+
     let _log_guard = setup_logging()?;
 
     let options = parse_args()?;
@@ -54,6 +63,11 @@ fn parse_args() -> Result<CrmCliOptions> {
                 print_help();
                 std::process::exit(0);
             }
+            "--manifest" => {
+                // Handled earlier, but keep here just in case
+                print_manifest();
+                std::process::exit(0);
+            }
             other => {
                 return Err(anyhow::anyhow!(
                     "Unknown argument '{}'. Use --help to see supported options.",
@@ -91,6 +105,38 @@ fn resolve_config_path(config_arg: Option<&str>, base_dir: &std::path::Path) -> 
             }
         }
         None => base_dir.join("config.json").to_string_lossy().to_string(),
+    }
+}
+
+fn print_manifest() {
+    let manifest = AppManifest {
+        name: "CRM One-Shot Fetcher".to_string(),
+        description: "Fetches CRM data on a one-off basis.".to_string(),
+        arguments: vec![
+            AppArg {
+                name: "--report".to_string(),
+                arg_type: ArgType::List,
+                required: false,
+                default_value: Some("all".to_string()),
+                options: Some(vec![
+                    "all".to_string(),
+                    "tickets".to_string(),
+                    "calls".to_string(),
+                    "leads".to_string(),
+                    "none".to_string(),
+                ]),
+            },
+            AppArg {
+                name: "--config".to_string(),
+                arg_type: ArgType::String,
+                required: false,
+                default_value: None,
+                options: None,
+            },
+        ],
+    };
+    if let Ok(json) = serde_json::to_string(&manifest) {
+        println!("{}", json);
     }
 }
 
