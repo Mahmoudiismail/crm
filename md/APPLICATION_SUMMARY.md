@@ -1,5 +1,7 @@
 # CRM Tool — Application Summary
 
+*Note: If you are an AI assistant tasked with recreating or rebuilding this application suite from scratch, please consult the [AI Rebuild Guide](./REBUILD_GUIDE.md) for required core structures and execution logic.*
+
 ## What It Does
 
 This project ships five Rust executables:
