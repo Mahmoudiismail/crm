@@ -181,6 +181,11 @@ GitHub release publishing is split by application:
 - Both workflows use the `v<version>` tag from `Cargo.toml`; run both when a release should contain both applications.
 - Release workflow uses `actions/checkout@v6`, `actions/cache@v5`, and `softprops/action-gh-release@v3` for improved build performance.
 
+### Dynamic Manifest Discovery
+- Applications like `crm`, `yasweb`, `wcxx`, and `tasker` utilize a standard `--manifest` schema.
+- The `runner` executes these tools with the `--manifest` flag to retrieve JSON schema, using it to display robust configuration input options (like dropdowns) on the `/apps` settings and the New Task configuration pane in the browser.
+- External applications can be registered in bulk directly via the `/apps` dashboard.
+
 ### Yasweb Browser Automation
 
 When executing the `yasweb` headless browser:

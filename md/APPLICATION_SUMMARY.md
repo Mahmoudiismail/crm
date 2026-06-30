@@ -8,6 +8,10 @@ This project ships five Rust executables:
 - `crm`: one-shot CRM fetch executable
 - `yasweb`: headless browser automation tool for Yasweb login
 - `wcxx`: fetching tool for Webex Contact Center data (calendars, agents, teams, queues, skills)
+- `tasker`: CLI to execute predefined background workflows
+
+## Dynamic App Registration
+External executables (`crm`, `yasweb`, `wcxx`, `tasker`) can dynamically expose their CLI arguments using the `--manifest` flag. The `runner` executes these tools with this flag to fetch a JSON manifest. This manifest is used to automatically generate HTML configuration forms within the `runner` GUI (e.g., adding text fields, checkboxes, or dropdown lists based on argument definitions), eliminating the need to recompile the `runner` when app parameters change.
 
 Release builds are optimized for maximum runtime performance and minimal file size through the Cargo release profile (`opt-level=3`, `lto=fat`, `strip=symbols`, `panic=abort`). GitHub release publishing is split by executable so `runner_windows.zip`, `crm_windows.zip`, `yasweb_windows.zip`, and `wcxx_windows.zip` can be built and uploaded independently.
 

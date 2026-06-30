@@ -41,6 +41,7 @@ Implementation: `src/runner/config.rs`
   - `crm_fetch` with `report` (`all`, `tickets`, `calls`, `leads`, `none`)
   - `shell_command` with execution `mode` and `commands`
   - `yasweb` with `report_type`, `report_name`, and `filters` (a map of key-value parameters passed dynamically)
+  - `external_app` with `app_id` and `args` (a map of key-value parameters to pass directly to the configured app executable)
 - `post_run_script`: path to an optional script that executes only upon a successful task completion (`.vbs`, `.txt`, `.bat`, `.cmd`, `.ps1`, or direct executable).
 - `timeout_seconds`: optional max execution timeout (in seconds) for this task's shell execution or post run script. When greater than 0, it overrides the global default from `shell_timeout_seconds` or `post_run_timeout_seconds` in the config file.
 - `last_run_at`: last run timestamp
@@ -136,6 +137,14 @@ Runner resolves relative `crm_config_path` and `crm_executable_path` from execut
   "shell_timeout_seconds": 900,
   "post_run_timeout_seconds": 900,
   "min_task_interval_seconds": 5,
+  "registered_apps": [
+    {
+      "id": "wcxx",
+      "name": "Webex Contact Center",
+      "executable_path": "/opt/crm_tool/wcxx",
+      "config_path": "/opt/crm_tool/wcxx_config.json"
+    }
+  ],
   "tasks": [
     {
       "id": "daily_all_reports",

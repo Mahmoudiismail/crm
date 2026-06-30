@@ -62,8 +62,9 @@ src/
 
 - Runner configuration loading/saving.
 - Runner-local report enum for `crm_fetch` tasks.
-- Task definitions (`crm_fetch`, `shell_command`).
+- Task definitions (`crm_fetch`, `shell_command`, `external_app`).
 - Legacy repetition/frequency scheduling fields and multi-schedule task definitions.
+- Maintenance of `RegisteredApp` objects for dynamic UI generation.
 - Shell command definitions for sequential or parallel execution.
 - External CRM executable path configuration.
 
@@ -89,6 +90,8 @@ src/
 ### `src/runner/gui.rs`
 
 - Lightweight HTTP GUI server.
+- Dynamic manifest queries (`/api/apps/manifest`) via sub-process `--manifest` executions.
+- Forms generated dynamically via JavaScript by iterating over app manifest argument objects.
 - Tailwind-styled dashboard loaded from cdnjs.
 - Status endpoint.
 - Trigger endpoints: run-all, run-by-id, tickets-only.

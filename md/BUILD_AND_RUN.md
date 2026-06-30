@@ -164,6 +164,11 @@ You can configure the reporting automation by passing CLI arguments:
 You can also use short flags or request help:
 `cargo run --bin yasweb -- --help`
 
+To output the JSON manifest describing the application's supported arguments:
+`cargo run --bin crm -- --manifest`
+`cargo run --bin yasweb -- --manifest`
+`cargo run --bin wcxx -- --manifest`
+
 ## Linux Support
 
 The application is primarily targetted at Windows. On Linux:
