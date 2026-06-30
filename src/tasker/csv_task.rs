@@ -261,6 +261,7 @@ pub fn run(
     let mut wrote_headers = false;
     let mut total_filtered_rows = 0;
     let mut total_deduped_rows = 0;
+    let mut seen_tickets = HashSet::new();
 
     for file_path in target_files {
         info!("Processing file: {}", file_path.display());
@@ -309,8 +310,6 @@ pub fn run(
             output_writer.write_record(&out_headers)?;
             wrote_headers = true;
         }
-
-        let mut seen_tickets = HashSet::new();
 
         for result in rdr.records() {
             let mut record = result?;
@@ -660,5 +659,78 @@ mod tests {
         let mut rdr = csv::ReaderBuilder::new().from_reader(out_content.as_bytes());
         let count = rdr.records().count();
         assert!(count > 1000, "Should have mapped thousands of records");
+    }
+
+    #[test]
+    fn test_csv_analysis_deduplication() {
+        // Setup configuration
+        let download_dir = tempfile::tempdir().unwrap();
+        let output_file = NamedTempFile::new().unwrap();
+        let users_file = NamedTempFile::new().unwrap();
+        let assignments_file = NamedTempFile::new().unwrap();
+
+        // Write empty mappings
+        writeln!(users_file.as_file(), "cognito_username,Team Name").unwrap();
+        writeln!(
+            assignments_file.as_file(),
+            "Category,Type,Subtype,Auto agent/team assignment"
+        )
+        .unwrap();
+
+        // Create two CSV files with overlapping tickets in the download directory
+        let file1_path = download_dir.path().join("ticket_report_1.csv");
+        let mut file1 = std::fs::File::create(&file1_path).unwrap();
+        writeln!(
+            file1,
+            "Ticket Id,Assignee,Ticket Type,Ticket Sub-Type,Ticket Category,Created At,Branch"
+        )
+        .unwrap();
+        writeln!(file1, "1001,alice,T1,ST1,C1,2023-01-01 10:00:00,BranchA").unwrap();
+        writeln!(file1, "1002,bob,T2,ST2,C2,2023-01-01 11:00:00,BranchB").unwrap();
+
+        // Ensure file 2 is created slightly later so it has a different modification time if needed,
+        // though our task processes them in modified date order or all together.
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        let file2_path = download_dir.path().join("ticket_report_2.csv");
+        let mut file2 = std::fs::File::create(&file2_path).unwrap();
+        writeln!(
+            file2,
+            "Ticket Id,Assignee,Ticket Type,Ticket Sub-Type,Ticket Category,Created At,Branch"
+        )
+        .unwrap();
+        writeln!(file2, "1002,bob,T2,ST2,C2,2023-01-01 11:00:00,BranchB").unwrap(); // Duplicate!
+        writeln!(file2, "1003,charlie,T3,ST3,C3,2023-01-01 12:00:00,BranchC").unwrap();
+
+        let config = CsvAnalysisConfig {
+            download_path: download_dir.path().to_str().unwrap().to_string(),
+            users_file: users_file.path().to_str().unwrap().to_string(),
+            assignment_settings_file: assignments_file.path().to_str().unwrap().to_string(),
+            minutes_ago: 60 * 24 * 365, // Last year
+            exclude_branches: vec![],
+            exclude_categories: vec![],
+            category_exceptions: None,
+            output_file: output_file.path().to_str().unwrap().to_string(),
+            email_config: None,
+        };
+
+        super::run(&config, false, false).unwrap();
+
+        let out_content = std::fs::read_to_string(output_file.path()).unwrap();
+        let mut rdr = csv::ReaderBuilder::new().from_reader(out_content.as_bytes());
+
+        let records: Vec<_> = rdr.records().map(|r| r.unwrap()).collect();
+
+        // We expect exactly 3 unique tickets: 1001, 1002, 1003.
+        // 1002 should not appear twice despite being in two different files.
+        assert_eq!(
+            records.len(),
+            3,
+            "Output should contain exactly 3 deduplicated records"
+        );
+
+        // Assert the ticket IDs are present exactly once.
+        // Note: the task sorts records by Ticket ID.
+        let ids: Vec<&str> = records.iter().map(|r| r.get(0).unwrap()).collect();
+        assert_eq!(ids, vec!["1001", "1002", "1003"]);
     }
 }

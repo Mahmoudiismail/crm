@@ -109,7 +109,7 @@ This task is designed to process multiple ticket report CSV files and augment th
 2. **Assignments:** Loads the assignment settings, matching `(Category, Type, Subtype)` to `Auto agent/team assignment`.
 3. **Tickets Join:** Iterates dynamically over dynamically identified ticket reports modified in the last `minutes_ago` interval.
     - Resolves and standardizes names (e.g., replaces underscores with spaces).
-    - Removes duplicates based on `Ticket Id`.
+    - Removes duplicates based on `Ticket Id` (deduplicates globally across all files processed).
     - Parses Excel serial timestamps or `dd/mm/yyyy hh:mm:ss` timestamps into proper strings.
     - Joins data to calculate the exact `Position` and `team`.
     - Adds `Day` and `Month` tracking columns.
