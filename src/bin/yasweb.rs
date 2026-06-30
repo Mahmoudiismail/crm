@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use chrono::{Datelike, NaiveDate};
 use crm_tool::manifest::{AppArg, AppManifest, ArgType};
 use headless_chrome::protocol::cdp::types::Event;
 use headless_chrome::{Browser, LaunchOptions};
@@ -16,6 +17,10 @@ struct ReportConfig {
     report_type: String,
     #[serde(default)]
     filters: HashMap<String, String>,
+    #[serde(default)]
+    start_date_key: Option<String>,
+    #[serde(default)]
+    end_date_key: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -79,39 +84,19 @@ fn setup_logging() -> Result<tracing_appender::non_blocking::WorkerGuard> {
     Ok(guard)
 }
 
-fn run_browser(
+fn run_browser_tab(
+    browser: Arc<Browser>,
     config: &YaswebConfig,
     active_report_name: &str,
     active_report_type: &str,
     active_filters: &HashMap<String, String>,
+    is_initial_tab: bool,
+    download_dir: Option<PathBuf>,
 ) -> Result<Vec<String>> {
     let mut discovered_filters = Vec::new();
-    let mut user_data_dir = std::env::current_exe().unwrap_or_default();
-    user_data_dir.pop();
-    user_data_dir.push("yasweb_chrome_data");
 
-    let args = vec![
-        std::ffi::OsStr::new("--ignore-certificate-errors"),
-        std::ffi::OsStr::new("--start-maximized"),
-        std::ffi::OsStr::new("--disable-web-security"),
-        std::ffi::OsStr::new("--disable-site-isolation-trials"),
-        std::ffi::OsStr::new("--disable-features=IsolateOrigins,site-per-process"),
-    ];
-
-    let launch_options = LaunchOptions::default_builder()
-        .headless(config.headless)
-        .sandbox(false)
-        .idle_browser_timeout(std::time::Duration::from_secs(120))
-        .user_data_dir(Some(user_data_dir))
-        .args(args)
-        .build()
-        .unwrap();
-
-    let browser = Browser::new(launch_options).context("Failed to launch browser")?;
-    // Use the first initial tab instead of opening a new one
-    let tab = {
+    let tab = if is_initial_tab {
         let tabs = browser.get_tabs().lock().unwrap();
-
         let mut blank_tab = None;
         for t in tabs.iter() {
             if t.get_url().contains("about:blank") {
@@ -121,20 +106,29 @@ fn run_browser(
         }
 
         if blank_tab.is_none() {
-            // Log all tab URLs if about:blank not found
             let urls: Vec<String> = tabs.iter().map(|t| t.get_url()).collect();
             info!("Warning: No about:blank tab found. Open tabs: {:?}", urls);
-
-            // Fallback to first tab
             blank_tab = tabs.first().cloned();
         }
+        match blank_tab {
+            Some(t) => t,
+            None => browser.new_tab().context("Failed to open new tab")?,
+        }
+    } else {
+        browser.new_tab().context("Failed to open new tab")?
+    };
 
-        blank_tab
-    };
-    let tab = match tab {
-        Some(t) => t,
-        None => browser.new_tab().context("Failed to open new tab")?,
-    };
+    // Configure download behavior to use temp dir
+    if let Some(ref dl_dir) = download_dir {
+        info!("Configuring download directory to {:?}", dl_dir);
+        if let Err(e) = tab.call_method(headless_chrome::protocol::cdp::Page::SetDownloadBehavior {
+            behavior:
+                headless_chrome::protocol::cdp::Page::SetDownloadBehaviorBehaviorOption::Allow,
+            download_path: Some(dl_dir.to_string_lossy().to_string()),
+        }) {
+            error!("Failed to set download behavior for tab: {:?}", e);
+        }
+    }
 
     // Enable network logging
     tab.enable_log()
@@ -834,6 +828,41 @@ fn run_browser(
         }
     }
 
+    // Wait for download if applicable
+    if let Some(dl_dir) = download_dir {
+        info!("Waiting for download to complete in {:?}...", dl_dir);
+        let mut download_complete = false;
+        // Wait up to 3 minutes
+        for _ in 0..180 {
+            if let Ok(entries) = std::fs::read_dir(&dl_dir) {
+                let mut found_incomplete = false;
+                let mut found_completed = false;
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if let Some(ext) = path.extension() {
+                        if ext == "crdownload" || ext == "tmp" {
+                            found_incomplete = true;
+                        } else if ext == "xlsx" || ext == "xls" || ext == "csv" {
+                            found_completed = true;
+                        }
+                    }
+                }
+
+                if found_completed && !found_incomplete {
+                    download_complete = true;
+                    break;
+                }
+            }
+            std::thread::sleep(Duration::from_secs(1));
+        }
+
+        if download_complete {
+            info!("Download successfully completed in {:?}", dl_dir);
+        } else {
+            error!("Download wait timeout or failed in {:?}", dl_dir);
+        }
+    }
+
     // Remove listener before exit
     tab.remove_event_listener(&events)
         .context("Failed to remove listener")?;
@@ -841,6 +870,14 @@ fn run_browser(
     if config.keep_open {
         std::thread::sleep(Duration::from_secs(60));
     }
+
+    // Cleanup tab if it is not the only tab left
+    if !is_initial_tab {
+        if let Err(e) = tab.close(true) {
+            error!("Failed to close tab: {:?}", e);
+        }
+    }
+
     Ok(discovered_filters)
 }
 
@@ -872,6 +909,27 @@ fn print_manifest() {
             },
             AppArg {
                 name: "--filters".to_string(),
+                arg_type: ArgType::String,
+                required: false,
+                default_value: None,
+                options: None,
+            },
+            AppArg {
+                name: "--monthly".to_string(),
+                arg_type: ArgType::Boolean,
+                required: false,
+                default_value: None,
+                options: None,
+            },
+            AppArg {
+                name: "--start-date".to_string(),
+                arg_type: ArgType::String,
+                required: false,
+                default_value: None,
+                options: None,
+            },
+            AppArg {
+                name: "--end-date".to_string(),
                 arg_type: ArgType::String,
                 required: false,
                 default_value: None,
@@ -934,6 +992,9 @@ async fn main() -> Result<()> {
     let mut active_report_name = String::new();
     let mut active_report_type = String::new();
     let mut active_filters = HashMap::new();
+    let mut is_monthly = false;
+    let mut start_date_str = None;
+    let mut end_date_str = None;
 
     let mut i = 1;
     while i < args.len() {
@@ -962,7 +1023,22 @@ async fn main() -> Result<()> {
                 }
                 i += 1;
             }
-            "--type" | "--name" | "--filters" | "--config" => {}
+            "--monthly" if i + 1 < args.len() => {
+                if args[i + 1].to_lowercase() == "true" || args[i + 1] == "1" {
+                    is_monthly = true;
+                }
+                i += 1;
+            }
+            "--start-date" if i + 1 < args.len() => {
+                start_date_str = Some(args[i + 1].clone());
+                i += 1;
+            }
+            "--end-date" if i + 1 < args.len() => {
+                end_date_str = Some(args[i + 1].clone());
+                i += 1;
+            }
+            "--type" | "--name" | "--filters" | "--config" | "--monthly" | "--start-date"
+            | "--end-date" => {}
             _ => {}
         }
         i += 1;
@@ -979,6 +1055,8 @@ async fn main() -> Result<()> {
         let report_conf = ReportConfig {
             report_type: active_report_type.clone(),
             filters: active_filters.clone(),
+            start_date_key: None,
+            end_date_key: None,
         };
         config
             .reports
@@ -1013,44 +1091,223 @@ async fn main() -> Result<()> {
 
     info!("Loaded config for URL: {}", config.url);
 
+    // Parse date ranges
+    let mut date_ranges: Vec<(String, String)> = Vec::new();
+    if is_monthly {
+        let start_date = start_date_str
+            .clone()
+            .context("--start-date is required when --monthly is true")?;
+        let end_date = end_date_str
+            .clone()
+            .context("--end-date is required when --monthly is true")?;
+
+        let start_dt = NaiveDate::parse_from_str(&start_date, "%d-%m-%Y")
+            .context("Invalid --start-date format, expected DD-MM-YYYY")?;
+        let end_dt = NaiveDate::parse_from_str(&end_date, "%d-%m-%Y")
+            .context("Invalid --end-date format, expected DD-MM-YYYY")?;
+
+        if start_dt > end_dt {
+            anyhow::bail!("--start-date must be before or equal to --end-date");
+        }
+
+        let report_conf = config.reports.get(&active_report_name).unwrap();
+        if report_conf.start_date_key.is_none()
+            || report_conf.end_date_key.is_none()
+            || report_conf.start_date_key.as_ref().unwrap().is_empty()
+            || report_conf.end_date_key.as_ref().unwrap().is_empty()
+        {
+            error!("For monthly execution, the report must have start_date_key and end_date_key configured in yasweb_config.json.");
+            anyhow::bail!("For monthly execution, the report must have start_date_key and end_date_key configured in yasweb_config.json.");
+        }
+
+        let mut current_dt = start_dt;
+        while current_dt <= end_dt {
+            let next_month = if current_dt.month() == 12 {
+                NaiveDate::from_ymd_opt(current_dt.year() + 1, 1, 1).unwrap()
+            } else {
+                NaiveDate::from_ymd_opt(current_dt.year(), current_dt.month() + 1, 1).unwrap()
+            };
+
+            let last_day = next_month.pred_opt().unwrap();
+            let chunk_end = if last_day > end_dt { end_dt } else { last_day };
+
+            date_ranges.push((
+                current_dt.format("%d-%m-%Y").to_string(),
+                chunk_end.format("%d-%m-%Y").to_string(),
+            ));
+
+            current_dt = next_month;
+        }
+
+        info!(
+            "Monthly execution planned for {} ranges: {:?}",
+            date_ranges.len(),
+            date_ranges
+        );
+    } else {
+        // Not monthly, just add a dummy single entry
+        date_ranges.push(("".to_string(), "".to_string()));
+    }
+
     let config_path_clone = config_path.clone();
     let mut config_clone = config.clone();
     let active_report_name_clone = active_report_name.clone();
 
-    // Run browser logic in a blocking task since headless_chrome is synchronous
-    let discovered_filters = tokio::task::spawn_blocking(move || {
-        match run_browser(
-            &config,
-            &active_report_name,
-            &active_report_type,
-            &active_filters,
-        ) {
-            Ok(filters) => filters,
-            Err(e) => {
-                error!("Browser automation failed: {:?}", e);
-                eprintln!("Browser automation failed: {:?}", e);
-                Vec::new()
-            }
-        }
-    })
-    .await?;
+    // Launch browser once
+    let mut user_data_dir = std::env::current_exe().unwrap_or_default();
+    user_data_dir.pop();
+    user_data_dir.push("yasweb_chrome_data");
 
-    if !discovered_filters.is_empty() {
-        if let Some(report) = config_clone.reports.get_mut(&active_report_name_clone) {
-            let mut updated_filters = false;
-            for f in discovered_filters {
-                if let std::collections::hash_map::Entry::Vacant(e) = report.filters.entry(f) {
-                    e.insert("".to_string());
-                    updated_filters = true;
+    let args = vec![
+        std::ffi::OsStr::new("--ignore-certificate-errors"),
+        std::ffi::OsStr::new("--start-maximized"),
+        std::ffi::OsStr::new("--disable-web-security"),
+        std::ffi::OsStr::new("--disable-site-isolation-trials"),
+        std::ffi::OsStr::new("--disable-features=IsolateOrigins,site-per-process"),
+    ];
+
+    let launch_options = LaunchOptions::default_builder()
+        .headless(config.headless)
+        .sandbox(false)
+        .idle_browser_timeout(std::time::Duration::from_secs(120))
+        .user_data_dir(Some(user_data_dir))
+        .args(args)
+        .build()
+        .unwrap();
+
+    let browser = Arc::new(Browser::new(launch_options).context("Failed to launch browser")?);
+
+    // Chunk runs into concurrent batches of max 6
+    for chunk in date_ranges.chunks(6) {
+        let mut tasks = Vec::new();
+        for (i, (start_dt, end_dt)) in chunk.iter().enumerate() {
+            let config_task = config.clone();
+            let active_report_name_task = active_report_name.clone();
+            let active_report_type_task = active_report_type.clone();
+
+            let mut run_filters = active_filters.clone();
+            if is_monthly && !start_dt.is_empty() && !end_dt.is_empty() {
+                let report_conf = config.reports.get(&active_report_name).unwrap();
+                if let Some(sk) = &report_conf.start_date_key {
+                    run_filters.insert(sk.clone(), start_dt.clone());
+                }
+                if let Some(ek) = &report_conf.end_date_key {
+                    run_filters.insert(ek.clone(), end_dt.clone());
                 }
             }
-            if updated_filters {
-                info!("Updating yasweb_config.json with newly discovered filters...");
-                let content = serde_json::to_string_pretty(&config_clone)
-                    .context("Failed to serialize updated yasweb config")?;
-                fs::write(&config_path_clone, content)
-                    .await
-                    .context("Failed to write updated yasweb_config.json")?;
+
+            let browser_clone = browser.clone();
+            let is_initial = i == 0 && !chunk.is_empty(); // use initial tab for the first element in the batch to avoid lingering blank tabs
+
+            // Setup download dir for this tab
+            let date_suffix = if is_monthly && !start_dt.is_empty() {
+                // e.g. "01-01-2026", get MM-YYYY
+                let parts: Vec<&str> = start_dt.split('-').collect();
+                if parts.len() == 3 {
+                    format!("{}-{}", parts[1], parts[2])
+                } else {
+                    start_dt.clone()
+                }
+            } else if let Some(st) = start_date_str.clone() {
+                st
+            } else {
+                chrono::Local::now().format("%d-%m-%Y").to_string()
+            };
+
+            let temp_dl_dir = {
+                let mut dir = std::env::current_exe().unwrap_or_default();
+                dir.pop();
+                dir.push(format!(
+                    "yasweb_downloads_tmp_{}_{}_{}",
+                    active_report_name, date_suffix, i
+                ));
+                let _ = std::fs::create_dir_all(&dir);
+                dir
+            };
+
+            let temp_dl_dir_clone = temp_dl_dir.clone();
+            let final_filename = format!("{}_{}.xlsx", active_report_name, date_suffix);
+
+            tasks.push(tokio::task::spawn_blocking(move || {
+                let res = match run_browser_tab(
+                    browser_clone,
+                    &config_task,
+                    &active_report_name_task,
+                    &active_report_type_task,
+                    &run_filters,
+                    is_initial,
+                    Some(temp_dl_dir.clone()),
+                ) {
+                    Ok(filters) => filters,
+                    Err(e) => {
+                        error!("Browser automation failed: {:?}", e);
+                        eprintln!("Browser automation failed: {:?}", e);
+                        Vec::new()
+                    }
+                };
+                (res, temp_dl_dir_clone, final_filename)
+            }));
+        }
+
+        let results = futures_util::future::join_all(tasks).await;
+
+        for (discovered_filters, temp_dl_dir, final_filename) in results.into_iter().flatten() {
+            // Move and rename the file
+            if let Ok(entries) = std::fs::read_dir(&temp_dl_dir) {
+                let mut final_out_dir = std::env::current_exe().unwrap_or_default();
+                final_out_dir.pop();
+                final_out_dir.push("downloads");
+                let _ = std::fs::create_dir_all(&final_out_dir);
+
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if let Some(ext) = path.extension() {
+                        if ext == "xlsx" || ext == "xls" || ext == "csv" {
+                            let mut out_file = final_out_dir.clone();
+                            // If the original file was not xlsx, adapt the extension, but we requested XLSX
+                            let ext_str = ext.to_string_lossy().to_string();
+                            let mut final_name = final_filename.clone();
+                            if ext_str != "xlsx" {
+                                final_name =
+                                    final_name.replace(".xlsx", &format!(".{}", ext_str));
+                            }
+                            out_file.push(final_name);
+
+                            info!("Moving downloaded file from {:?} to {:?}", path, out_file);
+                            if let Err(e) = std::fs::rename(&path, &out_file) {
+                                error!("Failed to rename/move file: {}", e);
+                                // Fallback to copy+delete across mount points
+                                if std::fs::copy(&path, &out_file).is_ok() {
+                                    let _ = std::fs::remove_file(&path);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Cleanup temp dir
+            let _ = std::fs::remove_dir_all(&temp_dl_dir);
+
+            if !discovered_filters.is_empty() {
+                if let Some(report) = config_clone.reports.get_mut(&active_report_name_clone) {
+                    let mut updated_filters = false;
+                    for f in discovered_filters {
+                        if let std::collections::hash_map::Entry::Vacant(e) =
+                            report.filters.entry(f)
+                        {
+                            e.insert("".to_string());
+                            updated_filters = true;
+                        }
+                    }
+                    if updated_filters {
+                        info!("Updating yasweb_config.json with newly discovered filters...");
+                        let content = serde_json::to_string_pretty(&config_clone)
+                            .context("Failed to serialize updated yasweb config")?;
+                        // Best effort write
+                        let _ = fs::write(&config_path_clone, content).await;
+                    }
+                }
             }
         }
     }
