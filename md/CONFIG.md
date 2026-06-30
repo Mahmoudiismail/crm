@@ -42,7 +42,7 @@ This file controls the GUI, global timing, and task scheduling. It has a `regist
 Executables spawned via the runner or manually have their own configurations.
 
 - **`config.json` (CRM):** Cognito user pool, API endpoints, credentials.
-- **`yasweb_config.json`:** Browser automation configurations, cached filter mappings.
+- **`yasweb_config.json`:** Browser automation configurations, cached filter mappings (including `start_date_key` and `end_date_key` for dynamic monthly date mapping).
 - **`wcxx_config.json`:** Webex CC token and organization endpoints.
 - **`tasker_config.json`:** Tasker tasks like CSV pivoting, team mappings, and Outlook configuration.
 

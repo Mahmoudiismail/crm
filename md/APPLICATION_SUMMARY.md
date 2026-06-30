@@ -75,17 +75,19 @@ CRM always performs login.
 
 1. Parse CLI arguments (intercepts `--manifest` for app registration).
 2. Load/create `yasweb_config.json` under executable directory.
-3. Launch a headless Chrome browser.
-4. Attach Chrome DevTools Protocol network listeners to log events.
-5. Navigate to the configured Yasweb URL.
-6. Identify and fill the username.
-7. Wait briefly for external data to load, then fill the password.
-8. Submit the login form.
-9. Verify login success by checking if the username appears in the header.
-10. Open menu via "#menuPinnedBtn", using `.click()` to toggle the menu open.
-11. Wait for the `.menuModules` element to receive the `show-modules` class, confirming the menu is visibly open.
-12. Click the MIS Reports module and, if configured, locate and select the target report type inside the resulting iframe.
-13. Logs are written to the `yasweblog` file. HTML content is extracted and logged heavily across all stages (successes and failures) for debugging purposes. Certificate errors are ignored during browser instantiation.
+3. Parse CLI inputs (`--name`, `--type`, `--filters`, `--monthly`, `--start-date`, `--end-date`).
+4. If `--monthly` is set, chunk the date range into monthly segments.
+5. Launch a single headless Chrome browser session.
+6. For each date chunk (batched up to 6 concurrently), launch a new browser tab.
+7. Set a unique temporary download directory per tab via CDP (`Page.setDownloadBehavior`) to isolate concurrent downloads.
+8. Attach Chrome DevTools Protocol network listeners to log events.
+9. Navigate to the configured Yasweb URL.
+10. Identify and fill the username and password, submitting the login form.
+11. Open menu via "#menuPinnedBtn", toggle it, and click the MIS Reports module.
+12. Automatically populate filter dates dynamically mapped to `start_date_key` and `end_date_key` via `yasweb_config.json` during monthly execution.
+13. Execute the report export via JS automation within the iframe.
+14. Wait up to 3 minutes for `.xlsx` downloads in the tab's temporary download directory to complete, rename the file accurately, and move it to a central `downloads` output folder.
+15. Logs are written to the `yasweblog` file. HTML content is extracted and logged heavily across all stages (successes and failures) for debugging purposes. Certificate errors are ignored during browser instantiation.
 
 ## Main Workflow (wcxx)
 
