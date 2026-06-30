@@ -27,19 +27,59 @@ pub struct AssignmentSettings {
     pub auto_agent_team_assignment: Option<String>,
 }
 
-pub fn resolve_relative_to_exe_dir(path: &str) -> std::path::PathBuf {
+pub fn parse_created_at(val: &str) -> Option<NaiveDateTime> {
+    let trimmed = val.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    // Try dd/mm/yyyy hh:mm:ss
+    if let Ok(dt) = NaiveDateTime::parse_from_str(trimmed, "%d/%m/%Y %H:%M:%S") {
+        return Some(dt);
+    }
+    // Try mm/dd/yyyy hh:mm:ss
+    if let Ok(dt) = NaiveDateTime::parse_from_str(trimmed, "%m/%d/%Y %H:%M:%S") {
+        return Some(dt);
+    }
+    // Try float
+    if let Ok(excel_float) = trimmed.parse::<f64>() {
+        let base_date = NaiveDate::from_ymd_opt(1899, 12, 30).unwrap();
+        let days = excel_float.trunc() as i64;
+        let fraction = excel_float.fract();
+        let seconds_in_day = 86400.0;
+        let total_seconds = (fraction * seconds_in_day).round() as u32;
+        let hours = total_seconds / 3600;
+        let minutes = (total_seconds % 3600) / 60;
+        let seconds = total_seconds % 60;
+        if let Some(date) = base_date.checked_add_signed(Duration::days(days)) {
+            if let Some(time) = NaiveTime::from_hms_opt(hours, minutes, seconds) {
+                return Some(NaiveDateTime::new(date, time));
+            }
+        }
+    }
+    None
+}
+
+pub fn resolve_relative_to_base_dir(
+    path: &str,
+    base_dir: Option<&std::path::Path>,
+) -> std::path::PathBuf {
     let p = std::path::PathBuf::from(path);
     if p.is_absolute() {
         return p;
     }
 
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(exe_dir) = exe.parent() {
-            return exe_dir.join(p);
-        }
+    if let Some(dir) = base_dir {
+        return dir.join(p);
     }
 
     p
+}
+
+pub fn resolve_relative_to_exe_dir(path: &str) -> std::path::PathBuf {
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|e| e.parent().map(|p| p.to_path_buf()));
+    resolve_relative_to_base_dir(path, exe_dir.as_deref())
 }
 
 pub fn run(
@@ -211,37 +251,6 @@ pub fn run(
         .collect();
 
     // Parse logic
-    fn parse_created_at(val: &str) -> Option<NaiveDateTime> {
-        let trimmed = val.trim();
-        if trimmed.is_empty() {
-            return None;
-        }
-        // Try dd/mm/yyyy hh:mm:ss
-        if let Ok(dt) = NaiveDateTime::parse_from_str(trimmed, "%d/%m/%Y %H:%M:%S") {
-            return Some(dt);
-        }
-        // Try mm/dd/yyyy hh:mm:ss
-        if let Ok(dt) = NaiveDateTime::parse_from_str(trimmed, "%m/%d/%Y %H:%M:%S") {
-            return Some(dt);
-        }
-        // Try float
-        if let Ok(excel_float) = trimmed.parse::<f64>() {
-            let base_date = NaiveDate::from_ymd_opt(1899, 12, 30).unwrap();
-            let days = excel_float.trunc() as i64;
-            let fraction = excel_float.fract();
-            let seconds_in_day = 86400.0;
-            let total_seconds = (fraction * seconds_in_day).round() as u32;
-            let hours = total_seconds / 3600;
-            let minutes = (total_seconds % 3600) / 60;
-            let seconds = total_seconds % 60;
-            if let Some(date) = base_date.checked_add_signed(Duration::days(days)) {
-                if let Some(time) = NaiveTime::from_hms_opt(hours, minutes, seconds) {
-                    return Some(NaiveDateTime::new(date, time));
-                }
-            }
-        }
-        None
-    }
 
     info!(
         "Processing ticket files and writing to output: {}",
@@ -308,46 +317,33 @@ pub fn run(
             let mut is_exception_val = "No";
 
             // Clean
-            if let Some(idx) = assignee_idx {
-                if let Some(val) = record.get(idx) {
-                    let cleaned = val.trim().to_string();
-                    let mut new_record = StringRecord::new();
-                    for (i, field) in record.iter().enumerate() {
-                        if i == idx {
-                            new_record.push_field(&cleaned);
-                        } else {
-                            new_record.push_field(field);
-                        }
+            // Optimize: Collect fields directly into an array or iterator and push_record
+            let mut new_record = StringRecord::with_capacity(record.len() * 16, record.len());
+            for (i, field) in record.iter().enumerate() {
+                if Some(i) == assignee_idx {
+                    new_record.push_field(field.trim());
+                } else if Some(i) == type_idx || Some(i) == subtype_idx || Some(i) == cat_idx {
+                    if field.contains('_') {
+                        new_record.push_field(&field.replace('_', " "));
+                    } else {
+                        new_record.push_field(field);
                     }
-                    record = new_record;
+                } else {
+                    new_record.push_field(field);
                 }
             }
-
-            for idx in [type_idx, subtype_idx, cat_idx].into_iter().flatten() {
-                if let Some(val) = record.get(idx) {
-                    let cleaned = val.replace('_', " ");
-                    let mut new_record = StringRecord::new();
-                    for (i, field) in record.iter().enumerate() {
-                        if i == idx {
-                            new_record.push_field(&cleaned);
-                        } else {
-                            new_record.push_field(field);
-                        }
-                    }
-                    record = new_record;
-                }
-            }
+            record = new_record;
 
             // Deduplicate
-            let ticket_id_val = ticket_id_idx
-                .and_then(|idx| record.get(idx))
-                .unwrap_or("")
-                .to_string();
-            if seen_tickets.contains(&ticket_id_val) {
+            let ticket_id_val = ticket_id_idx.and_then(|idx| record.get(idx)).unwrap_or("");
+
+            // Avoid string clone if we've seen it by querying with string slice first.
+            if seen_tickets.contains(ticket_id_val) {
                 total_deduped_rows += 1;
                 continue;
             }
-            seen_tickets.insert(ticket_id_val.clone());
+            let ticket_id_val_owned = ticket_id_val.to_string();
+            seen_tickets.insert(ticket_id_val_owned.clone());
 
             let branch_val = branch_idx
                 .and_then(|idx| record.get(idx))
@@ -458,7 +454,7 @@ pub fn run(
             record.push_field(team.as_deref().unwrap_or(""));
             record.push_field(is_exception_val);
 
-            all_records.push((ticket_id_val, record));
+            all_records.push((ticket_id_val_owned, record));
         }
     }
 
@@ -508,7 +504,9 @@ pub fn run(
 
 #[cfg(test)]
 mod tests {
+    use super::{parse_created_at, resolve_relative_to_base_dir};
     use crate::tasker::config::CsvAnalysisConfig;
+    use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
     use std::fs::File;
     use std::io::Write;
     use tempfile::NamedTempFile;
@@ -562,5 +560,105 @@ mod tests {
         let output_content = std::fs::read_to_string(config.output_file).unwrap();
         assert!(output_content.contains("Ticket Id"));
         assert!(output_content.contains("1001"));
+    }
+
+    #[test]
+    fn test_parse_created_at() {
+        // dd/mm/yyyy
+        assert_eq!(
+            parse_created_at("01/02/2026 12:00:00"),
+            Some(NaiveDateTime::new(
+                NaiveDate::from_ymd_opt(2026, 2, 1).unwrap(),
+                NaiveTime::from_hms_opt(12, 0, 0).unwrap()
+            ))
+        );
+
+        // mm/dd/yyyy
+        assert_eq!(
+            parse_created_at("02/15/2026 14:30:00"),
+            Some(NaiveDateTime::new(
+                NaiveDate::from_ymd_opt(2026, 2, 15).unwrap(),
+                NaiveTime::from_hms_opt(14, 30, 0).unwrap()
+            ))
+        );
+
+        // Excel float
+        assert_eq!(
+            parse_created_at("44562.5"), // Roughly sometime in 2022
+            Some(NaiveDateTime::new(
+                NaiveDate::from_ymd_opt(2022, 1, 1).unwrap(),
+                NaiveTime::from_hms_opt(12, 0, 0).unwrap()
+            ))
+        );
+
+        // Invalid
+        assert_eq!(parse_created_at(""), None);
+        assert_eq!(parse_created_at("invalid"), None);
+    }
+
+    #[test]
+    fn test_resolve_relative_to_base_dir() {
+        let base = std::path::PathBuf::from("/base/dir");
+        let rel_path = resolve_relative_to_base_dir("file.txt", Some(&base));
+        assert_eq!(rel_path, std::path::PathBuf::from("/base/dir/file.txt"));
+
+        let abs_path = resolve_relative_to_base_dir("/absolute/path", Some(&base));
+        assert_eq!(abs_path, std::path::PathBuf::from("/absolute/path"));
+
+        let rel_path_no_base = resolve_relative_to_base_dir("file.txt", None);
+        assert_eq!(rel_path_no_base, std::path::PathBuf::from("file.txt"));
+    }
+
+    #[test]
+    fn test_real_dataset_mapping() {
+        let users_file = NamedTempFile::new().unwrap();
+        let assignments_file = NamedTempFile::new().unwrap();
+        let download_dir = tempfile::tempdir().unwrap();
+        let output_file = NamedTempFile::new().unwrap();
+
+        let client = reqwest::blocking::Client::new();
+
+        let agents_csv = client
+            .get("https://paste.c-net.org/FreddoLocate")
+            .send()
+            .unwrap()
+            .text()
+            .unwrap();
+        std::fs::write(users_file.path(), agents_csv).unwrap();
+
+        let assignment_csv = client
+            .get("https://paste.c-net.org/HahahaBackpack")
+            .send()
+            .unwrap()
+            .text()
+            .unwrap();
+        std::fs::write(assignments_file.path(), assignment_csv).unwrap();
+
+        let ticket_csv = client
+            .get("https://paste.c-net.org/CalmedBrochure")
+            .send()
+            .unwrap()
+            .text()
+            .unwrap();
+        std::fs::write(download_dir.path().join("ticket_report1.csv"), ticket_csv).unwrap();
+
+        let config = CsvAnalysisConfig {
+            download_path: download_dir.path().to_str().unwrap().to_string(),
+            users_file: users_file.path().to_str().unwrap().to_string(),
+            assignment_settings_file: assignments_file.path().to_str().unwrap().to_string(),
+            minutes_ago: 60 * 24 * 365 * 10,
+            exclude_branches: vec![],
+            exclude_categories: vec![],
+            category_exceptions: None,
+            output_file: output_file.path().to_str().unwrap().to_string(),
+            email_config: None,
+        };
+
+        super::run(&config, false, false).unwrap();
+
+        let out_content = std::fs::read_to_string(output_file.path()).unwrap();
+        let mut rdr = csv::ReaderBuilder::new().from_reader(out_content.as_bytes());
+        let count = rdr.records().count();
+        assert!(count > 1000, "Should have mapped thousands of records");
     }
 }

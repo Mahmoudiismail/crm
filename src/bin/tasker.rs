@@ -8,17 +8,22 @@ use tracing::{error, info};
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
-fn run_app() -> Result<()> {
+pub fn run_app(args: Vec<String>) -> Result<()> {
     info!("Tasker started.");
 
     // Parse arguments
-    let args: Vec<String> = env::args().collect();
+
     let mut config_path_arg = None;
     let mut task_filter: Option<usize> = None;
     let mut only_call_center = false;
     let mut send_exceptions = false;
 
-    let mut args_iter = args.into_iter().skip(1).peekable();
+    let skip_count = if args.first().is_some_and(|a| !a.starts_with('-')) {
+        1
+    } else {
+        0
+    };
+    let mut args_iter = args.into_iter().skip(skip_count).peekable();
     while let Some(arg) = args_iter.next() {
         match arg.as_str() {
             "--config" => {
@@ -205,7 +210,7 @@ fn run_app() -> Result<()> {
     Ok(())
 }
 
-fn main() {
+fn main() -> Result<()> {
     // Setup file logging in the same directory as the executable
     let log_dir = env::current_exe()
         .ok()
@@ -220,8 +225,35 @@ fn main() {
         .with(fmt::layer().with_writer(std::io::stdout))
         .init();
 
-    if let Err(e) = run_app() {
+    if let Err(e) = run_app(env::args().collect()) {
         error!("Fatal application error: {:#}", e);
-        std::process::exit(1);
+        anyhow::bail!(e);
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tasker_args_parsing() {
+        // Run with mock args and a fake config path
+        let tmp = std::env::temp_dir();
+        let config_path = tmp.join("mock_tasker_config.json");
+        let _ = std::fs::remove_file(&config_path);
+
+        let args = vec![
+            "tasker".to_string(),
+            "--config".to_string(),
+            config_path.to_str().unwrap().to_string(),
+            "--only-call-center".to_string(),
+            "--send-exceptions".to_string(),
+        ];
+
+        let _res = run_app(args);
+        // It should succeed or fail cleanly, but mostly we just verify it doesn't crash on parse
+        // It will actually create the mock config and then exit cleanly or with an error
+        let _ = std::fs::remove_file(&config_path);
     }
 }

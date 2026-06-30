@@ -843,3 +843,82 @@ $Mail.Display()
     info!("Email processing complete.");
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tasker::config::EmailConfig;
+    use csv::StringRecord;
+    use std::fs::File;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    #[test]
+    fn test_email_processing_skips_closed() {
+        let download_dir = tempfile::tempdir().unwrap();
+        let mut ticket_file = File::create(download_dir.path().join("results.csv")).unwrap();
+        writeln!(
+            ticket_file,
+            "Ticket Id,Branch Name,Category,Type,Subtype,Status,Creation Date,Assignee,Day,Month,Position,team,Is Exception"
+        )
+        .unwrap();
+        writeln!(
+            ticket_file,
+            "1001,Main Branch,Cat1,Type1,Sub1,closed,01/01/2026 12:00:00,alice,1,01-2026,Pos1,Team A,No"
+        )
+        .unwrap();
+
+        let mut teams_file = NamedTempFile::new().unwrap();
+        writeln!(teams_file, "Team Name,To Email,CC Email").unwrap();
+        writeln!(teams_file, "Team A,test@example.com,cc@example.com").unwrap();
+
+        let email_config = EmailConfig {
+            team_mapping_file: teams_file.path().to_str().unwrap().to_string(),
+            body_template_file: None,
+            initial_cc: "init@example.com".to_string(),
+            ending_cc: "end@example.com".to_string(),
+            send_emails: Some(false),
+            default_to_email: "def@example.com".to_string(),
+            send_per_team_branches: vec!["Main Branch".to_string()],
+            send_per_branch_branches: vec![],
+            send_call_center: Some(false),
+        };
+
+        // If the email script runs but finds only closed tickets, it should skip.
+        // The fact it doesn't try to run PowerShell (which might fail in Linux sandbox) means it skips safely.
+        let result = process_emails(
+            download_dir.path().join("results.csv").to_str().unwrap(),
+            &email_config,
+            false,
+            false,
+        );
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_email_html_pivot_generation() {
+        // Build mock rows
+        let r1 = StringRecord::from(vec!["1", "Main Branch", "Open", "Team A"]);
+        let tr1 = TicketRow {
+            original_row: r1,
+            ticket_id: "1".to_string(),
+            team: "Team A".to_string(),
+            branch: "Main Branch".to_string(),
+            status: "Open".to_string(),
+            assignee: "alice".to_string(),
+            ticket_type: "t".to_string(),
+            ticket_subtype: "s".to_string(),
+            ticket_category: "c".to_string(),
+            created_at_dt: None,
+        };
+
+        let statuses = vec!["Open".to_string()];
+
+        let html = generate_pivot_html(&[tr1], &statuses, false);
+
+        // Assert HTML structure expectations
+        assert!(html.contains("Open"));
+        assert!(html.contains("Grand Total"));
+    }
+}
