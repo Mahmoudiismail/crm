@@ -493,6 +493,8 @@ pub fn run(
             email_cfg,
             only_call_center,
             send_exceptions,
+            &download_dir_path.to_string_lossy(),
+            config.minutes_ago,
         ) {
             error!("Error processing emails: {}", e);
         }

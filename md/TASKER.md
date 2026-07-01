@@ -102,7 +102,7 @@ This task is designed to process multiple ticket report CSV files and augment th
   - `default_to_email`: Fallback email if team mapped isn't found, and also used to send exception/error reports.
   - `send_per_team_branches`: List of branches that should send distinct emails for each *team* within the branch.
   - `send_per_branch_branches`: List of branches that will receive *one email for the entire branch* instead of separated by team.
-  - `send_call_center`: Boolean, if true unifies the "Call Center" tickets from all allowed branches into a single email instead of being grouped with the others.
+  - `send_call_center`: Boolean, if true unifies the "Call Center" tickets from all allowed branches into a single email instead of being grouped with the others. It also automatically discovers, parses, and attaches any matching `lead_report_*.csv` files for the Call Center bucket (even if there are zero open tickets for the target period).
 
 #### Processing Logic
 1. **User Maps:** Loads the user mapping file. Looks for columns matching `cognito_username` and `UserDepartmentName / Team Name` to create a `Position` list and define the primary assignee team.
