@@ -55,7 +55,7 @@ async fn main() -> Result<()> {
 
     let config_exists = runner_config_path.exists();
 
-    let runner_handle = start_scheduler(runner_config_path_str);
+    let runner_handle = start_scheduler(runner_config_path_str.clone());
     start_gui_server(runner_handle.clone());
 
     let tx = runner_handle.command_tx.clone();
@@ -68,11 +68,14 @@ async fn main() -> Result<()> {
     #[cfg(target_os = "windows")]
     let event_loop = EventLoop::new()?;
     #[cfg(target_os = "windows")]
-    let mut app = App {
-        tray_icon: None,
-        menu_items: None,
-        runner: runner_handle,
-        runner_gui_url: format!("http://{}:{}", runner_cfg.gui_host, runner_cfg.gui_port),
+    let mut app = {
+        let runner_cfg = crm_tool::runner::config::RunnerConfig::load(&runner_config_path_str);
+        App {
+            tray_icon: None,
+            menu_items: None,
+            runner: runner_handle,
+            runner_gui_url: format!("http://{}:{}", runner_cfg.gui_host, runner_cfg.gui_port),
+        }
     };
 
     #[cfg(target_os = "windows")]
@@ -170,7 +173,7 @@ impl ApplicationHandler for App {
                     let tx = self.runner.command_tx.clone();
                     tokio::spawn(async move {
                         let _ = tx
-                            .send(RunnerCommand::RunAdhocCrm(ReportType::Tickets))
+                            .send(RunnerCommand::RunAdhocCrm(crm_tool::crm::config::ReportType::Tickets))
                             .await;
                     });
                 } else if event.id == *logs_id {
