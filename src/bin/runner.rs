@@ -1,16 +1,15 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 #[cfg(target_os = "windows")]
 use crm_tool::runner::config::ReportType;
-use crm_tool::runner::config::RunnerConfig;
 #[cfg(target_os = "windows")]
 use crm_tool::runner::engine::RunnerHandle;
 use crm_tool::runner::engine::{start_scheduler, RunnerCommand};
 use crm_tool::runner::gui::start_gui_server;
 #[cfg(target_os = "windows")]
 use muda::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 #[cfg(target_os = "windows")]
 use std::time::Duration;
 #[cfg(target_os = "windows")]
@@ -55,8 +54,6 @@ async fn main() -> Result<()> {
     let runner_config_path_str = runner_config_path.to_string_lossy().to_string();
 
     let config_exists = runner_config_path.exists();
-    let runner_cfg = RunnerConfig::load(&runner_config_path_str)?;
-    ensure_crm_config_exists(&runner_cfg).await?;
 
     let runner_handle = start_scheduler(runner_config_path_str);
     start_gui_server(runner_handle.clone());
@@ -236,75 +233,4 @@ fn executable_dir() -> PathBuf {
         .ok()
         .and_then(|path| path.parent().map(|p| p.to_path_buf()))
         .unwrap_or_else(|| PathBuf::from("."))
-}
-
-async fn ensure_crm_config_exists(cfg: &RunnerConfig) -> Result<()> {
-    let config_path = resolve_relative_to_exe_dir(&cfg.crm_config_path);
-    if Path::new(&config_path).exists() {
-        return Ok(());
-    }
-
-    let crm_exec = resolve_crm_executable(&cfg.crm_executable_path);
-    info!(
-        "CRM config not found at {}. Initializing via {}",
-        config_path,
-        crm_exec.display()
-    );
-
-    let output = tokio::process::Command::new(&crm_exec)
-        .arg("--config")
-        .arg(&config_path)
-        .arg("--report")
-        .arg("none")
-        .output()
-        .await
-        .with_context(|| format!("Failed to launch CRM executable: {}", crm_exec.display()))?;
-
-    if !output.status.success() && !Path::new(&config_path).exists() {
-        return Err(anyhow::anyhow!(
-            "Failed to initialize CRM config using {} (status {:?}): {}",
-            crm_exec.display(),
-            output.status.code(),
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-
-    Ok(())
-}
-
-fn resolve_relative_to_exe_dir(path: &str) -> String {
-    let p = PathBuf::from(path);
-    if p.is_absolute() {
-        return p.to_string_lossy().to_string();
-    }
-    executable_dir().join(p).to_string_lossy().to_string()
-}
-
-fn resolve_crm_executable(configured: &str) -> PathBuf {
-    let configured = configured.trim();
-    let configured_name = if configured.is_empty() {
-        default_crm_binary_name().to_string()
-    } else {
-        configured.to_string()
-    };
-
-    let candidate = PathBuf::from(&configured_name);
-    if candidate.is_absolute() {
-        return candidate;
-    }
-
-    let sibling = executable_dir().join(&configured_name);
-    if sibling.exists() {
-        return sibling;
-    }
-
-    candidate
-}
-
-fn default_crm_binary_name() -> &'static str {
-    if cfg!(target_os = "windows") {
-        "crm.exe"
-    } else {
-        "crm"
-    }
 }

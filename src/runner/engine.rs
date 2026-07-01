@@ -1,29 +1,22 @@
-#[derive(serde::Serialize, Clone)]
-pub struct RunSpec {
-    pub report_type: String,
-    pub report_name: String,
-    pub filters: std::collections::HashMap<String, String>,
-}
 use std::fs;
 use std::io::Write;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use anyhow::{Context, Result};
-use chrono::{DateTime, Datelike, Local, Utc};
+use chrono::{DateTime, Utc};
 use tokio::sync::{mpsc, Mutex};
 use tracing::{debug, error, info};
 
 use super::config::{
-    next_daily_run_after, next_monthly_run_after, parse_rfc3339_utc, Repetition, ReportType,
-    RunnerConfig, RunnerTask, ShellCommandMode, ShellCommandSpec, TaskKind, TaskSchedule,
+    next_daily_run_after, next_monthly_run_after, parse_rfc3339_utc, Repetition, RunnerConfig,
+    RunnerTask, ShellCommandMode, ShellCommandSpec, TaskKind, TaskSchedule,
 };
 
 #[derive(Debug, Clone)]
 pub enum RunnerCommand {
     RunAllNow,
     RunTaskNow(String),
-    RunAdhocCrm(ReportType),
     SetTaskEnabled { task_id: String, enabled: bool },
 }
 
@@ -133,10 +126,6 @@ impl TaskLoggerInner {
     }
 }
 struct ExecutionPolicy {
-    crm_config_path: String,
-    crm_executable_path: String,
-    yasweb_config_path: String,
-    yasweb_executable_path: String,
     allow_shell_tasks: bool,
     shell_timeout_seconds: u64,
     post_run_timeout_seconds: u64,
@@ -238,7 +227,6 @@ async fn handle_command(
     match cmd {
         RunnerCommand::RunAllNow => run_all_tasks_now(path, status).await,
         RunnerCommand::RunTaskNow(task_id) => run_task_by_id(path, &task_id, status).await,
-        RunnerCommand::RunAdhocCrm(report) => run_adhoc_crm(path, report, status).await,
         RunnerCommand::SetTaskEnabled { task_id, enabled } => {
             set_task_enabled(path, &task_id, enabled).await
         }
@@ -350,32 +338,6 @@ async fn run_task_by_id(
     Err(anyhow::anyhow!("Task '{}' not found", task_id))
 }
 
-async fn run_adhoc_crm(
-    path: &str,
-    report: ReportType,
-    status: &Arc<Mutex<RunnerStatus>>,
-) -> Result<()> {
-    let cfg = RunnerConfig::load(path)?;
-    let policy = policy_from_config(&cfg);
-    let mut task = RunnerTask {
-        id: "adhoc_crm".to_string(),
-        name: "Adhoc CRM Run".to_string(),
-        enabled: true,
-        repetition: Repetition::Once,
-        frequency_seconds: 0,
-        next_run_at: String::new(),
-        schedules: Vec::new(),
-        kind: TaskKind::CrmFetch { report },
-        last_run_at: String::new(),
-        last_status: String::new(),
-        post_run_script: String::new(),
-        timeout_seconds: 0,
-    };
-
-    run_task(&mut task, &policy, status).await;
-    Ok(())
-}
-
 async fn set_task_enabled(path: &str, task_id: &str, enabled: bool) -> Result<()> {
     let mut cfg = RunnerConfig::load(path)?;
     if let Some(task) = cfg.tasks.iter_mut().find(|t| t.id == task_id) {
@@ -428,7 +390,6 @@ fn normalize_and_validate_task(task: &mut RunnerTask, cfg: &RunnerConfig) -> Res
     normalize_and_validate_schedules(task, cfg.min_task_interval_seconds.max(1))?;
 
     match &mut task.kind {
-        TaskKind::CrmFetch { .. } => {}
         TaskKind::ShellCommand { commands, .. } => {
             commands.retain(|c| !c.command.trim().is_empty());
             for c in commands.iter_mut() {
@@ -440,7 +401,6 @@ fn normalize_and_validate_task(task: &mut RunnerTask, cfg: &RunnerConfig) -> Res
                 ));
             }
         }
-        TaskKind::Yasweb { .. } => {}
         TaskKind::ExternalApp { app_id, .. } => {
             if app_id.is_empty() {
                 return Err(anyhow::anyhow!("External App tasks require an app_id"));
@@ -483,10 +443,6 @@ fn update_next_run(task: &mut RunnerTask, now: DateTime<Utc>, min_task_interval_
 
 fn policy_from_config(cfg: &RunnerConfig) -> ExecutionPolicy {
     ExecutionPolicy {
-        crm_config_path: cfg.crm_config_path.clone(),
-        crm_executable_path: cfg.crm_executable_path.clone(),
-        yasweb_config_path: cfg.yasweb_config_path.clone(),
-        yasweb_executable_path: cfg.yasweb_executable_path.clone(),
         allow_shell_tasks: cfg.allow_shell_tasks,
         shell_timeout_seconds: cfg.shell_timeout_seconds,
         post_run_timeout_seconds: cfg.post_run_timeout_seconds,
@@ -527,16 +483,6 @@ async fn run_task(
     };
 
     let result = match &task.kind {
-        TaskKind::CrmFetch { report } => {
-            run_crm_command(
-                &logger,
-                &policy.crm_executable_path,
-                &policy.crm_config_path,
-                *report,
-                effective_shell_timeout,
-            )
-            .await
-        }
         TaskKind::ShellCommand { mode, commands } => {
             if !policy.allow_shell_tasks {
                 Err(anyhow::anyhow!(
@@ -552,33 +498,6 @@ async fn run_task(
                     }
                 }
             }
-        }
-        TaskKind::Yasweb { reports } => {
-            let mut runs = Vec::new();
-            let now_utc = Utc::now();
-            for report in reports {
-                let mut resolved_filters = std::collections::HashMap::new();
-                for (k, v) in &report.filters {
-                    resolved_filters.insert(
-                        k.clone(),
-                        resolve_dynamic_dates(v, now_utc, &report.report_type),
-                    );
-                }
-                runs.push(RunSpec {
-                    report_type: report.report_type.clone(),
-                    report_name: report.report_name.clone(),
-                    filters: resolved_filters,
-                });
-            }
-
-            run_yasweb_command(
-                &logger,
-                &policy.yasweb_executable_path,
-                &policy.yasweb_config_path,
-                &runs,
-                effective_shell_timeout,
-            )
-            .await
         }
         TaskKind::ExternalApp { app_id, args } => {
             if let Some(app) = policy.registered_apps.iter().find(|a| &a.id == app_id) {
@@ -625,92 +544,6 @@ async fn run_task(
     let mut st = status.lock().await;
     st.last_run_at = Utc::now().to_rfc3339();
     st.currently_running = false;
-}
-
-async fn run_yasweb_command(
-    logger: &TaskLogger,
-    executable_path: &str,
-    config_path: &str,
-    runs: &[RunSpec],
-    timeout_seconds: u64,
-) -> Result<()> {
-    let resolved_executable = resolve_executable(executable_path);
-    let resolved_config_path = resolve_relative_to_exe_dir(config_path);
-
-    let handles = runs
-        .iter()
-        .map(|run| {
-            let run = run.clone();
-            let executable = resolved_executable.clone();
-            let config_path = resolved_config_path.clone();
-            let l = logger.clone();
-
-            tokio::spawn(async move {
-                let mut command = tokio::process::Command::new(&executable);
-                command.arg("--config").arg(&config_path);
-
-                command.arg("--name").arg(&run.report_name);
-                command.arg("--type").arg(&run.report_type);
-                if let Ok(filters_json) = serde_json::to_string(&run.filters) {
-                    command.arg("--filters").arg(filters_json);
-                }
-
-                l.log(&format!("Executing yasweb command: {:?}", command))
-                    .await;
-
-                let output_result = tokio::time::timeout(
-                    Duration::from_secs(timeout_seconds.max(1)),
-                    command.output(),
-                )
-                .await
-                .with_context(|| {
-                    format!(
-                        "yasweb command timed out after {}s ({})",
-                        timeout_seconds,
-                        executable.display()
-                    )
-                });
-                (run.report_name, output_result)
-            })
-        })
-        .collect::<Vec<_>>();
-
-    let mut failures = Vec::new();
-    for handle in handles {
-        let (report_name, result) = handle
-            .await
-            .context("parallel yasweb command task join failed")?;
-        let result = result?; // unpack the timeout context error
-        match result {
-            Ok(output) => {
-                logger
-                    .log_bytes(&format!("STDOUT ({})", report_name), &output.stdout)
-                    .await;
-                logger
-                    .log_bytes(&format!("STDERR ({})", report_name), &output.stderr)
-                    .await;
-                if !output.status.success() {
-                    failures.push(format!(
-                        "report '{}' failed with exit code: {:?}",
-                        report_name,
-                        output.status.code()
-                    ));
-                }
-            }
-            Err(e) => {
-                failures.push(format!("report '{}' failed: {}", report_name, e));
-            }
-        }
-    }
-
-    if failures.is_empty() {
-        Ok(())
-    } else {
-        Err(anyhow::anyhow!(
-            "yasweb task failed: {}",
-            failures.join("; ")
-        ))
-    }
 }
 
 async fn run_external_app(
@@ -763,52 +596,6 @@ async fn run_external_app(
         return Err(anyhow::anyhow!(
             "app '{}' failed ({}) with status {:?}; stderr: {}; stdout: {}",
             app.name,
-            resolved_executable.display(),
-            output.status.code(),
-            stderr_excerpt,
-            stdout_excerpt
-        ));
-    }
-
-    Ok(())
-}
-
-async fn run_crm_command(
-    logger: &TaskLogger,
-    executable_path: &str,
-    config_path: &str,
-    report: ReportType,
-    timeout_seconds: u64,
-) -> Result<()> {
-    let resolved_executable = resolve_executable(executable_path);
-    let resolved_config_path = resolve_relative_to_exe_dir(config_path);
-
-    let mut command = tokio::process::Command::new(&resolved_executable);
-    command.arg("--config").arg(&resolved_config_path);
-    command.arg("--report").arg(report.as_arg());
-    logger
-        .log(&format!("Executing CRM command: {:?}", command))
-        .await;
-
-    let output = tokio::time::timeout(
-        Duration::from_secs(timeout_seconds.max(1)),
-        command.output(),
-    )
-    .await
-    .with_context(|| {
-        format!(
-            "crm command timed out after {}s ({})",
-            timeout_seconds,
-            resolved_executable.display()
-        )
-    })??;
-    logger.log_bytes("STDOUT", &output.stdout).await;
-    logger.log_bytes("STDERR", &output.stderr).await;
-    if !output.status.success() {
-        let stdout_excerpt = excerpt_utf8(&output.stdout);
-        let stderr_excerpt = excerpt_utf8(&output.stderr);
-        return Err(anyhow::anyhow!(
-            "crm command failed ({}) with status {:?}; stderr: {}; stdout: {}",
             resolved_executable.display(),
             output.status.code(),
             stderr_excerpt,
@@ -872,66 +659,6 @@ fn default_crm_binary_name() -> &'static str {
     } else {
         "crm"
     }
-}
-
-pub fn resolve_dynamic_dates(input: &str, now_utc: DateTime<Utc>, report_type: &str) -> String {
-    let now_local = now_utc.with_timezone(&Local);
-    let today = now_local.date_naive();
-
-    let mut result = input.to_string();
-
-    let date_format = if report_type == "Standard Report" {
-        "%-d-%-m-%Y"
-    } else {
-        "%d-%b-%Y"
-    };
-
-    // {today}
-    if result.contains("{today}") {
-        result = result.replace("{today}", &today.format(date_format).to_string());
-    }
-
-    // {yesterday}
-    if result.contains("{yesterday}") {
-        let yesterday = today - chrono::TimeDelta::days(1);
-        result = result.replace("{yesterday}", &yesterday.format(date_format).to_string());
-    }
-
-    // {tomorrow}
-    if result.contains("{tomorrow}") {
-        let tomorrow = today + chrono::TimeDelta::days(1);
-        result = result.replace("{tomorrow}", &tomorrow.format(date_format).to_string());
-    }
-
-    // {bmonth} - Beginning of month
-    if result.contains("{bmonth}") {
-        if let Some(bmonth) = chrono::NaiveDate::from_ymd_opt(today.year(), today.month(), 1) {
-            result = result.replace("{bmonth}", &bmonth.format(date_format).to_string());
-        }
-    }
-
-    // {emonth} - End of month
-    if result.contains("{emonth}") {
-        let next_month_y = if today.month() == 12 {
-            today.year() + 1
-        } else {
-            today.year()
-        };
-        let next_month_m = if today.month() == 12 {
-            1
-        } else {
-            today.month() + 1
-        };
-
-        if let Some(next_month_first) =
-            chrono::NaiveDate::from_ymd_opt(next_month_y, next_month_m, 1)
-        {
-            let emonth = next_month_first - chrono::TimeDelta::days(1);
-            result = result.replace("{emonth}", &emonth.format(date_format).to_string());
-        }
-    }
-
-    result
 }
 
 fn excerpt_utf8(bytes: &[u8]) -> String {
@@ -1380,8 +1107,9 @@ mod tests {
             frequency_seconds: 60,
             next_run_at: String::new(),
             schedules: Vec::new(),
-            kind: TaskKind::CrmFetch {
-                report: ReportType::All,
+            kind: TaskKind::ShellCommand {
+                mode: ShellCommandMode::Sequential,
+                commands: Vec::new(),
             },
             last_run_at: String::new(),
             last_status: String::new(),
