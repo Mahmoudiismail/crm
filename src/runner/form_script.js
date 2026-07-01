@@ -471,8 +471,7 @@
       }
     });
   }
-
-
+  
   function updateTaskTypeVisibility() {
     const type = taskTypeSelect.value;
     if (shellCommandContainer) {
