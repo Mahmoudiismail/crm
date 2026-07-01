@@ -41,7 +41,7 @@ Together they:
 1. Load/create `runner_config.json` under executable directory.
 2. Ensure CRM `config.json` exists under executable directory.
 3. Start scheduler loop and runner GUI server.
-4. Run tasks from runner config (`crm_fetch`, `yasweb`, `shell_command`, and `external_app`).
+4. Run tasks from runner config (`shell_command`, and `external_app`).
 5. For external app tasks, execute the dynamically registered binary utilizing `--config` and any extra args.
 6. Persist task run metadata (`next_run_at`, `last_status`, `last_run_at`).
 

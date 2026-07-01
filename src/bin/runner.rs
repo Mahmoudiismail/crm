@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 #[cfg(target_os = "windows")]
-use crm_tool::runner::config::ReportType;
+use crm_tool::runner::config::RunnerConfig;
 #[cfg(target_os = "windows")]
 use crm_tool::runner::engine::RunnerHandle;
 use crm_tool::runner::engine::{start_scheduler, RunnerCommand};
@@ -68,6 +68,9 @@ async fn main() -> Result<()> {
     #[cfg(target_os = "windows")]
     let event_loop = EventLoop::new()?;
     #[cfg(target_os = "windows")]
+    let runner_cfg = RunnerConfig::load(&runner_config_path_str).unwrap_or_default();
+
+    #[cfg(target_os = "windows")]
     let mut app = App {
         tray_icon: None,
         menu_items: None,
@@ -92,13 +95,7 @@ async fn main() -> Result<()> {
 #[cfg(target_os = "windows")]
 struct App {
     tray_icon: Option<TrayIcon>,
-    menu_items: Option<(
-        muda::MenuId,
-        muda::MenuId,
-        muda::MenuId,
-        muda::MenuId,
-        muda::MenuId,
-    )>,
+    menu_items: Option<(muda::MenuId, muda::MenuId, muda::MenuId, muda::MenuId)>,
     runner: RunnerHandle,
     runner_gui_url: String,
 }
@@ -112,14 +109,12 @@ impl ApplicationHandler for App {
 
         let menu = Menu::new();
         let run_now_i = MenuItem::new("Run All Tasks Now", true, None);
-        let run_tickets_i = MenuItem::new("Run CRM (Tickets Only)", true, None);
         let open_gui_i = MenuItem::new("Open Runner GUI", true, None);
         let logs_i = MenuItem::new("View Logs", true, None);
         let quit_i = MenuItem::new("Exit", true, None);
 
-        let items: [&dyn IsMenuItem; 6] = [
+        let items: [&dyn IsMenuItem; 5] = [
             &run_now_i,
-            &run_tickets_i,
             &open_gui_i,
             &logs_i,
             &PredefinedMenuItem::separator(),
@@ -141,7 +136,6 @@ impl ApplicationHandler for App {
                 self.menu_items = Some((
                     quit_i.id().clone(),
                     run_now_i.id().clone(),
-                    run_tickets_i.id().clone(),
                     logs_i.id().clone(),
                     open_gui_i.id().clone(),
                 ));
@@ -154,7 +148,7 @@ impl ApplicationHandler for App {
     fn window_event(&mut self, _event_loop: &ActiveEventLoop, _id: WindowId, _event: WindowEvent) {}
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-        if let Some((quit_id, run_id, run_tickets_id, logs_id, open_gui_id)) = &self.menu_items {
+        if let Some((quit_id, run_id, logs_id, open_gui_id)) = &self.menu_items {
             if let Ok(event) = muda::MenuEvent::receiver().try_recv() {
                 if event.id == *quit_id {
                     info!("Exit requested from menu.");
@@ -164,14 +158,6 @@ impl ApplicationHandler for App {
                     let tx = self.runner.command_tx.clone();
                     tokio::spawn(async move {
                         let _ = tx.send(RunnerCommand::RunAllNow).await;
-                    });
-                } else if event.id == *run_tickets_id {
-                    info!("Manual CRM tickets run requested.");
-                    let tx = self.runner.command_tx.clone();
-                    tokio::spawn(async move {
-                        let _ = tx
-                            .send(RunnerCommand::RunAdhocCrm(ReportType::Tickets))
-                            .await;
                     });
                 } else if event.id == *logs_id {
                     info!("Opening logs file.");

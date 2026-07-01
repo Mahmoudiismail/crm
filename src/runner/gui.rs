@@ -645,7 +645,7 @@ fn render_task_form(
             ext_app_args = serde_json::to_string(args).unwrap_or_else(|_| "{}".to_string());
             ("external_app", "all")
         }
-        None => ("crm_fetch", "all"),
+        None => ("shell_command", "all"),
     };
 
     let error_html = error
@@ -662,8 +662,7 @@ fn render_task_form(
             <div><a class='text-sm font-semibold text-emerald-700' href='/'>Back to dashboard</a><h1 class='text-3xl font-bold text-gray-900 mt-3'>{}</h1></div>\
             {}\
             <form class='bg-white border border-gray-200 rounded shadow-sm p-5 space-y-5' method='post' action='{}'>\
-                <div class='grid md:grid-cols-2 gap-4'>\
-                    {}\
+                <div class='grid md:grid-cols-1 gap-4'>\
                     {}\
                 </div>\
                 <label class='flex items-center gap-2 text-sm font-semibold text-gray-800'><input type='checkbox' name='enabled' value='on' {}> Enabled</label>\
@@ -683,14 +682,6 @@ fn render_task_form(
                 </label>\
                 {}\
                 {}\
-                <div id='yasweb-container' class='hidden space-y-4 p-4 border border-blue-200 bg-blue-50 rounded'>\
-                    <div class='flex items-center justify-between'>\
-                        <h3 class='text-lg font-semibold text-blue-800'>Yasweb Configuration</h3>\
-                        <button type='button' id='add-yasweb-report' class='rounded border border-gray-300 bg-emerald-600 text-white px-3 py-1 text-sm font-semibold hover:bg-emerald-700'>+ Add Report</button>\
-                    </div>\
-                    <div id='yasweb-reports-list' class='space-y-4' data-initial-reports='{}'></div>\
-                    <input type='hidden' id='yasweb_reports_hidden' name='yasweb_reports' value=''>\
-                </div>\
                 <div id='external-app-container' class='hidden space-y-4 p-4 border border-purple-200 bg-purple-50 rounded'>\
                     <h3 class='text-lg font-semibold text-purple-800'>External Application</h3>\
                     <div id='external-app-select-container' class='mb-4'></div>\
@@ -708,12 +699,10 @@ fn render_task_form(
         input_field("Name", "name", name),
         if enabled { "checked" } else { "" },
         select_task_type(task_type),
-        "" /* removed select_report */,
         escape_html(post_run_script),
         escape_html(&timeout_seconds_str),
         schedule_editor_html(task),
         shell_command_editor_html(task),
-        "[]",
         ext_app_args.replace("'", "&#39;"),
         escape_html(&ext_app_id),
         escape_html(submit_label)
@@ -1267,7 +1256,7 @@ fn build_task_from_values(
     let task_type = values
         .get("task_type")
         .map(|v| v.to_ascii_lowercase())
-        .unwrap_or_else(|| "crm_fetch".to_string());
+        .unwrap_or_else(|| "shell_command".to_string());
 
     let kind = if task_type == "shell_command" {
         let mode = match values.get("shell_command_mode").map(|v| v.as_str()) {

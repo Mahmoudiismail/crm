@@ -40,7 +40,6 @@ The runner uses **cron-based polling** to evaluate task schedules:
    - **Weekly**: Check if current time >= calculated `next_run_at` for the target day
    - **Monthly**: Check if current time >= calculated `next_run_at` for the target date
 4. **Task Execution**: If any schedule is due, execute the task:
-   - For `crm_fetch`, invoke external `crm` executable with CLI args (`--config`, `--report`)
    - For `shell_command`, run configured commands. Commands can execute sequentially or in parallel
 5. **Task State Update**:
    - Update `last_run_at` timestamp
