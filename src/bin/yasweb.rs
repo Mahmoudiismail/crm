@@ -881,61 +881,92 @@ fn run_browser_tab(
     Ok(discovered_filters)
 }
 
-fn print_manifest() {
+fn print_manifest(config_path: Option<PathBuf>) {
+    let mut report_names = Vec::new();
+    let mut unique_filters = std::collections::HashSet::new();
+
+    if let Some(path) = config_path.clone() {
+        if let Ok(config_str) = std::fs::read_to_string(&path) {
+            if let Ok(config) = serde_json::from_str::<YaswebConfig>(&config_str) {
+                for (name, report) in &config.reports {
+                    report_names.push(name.clone());
+                    for filter_key in report.filters.keys() {
+                        unique_filters.insert(filter_key.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    let mut arguments = vec![
+        AppArg {
+            name: "--config".to_string(),
+            arg_type: ArgType::String,
+            required: false,
+            default_value: None,
+            options: None,
+        },
+        AppArg {
+            name: "--name".to_string(),
+            arg_type: if report_names.is_empty() {
+                ArgType::String
+            } else {
+                ArgType::List
+            },
+            required: true,
+            default_value: None,
+            options: if report_names.is_empty() {
+                None
+            } else {
+                Some(report_names)
+            },
+        },
+        AppArg {
+            name: "--type".to_string(),
+            arg_type: ArgType::String,
+            required: false,
+            default_value: None,
+            options: None,
+        },
+        AppArg {
+            name: "--monthly".to_string(),
+            arg_type: ArgType::Boolean,
+            required: false,
+            default_value: None,
+            options: None,
+        },
+        AppArg {
+            name: "--start-date".to_string(),
+            arg_type: ArgType::String,
+            required: false,
+            default_value: None,
+            options: None,
+        },
+        AppArg {
+            name: "--end-date".to_string(),
+            arg_type: ArgType::String,
+            required: false,
+            default_value: None,
+            options: None,
+        },
+    ];
+
+    let mut sorted_filters: Vec<_> = unique_filters.into_iter().collect();
+    sorted_filters.sort();
+    for f_name in sorted_filters {
+        arguments.push(AppArg {
+            name: format!("--filter-{}", f_name),
+            arg_type: ArgType::String,
+            required: false,
+            default_value: None,
+            options: None,
+        });
+    }
+
     let manifest = AppManifest {
         name: "Yasweb Automation Engine".to_string(),
         description: "Executes headless browser automation for web reporting.".to_string(),
-        arguments: vec![
-            AppArg {
-                name: "--config".to_string(),
-                arg_type: ArgType::String,
-                required: false,
-                default_value: None,
-                options: None,
-            },
-            AppArg {
-                name: "--name".to_string(),
-                arg_type: ArgType::String,
-                required: true,
-                default_value: None,
-                options: None,
-            },
-            AppArg {
-                name: "--type".to_string(),
-                arg_type: ArgType::String,
-                required: false,
-                default_value: None,
-                options: None,
-            },
-            AppArg {
-                name: "--filters".to_string(),
-                arg_type: ArgType::String,
-                required: false,
-                default_value: None,
-                options: None,
-            },
-            AppArg {
-                name: "--monthly".to_string(),
-                arg_type: ArgType::Boolean,
-                required: false,
-                default_value: None,
-                options: None,
-            },
-            AppArg {
-                name: "--start-date".to_string(),
-                arg_type: ArgType::String,
-                required: false,
-                default_value: None,
-                options: None,
-            },
-            AppArg {
-                name: "--end-date".to_string(),
-                arg_type: ArgType::String,
-                required: false,
-                default_value: None,
-                options: None,
-            },
-        ],
+        arguments,
     };
     if let Ok(json) = serde_json::to_string(&manifest) {
         println!("{}", json);
@@ -944,12 +975,37 @@ fn print_manifest() {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let args: Vec<String> = std::env::args().collect();
+
     // Intercept --manifest before anything else
-    for arg in std::env::args().skip(1) {
-        if arg == "--manifest" {
-            print_manifest();
-            std::process::exit(0);
+    if args.iter().any(|arg| arg == "--manifest") {
+        let mut config_path = None;
+        let mut j = 1;
+        while j < args.len() {
+            if args[j] == "--config" && j + 1 < args.len() {
+                let p = PathBuf::from(&args[j + 1]);
+                let p = if p.is_absolute() {
+                    p
+                } else {
+                    let mut exe_dir = std::env::current_exe().unwrap_or_default();
+                    exe_dir.pop();
+                    exe_dir.join(p)
+                };
+                config_path = Some(p);
+                break;
+            }
+            j += 1;
         }
+
+        if config_path.is_none() {
+            let mut default_path = std::env::current_exe().unwrap_or_default();
+            default_path.pop();
+            default_path.push("yasweb_config.json");
+            config_path = Some(default_path);
+        }
+
+        print_manifest(config_path);
+        std::process::exit(0);
     }
 
     let _guard = setup_logging()?;
@@ -1268,8 +1324,7 @@ async fn main() -> Result<()> {
                             let ext_str = ext.to_string_lossy().to_string();
                             let mut final_name = final_filename.clone();
                             if ext_str != "xlsx" {
-                                final_name =
-                                    final_name.replace(".xlsx", &format!(".{}", ext_str));
+                                final_name = final_name.replace(".xlsx", &format!(".{}", ext_str));
                             }
                             out_file.push(final_name);
 

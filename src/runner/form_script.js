@@ -297,15 +297,9 @@
   }
 
   const taskTypeSelect = document.getElementById("task-type-select");
-  const crmReportContainer = document.getElementById("crm-report-container");
   const shellCommandContainer = document.getElementById(
     "shell-command-container",
   );
-  const yaswebContainer = document.getElementById("yasweb-container");
-  const yaswebReportsList = document.getElementById("yasweb-reports-list");
-  const addYaswebReportBtn = document.getElementById("add-yasweb-report");
-  const yaswebReportsHidden = document.getElementById("yasweb_reports_hidden");
-
   const externalAppContainer = document.getElementById(
     "external-app-container",
   );
@@ -318,7 +312,6 @@
   const externalAppArgsHidden = document.getElementById("external_app_args");
   const externalAppIdHidden = document.getElementById("external_app_id");
 
-  let yaswebConfigData = null;
   let registeredAppsCache = null;
 
   async function fetchYaswebConfig() {
@@ -479,58 +472,11 @@
     });
   }
 
-  if (addYaswebReportBtn) {
-    addYaswebReportBtn.addEventListener("click", function () {
-      if (!yaswebReportsList) return;
-      const row = createYaswebReportRow(null);
-      yaswebReportsList.appendChild(row);
-    });
-  }
-
-  function buildYaswebReports() {
-    if (!yaswebReportsList) return "[]";
-    const reports = [];
-    Array.from(
-      yaswebReportsList.querySelectorAll("[data-yasweb-report-row]"),
-    ).forEach((row) => {
-      const reportName = row.querySelector(".yasweb-name-input").value.trim();
-      const reportType = row.querySelector(".yasweb-type-input").value.trim();
-      const filters = {};
-      Array.from(row.querySelectorAll(".yasweb-filter-input")).forEach(
-        (inp) => {
-          const key = inp.getAttribute("data-filter-key");
-          filters[key] = inp.value;
-        },
-      );
-
-      if (reportName) {
-        reports.push({
-          report_name: reportName,
-          report_type: reportType,
-          filters: filters,
-        });
-      }
-    });
-    return JSON.stringify(reports);
-  }
 
   function updateTaskTypeVisibility() {
-    if (!taskTypeSelect) return;
     const type = taskTypeSelect.value;
-    if (crmReportContainer) {
-      crmReportContainer.classList.toggle("hidden", type !== "crm_fetch");
-    }
     if (shellCommandContainer) {
-      shellCommandContainer.classList.toggle(
-        "hidden",
-        type !== "shell_command",
-      );
-    }
-    if (yaswebContainer) {
-      yaswebContainer.classList.toggle("hidden", type !== "yasweb");
-      if (type === "yasweb" && !yaswebConfigData) {
-        fetchYaswebConfig();
-      }
+      shellCommandContainer.classList.toggle("hidden", type !== "shell_command");
     }
     if (externalAppContainer) {
       externalAppContainer.classList.toggle("hidden", type !== "external_app");

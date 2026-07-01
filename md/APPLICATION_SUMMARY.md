@@ -27,7 +27,7 @@ Together they:
 
 - `runner` is tray-oriented (`#![windows_subsystem = "windows"]` on Windows).
 - Tasks can execute `ExternalApp` commands via `tokio::process`, mapping dynamically to apps registered in the GUI.
-- Multiple `yasweb` reports inside a single task now run concurrently in parallel, spawning separate `yasweb.exe` processes.
+- Multiple reports can be run concurrently by setting up task chains using `shell_command` or `external_app`.
 - `crm` is a console-style one-shot command.
 - `yasweb` runs headless browser automation using `headless_chrome`.
 - `wcxx` is a CLI tool that opens an HTML export dynamically in the browser.

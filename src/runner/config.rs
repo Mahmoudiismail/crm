@@ -1,10 +1,3 @@
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
-pub struct YaswebReportSpec {
-    pub report_type: String,
-    pub report_name: String,
-    #[serde(default)]
-    pub filters: std::collections::HashMap<String, String>,
-}
 use anyhow::{Context, Result};
 use chrono::{DateTime, Datelike, Local, NaiveTime, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
@@ -17,14 +10,6 @@ pub struct RunnerConfig {
     pub gui_port: u16,
     #[serde(default = "default_poll_interval")]
     pub poll_interval_seconds: u64,
-    #[serde(default = "default_crm_config_path")]
-    pub crm_config_path: String,
-    #[serde(default = "default_crm_executable_path")]
-    pub crm_executable_path: String,
-    #[serde(default = "default_yasweb_config_path")]
-    pub yasweb_config_path: String,
-    #[serde(default = "default_yasweb_executable_path")]
-    pub yasweb_executable_path: String,
     #[serde(default = "default_allow_shell_tasks")]
     pub allow_shell_tasks: bool,
     #[serde(default = "default_shell_timeout")]
@@ -86,18 +71,11 @@ pub enum Repetition {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum TaskKind {
-    CrmFetch {
-        report: ReportType,
-    },
     ShellCommand {
         #[serde(default)]
         mode: ShellCommandMode,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         commands: Vec<ShellCommandSpec>,
-    },
-    Yasweb {
-        #[serde(default)]
-        reports: Vec<YaswebReportSpec>,
     },
     ExternalApp {
         #[serde(default)]
@@ -206,8 +184,9 @@ impl ReportType {
 
 impl Default for TaskKind {
     fn default() -> Self {
-        Self::CrmFetch {
-            report: ReportType::All,
+        Self::ShellCommand {
+            mode: ShellCommandMode::Sequential,
+            commands: Vec::new(),
         }
     }
 }
@@ -218,31 +197,12 @@ impl Default for RunnerConfig {
             gui_host: default_gui_host(),
             gui_port: default_gui_port(),
             poll_interval_seconds: default_poll_interval(),
-            crm_config_path: default_crm_config_path(),
-            crm_executable_path: default_crm_executable_path(),
-            yasweb_config_path: default_yasweb_config_path(),
-            yasweb_executable_path: default_yasweb_executable_path(),
             allow_shell_tasks: default_allow_shell_tasks(),
             shell_timeout_seconds: default_shell_timeout(),
             post_run_timeout_seconds: default_post_run_timeout(),
             min_task_interval_seconds: default_min_task_interval(),
             registered_apps: Vec::new(),
-            tasks: vec![RunnerTask {
-                id: "daily_all_reports".to_string(),
-                name: "Daily CRM Fetch (All Reports)".to_string(),
-                enabled: true,
-                repetition: Repetition::Repeat,
-                frequency_seconds: 24 * 60 * 60,
-                next_run_at: String::new(),
-                schedules: Vec::new(),
-                kind: TaskKind::CrmFetch {
-                    report: ReportType::All,
-                },
-                last_run_at: String::new(),
-                last_status: String::new(),
-                post_run_script: String::new(),
-                timeout_seconds: 0,
-            }],
+            tasks: Vec::new(),
         }
     }
 }
@@ -823,30 +783,6 @@ fn default_poll_interval() -> u64 {
     30
 }
 
-fn default_crm_config_path() -> String {
-    "config.json".to_string()
-}
-
-fn default_crm_executable_path() -> String {
-    if cfg!(target_os = "windows") {
-        "crm.exe".to_string()
-    } else {
-        "crm".to_string()
-    }
-}
-
-fn default_yasweb_config_path() -> String {
-    "yasweb_config.json".to_string()
-}
-
-fn default_yasweb_executable_path() -> String {
-    if cfg!(target_os = "windows") {
-        "yasweb.exe".to_string()
-    } else {
-        "yasweb".to_string()
-    }
-}
-
 fn default_allow_shell_tasks() -> bool {
     false
 }
@@ -902,8 +838,9 @@ mod tests {
                 next_run_at: Utc::now().to_rfc3339(),
                 working_hours: None,
             }],
-            kind: TaskKind::CrmFetch {
-                report: ReportType::All,
+            kind: TaskKind::ShellCommand {
+                mode: ShellCommandMode::Sequential,
+                commands: Vec::new(),
             },
             last_run_at: String::new(),
             last_status: String::new(),
@@ -933,7 +870,7 @@ mod tests {
         assert_eq!(loaded_task.id, "test_interval");
         assert_eq!(loaded_task.name, "Test Interval Task");
         assert!(loaded_task.enabled);
-        assert!(matches!(loaded_task.kind, TaskKind::CrmFetch { .. }));
+        assert!(matches!(loaded_task.kind, TaskKind::ShellCommand { .. }));
 
         // Verify interval schedule
         assert_eq!(loaded_task.schedules.len(), 1);
@@ -1032,8 +969,9 @@ mod tests {
                     next_run_at: Utc::now().to_rfc3339(),
                     working_hours: None,
                 }],
-                kind: TaskKind::CrmFetch {
-                    report: ReportType::Tickets,
+                kind: TaskKind::ShellCommand {
+                    mode: ShellCommandMode::Sequential,
+                    commands: Vec::new(),
                 },
                 last_run_at: String::new(),
                 last_status: String::new(),
@@ -1085,9 +1023,7 @@ mod tests {
         // Verify first task (CRM with interval)
         let crm_task = &loaded.tasks[0];
         assert_eq!(crm_task.id, "crm_task");
-        assert!(
-            matches!(crm_task.kind, TaskKind::CrmFetch { report } if report == ReportType::Tickets)
-        );
+        assert!(matches!(crm_task.kind, TaskKind::ShellCommand { .. }));
         assert!(!crm_task.schedules.is_empty());
         match &crm_task.schedules[0] {
             TaskSchedule::Interval { every_seconds, .. } => {

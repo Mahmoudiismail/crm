@@ -6,8 +6,8 @@ use tokio::net::TcpListener;
 use tracing::{error, info};
 
 use crate::runner::config::{
-    human_datetime, next_daily_run_after, parse_rfc3339_utc, Repetition, ReportType, RunnerConfig,
-    RunnerTask, ShellCommandMode, ShellCommandSpec, TaskKind, TaskSchedule,
+    human_datetime, next_daily_run_after, parse_rfc3339_utc, Repetition, RunnerConfig, RunnerTask,
+    ShellCommandMode, ShellCommandSpec, TaskKind, TaskSchedule,
 };
 use crate::runner::engine::{create_task, delete_task, update_task};
 use crate::runner::engine::{RunnerCommand, RunnerHandle};
@@ -155,30 +155,6 @@ async fn route_request(
         return Ok((200, "text/html; charset=utf-8", html));
     }
 
-    if request.method == "GET" && route_path == "/config" {
-        let cfg = RunnerConfig::load(&handle.runner_config_path)?;
-        let html = render_config_form(&cfg, None);
-        return Ok((200, "text/html; charset=utf-8", html));
-    }
-
-    if request.method == "POST" && route_path == "/config" {
-        let values = parse_query_string(&request.body);
-        match update_global_config(&handle.runner_config_path, &values).await {
-            Ok(_) => {
-                return Ok((
-                    200,
-                    "text/html; charset=utf-8",
-                    render_redirect_to_dashboard("Configuration updated"),
-                ));
-            }
-            Err(e) => {
-                let cfg = RunnerConfig::load(&handle.runner_config_path)?;
-                let html = render_config_form(&cfg, Some(&e.to_string()));
-                return Ok((200, "text/html; charset=utf-8", html));
-            }
-        }
-    }
-
     if request.method == "GET" && route_path.starts_with("/edit/") {
         let task_id = route_path.trim_start_matches("/edit/");
         let cfg = RunnerConfig::load(&handle.runner_config_path)?;
@@ -256,19 +232,6 @@ async fn route_request(
             render_redirect_to_dashboard("Run-all triggered"),
         ));
     }
-
-    if request.method == "GET" && route_path == "/run-tickets" {
-        handle
-            .command_tx
-            .send(RunnerCommand::RunAdhocCrm(ReportType::Tickets))
-            .await?;
-        return Ok((
-            200,
-            "text/html; charset=utf-8",
-            render_redirect_to_dashboard("CRM tickets run triggered"),
-        ));
-    }
-
     if request.method == "GET" && route_path.starts_with("/run/") {
         let task_id = route_path.trim_start_matches("/run/").to_string();
         handle
@@ -312,18 +275,7 @@ async fn route_request(
             "text/html; charset=utf-8",
             render_redirect_to_dashboard("Task disabled"),
         ));
-    }
-
-    if request.method == "GET" && route_path == "/api/yasweb-config" {
-        let cfg = RunnerConfig::load(&handle.runner_config_path)?;
-        let path = crate::runner::engine::resolve_relative_to_exe_dir(&cfg.yasweb_config_path);
-        let config_str = tokio::fs::read_to_string(&path)
-            .await
-            .unwrap_or_else(|_| "{}".to_string());
-        return Ok((200, "application/json", config_str));
-    }
-
-    // --- New App Registration Endpoints ---
+    } // --- New App Registration Endpoints ---
 
     if request.method == "GET" && route_path == "/apps" {
         let cfg = RunnerConfig::load(&handle.runner_config_path)?;
@@ -382,6 +334,51 @@ async fn route_request(
             200,
             "text/html; charset=utf-8",
             render_redirect_to_dashboard("App registered successfully"),
+        ));
+    }
+    if request.method == "GET" && route_path.starts_with("/apps/edit/") {
+        let app_id = route_path.trim_start_matches("/apps/edit/");
+        let cfg = RunnerConfig::load(&handle.runner_config_path)?;
+        if let Some(app) = cfg.registered_apps.iter().find(|a| a.id == app_id) {
+            let html = render_app_edit_page(app);
+            return Ok((200, "text/html; charset=utf-8", html));
+        }
+        return Ok((
+            404,
+            "text/html; charset=utf-8",
+            render_error_page("App not found", app_id),
+        ));
+    }
+
+    if request.method == "POST" && route_path.starts_with("/apps/update/") {
+        let app_id = route_path.trim_start_matches("/apps/update/").to_string();
+        let values = parse_query_string(&request.body);
+
+        let mut cfg = RunnerConfig::load(&handle.runner_config_path)?;
+        if let Some(app) = cfg.registered_apps.iter_mut().find(|a| a.id == app_id) {
+            app.name = values
+                .get("name")
+                .map(|s| s.trim().to_string())
+                .unwrap_or_else(|| app.name.clone());
+            app.executable_path = values
+                .get("executable_path")
+                .map(|s| s.trim().to_string())
+                .unwrap_or_else(|| app.executable_path.clone());
+            app.config_path = values
+                .get("config_path")
+                .map(|s| s.trim().to_string())
+                .unwrap_or_else(|| app.config_path.clone());
+            cfg.save(&handle.runner_config_path)?;
+            return Ok((
+                200,
+                "text/html; charset=utf-8",
+                render_redirect_to_dashboard("App updated"),
+            ));
+        }
+        return Ok((
+            404,
+            "text/html; charset=utf-8",
+            render_error_page("App not found", &app_id),
         ));
     }
 
@@ -475,9 +472,9 @@ fn render_dashboard(
                     <div><p class='text-sm font-semibold text-emerald-700'>Runner</p><h1 class='text-3xl font-bold text-gray-900'>Task Dashboard</h1><p class='text-gray-600 mt-2'>Schedule CRM work and shell command groups from one local control panel.</p></div>\
                     <div class='flex flex-wrap gap-2'>\
                         <a class='rounded bg-gray-900 text-white px-4 py-2 text-sm font-semibold' href='/run-all'>Run All Now</a>\
-                        <a class='rounded border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-800' href='/run-tickets'>Run CRM Tickets</a>\
+                        \
                         <a class='rounded border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-800' href='/apps'>Apps</a>\
-                        <a class='rounded bg-gray-600 text-white px-4 py-2 text-sm font-semibold mr-2' href='/config'>Settings</a>\
+                        \
                         <a class='rounded bg-emerald-600 text-white px-4 py-2 text-sm font-semibold' href='/new-task'>New Task</a>\
                     </div>\
                 </div>\
@@ -562,7 +559,6 @@ fn render_task_row(task: &RunnerTask) -> String {
         "<span class='inline-flex rounded bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-700'>Disabled</span>"
     };
     let kind = match &task.kind {
-        TaskKind::CrmFetch { report } => format!("CRM {}", report.as_arg()),
         TaskKind::ShellCommand { mode, commands } => {
             let command_count = commands.len();
             let mode_str = match mode {
@@ -575,9 +571,6 @@ fn render_task_row(task: &RunnerTask) -> String {
                 if command_count == 1 { "" } else { "s" },
                 mode_str
             )
-        }
-        TaskKind::Yasweb { reports } => {
-            format!("Yasweb tasks ({})", reports.len())
         }
         TaskKind::ExternalApp { app_id, .. } => {
             format!("External App ({})", app_id)
@@ -642,28 +635,11 @@ fn render_task_form(
     } else {
         String::new()
     };
-    let mut yasweb_reports_json = "[]".to_string();
-
     let mut ext_app_id = String::new();
     let mut ext_app_args = String::new();
 
-    let (task_type, report) = match task.map(|t| &t.kind) {
+    let (task_type, _report) = match task.map(|t| &t.kind) {
         Some(TaskKind::ShellCommand { .. }) => ("shell_command", "all"),
-        Some(TaskKind::Yasweb { reports }) => {
-            yasweb_reports_json =
-                serde_json::to_string(reports).unwrap_or_else(|_| "[]".to_string());
-            ("yasweb", "all")
-        }
-        Some(TaskKind::CrmFetch { report }) => (
-            "crm_fetch",
-            match report {
-                ReportType::All => "all",
-                ReportType::Tickets => "tickets",
-                ReportType::Calls => "calls",
-                ReportType::Leads => "leads",
-                ReportType::None => "none",
-            },
-        ),
         Some(TaskKind::ExternalApp { app_id, args }) => {
             ext_app_id = app_id.clone();
             ext_app_args = serde_json::to_string(args).unwrap_or_else(|_| "{}".to_string());
@@ -732,12 +708,12 @@ fn render_task_form(
         input_field("Name", "name", name),
         if enabled { "checked" } else { "" },
         select_task_type(task_type),
-        select_report(report),
+        "" /* removed select_report */,
         escape_html(post_run_script),
         escape_html(&timeout_seconds_str),
         schedule_editor_html(task),
         shell_command_editor_html(task),
-        yasweb_reports_json.replace("'", "&#39;"),
+        "[]",
         ext_app_args.replace("'", "&#39;"),
         escape_html(&ext_app_id),
         escape_html(submit_label)
@@ -1137,33 +1113,9 @@ fn input_field(label: &str, name: &str, value: &str) -> String {
 
 fn select_task_type(value: &str) -> String {
     format!(
-        "<label class='block'><span class='text-sm font-semibold text-gray-800'>Task Type</span><select id='task-type-select' class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' name='task_type'><option value='crm_fetch' {}>CRM Fetch</option><option value='shell_command' {}>Shell Command</option><option value='yasweb' {}>Yasweb Report</option><option value='external_app' {}>External App</option></select></label>",
-        if value == "crm_fetch" { "selected" } else { "" },
+        "<label class='block'><span class='text-sm font-semibold text-gray-800'>Task Type</span><select id='task-type-select' class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' name='task_type'><option value='shell_command' {}>Shell Command</option><option value='external_app' {}>External App</option></select></label>",
         if value == "shell_command" { "selected" } else { "" },
-        if value == "yasweb" { "selected" } else { "" },
         if value == "external_app" { "selected" } else { "" }
-    )
-}
-
-fn select_report(value: &str) -> String {
-    let option = |raw: &str, label: &str| {
-        format!(
-            "<option value='{}' {}>{}</option>",
-            raw,
-            if value == raw { "selected" } else { "" },
-            label
-        )
-    };
-    format!(
-        "<div id='crm-report-container' class='block'><label class='block'><span class='text-sm font-semibold text-gray-800'>CRM Report</span><select class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' name='report'>{}</select></label></div>",
-        [
-            option("all", "All"),
-            option("tickets", "Tickets"),
-            option("calls", "Calls"),
-            option("leads", "Leads"),
-            option("none", "None"),
-        ]
-        .join("")
     )
 }
 
@@ -1275,16 +1227,6 @@ fn parse_checkbox(values: &HashMap<String, String>, key: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn parse_report_type(raw: Option<&String>) -> ReportType {
-    match raw.map(|v| v.to_ascii_lowercase()) {
-        Some(v) if v == "tickets" => ReportType::Tickets,
-        Some(v) if v == "calls" => ReportType::Calls,
-        Some(v) if v == "leads" => ReportType::Leads,
-        Some(v) if v == "none" => ReportType::None,
-        _ => ReportType::All,
-    }
-}
-
 fn build_task_from_values(
     values: &HashMap<String, String>,
     fallback_id: Option<String>,
@@ -1341,15 +1283,6 @@ fn build_task_from_values(
                     .unwrap_or_default(),
             )?,
         }
-    } else if task_type == "yasweb" {
-        let reports_json = values
-            .get("yasweb_reports")
-            .map(|s| s.as_str())
-            .unwrap_or("[]");
-        let reports: Vec<crate::runner::config::YaswebReportSpec> =
-            serde_json::from_str(reports_json)
-                .with_context(|| format!("Invalid yasweb reports JSON: {}", reports_json))?;
-        TaskKind::Yasweb { reports }
     } else if task_type == "external_app" {
         let app_id = values
             .get("external_app_id")
@@ -1363,8 +1296,9 @@ fn build_task_from_values(
             .with_context(|| format!("Invalid external app args JSON: {}", args_json))?;
         TaskKind::ExternalApp { app_id, args }
     } else {
-        TaskKind::CrmFetch {
-            report: parse_report_type(values.get("report")),
+        TaskKind::ShellCommand {
+            mode: ShellCommandMode::Sequential,
+            commands: Vec::new(),
         }
     };
 
@@ -1637,27 +1571,6 @@ fn escape_html(value: &str) -> String {
         .replace('"', "&quot;")
 }
 
-async fn update_global_config(
-    path: &str,
-    values: &std::collections::HashMap<String, String>,
-) -> anyhow::Result<()> {
-    let mut cfg = crate::runner::config::RunnerConfig::load(path)?;
-    if let Some(v) = values.get("crm_executable_path") {
-        cfg.crm_executable_path = v.to_string();
-    }
-    if let Some(v) = values.get("crm_config_path") {
-        cfg.crm_config_path = v.to_string();
-    }
-    if let Some(v) = values.get("yasweb_executable_path") {
-        cfg.yasweb_executable_path = v.to_string();
-    }
-    if let Some(v) = values.get("yasweb_config_path") {
-        cfg.yasweb_config_path = v.to_string();
-    }
-    cfg.save(path)?;
-    Ok(())
-}
-
 fn render_apps_page(apps: &[crate::runner::config::RegisteredApp]) -> String {
     let rows = apps.iter().map(|app| {
         format!(
@@ -1728,47 +1641,6 @@ fn render_apps_page(apps: &[crate::runner::config::RegisteredApp]) -> String {
     )
 }
 
-fn render_config_form(cfg: &crate::runner::config::RunnerConfig, error: Option<&str>) -> String {
-    let error_html = if let Some(e) = error {
-        format!(
-            "<div class='mb-4 rounded bg-red-100 p-3 text-red-700'>{}</div>",
-            escape_html(e)
-        )
-    } else {
-        "".to_string()
-    };
-
-    format!(
-        "<!DOCTYPE html>\
-        <html>\
-        <head>\
-            <title>Edit Settings</title>\
-            <link href='https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css' rel='stylesheet'>\
-        </head>\
-        <body class='bg-gray-100 text-gray-900'>\
-            <div class='mx-auto max-w-xl py-10'>\
-                <h1 class='mb-6 text-2xl font-bold'>Settings</h1>\
-                {}\
-                <form method='POST' action='/config' class='space-y-4 rounded bg-white p-6 shadow'>\
-                    {}\
-                    {}\
-                    {}\
-                    {}\
-                    <div class='flex gap-4'>\
-                        <button class='rounded bg-blue-600 text-white px-4 py-2 font-semibold' type='submit'>Save Settings</button>\
-                        <a href='/' class='rounded bg-gray-200 text-gray-800 px-4 py-2 font-semibold text-center'>Cancel</a>\
-                    </div>\
-                </form>\
-            </div>\
-        </body>\
-        </html>",
-        error_html,
-        input_field("CRM Executable Path", "crm_executable_path", &cfg.crm_executable_path),
-        input_field("CRM Config Path", "crm_config_path", &cfg.crm_config_path),
-        input_field("Yasweb Executable Path", "yasweb_executable_path", &cfg.yasweb_executable_path),
-        input_field("Yasweb Config Path", "yasweb_config_path", &cfg.yasweb_config_path),
-    )
-}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1922,4 +1794,17 @@ mod tests {
         assert!(html.contains("&lt;script&gt;alert(1)&lt;/script&gt;"));
         assert!(!html.contains("<script>"));
     }
+}
+
+fn render_app_edit_page(app: &crate::runner::config::RegisteredApp) -> String {
+    html_page(
+        "Edit App",
+        &format!(
+            "<div class='max-w-2xl mx-auto'>                <h1 class='text-2xl font-bold text-gray-900 mb-6'>Edit App</h1>                <form action='/apps/update/{}' method='POST' class='space-y-4 bg-white p-6 rounded shadow-sm border border-gray-200'>                    {}                    {}                    {}                    <div class='pt-4 flex gap-3'>                        <button type='submit' class='rounded bg-emerald-600 px-4 py-2 text-sm font-semibold text-white'>Update App</button>                        <a href='/apps' class='rounded border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700'>Cancel</a>                    </div>                </form>            </div>",
+            escape_html(&app.id),
+            input_field("Name", "name", &app.name),
+            input_field("Executable Path", "executable_path", &app.executable_path),
+            input_field("Config Path", "config_path", &app.config_path)
+        ),
+    )
 }
