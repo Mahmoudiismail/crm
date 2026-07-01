@@ -1268,8 +1268,7 @@ async fn main() -> Result<()> {
                             let ext_str = ext.to_string_lossy().to_string();
                             let mut final_name = final_filename.clone();
                             if ext_str != "xlsx" {
-                                final_name =
-                                    final_name.replace(".xlsx", &format!(".{}", ext_str));
+                                final_name = final_name.replace(".xlsx", &format!(".{}", ext_str));
                             }
                             out_file.push(final_name);
 

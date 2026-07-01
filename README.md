@@ -69,6 +69,7 @@ For detailed information, see the documentation in the `md/` folder:
 11. [`OPERATIONS.md`](./md/OPERATIONS.md) - Operations guide
 12. [`AI_DOC_POLICY.md`](./md/AI_DOC_POLICY.md) - Documentation policy
 13. [`TASKER.md`](./md/TASKER.md) - Tasker application
+14. [`REBUILD_GUIDE.md`](./md/REBUILD_GUIDE.md) - AI Rebuild/Regeneration guide
 
 ## 🏗️ Project Structure
 

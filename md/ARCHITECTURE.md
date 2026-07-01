@@ -2,6 +2,8 @@
 
 The system is split into multiple executables designed to run together, orchestrated by a central `runner`. Executable behavior logic is shared and defined via library modules.
 
+For a detailed guide on how to fundamentally reconstruct these components and their data models from scratch using AI, see the [AI Rebuild Guide](./REBUILD_GUIDE.md).
+
 ## Component Overview
 
 1.  **Runner (`src/bin/runner.rs`, `src/runner/*`)**: The background daemon. It runs as a system tray application on Windows, provides a local HTTP GUI, parses the overall `runner_config.json`, manages a chron-like schedule, and orchestrates task execution (launching `crm`, `yasweb`, `shell_command`, or dynamically registered `external_app` processes).
