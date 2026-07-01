@@ -471,7 +471,6 @@
       }
     });
   }
-
   
   function updateTaskTypeVisibility() {
     const type = taskTypeSelect.value;
