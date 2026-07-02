@@ -552,8 +552,8 @@ pub fn run(
                 email_cfg,
                 only_call_center,
                 send_exceptions,
-                download_dir,
-                minutes_ago,
+                &config.download_path,
+                config.minutes_ago,
             ) {
                 error!("Error processing emails: {}", e);
             }
