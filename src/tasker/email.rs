@@ -79,6 +79,17 @@ fn generate_pivot_html(rows: &[TicketRow], statuses: &[String], include_team_col
     // We group by: (TeamName?), Assignee, Ticket Subtype, Ticket Category
     // And for each we accumulate the status counts.
 
+    let mut present_statuses = HashSet::new();
+    for r in rows {
+        present_statuses.insert(r.status.to_lowercase());
+    }
+
+    let active_statuses: Vec<String> = statuses
+        .iter()
+        .filter(|s| present_statuses.contains(&s.to_lowercase()))
+        .cloned()
+        .collect();
+
     // To match the layout:
     // Row Labels             | open | follow-up | expired | ... | Grand Total
     //  Assignee1             |      |     1     |         | ... |      1
@@ -91,7 +102,7 @@ fn generate_pivot_html(rows: &[TicketRow], statuses: &[String], include_team_col
     html.push_str(
         "<th style='border: 1px solid black; padding: 2px; text-align: left;'>Row Labels</th>",
     );
-    for s in statuses {
+    for s in &active_statuses {
         html.push_str(&format!(
             "<th style='border: 1px solid black; padding: 8px 15px; text-align: center;'>{}</th>",
             s
@@ -202,7 +213,7 @@ fn generate_pivot_html(rows: &[TicketRow], statuses: &[String], include_team_col
             indent_px, bold_tag, name, bold_end
         ));
 
-        for st in statuses {
+        for st in &active_statuses {
             let cnt = counts.status_counts.get(st).copied().unwrap_or(0);
             let val = if cnt > 0 {
                 cnt.to_string()
@@ -312,7 +323,7 @@ fn generate_pivot_html(rows: &[TicketRow], statuses: &[String], include_team_col
     html.push_str(
         "<td style='padding: 8px; text-align: center; border: 1px solid black;'>Grand Total</td>",
     );
-    for st in statuses {
+    for st in &active_statuses {
         let cnt = grand_total_by_status.get(st).copied().unwrap_or(0);
         let val = if cnt > 0 {
             cnt.to_string()
@@ -783,21 +794,31 @@ pub fn process_emails(
         );
 
         let mapping = team_maps.get(&bucket_name.to_lowercase());
-        let to_emails = mapping
-            .map(|m| m.to_emails.clone())
-            .unwrap_or_else(|| config.default_to_email.clone());
-        let mapped_cc = mapping.map(|m| m.cc.clone()).unwrap_or_default();
-        let cc_list = vec![
-            config.initial_cc.clone(),
-            mapped_cc,
-            config.ending_cc.clone(),
-        ]
-        .into_iter()
-        .filter(|s| !s.is_empty())
-        .collect::<Vec<String>>()
-        .join(";");
+        let mapped_to = mapping.map(|m| m.to_emails.clone()).unwrap_or_default();
+
+        let (to_emails, cc_list) = if mapped_to.trim().is_empty() {
+            // Fallback: send to default email only, no CCs.
+            (config.default_to_email.clone(), String::new())
+        } else {
+            let mapped_cc = mapping.map(|m| m.cc.clone()).unwrap_or_default();
+            let ccs = vec![
+                config.initial_cc.clone(),
+                mapped_cc,
+                config.ending_cc.clone(),
+            ]
+            .into_iter()
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<String>>()
+            .join(";");
+            (mapped_to, ccs)
+        };
 
         let html_table = generate_pivot_html(rows, &statuses_vec, is_branch);
+
+        let receiver_name = mapping
+            .map(|m| m.receiver_name.clone())
+            .filter(|n| !n.trim().is_empty())
+            .unwrap_or_else(|| "All".to_string());
 
         let (subject, body) = if bucket_name.eq_ignore_ascii_case("Call Center") {
             (format!("Open TKTs - {}", bucket_name), "".to_string())
@@ -820,16 +841,9 @@ pub fn process_emails(
     <title>Open TKTs - {bucket_name}</title>
 </head>
 <body style="font-family: Arial, sans-serif;">
-    Dear All,<br/>
-    &nbsp;&nbsp;&nbsp;&nbsp;Kindly find below the list of open tickets in {bucket_name} for the period from {from_date_str} until {today_str}.<br/><br/>
-    <table border="0" cellpadding="0" cellspacing="0">
-        <tr>
-            <td width="20"></td>
-            <td>
-                {html_table}
-            </td>
-        </tr>
-    </table>
+    Dear {receiver_name},<br/>
+    Kindly find below the list of open tickets in {bucket_name} for the period from {from_date_str} until {today_str}.<br/><br/>
+    {html_table}
 </body>
 </html>"#;
                 if let Err(e) = std::fs::write(&template_path, default_template) {
@@ -865,8 +879,16 @@ pub fn process_emails(
                 }
             }
 
+            // Clean up old template margin layout dynamically if it's there
+            extracted_body = extracted_body
+                .replace("<table border=\"0\" cellpadding=\"0\" cellspacing=\"0\">\r\n        <tr>\r\n            <td width=\"20\"></td>\r\n            <td>\r\n                {html_table}\r\n            </td>\r\n        </tr>\r\n    </table>", "{html_table}")
+                .replace("<table border=\"0\" cellpadding=\"0\" cellspacing=\"0\">\n        <tr>\n            <td width=\"20\"></td>\n            <td>\n                {html_table}\n            </td>\n        </tr>\n    </table>", "{html_table}")
+                .replace("&nbsp;&nbsp;&nbsp;&nbsp;", "")
+                .replace("Dear All", "Dear {receiver_name}");
+
             // Replace placeholders
             let final_body = extracted_body
+                .replace("{receiver_name}", &receiver_name)
                 .replace("{bucket_name}", bucket_name)
                 .replace("{from_date_str}", &from_date_str)
                 .replace("{today_str}", &today_str)
@@ -876,12 +898,10 @@ pub fn process_emails(
             (extracted_subject, wrapped_body)
         } else {
             let body = format!(
-                "<html><body style=\"font-family: Arial, sans-serif;\">Dear All,<br/>&nbsp;&nbsp;&nbsp;&nbsp;Kindly find below the list of open tickets in {} for the period from {} until {}.<br/><br/>\
-                <table border=\"0\" cellpadding=\"0\" cellspacing=\"0\"><tr><td width=\"20\"></td><td>\
+                "<html><body style=\"font-family: Arial, sans-serif;\">Dear {},<br/>Kindly find below the list of open tickets in {} for the period from {} until {}.<br/><br/>\
                 {}\
-                </td></tr></table>\
                 </body></html>",
-                bucket_name, from_date_str, today_str, html_table
+                receiver_name, bucket_name, from_date_str, today_str, html_table
             );
             let subject = format!("Open TKTs - {}", bucket_name);
             (subject, body)

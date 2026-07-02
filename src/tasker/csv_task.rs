@@ -542,11 +542,18 @@ pub fn run(
         if let Some(email_cfg) = &config.email_config {
             // Start email processing
             info!("Email config present, starting email processing...");
+            // Provide sensible defaults for missing arguments based on global context (since csv_task might not have download_dir yet)
+            // or we look into how we should pass it. Let's pass standard defaults or look into config.
+            let download_dir = &config.download_path;
+            let minutes_ago = config.minutes_ago;
+
             if let Err(e) = crate::tasker::email::process_emails(
                 &output_file_path.to_string_lossy(),
                 email_cfg,
                 only_call_center,
                 send_exceptions,
+                download_dir,
+                minutes_ago,
             ) {
                 error!("Error processing emails: {}", e);
             }
