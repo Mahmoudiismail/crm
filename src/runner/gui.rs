@@ -1797,4 +1797,3 @@ mod tests {
         assert!(!html.contains("<script>"));
     }
 }
-
