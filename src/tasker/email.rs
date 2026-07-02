@@ -1,12 +1,15 @@
 use anyhow::{Context, Result};
+use chrono::{DateTime, Duration};
 use chrono::{Datelike, Local, NaiveDate};
-use csv::ReaderBuilder;
+use csv::{ReaderBuilder, StringRecord};
 use rust_xlsxwriter::Workbook;
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Write;
+use std::path::PathBuf;
 use tracing::{error, info};
+use walkdir::WalkDir;
 
 use crate::tasker::config::EmailConfig;
 
@@ -331,11 +334,146 @@ fn generate_pivot_html(rows: &[TicketRow], statuses: &[String], include_team_col
     html
 }
 
+fn generate_leads_report(download_dir: &str, minutes_ago: i64) -> Result<Option<PathBuf>> {
+    let download_dir_path = std::path::PathBuf::from(download_dir);
+    let now = Local::now().naive_local();
+    let threshold = now - Duration::minutes(minutes_ago);
+    let mut target_files = Vec::new();
+
+    for entry in WalkDir::new(&download_dir_path)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        let path = entry.path();
+        if path.is_file() {
+            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                if name.starts_with("lead_report") && name.ends_with(".csv") {
+                    if let Ok(metadata) = entry.metadata() {
+                        if let Ok(modified) = metadata.modified() {
+                            let mod_time: DateTime<Local> = modified.into();
+                            if mod_time.naive_local() >= threshold {
+                                target_files.push(path.to_path_buf());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if target_files.is_empty() {
+        return Ok(None);
+    }
+
+    // Sort files with modification date newer first
+    target_files.sort_by(|a, b| {
+        let meta_a = a
+            .metadata()
+            .and_then(|m| m.modified())
+            .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+        let meta_b = b
+            .metadata()
+            .and_then(|m| m.modified())
+            .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+        meta_b.cmp(&meta_a)
+    });
+
+    let mut all_records: Vec<StringRecord> = Vec::new();
+    let mut headers = None;
+    let mut seen_leads = HashSet::new();
+    let mut lead_id_idx = None;
+    let mut branch_idx = None;
+    let mut status_idx = None;
+
+    for file_path in target_files {
+        let file_bytes = std::fs::read(&file_path)?;
+        let file_content = String::from_utf8_lossy(&file_bytes);
+        let mut rdr = ReaderBuilder::new()
+            .has_headers(true)
+            .from_reader(file_content.as_bytes());
+
+        if headers.is_none() {
+            let h = rdr.headers()?.clone();
+            for (i, col_name) in h.iter().enumerate() {
+                let lower = col_name.trim().to_lowercase();
+                if lower == "lead id" {
+                    lead_id_idx = Some(i);
+                } else if lower == "branch" {
+                    branch_idx = Some(i);
+                } else if lower == "status" {
+                    status_idx = Some(i);
+                }
+            }
+            headers = Some(h);
+        }
+
+        for result in rdr.records() {
+            let record = result?;
+
+            let lead_id = lead_id_idx
+                .and_then(|idx| record.get(idx))
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            if seen_leads.contains(&lead_id) {
+                continue;
+            }
+            seen_leads.insert(lead_id.clone());
+
+            let branch = branch_idx
+                .and_then(|idx| record.get(idx))
+                .unwrap_or("")
+                .trim()
+                .to_lowercase();
+            let status = status_idx
+                .and_then(|idx| record.get(idx))
+                .unwrap_or("")
+                .trim()
+                .to_lowercase();
+
+            let branch_matches =
+                branch == "dr. soliman fakeeh hospital jeddah" || branch.is_empty();
+            let status_matches = status == "new" || status == "follow-up";
+
+            if branch_matches && status_matches {
+                all_records.push(record);
+            }
+        }
+    }
+
+    if all_records.is_empty() {
+        return Ok(None);
+    }
+
+    let tmp_dir = std::env::temp_dir();
+    let xlsx_path = tmp_dir.join("Call_Center_Leads.xlsx");
+    let mut workbook = Workbook::new();
+    let worksheet = workbook.add_worksheet();
+
+    if let Some(h) = headers {
+        for (i, name) in h.iter().enumerate() {
+            worksheet.write_string(0, i as u16, name)?;
+        }
+    }
+
+    for (row_idx, record) in all_records.iter().enumerate() {
+        for (col_idx, field) in record.iter().enumerate() {
+            worksheet.write_string((row_idx + 1) as u32, col_idx as u16, field)?;
+        }
+    }
+
+    workbook.save(&xlsx_path)?;
+
+    Ok(Some(xlsx_path))
+}
+
 pub fn process_emails(
     results_file: &str,
     config: &EmailConfig,
     only_call_center: bool,
     send_exceptions: bool,
+    download_dir: &str,
+    minutes_ago: i64,
 ) -> Result<()> {
     info!(
         "Starting email processing module. Reading output from {} (only_call_center: {}, send_exceptions: {})",
@@ -584,22 +722,34 @@ pub fn process_emails(
                                  rows: &[TicketRow],
                                  is_branch: bool|
      -> Result<()> {
-        if rows.is_empty() {
-            return Ok(());
-        }
-
-        // Check if all tickets in the bucket are closed
-        let all_closed = rows.iter().all(|r| r.status.eq_ignore_ascii_case("closed"));
-        if all_closed {
-            info!(
-                "Skipping email for {} because all tickets are closed.",
-                raw_bucket_name
-            );
-            return Ok(());
-        }
-
         let bucket_name_cleaned = raw_bucket_name.replace('\u{FFFD}', "").replace("ï¿½", "");
         let bucket_name = bucket_name_cleaned.as_str();
+
+        let mut leads_report_path = None;
+        if bucket_name.eq_ignore_ascii_case("call center") {
+            match generate_leads_report(download_dir, minutes_ago) {
+                Ok(path_opt) => leads_report_path = path_opt,
+                Err(e) => error!("Failed to generate leads report for Call Center: {}", e),
+            }
+        }
+
+        let all_closed =
+            rows.is_empty() || rows.iter().all(|r| r.status.eq_ignore_ascii_case("closed"));
+
+        if all_closed {
+            if leads_report_path.is_none() {
+                info!(
+                    "Skipping email for {} because all tickets are closed or empty, and no leads report generated.",
+                    raw_bucket_name
+                );
+                return Ok(());
+            } else {
+                info!(
+                    "All tickets closed or empty for {}, but leads report was generated. Continuing to send leads.",
+                    raw_bucket_name
+                );
+            }
+        }
 
         // Find min date
         let mut min_date = None;
@@ -777,7 +927,7 @@ pub fn process_emails(
             "Display()"
         };
 
-        let ps_script = format!(
+        let mut ps_script = format!(
             r#"
 $Outlook = New-Object -ComObject Outlook.Application
 $Mail = $Outlook.CreateItem(0)
@@ -785,16 +935,28 @@ $Mail.To = "{}"
 $Mail.CC = "{}"
 $Mail.Subject = "{}"
 $Mail.HTMLBody = '{}'
-$Mail.Attachments.Add("{}")
-$Mail.{}
 "#,
             to_emails,
             cc_list,
             subject.replace("\"", "'"), // basic sanitize for powershell string interpolation
-            body.replace("'", "''"),
-            xlsx_path.display(),
-            display_or_send
+            body.replace("'", "''")
         );
+
+        if !all_closed {
+            ps_script.push_str(&format!(
+                "$Mail.Attachments.Add(\"{}\")\n",
+                xlsx_path.display()
+            ));
+        }
+
+        if let Some(ref leads_path) = leads_report_path {
+            ps_script.push_str(&format!(
+                "$Mail.Attachments.Add(\"{}\")\n",
+                leads_path.display()
+            ));
+        }
+
+        ps_script.push_str(&format!("$Mail.{}\n", display_or_send));
 
         if let Err(e) = run_powershell(&ps_script) {
             error!("Failed to send email for {}: {}", bucket_name, e);
@@ -822,6 +984,10 @@ $Mail.Display()
 
         let _ = std::fs::remove_file(xlsx_path);
 
+        if let Some(ref leads_path) = leads_report_path {
+            let _ = std::fs::remove_file(leads_path);
+        }
+
         Ok(())
     };
 
@@ -836,9 +1002,8 @@ $Mail.Display()
     }
 
     // 3. Process Call Center
-    if !call_center_bucket.is_empty() {
-        send_email_for_bucket("Call Center", &call_center_bucket, true)?;
-    }
+    // Call Center gets special treatment because even if they have NO open tickets, they might have leads.
+    send_email_for_bucket("Call Center", &call_center_bucket, true)?;
 
     info!("Email processing complete.");
     Ok(())
@@ -891,6 +1056,8 @@ mod tests {
             &email_config,
             false,
             false,
+            download_dir.path().to_str().unwrap(),
+            60,
         );
 
         assert!(result.is_ok());

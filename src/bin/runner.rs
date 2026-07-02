@@ -70,11 +70,14 @@ async fn main() -> Result<()> {
     #[cfg(target_os = "windows")]
     let event_loop = EventLoop::new()?;
     #[cfg(target_os = "windows")]
-    let mut app = App {
-        tray_icon: None,
-        menu_items: None,
-        runner: runner_handle,
-        runner_gui_url: format!("http://{}:{}", runner_cfg.gui_host, runner_cfg.gui_port),
+    let mut app = {
+        let runner_cfg = crm_tool::runner::config::RunnerConfig::load(&runner_config_path_str);
+        App {
+            tray_icon: None,
+            menu_items: None,
+            runner: runner_handle,
+            runner_gui_url: format!("http://{}:{}", runner_cfg.gui_host, runner_cfg.gui_port),
+        }
     };
 
     #[cfg(target_os = "windows")]
