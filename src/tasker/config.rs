@@ -10,6 +10,8 @@ pub struct TaskerConfig {
 pub enum TaskConfig {
     #[serde(rename = "csv_analysis")]
     CsvAnalysis(CsvAnalysisConfig),
+    #[serde(rename = "dashboard_updater")]
+    DashboardUpdater(DashboardUpdaterConfig),
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -45,6 +47,24 @@ pub struct CsvAnalysisConfig {
     pub email_config: Option<EmailConfig>,
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct DashboardUpdaterConfig {
+    pub download_path: String,
+    pub users_file: String,
+    pub assignment_settings_file: String,
+    pub minutes_ago: i64,
+    pub exclude_branches: Vec<String>,
+    pub exclude_categories: Vec<String>,
+    pub category_exceptions: Option<Vec<CategoryException>>,
+    pub output_file: String,
+
+    // Dashboard specific config
+    pub dashboard_file: String,
+    pub dashboard_table_name: String,
+    pub email_to: Option<String>,
+    pub email_cc: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -75,6 +95,41 @@ mod tests {
                 assert_eq!(csv.minutes_ago, 15);
                 assert_eq!(csv.exclude_branches, vec!["B1"]);
             }
+            _ => panic!("Expected CsvAnalysis task"),
+        }
+    }
+
+    #[test]
+    fn test_dashboard_updater_config_serialization() {
+        let json_data = r#"{
+          "tasks": [
+            {
+              "type": "dashboard_updater",
+              "download_path": "./downloads",
+              "users_file": "./users.csv",
+              "assignment_settings_file": "./assignments.csv",
+              "minutes_ago": 15,
+              "exclude_branches": [],
+              "exclude_categories": [],
+              "output_file": "./results.csv",
+              "dashboard_file": "./dashboard.xlsx",
+              "dashboard_table_name": "table2",
+              "email_to": "aya@example.com",
+              "email_cc": "cc@example.com"
+            }
+          ]
+        }"#;
+
+        let config: TaskerConfig = serde_json::from_str(json_data).unwrap();
+        assert_eq!(config.tasks.len(), 1);
+
+        match &config.tasks[0] {
+            TaskConfig::DashboardUpdater(dash) => {
+                assert_eq!(dash.dashboard_file, "./dashboard.xlsx");
+                assert_eq!(dash.dashboard_table_name, "table2");
+                assert_eq!(dash.email_to.as_deref(), Some("aya@example.com"));
+            }
+            _ => panic!("Expected DashboardUpdater task"),
         }
     }
 }

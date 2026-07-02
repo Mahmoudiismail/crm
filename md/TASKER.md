@@ -104,6 +104,39 @@ This task is designed to process multiple ticket report CSV files and augment th
   - `send_per_branch_branches`: List of branches that will receive *one email for the entire branch* instead of separated by team.
   - `send_call_center`: Boolean, if true unifies the "Call Center" tickets from all allowed branches into a single email instead of being grouped with the others.
 
+### `dashboard_updater` Task
+
+This task is similar to `csv_analysis`, in that it processes raw ticket CSVs based on configuration mapping, but instead of emailing multiple pivot reports, it surgically injects the resulting CSV data into a specified Microsoft Excel file's Table (ListObject), refreshes the document's Pivot Tables, and emails the updated dashboard to specified stakeholders via Outlook.
+
+#### Example Configuration
+```json
+{
+  "tasks": [
+    {
+      "type": "dashboard_updater",
+      "download_path": "./downloads",
+      "users_file": "./data/users.csv",
+      "assignment_settings_file": "./data/assignments.csv",
+      "minutes_ago": 15,
+      "exclude_branches": [],
+      "exclude_categories": [],
+      "output_file": "./results.csv",
+      "dashboard_file": "./dashboard.xlsx",
+      "dashboard_table_name": "table2",
+      "email_to": "stakeholder@example.com",
+      "email_cc": "cc@example.com"
+    }
+  ]
+}
+```
+
+#### Fields Description
+- Shares all core CSV generation fields with `csv_analysis` (`download_path`, `users_file`, `minutes_ago`, `exclude_branches`, etc.).
+- `dashboard_file`: Path to the existing `.xlsx` dashboard file you want to update.
+- `dashboard_table_name`: The name of the Excel Table (ListObject) inside the workbook that should be cleared and filled with the new CSV data (e.g., `"table2"`).
+- `email_to`: (Optional) Email address to send the final updated dashboard to.
+- `email_cc`: (Optional) CC email address for the final report.
+
 #### Processing Logic
 1. **User Maps:** Loads the user mapping file. Looks for columns matching `cognito_username` and `UserDepartmentName / Team Name` to create a `Position` list and define the primary assignee team.
 2. **Assignments:** Loads the assignment settings, matching `(Category, Type, Subtype)` to `Auto agent/team assignment`.
