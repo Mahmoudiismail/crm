@@ -37,16 +37,9 @@ jobs:
           targets: x86_64-pc-windows-msvc
 
       - name: Cache cargo artifacts
-        uses: actions/cache@v6
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git/db
-            target
-          key: shared-cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            shared-cargo-${{ runner.os }}-
+          shared-key: "crm-rust-shared-cache"
 
       - name: Get version
         shell: bash
