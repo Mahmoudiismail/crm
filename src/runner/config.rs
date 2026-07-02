@@ -158,30 +158,6 @@ pub enum ShellCommandMode {
     Parallel,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-#[derive(Default)]
-pub enum ReportType {
-    #[default]
-    All,
-    Tickets,
-    Calls,
-    Leads,
-    None,
-}
-
-impl ReportType {
-    pub fn as_arg(self) -> &'static str {
-        match self {
-            Self::All => "all",
-            Self::Tickets => "tickets",
-            Self::Calls => "calls",
-            Self::Leads => "leads",
-            Self::None => "none",
-        }
-    }
-}
-
 impl Default for TaskKind {
     fn default() -> Self {
         Self::ShellCommand {

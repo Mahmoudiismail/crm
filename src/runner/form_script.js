@@ -617,35 +617,12 @@
     updateTaskTypeVisibility();
   }
 
-  if (yaswebReportsList) {
-    try {
-      const initialReportsStr = yaswebReportsList.getAttribute(
-        "data-initial-reports",
-      );
-      if (
-        initialReportsStr &&
-        initialReportsStr !== "{}" &&
-        initialReportsStr !== "[]" &&
-        initialReportsStr !== ""
-      ) {
-        const initialReports = JSON.parse(initialReportsStr);
-        if (Array.isArray(initialReports)) {
-          initialReports.forEach((rep) => {
-            yaswebReportsList.appendChild(createYaswebReportRow(rep));
-          });
-        }
-      }
-    } catch (e) {
-      console.error("Failed to parse initial yasweb reports", e);
-    }
-  }
 
   const form = document.querySelector("form");
   if (form) {
     form.addEventListener("submit", function (e) {
       if (schedulesHidden) schedulesHidden.value = buildSchedules();
       if (commandsHidden) commandsHidden.value = buildCommands();
-      if (yaswebReportsHidden) yaswebReportsHidden.value = buildYaswebReports();
 
       // Serialize external app args
       if (

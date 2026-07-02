@@ -6,7 +6,7 @@ For a detailed guide on how to fundamentally reconstruct these components and th
 
 ## Component Overview
 
-1.  **Runner (`src/bin/runner.rs`, `src/runner/*`)**: The background daemon. It runs as a system tray application on Windows, provides a local HTTP GUI, parses the overall `runner_config.json`, manages a chron-like schedule, and orchestrates task execution (launching `crm`, `yasweb`, `shell_command`, or dynamically registered `external_app` processes).
+1.  **Runner (`src/bin/runner.rs`, `src/runner/*`)**: The background daemon. It runs as a system tray application on Windows, provides a local HTTP GUI, parses the overall `runner_config.json`, manages a chron-like schedule, and orchestrates task execution (launching `shell_command` or dynamically registered `external_app` processes).
 2.  **AppManifest System (`src/manifest.rs`, `md/MANIFEST_SCHEMA.md`)**: A JSON standard dictating how `crm`, `yasweb`, `wcxx`, and `tasker` advertise their command-line arguments to the `runner` application, allowing the runner GUI to construct inputs dynamically.
 3.  **CRM Fetcher (`src/bin/crm.rs`, `src/crm/*`)**: A one-shot CLI utility handling Cognito SRP authentication, report payload requests (Tickets, Calls, Leads), and CSV downloading.
 4.  **Yasweb Automation (`src/bin/yasweb.rs`)**: A headless Chrome automation utility used to log into an external Yasweb Angular dashboard, discover and configure filters, and extract generated data via iframe injection. It supports concurrent execution of monthly sliced reports via tab isolation and CDP file download interception.
