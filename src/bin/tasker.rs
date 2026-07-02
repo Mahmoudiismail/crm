@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use crm_tool::manifest::{AppArg, AppManifest, ArgType};
 use crm_tool::tasker::config::{TaskConfig, TaskerConfig};
-use crm_tool::tasker::csv_task;
+use crm_tool::tasker::{csv_task, dashboard_updater};
 use serde_json::Value;
 use std::env;
 use std::fs;
@@ -202,6 +202,11 @@ pub fn run_app(args: Vec<String>) -> Result<()> {
             TaskConfig::CsvAnalysis(csv_config) => {
                 if let Err(e) = csv_task::run(csv_config, only_call_center, send_exceptions) {
                     error!("Error running CsvAnalysis task: {:?}", e);
+                }
+            }
+            TaskConfig::DashboardUpdater(dash_config) => {
+                if let Err(e) = dashboard_updater::run(dash_config) {
+                    error!("Error running DashboardUpdater task: {:?}", e);
                 }
             }
         }
