@@ -22,7 +22,7 @@ pub struct EmailConfig {
     pub ending_cc: String,
     pub send_emails: Option<bool>,
     pub default_to_email: String,
-    pub send_per_team_branches: Vec<String>,
+    pub send_per_team_all_branches: Vec<String>,
     pub send_per_branch_branches: Vec<String>,
     pub send_call_center: Option<bool>,
 }

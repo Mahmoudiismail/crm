@@ -19,11 +19,11 @@ struct TeamMapping {
     #[serde(alias = "Team Name")]
     team_name: String,
     #[serde(alias = "Receiver Name")]
-    receiver_name: String,
+    receiver_name: Option<String>,
     #[serde(alias = "To Emails")]
-    to_emails: String,
+    to_emails: Option<String>,
     #[serde(alias = "CC")]
-    cc: String,
+    cc: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -76,54 +76,6 @@ fn run_powershell(script: &str) -> Result<()> {
 }
 
 fn generate_pivot_html(rows: &[TicketRow], statuses: &[String], include_team_col: bool) -> String {
-    // We group by: (TeamName?), Assignee, Ticket Subtype, Ticket Category
-    // And for each we accumulate the status counts.
-
-    let mut present_statuses = HashSet::new();
-    for r in rows {
-        present_statuses.insert(r.status.to_lowercase());
-    }
-
-    let active_statuses: Vec<String> = statuses
-        .iter()
-        .filter(|s| present_statuses.contains(&s.to_lowercase()))
-        .cloned()
-        .collect();
-
-    // To match the layout:
-    // Row Labels             | open | follow-up | expired | ... | Grand Total
-    //  Assignee1             |      |     1     |         | ... |      1
-    //    subtype1            |      |     1     |         | ... |      1
-    //      category1         |      |     1     |         | ... |      1
-
-    let mut html = String::new();
-    html.push_str("<table style='border-collapse: collapse; width: max-content; font-family: Arial, sans-serif; border: 1px solid black; font-size: 14px;'>");
-    html.push_str("<tr style='background-color: #d9e1f2; color: black; font-weight: bold;'>");
-    html.push_str(
-        "<th style='border: 1px solid black; padding: 2px; text-align: left;'>Row Labels</th>",
-    );
-    for s in &active_statuses {
-        html.push_str(&format!(
-            "<th style='border: 1px solid black; padding: 8px 15px; text-align: center;'>{}</th>",
-            s
-        ));
-    }
-    html.push_str(
-        "<th style='border: 1px solid black; padding: 8px 15px; text-align: center;'>Grand Total</th>",
-    );
-    html.push_str("</tr>");
-
-    // Compute totals
-    let mut grand_total_by_status: HashMap<String, usize> = HashMap::new();
-    let mut grand_total = 0;
-
-    // Hierarchy: Team (optional) -> Assignee -> Subtype -> Category
-    // Because building a full pivot tree in Rust manually is verbose, let's just do:
-    // A nested map structure.
-
-    // Since `Team` is optional in the pivot tree depending on `include_team_col`
-    // If include_team_col is true, we add a level at the top for Team.
-
     #[derive(Default)]
     struct Counts {
         status_counts: HashMap<String, usize>,
@@ -136,7 +88,6 @@ fn generate_pivot_html(rows: &[TicketRow], statuses: &[String], include_team_col
         }
     }
 
-    // We will collect the data into a flat list and then sort it to group easily
     let mut sorted_rows = rows.to_vec();
     sorted_rows.sort_by(|a, b| {
         let cmp_team = a.team.cmp(&b.team);
@@ -154,18 +105,13 @@ fn generate_pivot_html(rows: &[TicketRow], statuses: &[String], include_team_col
         a.ticket_category.cmp(&b.ticket_category)
     });
 
-    // We need to render the tree.
-    // We will do a multi-pass approach or just use variables to track current groups.
-
-    let _current_team = String::new();
-    let _current_assignee = String::new();
-    let _current_subtype = String::new();
-
-    // To print totals at the top of a group, we need to pre-aggregate.
     let mut team_counts: HashMap<String, Counts> = HashMap::new();
-    let mut assignee_counts: HashMap<(String, String), Counts> = HashMap::new(); // (team, assignee)
-    let mut subtype_counts: HashMap<(String, String, String), Counts> = HashMap::new(); // (team, assignee, subtype)
-    let mut category_counts: HashMap<(String, String, String, String), Counts> = HashMap::new(); // (team, assignee, subtype, category)
+    let mut assignee_counts: HashMap<(String, String), Counts> = HashMap::new();
+    let mut subtype_counts: HashMap<(String, String, String), Counts> = HashMap::new();
+    let mut category_counts: HashMap<(String, String, String, String), Counts> = HashMap::new();
+
+    let mut grand_total_by_status: HashMap<String, usize> = HashMap::new();
+    let mut grand_total = 0;
 
     for r in &sorted_rows {
         let t = if include_team_col {
@@ -196,6 +142,36 @@ fn generate_pivot_html(rows: &[TicketRow], statuses: &[String], include_team_col
         grand_total += 1;
     }
 
+    // Now filter active_statuses based on what actually has > 0 in grand_total_by_status
+    let active_statuses: Vec<String> = statuses
+        .iter()
+        .filter(|s| {
+            grand_total_by_status
+                .get(&s.to_lowercase())
+                .copied()
+                .unwrap_or(0)
+                > 0
+        })
+        .cloned()
+        .collect();
+
+    let mut html = String::new();
+    html.push_str("<table style='border-collapse: collapse; width: max-content; font-family: Arial, sans-serif; border: 1px solid black; font-size: 14px;'>");
+    html.push_str("<tr style='background-color: #d9e1f2; color: black; font-weight: bold;'>");
+    html.push_str(
+        "<th style='border: 1px solid black; padding: 2px; text-align: left;'>Row Labels</th>",
+    );
+    for s in &active_statuses {
+        html.push_str(&format!(
+            "<th style='border: 1px solid black; padding: 8px 15px; text-align: center;'>{}</th>",
+            s
+        ));
+    }
+    html.push_str(
+        "<th style='border: 1px solid black; padding: 8px 15px; text-align: center;'>Grand Total</th>",
+    );
+    html.push_str("</tr>");
+
     let mut printed_teams = HashSet::new();
     let mut printed_assignees = HashSet::new();
     let mut printed_subtypes = HashSet::new();
@@ -214,7 +190,11 @@ fn generate_pivot_html(rows: &[TicketRow], statuses: &[String], include_team_col
         ));
 
         for st in &active_statuses {
-            let cnt = counts.status_counts.get(st).copied().unwrap_or(0);
+            let cnt = counts
+                .status_counts
+                .get(&st.to_lowercase())
+                .copied()
+                .unwrap_or(0);
             let val = if cnt > 0 {
                 cnt.to_string()
             } else {
@@ -244,6 +224,8 @@ fn generate_pivot_html(rows: &[TicketRow], statuses: &[String], include_team_col
         let c = r.ticket_category.clone();
 
         let a_key = (t.clone(), a.clone());
+        let s_key = (t.clone(), a.clone(), s.clone());
+        let c_key = (t.clone(), a.clone(), s.clone(), c.clone());
 
         // Skip employees who only have closed tickets
         let assignee_count = assignee_counts.get(&a_key).unwrap();
@@ -272,10 +254,8 @@ fn generate_pivot_html(rows: &[TicketRow], statuses: &[String], include_team_col
                 true,
                 assignee_counts.get(&a_key).unwrap(),
             ));
-            printed_assignees.insert(a_key);
+            printed_assignees.insert(a_key.clone());
         }
-
-        let s_key = (t.clone(), a.clone(), s.clone());
 
         let subtype_count = subtype_counts.get(&s_key).unwrap();
         let mut subtype_has_non_closed = false;
@@ -295,8 +275,6 @@ fn generate_pivot_html(rows: &[TicketRow], statuses: &[String], include_team_col
             html.push_str(&render_row(&s, indent, false, subtype_count));
             printed_subtypes.insert(s_key.clone());
         }
-
-        let c_key = (t.clone(), a.clone(), s.clone(), c.clone());
 
         let category_count = category_counts.get(&c_key).unwrap();
         let mut category_has_non_closed = false;
@@ -324,7 +302,10 @@ fn generate_pivot_html(rows: &[TicketRow], statuses: &[String], include_team_col
         "<td style='padding: 8px; text-align: center; border: 1px solid black;'>Grand Total</td>",
     );
     for st in &active_statuses {
-        let cnt = grand_total_by_status.get(st).copied().unwrap_or(0);
+        let cnt = grand_total_by_status
+            .get(&st.to_lowercase())
+            .copied()
+            .unwrap_or(0);
         let val = if cnt > 0 {
             cnt.to_string()
         } else {
@@ -344,7 +325,6 @@ fn generate_pivot_html(rows: &[TicketRow], statuses: &[String], include_team_col
     html.push_str("</table>");
     html
 }
-
 fn generate_leads_report(download_dir: &str, minutes_ago: i64) -> Result<Option<PathBuf>> {
     let download_dir_path = std::path::PathBuf::from(download_dir);
     let now = Local::now().naive_local();
@@ -684,8 +664,8 @@ pub fn process_emails(
     // Grouping
     // We have 3 buckets: per_team, per_branch, and call_center
 
-    let send_per_team_branches: HashSet<String> = config
-        .send_per_team_branches
+    let send_per_team_all_branches: HashSet<String> = config
+        .send_per_team_all_branches
         .iter()
         .map(|s| s.to_lowercase())
         .collect();
@@ -707,22 +687,24 @@ pub fn process_emails(
 
         let is_cc = t_low == "call center";
 
-        let allowed_branch =
-            send_per_team_branches.contains(&b_low) || send_per_branch_branches.contains(&b_low);
+        // "all allowed branches" means the branch must be in send_per_branch_branches.
+        let allowed_branch = send_per_branch_branches.contains(&b_low);
 
-        if is_cc && send_cc && allowed_branch {
-            call_center_bucket.push(row);
-        } else if !is_cc && !only_call_center {
-            if send_per_team_branches.contains(&b_low) {
-                per_team_buckets
-                    .entry(row.team.clone())
-                    .or_default()
-                    .push(row);
-            } else if send_per_branch_branches.contains(&b_low) {
-                per_branch_buckets
-                    .entry(row.branch.clone())
-                    .or_default()
-                    .push(row);
+        if allowed_branch {
+            if is_cc && send_cc {
+                call_center_bucket.push(row);
+            } else if !is_cc && !only_call_center {
+                if send_per_team_all_branches.contains(&t_low) {
+                    per_team_buckets
+                        .entry(row.team.clone())
+                        .or_default()
+                        .push(row);
+                } else {
+                    per_branch_buckets
+                        .entry(row.branch.clone())
+                        .or_default()
+                        .push(row);
+                }
             }
         }
     }
@@ -794,13 +776,15 @@ pub fn process_emails(
         );
 
         let mapping = team_maps.get(&bucket_name.to_lowercase());
-        let mapped_to = mapping.map(|m| m.to_emails.clone()).unwrap_or_default();
+        let mapped_to = mapping
+            .and_then(|m| m.to_emails.clone())
+            .unwrap_or_default();
 
         let (to_emails, cc_list) = if mapped_to.trim().is_empty() {
             // Fallback: send to default email only, no CCs.
             (config.default_to_email.clone(), String::new())
         } else {
-            let mapped_cc = mapping.map(|m| m.cc.clone()).unwrap_or_default();
+            let mapped_cc = mapping.and_then(|m| m.cc.clone()).unwrap_or_default();
             let ccs = vec![
                 config.initial_cc.clone(),
                 mapped_cc,
@@ -816,7 +800,7 @@ pub fn process_emails(
         let html_table = generate_pivot_html(rows, &statuses_vec, is_branch);
 
         let receiver_name = mapping
-            .map(|m| m.receiver_name.clone())
+            .and_then(|m| m.receiver_name.clone())
             .filter(|n| !n.trim().is_empty())
             .unwrap_or_else(|| "All".to_string());
 
@@ -1064,7 +1048,7 @@ mod tests {
             ending_cc: "end@example.com".to_string(),
             send_emails: Some(false),
             default_to_email: "def@example.com".to_string(),
-            send_per_team_branches: vec!["Main Branch".to_string()],
+            send_per_team_all_branches: vec!["Main Branch".to_string()],
             send_per_branch_branches: vec![],
             send_call_center: Some(false),
         };
