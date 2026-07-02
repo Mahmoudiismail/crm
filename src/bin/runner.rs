@@ -70,7 +70,8 @@ async fn main() -> Result<()> {
     #[cfg(target_os = "windows")]
     let event_loop = EventLoop::new()?;
     #[cfg(target_os = "windows")]
-    let runner_cfg = RunnerConfig::load(&runner_config_path_str).unwrap_or_default();
+    let runner_cfg =
+        crm_tool::runner::config::RunnerConfig::load(&runner_config_path_str).unwrap_or_default();
 
     #[cfg(target_os = "windows")]
     let mut app = App {
@@ -161,8 +162,6 @@ impl ApplicationHandler for App {
                     tokio::spawn(async move {
                         let _ = tx.send(RunnerCommand::RunAllNow).await;
                     });
-                } else if event.id == *run_tickets_id {
-                    info!("Manual CRM tickets run requested (deprecated/handled differently).");
                 } else if event.id == *logs_id {
                     info!("Opening logs file.");
                     if let Ok(exe_path) = std::env::current_exe() {
