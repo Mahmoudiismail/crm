@@ -2,7 +2,6 @@
 
 use anyhow::Result;
 #[cfg(target_os = "windows")]
-use crm_tool::runner::config::ReportType;
 #[cfg(target_os = "windows")]
 use crm_tool::runner::engine::RunnerHandle;
 use crm_tool::runner::engine::{start_scheduler, RunnerCommand};
@@ -55,7 +54,10 @@ async fn main() -> Result<()> {
 
     let config_exists = runner_config_path.exists();
 
-    let runner_handle = start_scheduler(runner_config_path_str.clone());
+    #[cfg(target_os = "windows")]
+    let runner_cfg = crm_tool::runner::config::RunnerConfig::load(&runner_config_path_str)?;
+
+    let runner_handle = start_scheduler(runner_config_path_str);
     start_gui_server(runner_handle.clone());
 
     let tx = runner_handle.command_tx.clone();
@@ -169,13 +171,7 @@ impl ApplicationHandler for App {
                         let _ = tx.send(RunnerCommand::RunAllNow).await;
                     });
                 } else if event.id == *run_tickets_id {
-                    info!("Manual CRM tickets run requested.");
-                    let tx = self.runner.command_tx.clone();
-                    tokio::spawn(async move {
-                        let _ = tx
-                            .send(RunnerCommand::RunAdhocCrm(crm_tool::crm::config::ReportType::Tickets))
-                            .await;
-                    });
+                    info!("Manual CRM tickets run requested (deprecated/handled differently).");
                 } else if event.id == *logs_id {
                     info!("Opening logs file.");
                     if let Ok(exe_path) = std::env::current_exe() {

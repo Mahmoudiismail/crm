@@ -82,20 +82,57 @@ pub fn resolve_relative_to_exe_dir(path: &str) -> std::path::PathBuf {
     resolve_relative_to_base_dir(path, exe_dir.as_deref())
 }
 
-pub fn run(
-    config: &CsvAnalysisConfig,
-    only_call_center: bool,
-    send_exceptions: bool,
-) -> Result<()> {
+pub struct CsvAnalysisParams<'a> {
+    pub users_file: &'a str,
+    pub assignment_settings_file: &'a str,
+    pub download_path: &'a str,
+    pub output_file: &'a str,
+    pub minutes_ago: i64,
+    pub exclude_branches: &'a [String],
+    pub exclude_categories: &'a [String],
+    pub category_exceptions: Option<&'a Vec<crate::tasker::config::CategoryException>>,
+}
+
+impl<'a> From<&'a CsvAnalysisConfig> for CsvAnalysisParams<'a> {
+    fn from(config: &'a CsvAnalysisConfig) -> Self {
+        Self {
+            users_file: &config.users_file,
+            assignment_settings_file: &config.assignment_settings_file,
+            download_path: &config.download_path,
+            output_file: &config.output_file,
+            minutes_ago: config.minutes_ago,
+            exclude_branches: &config.exclude_branches,
+            exclude_categories: &config.exclude_categories,
+            category_exceptions: config.category_exceptions.as_ref(),
+        }
+    }
+}
+
+impl<'a> From<&'a crate::tasker::config::DashboardUpdaterConfig> for CsvAnalysisParams<'a> {
+    fn from(config: &'a crate::tasker::config::DashboardUpdaterConfig) -> Self {
+        Self {
+            users_file: &config.users_file,
+            assignment_settings_file: &config.assignment_settings_file,
+            download_path: &config.download_path,
+            output_file: &config.output_file,
+            minutes_ago: config.minutes_ago,
+            exclude_branches: &config.exclude_branches,
+            exclude_categories: &config.exclude_categories,
+            category_exceptions: config.category_exceptions.as_ref(),
+        }
+    }
+}
+
+pub fn generate_csv(params: &CsvAnalysisParams) -> Result<Option<std::path::PathBuf>> {
     info!(
-        "Starting CsvAnalysis task (only_call_center: {}, send_exceptions: {}). Config: {:?}",
-        only_call_center, send_exceptions, config
+        "Starting CSV Generation (minutes_ago: {})",
+        params.minutes_ago
     );
 
-    let users_file_path = resolve_relative_to_exe_dir(&config.users_file);
-    let assignment_settings_path = resolve_relative_to_exe_dir(&config.assignment_settings_file);
-    let download_dir_path = resolve_relative_to_exe_dir(&config.download_path);
-    let output_file_path = resolve_relative_to_exe_dir(&config.output_file);
+    let users_file_path = resolve_relative_to_exe_dir(params.users_file);
+    let assignment_settings_path = resolve_relative_to_exe_dir(params.assignment_settings_file);
+    let download_dir_path = resolve_relative_to_exe_dir(params.download_path);
+    let output_file_path = resolve_relative_to_exe_dir(params.output_file);
 
     // 1. Load users (Table11)
     info!("Loading users file from {}", users_file_path.display());
@@ -188,10 +225,10 @@ pub fn run(
     info!(
         "Scanning for target ticket CSVs in {} (modified in last {} min)",
         download_dir_path.display(),
-        config.minutes_ago
+        params.minutes_ago
     );
     let now = Local::now().naive_local();
-    let threshold = now - Duration::minutes(config.minutes_ago);
+    let threshold = now - Duration::minutes(params.minutes_ago);
     let mut target_files = Vec::new();
 
     for entry in WalkDir::new(&download_dir_path)
@@ -218,9 +255,9 @@ pub fn run(
     if target_files.is_empty() {
         info!(
             "No target files found modified in the last {} minutes.",
-            config.minutes_ago
+            params.minutes_ago
         );
-        return Ok(());
+        return Ok(None);
     }
 
     // Sort files with modification date newer first
@@ -239,12 +276,12 @@ pub fn run(
     info!("Found {} target ticket files.", target_files.len());
 
     // Prepare exclusion filters
-    let exclude_branches: HashSet<String> = config
+    let exclude_branches: HashSet<String> = params
         .exclude_branches
         .iter()
         .map(|s| s.trim().to_lowercase())
         .collect();
-    let exclude_categories: HashSet<String> = config
+    let exclude_categories: HashSet<String> = params
         .exclude_categories
         .iter()
         .map(|s| s.trim().to_lowercase())
@@ -404,7 +441,7 @@ pub fn run(
             if exclude_categories.contains(&cat_val) {
                 // Check if this matches a category exception
                 let mut matches_exception = false;
-                if let Some(exceptions) = &config.category_exceptions {
+                if let Some(exceptions) = params.category_exceptions {
                     for exc in exceptions {
                         if exc.category.trim().to_lowercase() == cat_val {
                             let branch_matches = exc.branch.as_ref().is_none_or(|b| {
@@ -481,23 +518,41 @@ pub fn run(
 
     output_writer.flush()?;
     info!(
-        "csv_analysis task completed successfully. Output written to {}",
+        "CSV generation completed successfully. Output written to {}",
         output_file_path.display()
     );
 
-    if let Some(email_cfg) = &config.email_config {
-        // Start email processing
-        info!("Email config present, starting email processing...");
-        if let Err(e) = crate::tasker::email::process_emails(
-            &output_file_path.to_string_lossy(),
-            email_cfg,
-            only_call_center,
-            send_exceptions,
-            &download_dir_path.to_string_lossy(),
-            config.minutes_ago,
-        ) {
-            error!("Error processing emails: {}", e);
+    Ok(Some(output_file_path))
+}
+
+pub fn run(
+    config: &CsvAnalysisConfig,
+    only_call_center: bool,
+    send_exceptions: bool,
+) -> Result<()> {
+    info!(
+        "Starting CsvAnalysis task (only_call_center: {}, send_exceptions: {}). Config: {:?}",
+        only_call_center, send_exceptions, config
+    );
+
+    let params = CsvAnalysisParams::from(config);
+    let output_file_path_opt = generate_csv(&params)?;
+
+    if let Some(output_file_path) = output_file_path_opt {
+        if let Some(email_cfg) = &config.email_config {
+            // Start email processing
+            info!("Email config present, starting email processing...");
+            if let Err(e) = crate::tasker::email::process_emails(
+                &output_file_path.to_string_lossy(),
+                email_cfg,
+                only_call_center,
+                send_exceptions,
+            ) {
+                error!("Error processing emails: {}", e);
+            }
         }
+    } else {
+        info!("No new data found, skipping email processing.");
     }
 
     Ok(())

@@ -1641,6 +1641,19 @@ fn render_apps_page(apps: &[crate::runner::config::RegisteredApp]) -> String {
     )
 }
 
+fn render_app_edit_page(app: &crate::runner::config::RegisteredApp) -> String {
+    html_page(
+        "Edit App",
+        &format!(
+            "<div class='max-w-2xl mx-auto'>                <h1 class='text-2xl font-bold text-gray-900 mb-6'>Edit App</h1>                <form action='/apps/update/{}' method='POST' class='space-y-4 bg-white p-6 rounded shadow-sm border border-gray-200'>                    {}                    {}                    {}                    <div class='pt-4 flex gap-3'>                        <button type='submit' class='rounded bg-emerald-600 px-4 py-2 text-sm font-semibold text-white'>Update App</button>                        <a href='/apps' class='rounded border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700'>Cancel</a>                    </div>                </form>            </div>",
+            escape_html(&app.id),
+            input_field("Name", "name", &app.name),
+            input_field("Executable Path", "executable_path", &app.executable_path),
+            input_field("Config Path", "config_path", &app.config_path)
+        ),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1796,15 +1809,3 @@ mod tests {
     }
 }
 
-fn render_app_edit_page(app: &crate::runner::config::RegisteredApp) -> String {
-    html_page(
-        "Edit App",
-        &format!(
-            "<div class='max-w-2xl mx-auto'>                <h1 class='text-2xl font-bold text-gray-900 mb-6'>Edit App</h1>                <form action='/apps/update/{}' method='POST' class='space-y-4 bg-white p-6 rounded shadow-sm border border-gray-200'>                    {}                    {}                    {}                    <div class='pt-4 flex gap-3'>                        <button type='submit' class='rounded bg-emerald-600 px-4 py-2 text-sm font-semibold text-white'>Update App</button>                        <a href='/apps' class='rounded border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700'>Cancel</a>                    </div>                </form>            </div>",
-            escape_html(&app.id),
-            input_field("Name", "name", &app.name),
-            input_field("Executable Path", "executable_path", &app.executable_path),
-            input_field("Config Path", "config_path", &app.config_path)
-        ),
-    )
-}
