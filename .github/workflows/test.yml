@@ -23,16 +23,9 @@ jobs:
           components: rustfmt, clippy
 
       - name: Cache cargo artifacts
-        uses: actions/cache@v5
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git/db
-            target
-          key: test-cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            test-cargo-${{ runner.os }}-
+          shared-key: "crm-rust-shared-cache"
 
       - name: Build all models and binaries
         run: cargo build --workspace --all-targets
