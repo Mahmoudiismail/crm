@@ -228,7 +228,11 @@ fn generate_pivot_html(rows: &[TicketRow], statuses: &[String], include_team_col
         let c_key = (t.clone(), a.clone(), s.clone(), c.clone());
 
         // Skip employees who only have closed tickets
-        let assignee_count = assignee_counts.get(&a_key).unwrap();
+        let assignee_count = if let Some(count) = assignee_counts.get(&a_key) {
+            count
+        } else {
+            continue;
+        };
         let mut has_non_closed = false;
         for (st_key, st_cnt) in &assignee_count.status_counts {
             if !st_key.eq_ignore_ascii_case("closed") && *st_cnt > 0 {
@@ -242,22 +246,30 @@ fn generate_pivot_html(rows: &[TicketRow], statuses: &[String], include_team_col
         }
 
         if include_team_col && !printed_teams.contains(&t) {
-            html.push_str(&render_row(&t, 0, true, team_counts.get(&t).unwrap()));
+            if let Some(count) = team_counts.get(&t) {
+                html.push_str(&render_row(&t, 0, true, count));
+            }
             printed_teams.insert(t.clone());
         }
 
         if !printed_assignees.contains(&a_key) {
             let indent = if include_team_col { 1 } else { 0 };
-            html.push_str(&render_row(
-                &a,
-                indent,
-                true,
-                assignee_counts.get(&a_key).unwrap(),
-            ));
+            if let Some(count) = assignee_counts.get(&a_key) {
+                html.push_str(&render_row(
+                    &a,
+                    indent,
+                    true,
+                    count,
+                ));
+            }
             printed_assignees.insert(a_key.clone());
         }
 
-        let subtype_count = subtype_counts.get(&s_key).unwrap();
+        let subtype_count = if let Some(count) = subtype_counts.get(&s_key) {
+            count
+        } else {
+            continue;
+        };
         let mut subtype_has_non_closed = false;
         for (st_key, st_cnt) in &subtype_count.status_counts {
             if !st_key.eq_ignore_ascii_case("closed") && *st_cnt > 0 {
@@ -276,7 +288,11 @@ fn generate_pivot_html(rows: &[TicketRow], statuses: &[String], include_team_col
             printed_subtypes.insert(s_key.clone());
         }
 
-        let category_count = category_counts.get(&c_key).unwrap();
+        let category_count = if let Some(count) = category_counts.get(&c_key) {
+            count
+        } else {
+            continue;
+        };
         let mut category_has_non_closed = false;
         for (st_key, st_cnt) in &category_count.status_counts {
             if !st_key.eq_ignore_ascii_case("closed") && *st_cnt > 0 {
@@ -842,9 +858,13 @@ pub fn process_emails(
 
             // Extract title
             let mut extracted_subject = format!("Open TKTs - {}", bucket_name);
-            if let Some(start_idx) = template_content.find("<title>") {
-                if let Some(end_idx) = template_content[start_idx..].find("</title>") {
-                    let title_content = &template_content[start_idx + 7..start_idx + end_idx];
+            if let (Some(start_idx), Some(relative_end_idx)) = (
+                template_content.find("<title>"),
+                template_content.find("</title>")
+            ) {
+                let end_idx = relative_end_idx;
+                if start_idx < end_idx {
+                    let title_content = &template_content[start_idx + 7..end_idx];
                     extracted_subject = title_content
                         .replace("{bucket_name}", bucket_name)
                         .replace("{from_date_str}", &from_date_str)
@@ -856,10 +876,14 @@ pub fn process_emails(
 
             // Extract body
             let mut extracted_body = template_content.clone();
-            if let Some(start_idx) = template_content.find("<body>") {
-                if let Some(end_idx) = template_content[start_idx..].find("</body>") {
+            if let (Some(start_idx), Some(relative_end_idx)) = (
+                template_content.find("<body>"),
+                template_content.find("</body>")
+            ) {
+                let end_idx = relative_end_idx;
+                if start_idx < end_idx {
                     extracted_body =
-                        template_content[start_idx + 6..start_idx + end_idx].to_string();
+                        template_content[start_idx + 6..end_idx].to_string();
                 }
             }
 

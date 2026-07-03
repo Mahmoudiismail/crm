@@ -506,7 +506,6 @@ async fn run_task(
     {
         let mut st = status.lock().await;
         if st.currently_running {
-            task.last_status = "skipped: another task is running".to_string();
             return;
         }
         st.currently_running = true;
