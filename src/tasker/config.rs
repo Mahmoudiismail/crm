@@ -89,7 +89,7 @@ mod tests {
         let config: TaskerConfig = serde_json::from_str(json_data).unwrap();
         assert_eq!(config.tasks.len(), 1);
 
-        match &config.tasks[0] {
+        match config.tasks.first().expect("Task list empty") {
             TaskConfig::CsvAnalysis(csv) => {
                 assert_eq!(csv.download_path, "./downloads");
                 assert_eq!(csv.minutes_ago, 15);
@@ -123,7 +123,7 @@ mod tests {
         let config: TaskerConfig = serde_json::from_str(json_data).unwrap();
         assert_eq!(config.tasks.len(), 1);
 
-        match &config.tasks[0] {
+        match config.tasks.first().expect("Task list empty") {
             TaskConfig::DashboardUpdater(dash) => {
                 assert_eq!(dash.dashboard_file, "./dashboard.xlsx");
                 assert_eq!(dash.dashboard_table_name, "table2");

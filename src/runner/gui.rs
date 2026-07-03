@@ -1735,7 +1735,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(schedules.len(), 3);
-        match &schedules[0] {
+        match schedules.first().expect("No schedule") {
             TaskSchedule::Interval {
                 every_seconds,
                 working_hours,
@@ -1754,7 +1754,7 @@ mod tests {
             parse_schedules_text("interval: every 2h; wh: Monday=09:00-17:00,Friday=10:00-15:00\n")
                 .unwrap();
         assert_eq!(schedules.len(), 1);
-        match &schedules[0] {
+        match schedules.first().expect("No schedule") {
             TaskSchedule::Interval {
                 every_seconds,
                 working_hours,
@@ -1779,12 +1779,12 @@ mod tests {
         )
         .unwrap();
         assert_eq!(commands.len(), 3);
-        assert_eq!(commands[0].command, "echo prepare");
-        assert!(!commands[0].continue_on_error);
-        assert_eq!(commands[1].command, "cleanup-if-present");
-        assert!(commands[1].continue_on_error);
-        assert_eq!(commands[2].command, "echo fallback");
-        assert!(!commands[2].continue_on_error);
+        assert_eq!(commands.first().unwrap().command, "echo prepare");
+        assert!(!commands.first().unwrap().continue_on_error);
+        assert_eq!(commands.get(1).unwrap().command, "cleanup-if-present");
+        assert!(commands.get(1).unwrap().continue_on_error);
+        assert_eq!(commands.get(2).unwrap().command, "echo fallback");
+        assert!(!commands.get(2).unwrap().continue_on_error);
     }
 
     #[test]

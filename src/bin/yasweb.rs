@@ -96,7 +96,7 @@ fn run_browser_tab(
     let mut discovered_filters = Vec::new();
 
     let tab = if is_initial_tab {
-        let tabs = browser.get_tabs().lock().unwrap();
+        let tabs = browser.get_tabs().lock().unwrap_or_else(|e| e.into_inner());
         let mut blank_tab = None;
         for t in tabs.iter() {
             if t.get_url().contains("about:blank") {
@@ -1170,11 +1170,20 @@ async fn main() -> Result<()> {
             anyhow::bail!("--start-date must be before or equal to --end-date");
         }
 
-        let report_conf = config.reports.get(&active_report_name).unwrap();
+        let report_conf = config
+            .reports
+            .get(&active_report_name)
+            .context("Report name not found in config")?;
         if report_conf.start_date_key.is_none()
             || report_conf.end_date_key.is_none()
-            || report_conf.start_date_key.as_ref().unwrap().is_empty()
-            || report_conf.end_date_key.as_ref().unwrap().is_empty()
+            || report_conf
+                .start_date_key
+                .as_ref()
+                .is_none_or(|k| k.is_empty())
+            || report_conf
+                .end_date_key
+                .as_ref()
+                .is_none_or(|k| k.is_empty())
         {
             error!("For monthly execution, the report must have start_date_key and end_date_key configured in yasweb_config.json.");
             anyhow::bail!("For monthly execution, the report must have start_date_key and end_date_key configured in yasweb_config.json.");
@@ -1183,12 +1192,13 @@ async fn main() -> Result<()> {
         let mut current_dt = start_dt;
         while current_dt <= end_dt {
             let next_month = if current_dt.month() == 12 {
-                NaiveDate::from_ymd_opt(current_dt.year() + 1, 1, 1).unwrap()
+                NaiveDate::from_ymd_opt(current_dt.year() + 1, 1, 1).context("Invalid date math")?
             } else {
-                NaiveDate::from_ymd_opt(current_dt.year(), current_dt.month() + 1, 1).unwrap()
+                NaiveDate::from_ymd_opt(current_dt.year(), current_dt.month() + 1, 1)
+                    .context("Invalid date math")?
             };
 
-            let last_day = next_month.pred_opt().unwrap();
+            let last_day = next_month.pred_opt().context("Invalid date math")?;
             let chunk_end = if last_day > end_dt { end_dt } else { last_day };
 
             date_ranges.push((
@@ -1247,7 +1257,10 @@ async fn main() -> Result<()> {
 
             let mut run_filters = active_filters.clone();
             if is_monthly && !start_dt.is_empty() && !end_dt.is_empty() {
-                let report_conf = config.reports.get(&active_report_name).unwrap();
+                let report_conf = config
+                    .reports
+                    .get(&active_report_name)
+                    .context("Report name not found in config")?;
                 if let Some(sk) = &report_conf.start_date_key {
                     run_filters.insert(sk.clone(), start_dt.clone());
                 }

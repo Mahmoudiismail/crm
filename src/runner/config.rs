@@ -842,7 +842,7 @@ mod tests {
 
         // Verify
         assert_eq!(loaded.tasks.len(), 1);
-        let loaded_task = &loaded.tasks[0];
+        let loaded_task = loaded.tasks.first().expect("No tasks loaded");
         assert_eq!(loaded_task.id, "test_interval");
         assert_eq!(loaded_task.name, "Test Interval Task");
         assert!(loaded_task.enabled);
@@ -850,7 +850,7 @@ mod tests {
 
         // Verify interval schedule
         assert_eq!(loaded_task.schedules.len(), 1);
-        match &loaded_task.schedules[0] {
+        match loaded_task.schedules.first().expect("No schedules loaded") {
             TaskSchedule::Interval {
                 every_seconds,
                 enabled,
@@ -911,7 +911,7 @@ mod tests {
 
         // Verify
         assert_eq!(loaded.tasks.len(), 1);
-        let loaded_task = &loaded.tasks[0];
+        let loaded_task = loaded.tasks.first().expect("No tasks loaded");
         assert_eq!(loaded_task.id, "test_shell");
         assert_eq!(loaded_task.name, "Test Shell Task");
 
@@ -920,9 +920,12 @@ mod tests {
             TaskKind::ShellCommand { mode, commands } => {
                 assert_eq!(*mode, ShellCommandMode::Parallel);
                 assert_eq!(commands.len(), 2);
-                assert_eq!(commands[0].command, "tar -czf backup.tar.gz /data");
-                assert!(!commands[0].continue_on_error);
-                assert!(commands[1].continue_on_error);
+                assert_eq!(
+                    commands.first().expect("Missing command").command,
+                    "tar -czf backup.tar.gz /data"
+                );
+                assert!(!commands.first().expect("Missing command").continue_on_error);
+                assert!(commands.get(1).expect("Missing command").continue_on_error);
             }
             _ => panic!("Expected ShellCommand kind"),
         }
@@ -997,11 +1000,11 @@ mod tests {
         assert_eq!(loaded.tasks.len(), 2);
 
         // Verify first task (CRM with interval)
-        let crm_task = &loaded.tasks[0];
+        let crm_task = loaded.tasks.first().expect("No task");
         assert_eq!(crm_task.id, "crm_task");
         assert!(matches!(crm_task.kind, TaskKind::ShellCommand { .. }));
         assert!(!crm_task.schedules.is_empty());
-        match &crm_task.schedules[0] {
+        match crm_task.schedules.first().expect("No schedules") {
             TaskSchedule::Interval { every_seconds, .. } => {
                 assert_eq!(*every_seconds, 86400);
             }
@@ -1016,11 +1019,14 @@ mod tests {
             TaskKind::ShellCommand { mode, commands } => {
                 assert_eq!(*mode, ShellCommandMode::Sequential);
                 assert_eq!(commands.len(), 1);
-                assert_eq!(commands[0].command, "echo Hello World");
+                assert_eq!(
+                    commands.first().expect("Missing command").command,
+                    "echo Hello World"
+                );
             }
             _ => panic!("Expected ShellCommand kind"),
         }
-        match &shell_task.schedules[0] {
+        match shell_task.schedules.first().expect("No schedules") {
             TaskSchedule::Once { .. } => {}
             _ => panic!("Expected Once schedule"),
         }
