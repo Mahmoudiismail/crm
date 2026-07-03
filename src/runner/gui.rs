@@ -339,8 +339,14 @@ async fn route_request(
     if request.method == "GET" && route_path.starts_with("/apps/edit/") {
         let app_id = route_path.trim_start_matches("/apps/edit/");
         let cfg = RunnerConfig::load(&handle.runner_config_path)?;
-        let decoded_app_id = urlencoding::decode(app_id).map(|c| c.into_owned()).unwrap_or_else(|_| app_id.to_string());
-        if let Some(app) = cfg.registered_apps.iter().find(|a| a.id == app_id || a.id == decoded_app_id) {
+        let decoded_app_id = urlencoding::decode(app_id)
+            .map(|c| c.into_owned())
+            .unwrap_or_else(|_| app_id.to_string());
+        if let Some(app) = cfg
+            .registered_apps
+            .iter()
+            .find(|a| a.id == app_id || a.id == decoded_app_id)
+        {
             let html = render_app_edit_page(app);
             return Ok((200, "text/html; charset=utf-8", html));
         }
@@ -356,8 +362,14 @@ async fn route_request(
         let values = parse_query_string(&request.body);
 
         let mut cfg = RunnerConfig::load(&handle.runner_config_path)?;
-        let decoded_app_id = urlencoding::decode(&app_id).map(|c| c.into_owned()).unwrap_or_else(|_| app_id.clone());
-        if let Some(app) = cfg.registered_apps.iter_mut().find(|a| a.id == app_id || a.id == decoded_app_id) {
+        let decoded_app_id = urlencoding::decode(&app_id)
+            .map(|c| c.into_owned())
+            .unwrap_or_else(|_| app_id.clone());
+        if let Some(app) = cfg
+            .registered_apps
+            .iter_mut()
+            .find(|a| a.id == app_id || a.id == decoded_app_id)
+        {
             app.name = values
                 .get("name")
                 .map(|s| s.trim().to_string())
