@@ -234,7 +234,10 @@ async fn handle_command(
 }
 
 pub async fn create_task(path: &str, mut task: RunnerTask) -> Result<()> {
-    let mut cfg = RunnerConfig::load(path)?;
+    let path_str = path.to_string();
+    let mut cfg = tokio::task::spawn_blocking(move || RunnerConfig::load(&path_str))
+        .await
+        .context("spawn_blocking panic")??;
     normalize_and_validate_task(&mut task, &cfg)?;
 
     if cfg.tasks.iter().any(|t| t.id == task.id) {
@@ -242,12 +245,18 @@ pub async fn create_task(path: &str, mut task: RunnerTask) -> Result<()> {
     }
 
     cfg.tasks.push(task);
-    cfg.save(path)?;
+    let path_str = path.to_string();
+    tokio::task::spawn_blocking(move || cfg.save(&path_str))
+        .await
+        .context("spawn_blocking panic")??;
     Ok(())
 }
 
 pub async fn update_task(path: &str, task_id: &str, mut task: RunnerTask) -> Result<()> {
-    let mut cfg = RunnerConfig::load(path)?;
+    let path_str = path.to_string();
+    let mut cfg = tokio::task::spawn_blocking(move || RunnerConfig::load(&path_str))
+        .await
+        .context("spawn_blocking panic")??;
     let Some(existing_idx) = cfg.tasks.iter().position(|t| t.id == task_id) else {
         return Err(anyhow::anyhow!("Task '{}' not found", task_id));
     };
@@ -274,23 +283,35 @@ pub async fn update_task(path: &str, task_id: &str, mut task: RunnerTask) -> Res
     }
 
     cfg.tasks[existing_idx] = task;
-    cfg.save(path)?;
+    let path_str = path.to_string();
+    tokio::task::spawn_blocking(move || cfg.save(&path_str))
+        .await
+        .context("spawn_blocking panic")??;
     Ok(())
 }
 
 pub async fn delete_task(path: &str, task_id: &str) -> Result<()> {
-    let mut cfg = RunnerConfig::load(path)?;
+    let path_str = path.to_string();
+    let mut cfg = tokio::task::spawn_blocking(move || RunnerConfig::load(&path_str))
+        .await
+        .context("spawn_blocking panic")??;
     let initial_len = cfg.tasks.len();
     cfg.tasks.retain(|t| t.id != task_id);
     if cfg.tasks.len() == initial_len {
         return Err(anyhow::anyhow!("Task '{}' not found", task_id));
     }
-    cfg.save(path)?;
+    let path_str = path.to_string();
+    tokio::task::spawn_blocking(move || cfg.save(&path_str))
+        .await
+        .context("spawn_blocking panic")??;
     Ok(())
 }
 
 pub async fn run_due_tasks(path: &str, status: &Arc<Mutex<RunnerStatus>>) -> Result<()> {
-    let mut cfg = RunnerConfig::load(path)?;
+    let path_str = path.to_string();
+    let mut cfg = tokio::task::spawn_blocking(move || RunnerConfig::load(&path_str))
+        .await
+        .context("spawn_blocking panic")??;
     let now = Utc::now();
     let policy = policy_from_config(&cfg);
 
@@ -301,12 +322,18 @@ pub async fn run_due_tasks(path: &str, status: &Arc<Mutex<RunnerStatus>>) -> Res
         }
     }
 
-    cfg.save(path)?;
+    let path_str = path.to_string();
+    tokio::task::spawn_blocking(move || cfg.save(&path_str))
+        .await
+        .context("spawn_blocking panic")??;
     Ok(())
 }
 
 async fn run_all_tasks_now(path: &str, status: &Arc<Mutex<RunnerStatus>>) -> Result<()> {
-    let mut cfg = RunnerConfig::load(path)?;
+    let path_str = path.to_string();
+    let mut cfg = tokio::task::spawn_blocking(move || RunnerConfig::load(&path_str))
+        .await
+        .context("spawn_blocking panic")??;
     let now = Utc::now();
     let policy = policy_from_config(&cfg);
     for task in &mut cfg.tasks {
@@ -315,7 +342,10 @@ async fn run_all_tasks_now(path: &str, status: &Arc<Mutex<RunnerStatus>>) -> Res
             update_next_run(task, now, policy.min_task_interval_seconds);
         }
     }
-    cfg.save(path)?;
+    let path_str = path.to_string();
+    tokio::task::spawn_blocking(move || cfg.save(&path_str))
+        .await
+        .context("spawn_blocking panic")??;
     Ok(())
 }
 
@@ -324,14 +354,21 @@ async fn run_task_by_id(
     task_id: &str,
     status: &Arc<Mutex<RunnerStatus>>,
 ) -> Result<()> {
-    let mut cfg = RunnerConfig::load(path)?;
+    let path_str = path.to_string();
+    let mut cfg = tokio::task::spawn_blocking(move || RunnerConfig::load(&path_str))
+        .await
+        .context("spawn_blocking panic")??;
     let now = Utc::now();
     let policy = policy_from_config(&cfg);
 
     if let Some(task) = cfg.tasks.iter_mut().find(|t| t.id == task_id) {
         run_task(task, &policy, status).await;
         update_next_run(task, now, policy.min_task_interval_seconds);
-        cfg.save(path)?;
+        let path_str = path.to_string();
+        let cfg_clone = cfg.clone();
+        tokio::task::spawn_blocking(move || cfg_clone.save(&path_str))
+            .await
+            .context("spawn_blocking panic")??;
         return Ok(());
     }
 
@@ -339,7 +376,10 @@ async fn run_task_by_id(
 }
 
 async fn set_task_enabled(path: &str, task_id: &str, enabled: bool) -> Result<()> {
-    let mut cfg = RunnerConfig::load(path)?;
+    let path_str = path.to_string();
+    let mut cfg = tokio::task::spawn_blocking(move || RunnerConfig::load(&path_str))
+        .await
+        .context("spawn_blocking panic")??;
     if let Some(task) = cfg.tasks.iter_mut().find(|t| t.id == task_id) {
         task.enabled = enabled;
         if enabled && task.next_run_at.is_empty() {
@@ -348,7 +388,11 @@ async fn set_task_enabled(path: &str, task_id: &str, enabled: bool) -> Result<()
         for schedule in &mut task.schedules {
             set_schedule_enabled(schedule, enabled);
         }
-        cfg.save(path)?;
+        let path_str = path.to_string();
+        let cfg_clone = cfg.clone();
+        tokio::task::spawn_blocking(move || cfg_clone.save(&path_str))
+            .await
+            .context("spawn_blocking panic")??;
         return Ok(());
     }
     Err(anyhow::anyhow!("Task '{}' not found", task_id))
