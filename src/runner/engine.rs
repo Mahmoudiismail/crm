@@ -561,10 +561,16 @@ async fn run_external_app(
     }
 
     for (k, v) in args {
+        if k == "--config" && !app.config_path.trim().is_empty() {
+            // Do not allow task arguments to override the app's registered config path if the app already has one defined
+            continue;
+        }
         if v.eq_ignore_ascii_case("true") || v.eq_ignore_ascii_case("on") {
             command.arg(k);
         } else if v.eq_ignore_ascii_case("false") || v.eq_ignore_ascii_case("off") {
             // omit
+        } else if v.trim().is_empty() {
+            // Do not add the flag at all if its value is empty, this prevents passing empty filters like `--filters ""` or empty `--config ""`
         } else {
             command.arg(k).arg(v);
         }

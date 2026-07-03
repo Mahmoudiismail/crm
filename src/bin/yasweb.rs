@@ -1068,13 +1068,17 @@ async fn main() -> Result<()> {
             }
             "--filters" if i + 1 < args.len() => {
                 let filters_str = args[i + 1].clone();
-                match serde_json::from_str::<HashMap<String, String>>(&filters_str) {
-                    Ok(parsed_filters) => {
-                        active_filters = parsed_filters;
-                    }
-                    Err(e) => {
-                        error!("Failed to parse filters JSON: {}", e);
-                        anyhow::bail!("Failed to parse filters JSON: {}", e);
+                if filters_str.trim().is_empty() {
+                    active_filters = HashMap::new();
+                } else {
+                    match serde_json::from_str::<HashMap<String, String>>(&filters_str) {
+                        Ok(parsed_filters) => {
+                            active_filters = parsed_filters;
+                        }
+                        Err(e) => {
+                            error!("Failed to parse filters JSON: {}", e);
+                            anyhow::bail!("Failed to parse filters JSON: {}", e);
+                        }
                     }
                 }
                 i += 1;

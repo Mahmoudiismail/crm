@@ -69,6 +69,7 @@ CRM always performs login.
 - Schedule summaries, next-run times, and last-run times are rendered in human-readable local time in the GUI.
 - Tray and GUI can trigger run-all, tickets-only CRM, or specific task by id.
 - Atomic run guard prevents overlapping task execution.
+- Supports editing dynamically registered applications via the GUI.
 - Shell tasks are controlled by runner safety policy (`allow_shell_tasks`, per-task timeouts or global fallback timeout, min interval) and can run commands sequentially or in parallel.
 
 ## Main Workflow (yasweb)
