@@ -72,7 +72,7 @@ This task is designed to process multiple ticket report CSV files and augment th
         "ending_cc": "ending@example.com",
         "send_emails": false,
         "default_to_email": "fallback@example.com",
-        "send_per_team_branches": ["Dr. Soliman Fakeeh Hospital"],
+        "send_per_team_all_branches": ["PRE-AUTHORIZATION"],
         "send_per_branch_branches": ["dsfmc", "DSFMH"],
         "send_call_center": true
       }
@@ -100,7 +100,7 @@ This task is designed to process multiple ticket report CSV files and augment th
   - `initial_cc` / `ending_cc`: Static CC emails appended to every sent mail.
   - `send_emails`: Boolean, if `false` emails are left open as drafts (using `.Display()`) for manual review. If `true` uses `.Send()`.
   - `default_to_email`: Fallback email if team mapped isn't found, and also used to send exception/error reports.
-  - `send_per_team_branches`: List of branches that should send distinct emails for each *team* within the branch.
+  - `send_per_team_all_branches`: List of teams (e.g., "PRE-AUTHORIZATION") whose tickets should be aggregated into a single email spanning across all allowed branches, rather than partitioned by individual branch rules.
   - `send_per_branch_branches`: List of branches that will receive *one email for the entire branch* instead of separated by team.
   - `send_call_center`: Boolean, if true unifies the "Call Center" tickets from all allowed branches into a single email instead of being grouped with the others. It also automatically discovers, parses, and attaches any matching `lead_report_*.csv` files for the Call Center bucket (even if there are zero open tickets for the target period).
 
@@ -149,7 +149,7 @@ This task is similar to `csv_analysis`, in that it processes raw ticket CSVs bas
 4. **Sort and Output:** Sorts numerically by `Ticket Id` and streams everything efficiently to the `output_file`.
 5. **Email Automation:** (If `email_config` is defined)
     - Re-reads the generated output. Filters out any "Closed" tickets.
-    - Groups remaining tickets by either branch or team as defined in `send_per_team_branches` and `send_per_branch_branches`, separating "Call Center" tickets if configured.
+    - Groups remaining tickets by either branch or team as defined in `send_per_team_all_branches` and `send_per_branch_branches`, separating "Call Center" tickets if configured.
     - Uses `rust_xlsxwriter` to create a `.xlsx` data file for each group.
     - Generates a heavily styled HTML Pivot Table counting occurrences by dynamically resolved Status per Subtype/Category.
     - Executes a background PowerShell script to automate Microsoft Outlook (`New-Object -ComObject Outlook.Application`), appending the Excel attachment and drafting/sending the result.
