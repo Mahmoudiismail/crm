@@ -255,12 +255,7 @@ fn generate_pivot_html(rows: &[TicketRow], statuses: &[String], include_team_col
         if !printed_assignees.contains(&a_key) {
             let indent = if include_team_col { 1 } else { 0 };
             if let Some(count) = assignee_counts.get(&a_key) {
-                html.push_str(&render_row(
-                    &a,
-                    indent,
-                    true,
-                    count,
-                ));
+                html.push_str(&render_row(&a, indent, true, count));
             }
             printed_assignees.insert(a_key.clone());
         }
@@ -860,7 +855,7 @@ pub fn process_emails(
             let mut extracted_subject = format!("Open TKTs - {}", bucket_name);
             if let (Some(start_idx), Some(relative_end_idx)) = (
                 template_content.find("<title>"),
-                template_content.find("</title>")
+                template_content.find("</title>"),
             ) {
                 let end_idx = relative_end_idx;
                 if start_idx < end_idx {
@@ -878,12 +873,11 @@ pub fn process_emails(
             let mut extracted_body = template_content.clone();
             if let (Some(start_idx), Some(relative_end_idx)) = (
                 template_content.find("<body>"),
-                template_content.find("</body>")
+                template_content.find("</body>"),
             ) {
                 let end_idx = relative_end_idx;
                 if start_idx < end_idx {
-                    extracted_body =
-                        template_content[start_idx + 6..end_idx].to_string();
+                    extracted_body = template_content[start_idx + 6..end_idx].to_string();
                 }
             }
 
