@@ -49,7 +49,7 @@ async fn run_server(handle: RunnerHandle) -> Result<()> {
                 Err(e) => (
                     500,
                     "text/html; charset=utf-8",
-                    render_error_page("Request failed", &e.to_string()),
+                    render_error_page("Request failed", &format!("{e}")),
                 ),
             };
 

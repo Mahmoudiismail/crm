@@ -1243,7 +1243,7 @@ async fn main() -> Result<()> {
         .user_data_dir(Some(user_data_dir))
         .args(args)
         .build()
-        .unwrap();
+        .map_err(|e| anyhow::anyhow!("Failed to build launch options: {e}"))?;
 
     let browser = Arc::new(Browser::new(launch_options).context("Failed to launch browser")?);
 
