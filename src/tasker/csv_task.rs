@@ -42,7 +42,7 @@ pub fn parse_created_at(val: &str) -> Option<NaiveDateTime> {
     }
     // Try float
     if let Ok(excel_float) = trimmed.parse::<f64>() {
-        let base_date = NaiveDate::from_ymd_opt(1899, 12, 30).expect("Base date must be valid");
+        let base_date = NaiveDate::from_ymd_opt(1899, 12, 30).unwrap_or_default();
         let days = excel_float.trunc() as i64;
         let fraction = excel_float.fract();
         let seconds_in_day = 86400.0;

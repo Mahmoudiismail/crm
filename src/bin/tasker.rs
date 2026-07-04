@@ -139,11 +139,11 @@ pub fn run_app(args: Vec<String>) -> Result<()> {
         match (a, b) {
             (Value::Object(a_obj), Value::Object(b_obj)) => {
                 for (k, v) in b_obj {
-                    if !a_obj.contains_key(k) {
+                    if let Some(a_val) = a_obj.get_mut(k) {
+                        merge(a_val, v, changed);
+                    } else {
                         a_obj.insert(k.clone(), v.clone());
                         *changed = true;
-                    } else {
-                        merge(a_obj.get_mut(k).unwrap(), v, changed);
                     }
                 }
             }
