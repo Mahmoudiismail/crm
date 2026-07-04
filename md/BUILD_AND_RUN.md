@@ -48,11 +48,19 @@ cargo run --bin tasker -- --manifest
 
 They will output a JSON representation of their arguments and exit.
 
-## Running Tests
+## CI Pipeline and Testing
+
+The GitHub Actions CI pipeline enforces the following step order for all pull requests:
+1. `cargo fmt -- --check`
+2. `cargo clippy --all-targets --all-features -- -D warnings`
+3. `cargo test --workspace`
+4. `cargo build --all-targets`
+
+### Running Tests Locally
 
 Standard Rust cargo tests:
 ```bash
-cargo test
+cargo test --workspace
 ```
 
 ## Cross-Compiling for Windows (from Linux/WSL)

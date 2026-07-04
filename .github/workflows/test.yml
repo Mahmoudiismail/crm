@@ -27,14 +27,14 @@ jobs:
         with:
           shared-key: "crm-rust-shared-cache"
 
-      - name: Build all models and binaries
-        run: cargo build --workspace --all-targets
-
-      - name: Run tests
-        run: cargo test --workspace
-
       - name: Run format check
         run: cargo fmt -- --check
 
       - name: Run clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Run tests
+        run: cargo test --workspace
+
+      - name: Build all models and binaries
+        run: cargo build --all-targets
