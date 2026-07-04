@@ -30,7 +30,10 @@ pub fn run_app(args: Vec<String>) -> Result<()> {
             "--config" => {
                 if let Some(path) = args_iter.peek() {
                     if !path.starts_with("-") {
-                        config_path_arg = Some(std::path::PathBuf::from(args_iter.next().ok_or_else(|| anyhow::anyhow!("Missing value for --config"))?));
+                        config_path_arg =
+                            Some(std::path::PathBuf::from(args_iter.next().ok_or_else(
+                                || anyhow::anyhow!("Missing value for --config"),
+                            )?));
                     } else {
                         tracing::warn!(
                             "--config flag provided but next argument starts with '-'. Ignoring."
