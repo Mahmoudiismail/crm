@@ -14,6 +14,7 @@
 - `--config <PATH>`: Overrides the default `tasker_config.json` path. (Legacy support also allows passing just the path without the flag, as long as it does not start with `-`).
 - `--task <INDEX>`: Executes only a specific task from the configuration (1-based index). For example, `--task 1` runs only the first task in the config array.
 - `--only-call-center`: When provided, the task skips generating per-team and per-branch emails, and *only* processes and sends the Call Center email logic for the target task.
+- `--only-call-center2`: When provided, the task skips generating per-team and per-branch emails, and *only* processes and sends the Call Center2 email logic for the target task.
 
 **Example: Scheduling in runner_config.json**
 To schedule these separately in the `runner`, you can configure two different tasks in `runner_config.json`:
@@ -74,6 +75,7 @@ This task is designed to process multiple ticket report CSV files and augment th
         "default_to_email": "fallback@example.com",
         "send_per_team_all_branches": ["PRE-AUTHORIZATION"],
         "send_per_branch_branches": ["dsfmc", "DSFMH"],
+        "send_per_team_branches": ["Dr. Soliman Fakeeh Hospital Jeddah"],
         "send_call_center": true
       }
     }
@@ -92,7 +94,7 @@ This task is designed to process multiple ticket report CSV files and augment th
 - `category_exceptions`: (Optional) List of objects specifying conditional inclusions for otherwise excluded categories.
   - `category`: The category string that normally would be excluded.
   - `branch`: (Optional) Only allow the exception if the ticket branch matches this.
-  - `team`: (Optional) Only allow the exception if the assigned team matches this.
+  - `team`: (Optional) If specified and the exception matches, this overrides and assigns the ticket to this team.
 - `output_file`: Destination file path to write the combined, joined, and augmented CSV output.
 - `email_config`: (Optional) Specifies automated email configuration via Microsoft Outlook.
   - `team_mapping_file`: Path to CSV configuring email recipients per Team or Branch Name (Requires headers `Team Name`, `To Emails`, `CC`).
@@ -102,6 +104,7 @@ This task is designed to process multiple ticket report CSV files and augment th
   - `default_to_email`: Fallback email if team mapped isn't found, and also used to send exception/error reports.
   - `send_per_team_all_branches`: List of teams (e.g., "PRE-AUTHORIZATION") whose tickets should be aggregated into a single email spanning across all allowed branches, rather than partitioned by individual branch rules.
   - `send_per_branch_branches`: List of branches that will receive *one email for the entire branch* instead of separated by team.
+  - `send_per_team_branches`: List of branches that should have their emails sent per team.
   - `send_call_center`: Boolean, if true unifies the "Call Center" tickets from all allowed branches into a single email instead of being grouped with the others. It also automatically discovers, parses, and attaches any matching `lead_report_*.csv` files for the Call Center bucket (even if there are zero open tickets for the target period).
 
 ### `dashboard_updater` Task

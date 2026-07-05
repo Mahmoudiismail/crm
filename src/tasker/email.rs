@@ -473,13 +473,14 @@ pub fn process_emails(
     results_file: &str,
     config: &EmailConfig,
     only_call_center: bool,
+    only_call_center2: bool,
     send_exceptions: bool,
     download_dir: &str,
     minutes_ago: i64,
 ) -> Result<()> {
     info!(
-        "Starting email processing module. Reading output from {} (only_call_center: {}, send_exceptions: {})",
-        results_file, only_call_center, send_exceptions
+        "Starting email processing module. Reading output from {} (only_call_center: {}, only_call_center2: {}, send_exceptions: {})",
+        results_file, only_call_center, only_call_center2, send_exceptions
     );
 
     let team_mapping_path =
@@ -521,6 +522,7 @@ pub fn process_emails(
     let mut team_idx = None;
     let mut created_at_idx = None;
     let mut is_exception_idx = None;
+    let mut position_idx = None;
 
     for (i, h) in headers.iter().enumerate() {
         let h_low = h.trim().to_lowercase();
@@ -544,6 +546,8 @@ pub fn process_emails(
             created_at_idx = Some(i);
         } else if h_low == "is exception" {
             is_exception_idx = Some(i);
+        } else if h_low == "position" {
+            position_idx = Some(i);
         }
     }
 
@@ -685,37 +689,55 @@ pub fn process_emails(
         .iter()
         .map(|s| s.to_lowercase())
         .collect();
-    // Force sending CC if only_call_center flag is passed via CLI, otherwise use config
-    let send_cc = only_call_center || config.send_call_center.unwrap_or(false);
+    let send_per_team_branches: HashSet<String> = config
+        .send_per_team_branches
+        .as_ref()
+        .unwrap_or(&Vec::new())
+        .iter()
+        .map(|s| s.to_lowercase())
+        .collect();
+
+    let send_cc = config.send_call_center.unwrap_or(false);
 
     let mut per_team_buckets: HashMap<String, Vec<TicketRow>> = HashMap::new(); // Key: Team name
     let mut per_branch_buckets: HashMap<String, Vec<TicketRow>> = HashMap::new(); // Key: Branch name
     let mut call_center_bucket: Vec<TicketRow> = Vec::new();
+    let mut call_center2_bucket: Vec<TicketRow> = Vec::new();
 
     for row in ticket_rows {
         let b_low = row.branch.to_lowercase();
         let t_low = row.team.to_lowercase();
 
         let is_cc = t_low == "call center";
+        let is_cc2 = t_low == "call center2";
 
         // "all allowed branches" means the branch must be in send_per_branch_branches.
         let allowed_branch = send_per_branch_branches.contains(&b_low);
 
-        if allowed_branch {
-            if is_cc && send_cc {
+        if is_cc {
+            if send_cc && only_call_center {
                 call_center_bucket.push(row);
-            } else if !is_cc && !only_call_center {
-                if send_per_team_all_branches.contains(&t_low) {
-                    per_team_buckets
-                        .entry(row.team.clone())
-                        .or_default()
-                        .push(row);
-                } else {
-                    per_branch_buckets
-                        .entry(row.branch.clone())
-                        .or_default()
-                        .push(row);
-                }
+            }
+        } else if is_cc2 {
+            if send_cc && only_call_center2 {
+                call_center2_bucket.push(row);
+            }
+        } else if !only_call_center && !only_call_center2 {
+            if send_per_team_all_branches.contains(&t_low) {
+                per_team_buckets
+                    .entry(row.team.clone())
+                    .or_default()
+                    .push(row);
+            } else if allowed_branch {
+                per_branch_buckets
+                    .entry(row.branch.clone())
+                    .or_default()
+                    .push(row);
+            } else if send_per_team_branches.contains(&b_low) {
+                per_team_buckets
+                    .entry(row.team.clone())
+                    .or_default()
+                    .push(row);
             }
         }
     }
@@ -796,11 +818,17 @@ pub fn process_emails(
             (config.default_to_email.clone(), String::new())
         } else {
             let mapped_cc = mapping.and_then(|m| m.cc.clone()).unwrap_or_default();
-            let ccs = vec![
-                config.initial_cc.clone(),
-                mapped_cc,
-                config.ending_cc.clone(),
-            ]
+            let ccs = if bucket_name.eq_ignore_ascii_case("call center")
+                || bucket_name.eq_ignore_ascii_case("call center2")
+            {
+                vec![mapped_cc]
+            } else {
+                vec![
+                    config.initial_cc.clone(),
+                    mapped_cc,
+                    config.ending_cc.clone(),
+                ]
+            }
             .into_iter()
             .filter(|s| !s.is_empty())
             .collect::<Vec<String>>()
@@ -917,9 +945,12 @@ pub fn process_emails(
         let mut workbook = Workbook::new();
         let worksheet = workbook.add_worksheet();
 
+        let skip_team_col = !is_branch && team_idx.is_some();
+        let skip_team_idx = if skip_team_col { team_idx } else { None };
+
         let mut out_col_idx = 0;
         for (i, h) in headers.iter().enumerate() {
-            if is_exception_idx == Some(i) {
+            if is_exception_idx == Some(i) || position_idx == Some(i) || skip_team_idx == Some(i) {
                 continue;
             }
             worksheet.write_string(0, out_col_idx, h)?;
@@ -933,7 +964,10 @@ pub fn process_emails(
             }
             let mut out_c_idx = 0;
             for (c_idx, field) in row.original_row.iter().enumerate() {
-                if is_exception_idx == Some(c_idx) {
+                if is_exception_idx == Some(c_idx)
+                    || position_idx == Some(c_idx)
+                    || skip_team_idx == Some(c_idx)
+                {
                     continue;
                 }
                 worksheet.write_string(write_r_idx as u32, out_c_idx, field)?;
@@ -1025,7 +1059,14 @@ $Mail.Display()
 
     // 3. Process Call Center
     // Call Center gets special treatment because even if they have NO open tickets, they might have leads.
-    send_email_for_bucket("Call Center", &call_center_bucket, true)?;
+    if send_cc && only_call_center {
+        send_email_for_bucket("Call Center", &call_center_bucket, true)?;
+    }
+
+    // 4. Process Call Center 2
+    if send_cc && only_call_center2 {
+        send_email_for_bucket("Call Center2", &call_center2_bucket, true)?;
+    }
 
     info!("Email processing complete.");
     Ok(())
@@ -1068,6 +1109,7 @@ mod tests {
             default_to_email: "def@example.com".to_string(),
             send_per_team_all_branches: vec!["Main Branch".to_string()],
             send_per_branch_branches: vec![],
+            send_per_team_branches: None,
             send_call_center: Some(false),
         };
 
@@ -1076,6 +1118,7 @@ mod tests {
         let result = process_emails(
             download_dir.path().join("results.csv").to_str().unwrap(),
             &email_config,
+            false,
             false,
             false,
             download_dir.path().to_str().unwrap(),

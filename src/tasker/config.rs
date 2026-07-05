@@ -24,6 +24,7 @@ pub struct EmailConfig {
     pub default_to_email: String,
     pub send_per_team_all_branches: Vec<String>,
     pub send_per_branch_branches: Vec<String>,
+    pub send_per_team_branches: Option<Vec<String>>,
     pub send_call_center: Option<bool>,
 }
 
