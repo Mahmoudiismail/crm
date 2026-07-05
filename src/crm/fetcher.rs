@@ -520,6 +520,29 @@ fn format_redacted_headers(headers: &reqwest::header::HeaderMap) -> String {
 // Tests
 // ──────────────────────────────────────────────────────────────
 
+fn has_recent_download(download_dir: &Path, prefix: &str) -> bool {
+    let threshold = SystemTime::now() - std::time::Duration::from_secs(30);
+
+    if let Ok(entries) = fs::read_dir(download_dir) {
+        for entry in entries.flatten() {
+            if let Ok(metadata) = entry.metadata() {
+                if metadata.is_file() {
+                    if let Some(name) = entry.file_name().to_str() {
+                        if name.starts_with(prefix) && name.ends_with(".csv") {
+                            if let Ok(modified) = metadata.modified() {
+                                if modified >= threshold {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -640,27 +663,4 @@ mod tests {
         assert!(!redacted.contains("super_secret_token"));
         assert!(!redacted.contains("session_id=12345"));
     }
-}
-
-fn has_recent_download(download_dir: &Path, prefix: &str) -> bool {
-    let threshold = SystemTime::now() - std::time::Duration::from_secs(30);
-
-    if let Ok(entries) = fs::read_dir(download_dir) {
-        for entry in entries.flatten() {
-            if let Ok(metadata) = entry.metadata() {
-                if metadata.is_file() {
-                    if let Some(name) = entry.file_name().to_str() {
-                        if name.starts_with(prefix) && name.ends_with(".csv") {
-                            if let Ok(modified) = metadata.modified() {
-                                if modified >= threshold {
-                                    return true;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    false
 }
