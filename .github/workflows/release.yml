@@ -101,23 +101,75 @@ jobs:
         with:
           name: ${{ matrix.binary }}_windows_zip
 
-      - name: Base64 Encode Google Drive Credentials
-        id: encode_creds
-        shell: bash
-        run: |
-          # Use an environment variable to securely handle the multi-line JSON secret
-          encoded_creds=$(echo -n "$GDRIVE_CREDENTIALS" | base64 -w 0)
-          echo "::add-mask::$encoded_creds"
-          echo "B64_CREDS=$encoded_creds" >> $GITHUB_ENV
-        env:
-          GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Google APIs
+        run: npm install googleapis
 
       - name: Upload to Google Drive
-        uses: mathisve/gdrive-upload-action@main
+        uses: actions/github-script@v7
+        env:
+          GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+          FILENAME: "${{ matrix.binary }}_windows.zip"
+          DRIVE_NAME: "v${{ needs.release.outputs.version }}-${{ matrix.binary }}_${{ needs.release.outputs.build_date }}_windows.zip"
         with:
-          credentials: ${{ env.B64_CREDS }}
-          filename: "${{ matrix.binary }}_windows.zip"
-          folderId: ${{ secrets.GDRIVE_FOLDER_ID }}
-          name: "v${{ needs.release.outputs.version }}-${{ matrix.binary }}_${{ needs.release.outputs.build_date }}_windows.zip"
-          encoded: true
-          overwrite: "true"
+          script: |
+            const fs = require('fs');
+            const { google } = require('googleapis');
+
+            const credsJson = process.env.GDRIVE_CREDENTIALS;
+            if (!credsJson) {
+              core.setFailed('GDRIVE_CREDENTIALS is not set');
+              return;
+            }
+            const credentials = JSON.parse(credsJson);
+
+            const auth = new google.auth.GoogleAuth({
+              credentials,
+              scopes: ['https://www.googleapis.com/auth/drive.file', 'https://www.googleapis.com/auth/drive'],
+            });
+
+            const drive = google.drive({ version: 'v3', auth });
+
+            const fileMetadata = {
+              name: process.env.DRIVE_NAME,
+              parents: [process.env.GDRIVE_FOLDER_ID]
+            };
+
+            const media = {
+              mimeType: 'application/zip',
+              body: fs.createReadStream(process.env.FILENAME)
+            };
+
+            try {
+              // Delete existing file if we want to mimic overwrite
+              const existingFiles = await drive.files.list({
+                q: `name='${process.env.DRIVE_NAME}' and '${process.env.GDRIVE_FOLDER_ID}' in parents and trashed=false`,
+                supportsAllDrives: true,
+                includeItemsFromAllDrives: true,
+                fields: 'files(id)'
+              });
+
+              if (existingFiles.data.files && existingFiles.data.files.length > 0) {
+                for (const file of existingFiles.data.files) {
+                  await drive.files.delete({
+                    fileId: file.id,
+                    supportsAllDrives: true
+                  });
+                }
+              }
+
+              const res = await drive.files.create({
+                requestBody: fileMetadata,
+                media: media,
+                fields: 'id',
+                supportsAllDrives: true
+              });
+              console.log(`File uploaded successfully with ID: ${res.data.id}`);
+            } catch (err) {
+              core.setFailed(`Error uploading file: ${err.message}`);
+            }
