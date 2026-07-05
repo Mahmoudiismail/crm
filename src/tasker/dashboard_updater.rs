@@ -62,11 +62,55 @@ pub fn run(config: &DashboardUpdaterConfig) -> Result<()> {
         );
     }
 
-    let csv_path_str = generated_csv_path.to_string_lossy().to_string();
+    // Filter out exceptions from the generated CSV for the dashboard
+    let tmp_dir = std::env::temp_dir();
+    let filtered_csv_path = tmp_dir.join(format!(
+        "dashboard_filtered_{}.csv",
+        Local::now().timestamp_nanos_opt().unwrap_or(0)
+    ));
+
+    {
+        let file = File::open(&generated_csv_path)?;
+        let mut rdr = csv::ReaderBuilder::new()
+            .has_headers(true)
+            .from_reader(file);
+        let headers = rdr.headers()?.clone();
+
+        let mut is_exception_idx = None;
+        for (i, h) in headers.iter().enumerate() {
+            if h.trim().to_lowercase() == "is exception" {
+                is_exception_idx = Some(i);
+                break;
+            }
+        }
+
+        let mut wtr = csv::WriterBuilder::new().from_path(&filtered_csv_path)?;
+        wtr.write_record(&headers)?;
+
+        for result in rdr.records() {
+            let record = result?;
+            let is_exception = if let Some(idx) = is_exception_idx {
+                record
+                    .get(idx)
+                    .unwrap_or("No")
+                    .trim()
+                    .eq_ignore_ascii_case("Yes")
+            } else {
+                false
+            };
+
+            if !is_exception {
+                wtr.write_record(&record)?;
+            }
+        }
+        wtr.flush()?;
+    }
+
+    let csv_path_str = filtered_csv_path.to_string_lossy().to_string();
     let dashboard_path_str = dashboard_file_path.to_string_lossy().to_string();
 
     info!(
-        "Updating dashboard table '{}' in file '{}' with CSV data from '{}'",
+        "Updating dashboard table '{}' in file '{}' with filtered CSV data from '{}'",
         config.dashboard_table_name, dashboard_path_str, csv_path_str
     );
 
@@ -167,7 +211,12 @@ $Excel.Quit()
         table_name = config.dashboard_table_name.replace('\'', "''")
     );
 
-    if let Err(e) = run_powershell(&ps_script) {
+    let ps_result = run_powershell(&ps_script);
+
+    // Cleanup temporary filtered CSV
+    let _ = std::fs::remove_file(&filtered_csv_path);
+
+    if let Err(e) = ps_result {
         error!("Error executing dashboard update PowerShell script: {}", e);
         anyhow::bail!(e);
     }
