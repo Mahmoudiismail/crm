@@ -54,6 +54,11 @@ jobs:
         shell: bash
         run: cd "target/release" && 7z a -p123456 ${{ matrix.binary }}_windows.zip ${{ matrix.binary }}.exe
 
+      - name: Get build date
+        shell: bash
+        run: |
+          echo "BUILD_DATE=$(date -u +'%Y%m%d_%H%M%S')" >> $GITHUB_ENV
+
       - name: Create or update GitHub release
         uses: softprops/action-gh-release@v3
         with:
@@ -66,3 +71,23 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Base64 Encode Google Drive Credentials
+        id: encode_creds
+        shell: bash
+        run: |
+          # Use an environment variable to securely handle the multi-line JSON secret
+          encoded_creds=$(echo -n "$GDRIVE_CREDENTIALS" | base64 -w 0)
+          echo "::add-mask::$encoded_creds"
+          echo "B64_CREDS=$encoded_creds" >> $GITHUB_ENV
+        env:
+          GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
+
+      - name: Upload to Google Drive
+        uses: adityak74/google-drive-upload-git-action@main
+        with:
+          credentials: ${{ env.B64_CREDS }}
+          filename: "target/release/${{ matrix.binary }}_windows.zip"
+          folderId: ${{ secrets.GDRIVE_FOLDER_ID }}
+          name: "v${{ env.VERSION }}-${{ matrix.binary }}_${{ env.BUILD_DATE }}_windows.zip"
+          overwrite: "true"
