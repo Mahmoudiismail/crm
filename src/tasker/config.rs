@@ -26,6 +26,7 @@ pub struct EmailConfig {
     pub send_per_branch_branches: Vec<String>,
     pub send_per_team_branches: Option<Vec<String>>,
     pub send_call_center: Option<bool>,
+    pub send_exceptions: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

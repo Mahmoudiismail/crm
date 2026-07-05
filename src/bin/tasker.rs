@@ -17,7 +17,6 @@ pub fn run_app(args: Vec<String>) -> Result<()> {
     let mut config_path_arg = None;
     let mut task_filter: Option<usize> = None;
     let mut only_call_center = false;
-    let mut only_call_center2 = false;
     let mut send_exceptions = false;
 
     let skip_count = if args.first().is_some_and(|a| !a.starts_with('-')) {
@@ -53,9 +52,6 @@ pub fn run_app(args: Vec<String>) -> Result<()> {
             "--only-call-center" => {
                 only_call_center = true;
             }
-            "--only-call-center2" => {
-                only_call_center2 = true;
-            }
             "--send-exceptions" => {
                 send_exceptions = true;
             }
@@ -90,13 +86,7 @@ pub fn run_app(args: Vec<String>) -> Result<()> {
       "exclude_categories": [
         "incomplete reservation"
       ],
-      "category_exceptions": [
-        {
-          "category": "incomplete reservation",
-          "branch": "",
-          "team": ""
-        }
-      ],
+      "category_exceptions": [],
       "output_file": "./results.csv",
       "email_config": {
         "team_mapping_file": "./teams.csv",
@@ -112,7 +102,8 @@ pub fn run_app(args: Vec<String>) -> Result<()> {
           "dsfmc",
           "DSFMH"
         ],
-        "send_call_center": false
+        "send_call_center": false,
+        "send_exceptions": false
       }
     }
   ]
@@ -207,12 +198,7 @@ pub fn run_app(args: Vec<String>) -> Result<()> {
         info!("Running task #{}", task_idx);
         match task {
             TaskConfig::CsvAnalysis(csv_config) => {
-                if let Err(e) = csv_task::run(
-                    csv_config,
-                    only_call_center,
-                    only_call_center2,
-                    send_exceptions,
-                ) {
+                if let Err(e) = csv_task::run(csv_config, only_call_center, send_exceptions) {
                     error!("Error running CsvAnalysis task: {:?}", e);
                 }
             }
@@ -251,13 +237,6 @@ fn print_manifest() {
             },
             AppArg {
                 name: "--only-call-center".to_string(),
-                arg_type: ArgType::Boolean,
-                required: false,
-                default_value: Some("false".to_string()),
-                options: None,
-            },
-            AppArg {
-                name: "--only-call-center2".to_string(),
                 arg_type: ArgType::Boolean,
                 required: false,
                 default_value: Some("false".to_string()),

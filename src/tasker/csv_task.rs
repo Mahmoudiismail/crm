@@ -525,12 +525,12 @@ pub fn generate_csv(params: &CsvAnalysisParams) -> Result<Option<std::path::Path
 pub fn run(
     config: &CsvAnalysisConfig,
     only_call_center: bool,
-    only_call_center2: bool,
+
     send_exceptions: bool,
 ) -> Result<()> {
     info!(
-        "Starting CsvAnalysis task (only_call_center: {}, only_call_center2: {}, send_exceptions: {}). Config: {:?}",
-        only_call_center, only_call_center2, send_exceptions, config
+        "Starting CsvAnalysis task (only_call_center: {}, send_exceptions: {}). Config: {:?}",
+        only_call_center, send_exceptions, config
     );
 
     let params = CsvAnalysisParams::from(config);
@@ -547,10 +547,10 @@ pub fn run(
                 &output_file_path.to_string_lossy(),
                 email_cfg,
                 only_call_center,
-                only_call_center2,
                 send_exceptions,
                 &config.download_path,
                 config.minutes_ago,
+                config.category_exceptions.as_deref(),
             ) {
                 error!("Error processing emails: {}", e);
             }
@@ -614,7 +614,7 @@ mod tests {
         };
 
         // Run the task
-        super::run(&config, false, false, false).unwrap();
+        super::run(&config, false, false).unwrap();
 
         // Validate the output file was created and contains expected headers
         let output_content = std::fs::read_to_string(config.output_file).unwrap();
@@ -714,7 +714,7 @@ mod tests {
             email_config: None,
         };
 
-        super::run(&config, false, false, false).unwrap();
+        super::run(&config, false, false).unwrap();
 
         let out_content = std::fs::read_to_string(output_file.path()).unwrap();
         let mut rdr = csv::ReaderBuilder::new().from_reader(out_content.as_bytes());
@@ -774,7 +774,7 @@ mod tests {
             email_config: None,
         };
 
-        super::run(&config, false, false, false).unwrap();
+        super::run(&config, false, false).unwrap();
 
         let out_content = std::fs::read_to_string(output_file.path()).unwrap();
         let mut rdr = csv::ReaderBuilder::new().from_reader(out_content.as_bytes());
