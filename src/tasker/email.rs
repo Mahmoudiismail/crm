@@ -923,11 +923,17 @@ pub fn process_emails(
                 .replace("&nbsp;&nbsp;&nbsp;&nbsp;", "")
                 .replace("Dear All", "Dear {receiver_name}");
 
-            // Dynamically upgrade old layouts if they don't have the new full-wrap table structure.
-            // If it contains the exact text "Kindly find below" without being inside a layout table td, wrap it.
+            // Dynamically upgrade old layouts if they don't have the new full-wrap div structure.
+            // If it contains the exact text "Kindly find below" without being inside a layout div, wrap it.
             let old_pattern = "Kindly find below the list of open tickets in {bucket_name} for the period from {from_date_str} until {today_str}.<br/><br/>\n    {html_table}";
             let old_pattern_r = "Kindly find below the list of open tickets in {bucket_name} for the period from {from_date_str} until {today_str}.<br/><br/>\r\n    {html_table}";
-            let new_pattern = r#"<table border="0" cellpadding="0" cellspacing="0">
+
+            let new_pattern = r#"<div style="margin-left: 20px;">
+        Kindly find below the list of open tickets in {bucket_name} for the period from {from_date_str} until {today_str}.<br/><br/>
+        {html_table}
+    </div>"#;
+
+            let _prev_table_pattern = r#"<table border="0" cellpadding="0" cellspacing="0">
         <tr>
             <td width="20"></td>
             <td>
