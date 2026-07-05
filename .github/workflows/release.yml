@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       binary:
-        description: 'Binary to release (crm, runner, yasweb, wcxx, or tasker)'
+        description: Binary to release
         required: true
-        default: 'crm'
+        default: crm
         type: choice
         options:
           - crm
@@ -20,169 +20,170 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    name: Build and Publish Release
-    runs-on: windows-latest
-    strategy:
-      matrix:
-        binary: ${{ fromJson(github.event.inputs.binary == 'all' && '["crm", "runner", "yasweb", "wcxx", "tasker"]' || format('["{0}"]', github.event.inputs.binary)) }}
+  prepare:
+    name: Prepare Build Info
+    runs-on: ubuntu-latest
 
     outputs:
-      version: ${{ steps.set_vars.outputs.VERSION }}
-      build_date: ${{ steps.set_vars.outputs.BUILD_DATE }}
+      version: ${{ steps.vars.outputs.version }}
+      build_date: ${{ steps.vars.outputs.build_date }}
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - id: vars
+        shell: bash
+        run: |
+          VERSION=$(grep '^version =' Cargo.toml | head -n1 | awk -F '"' '{print $2}')
+          BUILD_DATE=$(date -u +'%Y%m%d_%H%M%S')
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
+
+  release:
+    name: Build & Release
+    needs: prepare
+    runs-on: windows-latest
+
+    strategy:
+      matrix:
+        binary: ${{ fromJson(github.event.inputs.binary == 'all' && '["crm","runner","yasweb","wcxx","tasker"]' || format('["{0}"]', github.event.inputs.binary)) }}
+
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      BUILD_DATE: ${{ needs.prepare.outputs.build_date }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-msvc
 
-      - name: Cache cargo artifacts
-        uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "crm-rust-shared-cache"
+          shared-key: crm-rust-shared-cache
 
-      - name: Get version
-        shell: bash
-        run: |
-          VERSION=$(grep '^version =' Cargo.toml | head -n 1 | awk -F '"' '{print $2}')
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-
-      - name: Build binary
+      - name: Build
         run: cargo build --release --bin ${{ matrix.binary }}
 
-      - name: Prepare artifact zip
-        shell: bash
-        run: cd "target/release" && 7z a -p123456 ${{ matrix.binary }}_windows.zip ${{ matrix.binary }}.exe
-
-      - name: Get build date and set outputs
-        id: set_vars
+      - name: Zip
         shell: bash
         run: |
-          BUILD_DATE=$(date -u +'%Y%m%d_%H%M%S')
-          echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_ENV
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-          echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_OUTPUT
+          cd target/release
+          7z a -p123456 ${{ matrix.binary }}_windows.zip ${{ matrix.binary }}.exe
 
-      - name: Create or update GitHub release
+      - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.VERSION }}-${{ matrix.binary }}
           name: Release v${{ env.VERSION }} (${{ matrix.binary }})
           draft: false
           prerelease: false
-          files: target/release/${{ matrix.binary }}_windows.zip
           overwrite_files: true
           generate_release_notes: true
+          files: target/release/${{ matrix.binary }}_windows.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload artifact for GDrive upload
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.binary }}_windows_zip
           path: target/release/${{ matrix.binary }}_windows.zip
           retention-days: 1
-upload_gdrive:
-  name: Upload to Google Drive
-  needs: release
-  runs-on: ubuntu-latest
 
-  strategy:
-    matrix:
-      binary: ${{ fromJson(github.event.inputs.binary == 'all' && '["crm", "runner", "yasweb", "wcxx", "tasker"]' || format('["{0}"]', github.event.inputs.binary)) }}
+  upload_gdrive:
+    name: Upload to Google Drive
+    needs:
+      - prepare
+      - release
 
-  steps:
-    - name: Download artifact
-      uses: actions/download-artifact@v4
-      with:
-        name: ${{ matrix.binary }}_windows_zip
+    runs-on: ubuntu-latest
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: 20
+    strategy:
+      matrix:
+        binary: ${{ fromJson(github.event.inputs.binary == 'all' && '["crm","runner","yasweb","wcxx","tasker"]' || format('["{0}"]', github.event.inputs.binary)) }}
 
-    - name: Install Google APIs
-      run: npm install googleapis
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      BUILD_DATE: ${{ needs.prepare.outputs.build_date }}
 
-    - name: Upload to Google Drive
-      uses: actions/github-script@v7
-      env:
-        GDRIVE_CLIENT_ID: ${{ secrets.GDRIVE_CLIENT_ID }}
-        GDRIVE_CLIENT_SECRET: ${{ secrets.GDRIVE_CLIENT_SECRET }}
-        GDRIVE_REFRESH_TOKEN: ${{ secrets.GDRIVE_REFRESH_TOKEN }}
-        GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.binary }}_windows_zip
 
-        FILENAME: "${{ matrix.binary }}_windows.zip"
-        DRIVE_NAME: "v${{ needs.release.outputs.version }}-${{ matrix.binary }}_${{ needs.release.outputs.build_date }}_windows.zip"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
-      with:
-        script: |
-          const fs = require('fs');
-          const { google } = require('googleapis');
+      - run: npm install googleapis
 
-          const oauth2Client = new google.auth.OAuth2(
-            process.env.GDRIVE_CLIENT_ID,
-            process.env.GDRIVE_CLIENT_SECRET
-          );
+      - uses: actions/github-script@v7
+        env:
+          GDRIVE_CLIENT_ID: ${{ secrets.GDRIVE_CLIENT_ID }}
+          GDRIVE_CLIENT_SECRET: ${{ secrets.GDRIVE_CLIENT_SECRET }}
+          GDRIVE_REFRESH_TOKEN: ${{ secrets.GDRIVE_REFRESH_TOKEN }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
 
-          oauth2Client.setCredentials({
-            refresh_token: process.env.GDRIVE_REFRESH_TOKEN
-          });
+          FILENAME: ${{ matrix.binary }}_windows.zip
+          DRIVE_NAME: v${{ env.VERSION }}-${{ matrix.binary }}_${{ env.BUILD_DATE }}_windows.zip
 
-          const drive = google.drive({
-            version: 'v3',
-            auth: oauth2Client
-          });
+        with:
+          script: |
+            const fs = require('fs');
+            const { google } = require('googleapis');
 
-          const folderId = process.env.GDRIVE_FOLDER_ID;
-          const fileName = process.env.DRIVE_NAME;
-          const localFile = process.env.FILENAME;
+            const oauth2Client = new google.auth.OAuth2(
+              process.env.GDRIVE_CLIENT_ID,
+              process.env.GDRIVE_CLIENT_SECRET
+            );
 
-          try {
-            // Ensure refresh token is valid
-            await oauth2Client.getAccessToken();
-
-            // Search for an existing file with the same name
-            const existing = await drive.files.list({
-              q: `'${folderId}' in parents and name='${fileName}' and trashed=false`,
-              fields: 'files(id,name)'
+            oauth2Client.setCredentials({
+              refresh_token: process.env.GDRIVE_REFRESH_TOKEN
             });
 
-            // Delete existing file(s)
-            if (existing.data.files.length > 0) {
-              for (const file of existing.data.files) {
-                console.log(`Deleting existing file: ${file.name} (${file.id})`);
+            await oauth2Client.getAccessToken();
 
+            const drive = google.drive({
+              version: 'v3',
+              auth: oauth2Client
+            });
+
+            const folderId = process.env.GDRIVE_FOLDER_ID;
+            const fileName = process.env.DRIVE_NAME;
+            const localFile = process.env.FILENAME;
+
+            try {
+              const existing = await drive.files.list({
+                q: `'${folderId}' in parents and name='${fileName}' and trashed=false`,
+                fields: 'files(id,name)'
+              });
+
+              for (const file of existing.data.files) {
+                console.log(`Deleting ${file.name}`);
                 await drive.files.delete({
                   fileId: file.id
                 });
               }
+
+              const result = await drive.files.create({
+                requestBody: {
+                  name: fileName,
+                  parents: [folderId]
+                },
+                media: {
+                  mimeType: 'application/zip',
+                  body: fs.createReadStream(localFile)
+                },
+                fields: 'id,webViewLink'
+              });
+
+              console.log(`Uploaded successfully`);
+              console.log(result.data.webViewLink);
+
+            } catch (e) {
+              console.error(e);
+              core.setFailed(e.message);
             }
-
-            // Upload new file
-            const response = await drive.files.create({
-              requestBody: {
-                name: fileName,
-                parents: [folderId]
-              },
-              media: {
-                mimeType: 'application/zip',
-                body: fs.createReadStream(localFile)
-              },
-              fields: 'id, webViewLink'
-            });
-
-            console.log(`Upload successful.`);
-            console.log(`File ID: ${response.data.id}`);
-            console.log(`View: ${response.data.webViewLink}`);
-
-          } catch (err) {
-            console.error(err);
-            core.setFailed(err.message);
-          }
-  
