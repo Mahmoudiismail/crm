@@ -473,15 +473,29 @@ pub fn process_emails(
     results_file: &str,
     config: &EmailConfig,
     only_call_center: bool,
-    only_call_center2: bool,
     send_exceptions: bool,
     download_dir: &str,
     minutes_ago: i64,
+    category_exceptions: Option<&[crate::tasker::config::CategoryException]>,
 ) -> Result<()> {
     info!(
-        "Starting email processing module. Reading output from {} (only_call_center: {}, only_call_center2: {}, send_exceptions: {})",
-        results_file, only_call_center, only_call_center2, send_exceptions
+        "Starting email processing module. Reading output from {} (only_call_center: {}, send_exceptions: {})",
+        results_file, only_call_center, send_exceptions
     );
+
+    let effective_send_exceptions = send_exceptions || config.send_exceptions.unwrap_or(false);
+
+    let exception_teams: std::collections::HashSet<String> =
+        if let Some(exceptions) = category_exceptions {
+            exceptions
+                .iter()
+                .filter_map(|e| e.team.as_ref())
+                .filter(|t: &&String| !t.trim().is_empty())
+                .map(|t: &String| t.trim().to_lowercase())
+                .collect()
+        } else {
+            std::collections::HashSet::new()
+        };
 
     let team_mapping_path =
         crate::tasker::csv_task::resolve_relative_to_exe_dir(&config.team_mapping_file);
@@ -565,7 +579,7 @@ pub fn process_emails(
 
         let is_exception = is_exception_val == "yes";
 
-        if send_exceptions {
+        if effective_send_exceptions {
             if !is_exception {
                 continue; // Only process exceptions
             }
@@ -702,14 +716,12 @@ pub fn process_emails(
     let mut per_team_buckets: HashMap<String, Vec<TicketRow>> = HashMap::new(); // Key: Team name
     let mut per_branch_buckets: HashMap<String, Vec<TicketRow>> = HashMap::new(); // Key: Branch name
     let mut call_center_bucket: Vec<TicketRow> = Vec::new();
-    let mut call_center2_bucket: Vec<TicketRow> = Vec::new();
 
     for row in ticket_rows {
         let b_low = row.branch.to_lowercase();
         let t_low = row.team.to_lowercase();
 
         let is_cc = t_low == "call center";
-        let is_cc2 = t_low == "call center2";
 
         // "all allowed branches" means the branch must be in send_per_branch_branches.
         let allowed_branch = send_per_branch_branches.contains(&b_low);
@@ -718,26 +730,29 @@ pub fn process_emails(
             if send_cc && only_call_center {
                 call_center_bucket.push(row);
             }
-        } else if is_cc2 {
-            if send_cc && only_call_center2 {
-                call_center2_bucket.push(row);
-            }
-        } else if !only_call_center && !only_call_center2 {
-            if send_per_team_all_branches.contains(&t_low) {
+        } else if !only_call_center {
+            if effective_send_exceptions {
                 per_team_buckets
                     .entry(row.team.clone())
                     .or_default()
                     .push(row);
-            } else if allowed_branch {
-                per_branch_buckets
-                    .entry(row.branch.clone())
-                    .or_default()
-                    .push(row);
-            } else if send_per_team_branches.contains(&b_low) {
-                per_team_buckets
-                    .entry(row.team.clone())
-                    .or_default()
-                    .push(row);
+            } else {
+                if send_per_team_all_branches.contains(&t_low) {
+                    per_team_buckets
+                        .entry(row.team.clone())
+                        .or_default()
+                        .push(row);
+                } else if allowed_branch {
+                    per_branch_buckets
+                        .entry(row.branch.clone())
+                        .or_default()
+                        .push(row);
+                } else if send_per_team_branches.contains(&b_low) {
+                    per_team_buckets
+                        .entry(row.team.clone())
+                        .or_default()
+                        .push(row);
+                }
             }
         }
     }
@@ -819,7 +834,8 @@ pub fn process_emails(
         } else {
             let mapped_cc = mapping.and_then(|m| m.cc.clone()).unwrap_or_default();
             let ccs = if bucket_name.eq_ignore_ascii_case("call center")
-                || bucket_name.eq_ignore_ascii_case("call center2")
+                || effective_send_exceptions
+                || exception_teams.contains(&bucket_name.to_lowercase())
             {
                 vec![mapped_cc]
             } else {
@@ -1063,11 +1079,6 @@ $Mail.Display()
         send_email_for_bucket("Call Center", &call_center_bucket, true)?;
     }
 
-    // 4. Process Call Center 2
-    if send_cc && only_call_center2 {
-        send_email_for_bucket("Call Center2", &call_center2_bucket, true)?;
-    }
-
     info!("Email processing complete.");
     Ok(())
 }
@@ -1111,6 +1122,7 @@ mod tests {
             send_per_branch_branches: vec![],
             send_per_team_branches: None,
             send_call_center: Some(false),
+            send_exceptions: Some(false),
         };
 
         // If the email script runs but finds only closed tickets, it should skip.
@@ -1120,9 +1132,9 @@ mod tests {
             &email_config,
             false,
             false,
-            false,
             download_dir.path().to_str().unwrap(),
             60,
+            None,
         );
 
         assert!(result.is_ok());

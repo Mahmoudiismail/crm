@@ -23,3 +23,7 @@ When a `TaskKind::ExternalApp` is executed on its schedule, the `runner/engine.r
 
 *   **Config State:** Configuration files (`runner_config.json`, `config.json`, `yasweb_config.json`, `wcxx_config.json`, `tasker_config.json`) are automatically created in the exact same directory as their relative executables with sane defaults if missing.
 *   **Logging State:** Application logs (`runner.log`, `crm.log`, `yasweblog`, `wcxx.log`, `task_csv_analysis.log`, etc.) are heavily emitted into the exact same local execution directory using non-blocking thread workers.
+
+## Components Update
+
+- **`tasker`:** Aggregates and emails reports based on configured bucket logic. Supports `--send-exceptions` to dynamically read teams mapped in `category_exceptions` and group exception tickets dynamically, using only mapped CC lists and ignoring standard global logic.
