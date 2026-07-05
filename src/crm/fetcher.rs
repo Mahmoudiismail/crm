@@ -3,7 +3,10 @@ use chrono::{Datelike, Duration as ChronoDuration, NaiveDate};
 use futures_util::future::join_all;
 use serde_json::Value;
 use std::fmt::Write;
+use std::fs;
+use std::path::Path;
 use std::sync::Arc;
+use std::time::SystemTime;
 use tracing::{debug, error, info};
 
 use crate::crm::config::AppConfig;
@@ -62,6 +65,7 @@ pub async fn fetch_reports(
     client: &reqwest::Client,
     token: &str,
     report_type: ReportType,
+    download_dir: &Path,
 ) -> Result<Value> {
     let mut results = serde_json::Map::new();
 
@@ -96,6 +100,21 @@ pub async fn fetch_reports(
 
     for def in defs {
         if !should_fetch(def.key) {
+            continue;
+        }
+
+        let prefix = match def.key {
+            "tickets" => "ticket_report_",
+            "calls" => "call_logs_",
+            "leads" => "lead_report_",
+            _ => "",
+        };
+
+        if !prefix.is_empty() && has_recent_download(download_dir, prefix) {
+            info!(
+                "Skipping fetch for '{}': A recent file (<30s old) already exists in Downloads",
+                def.key
+            );
             continue;
         }
 
@@ -500,6 +519,29 @@ fn format_redacted_headers(headers: &reqwest::header::HeaderMap) -> String {
 // ──────────────────────────────────────────────────────────────
 // Tests
 // ──────────────────────────────────────────────────────────────
+
+fn has_recent_download(download_dir: &Path, prefix: &str) -> bool {
+    let threshold = SystemTime::now() - std::time::Duration::from_secs(30);
+
+    if let Ok(entries) = fs::read_dir(download_dir) {
+        for entry in entries.flatten() {
+            if let Ok(metadata) = entry.metadata() {
+                if metadata.is_file() {
+                    if let Some(name) = entry.file_name().to_str() {
+                        if name.starts_with(prefix) && name.ends_with(".csv") {
+                            if let Ok(modified) = metadata.modified() {
+                                if modified >= threshold {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    false
+}
 
 #[cfg(test)]
 mod tests {

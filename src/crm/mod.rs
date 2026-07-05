@@ -20,15 +20,16 @@ pub async fn run_once(crm_config_path: &str, report: ReportType) -> Result<()> {
     let token = auth::ensure_authenticated(&mut config, &client, false).await?;
     config.save(crm_config_path)?;
 
-    let results = fetcher::fetch_reports(&config, &client, &token, report).await?;
+    let exe_path = std::env::current_exe()?;
+    let exe_dir = exe_path
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."));
+    let download_dir = exe_dir.join("Downloads");
+
+    let results = fetcher::fetch_reports(&config, &client, &token, report, &download_dir).await?;
 
     if config.download_csv {
         let urls = fetcher::extract_urls(&results);
-        let exe_path = std::env::current_exe()?;
-        let exe_dir = exe_path
-            .parent()
-            .unwrap_or_else(|| std::path::Path::new("."));
-        let download_dir = exe_dir.join("Downloads");
         tokio::fs::create_dir_all(&download_dir).await?;
 
         let download_futures = urls.iter().map(|(key, url)| {
