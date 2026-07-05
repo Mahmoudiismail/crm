@@ -86,90 +86,103 @@ jobs:
           name: ${{ matrix.binary }}_windows_zip
           path: target/release/${{ matrix.binary }}_windows.zip
           retention-days: 1
+upload_gdrive:
+  name: Upload to Google Drive
+  needs: release
+  runs-on: ubuntu-latest
 
-  upload_gdrive:
-    name: Upload to Google Drive
-    needs: release
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        binary: ${{ fromJson(github.event.inputs.binary == 'all' && '["crm", "runner", "yasweb", "wcxx", "tasker"]' || format('["{0}"]', github.event.inputs.binary)) }}
+  strategy:
+    matrix:
+      binary: ${{ fromJson(github.event.inputs.binary == 'all' && '["crm", "runner", "yasweb", "wcxx", "tasker"]' || format('["{0}"]', github.event.inputs.binary)) }}
 
-    steps:
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ matrix.binary }}_windows_zip
+  steps:
+    - name: Download artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ matrix.binary }}_windows_zip
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
 
-      - name: Install Google APIs
-        run: npm install googleapis
+    - name: Install Google APIs
+      run: npm install googleapis
 
-      - name: Upload to Google Drive
-        uses: actions/github-script@v7
-        env:
-          GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
-          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
-          FILENAME: "${{ matrix.binary }}_windows.zip"
-          DRIVE_NAME: "v${{ needs.release.outputs.version }}-${{ matrix.binary }}_${{ needs.release.outputs.build_date }}_windows.zip"
-        with:
-          script: |
-            const fs = require('fs');
-            const { google } = require('googleapis');
+    - name: Upload to Google Drive
+      uses: actions/github-script@v7
+      env:
+        GDRIVE_CLIENT_ID: ${{ secrets.GDRIVE_CLIENT_ID }}
+        GDRIVE_CLIENT_SECRET: ${{ secrets.GDRIVE_CLIENT_SECRET }}
+        GDRIVE_REFRESH_TOKEN: ${{ secrets.GDRIVE_REFRESH_TOKEN }}
+        GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
 
-            const credsJson = process.env.GDRIVE_CREDENTIALS;
-            if (!credsJson) {
-              core.setFailed('GDRIVE_CREDENTIALS is not set');
-              return;
-            }
-            const credentials = JSON.parse(credsJson);
+        FILENAME: "${{ matrix.binary }}_windows.zip"
+        DRIVE_NAME: "v${{ needs.release.outputs.version }}-${{ matrix.binary }}_${{ needs.release.outputs.build_date }}_windows.zip"
 
-            const auth = new google.auth.GoogleAuth({
-              credentials,
-              scopes: ['https://www.googleapis.com/auth/drive.file', 'https://www.googleapis.com/auth/drive'],
+      with:
+        script: |
+          const fs = require('fs');
+          const { google } = require('googleapis');
+
+          const oauth2Client = new google.auth.OAuth2(
+            process.env.GDRIVE_CLIENT_ID,
+            process.env.GDRIVE_CLIENT_SECRET
+          );
+
+          oauth2Client.setCredentials({
+            refresh_token: process.env.GDRIVE_REFRESH_TOKEN
+          });
+
+          const drive = google.drive({
+            version: 'v3',
+            auth: oauth2Client
+          });
+
+          const folderId = process.env.GDRIVE_FOLDER_ID;
+          const fileName = process.env.DRIVE_NAME;
+          const localFile = process.env.FILENAME;
+
+          try {
+            // Ensure refresh token is valid
+            await oauth2Client.getAccessToken();
+
+            // Search for an existing file with the same name
+            const existing = await drive.files.list({
+              q: `'${folderId}' in parents and name='${fileName}' and trashed=false`,
+              fields: 'files(id,name)'
             });
 
-            const drive = google.drive({ version: 'v3', auth });
+            // Delete existing file(s)
+            if (existing.data.files.length > 0) {
+              for (const file of existing.data.files) {
+                console.log(`Deleting existing file: ${file.name} (${file.id})`);
 
-            const fileMetadata = {
-              name: process.env.DRIVE_NAME,
-              parents: [process.env.GDRIVE_FOLDER_ID]
-            };
-
-            const media = {
-              mimeType: 'application/zip',
-              body: fs.createReadStream(process.env.FILENAME)
-            };
-
-            try {
-              // Delete existing file if we want to mimic overwrite
-              const existingFiles = await drive.files.list({
-                q: `name='${process.env.DRIVE_NAME}' and '${process.env.GDRIVE_FOLDER_ID}' in parents and trashed=false`,
-                supportsAllDrives: true,
-                includeItemsFromAllDrives: true,
-                fields: 'files(id)'
-              });
-
-              if (existingFiles.data.files && existingFiles.data.files.length > 0) {
-                for (const file of existingFiles.data.files) {
-                  await drive.files.delete({
-                    fileId: file.id,
-                    supportsAllDrives: true
-                  });
-                }
+                await drive.files.delete({
+                  fileId: file.id
+                });
               }
-
-              const res = await drive.files.create({
-                requestBody: fileMetadata,
-                media: media,
-                fields: 'id',
-                supportsAllDrives: true
-              });
-              console.log(`File uploaded successfully with ID: ${res.data.id}`);
-            } catch (err) {
-              core.setFailed(`Error uploading file: ${err.message}`);
             }
+
+            // Upload new file
+            const response = await drive.files.create({
+              requestBody: {
+                name: fileName,
+                parents: [folderId]
+              },
+              media: {
+                mimeType: 'application/zip',
+                body: fs.createReadStream(localFile)
+              },
+              fields: 'id, webViewLink'
+            });
+
+            console.log(`Upload successful.`);
+            console.log(`File ID: ${response.data.id}`);
+            console.log(`View: ${response.data.webViewLink}`);
+
+          } catch (err) {
+            console.error(err);
+            core.setFailed(err.message);
+          }
+  
