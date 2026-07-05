@@ -113,10 +113,11 @@ jobs:
           GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
 
       - name: Upload to Google Drive
-        uses: adityak74/google-drive-upload-git-action@main
+        uses: mathisve/gdrive-upload-action@main
         with:
           credentials: ${{ env.B64_CREDS }}
           filename: "${{ matrix.binary }}_windows.zip"
           folderId: ${{ secrets.GDRIVE_FOLDER_ID }}
           name: "v${{ needs.release.outputs.version }}-${{ matrix.binary }}_${{ needs.release.outputs.build_date }}_windows.zip"
+          encoded: true
           overwrite: "true"
