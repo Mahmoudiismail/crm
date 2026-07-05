@@ -407,7 +407,7 @@ pub fn generate_csv(params: &CsvAnalysisParams) -> Result<Option<std::path::Path
 
             let team2 = assignment_map.get(&(t_cat, t_type, t_subtype)).cloned();
 
-            let (position, team) = if let Some(user_info) = assignee_map.get(&assignee) {
+            let (position, mut team) = if let Some(user_info) = assignee_map.get(&assignee) {
                 let pos = if user_info.positions.is_empty() {
                     None
                 } else if let Some(t2) = &team2 {
@@ -447,18 +447,15 @@ pub fn generate_csv(params: &CsvAnalysisParams) -> Result<Option<std::path::Path
                             let branch_matches = exc.branch.as_ref().is_none_or(|b| {
                                 b.trim().is_empty() || b.trim().to_lowercase() == branch_val
                             });
-                            let team_matches = exc.team.as_ref().is_none_or(|t| {
-                                if t.trim().is_empty() {
-                                    true
-                                } else {
-                                    team.as_ref().is_some_and(|tm| {
-                                        tm.trim().to_lowercase() == t.trim().to_lowercase()
-                                    })
-                                }
-                            });
 
-                            if branch_matches && team_matches {
+                            if branch_matches {
                                 matches_exception = true;
+                                // Override the team based on the exception assignment
+                                if let Some(t) = exc.team.as_ref() {
+                                    if !t.trim().is_empty() {
+                                        team = Some(t.trim().to_string());
+                                    }
+                                }
                                 break;
                             }
                         }
@@ -528,11 +525,12 @@ pub fn generate_csv(params: &CsvAnalysisParams) -> Result<Option<std::path::Path
 pub fn run(
     config: &CsvAnalysisConfig,
     only_call_center: bool,
+    only_call_center2: bool,
     send_exceptions: bool,
 ) -> Result<()> {
     info!(
-        "Starting CsvAnalysis task (only_call_center: {}, send_exceptions: {}). Config: {:?}",
-        only_call_center, send_exceptions, config
+        "Starting CsvAnalysis task (only_call_center: {}, only_call_center2: {}, send_exceptions: {}). Config: {:?}",
+        only_call_center, only_call_center2, send_exceptions, config
     );
 
     let params = CsvAnalysisParams::from(config);
@@ -549,6 +547,7 @@ pub fn run(
                 &output_file_path.to_string_lossy(),
                 email_cfg,
                 only_call_center,
+                only_call_center2,
                 send_exceptions,
                 &config.download_path,
                 config.minutes_ago,
@@ -615,7 +614,7 @@ mod tests {
         };
 
         // Run the task
-        super::run(&config, false, false).unwrap();
+        super::run(&config, false, false, false).unwrap();
 
         // Validate the output file was created and contains expected headers
         let output_content = std::fs::read_to_string(config.output_file).unwrap();
@@ -715,7 +714,7 @@ mod tests {
             email_config: None,
         };
 
-        super::run(&config, false, false).unwrap();
+        super::run(&config, false, false, false).unwrap();
 
         let out_content = std::fs::read_to_string(output_file.path()).unwrap();
         let mut rdr = csv::ReaderBuilder::new().from_reader(out_content.as_bytes());
@@ -775,7 +774,7 @@ mod tests {
             email_config: None,
         };
 
-        super::run(&config, false, false).unwrap();
+        super::run(&config, false, false, false).unwrap();
 
         let out_content = std::fs::read_to_string(output_file.path()).unwrap();
         let mut rdr = csv::ReaderBuilder::new().from_reader(out_content.as_bytes());

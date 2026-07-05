@@ -28,7 +28,7 @@ If you need to bypass the runner, invoke the apps directly:
 
 **Tasker Worker:**
 ```bash
-./tasker --task 1 --only-call-center
+./tasker --task 1 --only-call-center --only-call-center2
 ```
 
 **Webex Fetch:**
