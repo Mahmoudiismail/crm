@@ -1,6 +1,6 @@
 use crate::tasker::config::CsvAnalysisConfig;
 use anyhow::{Context, Result};
-use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime};
+use chrono::{DateTime, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime};
 use csv::{ReaderBuilder, StringRecord, WriterBuilder};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
@@ -314,7 +314,6 @@ pub fn generate_csv(params: &CsvAnalysisParams) -> Result<Option<std::path::Path
         let mut type_idx = None;
         let mut subtype_idx = None;
         let mut cat_idx = None;
-        let mut created_idx = None;
         let mut ticket_id_idx = None;
         let mut branch_idx = None;
 
@@ -328,8 +327,6 @@ pub fn generate_csv(params: &CsvAnalysisParams) -> Result<Option<std::path::Path
                 subtype_idx = Some(i);
             } else if h_trim == "Ticket Category" {
                 cat_idx = Some(i);
-            } else if h_trim == "Created At" {
-                created_idx = Some(i);
             } else if h_trim == "Ticket Id" {
                 ticket_id_idx = Some(i);
             } else if h_trim == "Branch" {
@@ -339,8 +336,6 @@ pub fn generate_csv(params: &CsvAnalysisParams) -> Result<Option<std::path::Path
 
         if !wrote_headers {
             let mut out_headers = headers.clone();
-            out_headers.push_field("Day");
-            out_headers.push_field("Month");
             out_headers.push_field("Position");
             out_headers.push_field("team");
             out_headers.push_field("Is Exception");
@@ -470,19 +465,6 @@ pub fn generate_csv(params: &CsvAnalysisParams) -> Result<Option<std::path::Path
                 is_exception_val = "Yes";
             }
 
-            // Date helpers
-            let created_at_val = created_idx.and_then(|idx| record.get(idx)).unwrap_or("");
-            let parsed_dt = parse_created_at(created_at_val);
-
-            let day_str = parsed_dt
-                .map(|dt| dt.date().day().to_string())
-                .unwrap_or_default();
-            let month_str = parsed_dt
-                .map(|dt| dt.format("%m-%Y").to_string())
-                .unwrap_or_default();
-
-            record.push_field(&day_str);
-            record.push_field(&month_str);
             record.push_field(position.as_deref().unwrap_or(""));
             record.push_field(team.as_deref().unwrap_or(""));
             record.push_field(is_exception_val);

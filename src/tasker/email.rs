@@ -865,8 +865,15 @@ pub fn process_emails(
 </head>
 <body style="font-family: Arial, sans-serif;">
     Dear {receiver_name},<br/>
-    Kindly find below the list of open tickets in {bucket_name} for the period from {from_date_str} until {today_str}.<br/><br/>
-    {html_table}
+    <table border="0" cellpadding="0" cellspacing="0">
+        <tr>
+            <td width="20"></td>
+            <td>
+                Kindly find below the list of open tickets in {bucket_name} for the period from {from_date_str} until {today_str}.<br/><br/>
+                {html_table}
+            </td>
+        </tr>
+    </table>
 </body>
 </html>"#;
                 if let Err(e) = std::fs::write(&template_path, default_template) {
@@ -916,6 +923,27 @@ pub fn process_emails(
                 .replace("&nbsp;&nbsp;&nbsp;&nbsp;", "")
                 .replace("Dear All", "Dear {receiver_name}");
 
+            // Dynamically upgrade old layouts if they don't have the new full-wrap table structure.
+            // If it contains the exact text "Kindly find below" without being inside a layout table td, wrap it.
+            let old_pattern = "Kindly find below the list of open tickets in {bucket_name} for the period from {from_date_str} until {today_str}.<br/><br/>\n    {html_table}";
+            let old_pattern_r = "Kindly find below the list of open tickets in {bucket_name} for the period from {from_date_str} until {today_str}.<br/><br/>\r\n    {html_table}";
+            let new_pattern = r#"<table border="0" cellpadding="0" cellspacing="0">
+        <tr>
+            <td width="20"></td>
+            <td>
+                Kindly find below the list of open tickets in {bucket_name} for the period from {from_date_str} until {today_str}.<br/><br/>
+                {html_table}
+            </td>
+        </tr>
+    </table>"#;
+            extracted_body = extracted_body
+                .replace(old_pattern, new_pattern)
+                .replace(old_pattern_r, new_pattern);
+
+            // Just in case it was a single line version
+            let old_pattern_inline = "Kindly find below the list of open tickets in {bucket_name} for the period from {from_date_str} until {today_str}.<br/><br/>{html_table}";
+            extracted_body = extracted_body.replace(old_pattern_inline, new_pattern);
+
             // Replace placeholders
             let final_body = extracted_body
                 .replace("{receiver_name}", &receiver_name)
@@ -928,9 +956,17 @@ pub fn process_emails(
             (extracted_subject, wrapped_body)
         } else {
             let body = format!(
-                "<html><body style=\"font-family: Arial, sans-serif;\">Dear {},<br/>Kindly find below the list of open tickets in {} for the period from {} until {}.<br/><br/>\
-                {}\
-                </body></html>",
+                r#"<html><body style="font-family: Arial, sans-serif;">Dear {},<br/>
+    <table border="0" cellpadding="0" cellspacing="0">
+        <tr>
+            <td width="20"></td>
+            <td>
+                Kindly find below the list of open tickets in {} for the period from {} until {}.<br/><br/>
+                {}
+            </td>
+        </tr>
+    </table>
+</body></html>"#,
                 receiver_name, bucket_name, from_date_str, today_str, html_table
             );
             let subject = format!("Open TKTs - {}", bucket_name);
@@ -1087,12 +1123,12 @@ mod tests {
         let mut ticket_file = File::create(download_dir.path().join("results.csv")).unwrap();
         writeln!(
             ticket_file,
-            "Ticket Id,Branch Name,Category,Type,Subtype,Status,Creation Date,Assignee,Day,Month,Position,team,Is Exception"
+            "Ticket Id,Branch Name,Category,Type,Subtype,Status,Creation Date,Assignee,Position,team,Is Exception"
         )
         .unwrap();
         writeln!(
             ticket_file,
-            "1001,Main Branch,Cat1,Type1,Sub1,closed,01/01/2026 12:00:00,alice,1,01-2026,Pos1,Team A,No"
+            "1001,Main Branch,Cat1,Type1,Sub1,closed,01/01/2026 12:00:00,alice,Pos1,Team A,No"
         )
         .unwrap();
 
