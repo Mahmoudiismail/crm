@@ -818,7 +818,9 @@ pub fn process_emails(
             (config.default_to_email.clone(), String::new())
         } else {
             let mapped_cc = mapping.and_then(|m| m.cc.clone()).unwrap_or_default();
-            let ccs = if bucket_name.eq_ignore_ascii_case("call center") || bucket_name.eq_ignore_ascii_case("call center2") {
+            let ccs = if bucket_name.eq_ignore_ascii_case("call center")
+                || bucket_name.eq_ignore_ascii_case("call center2")
+            {
                 vec![mapped_cc]
             } else {
                 vec![
@@ -962,7 +964,10 @@ pub fn process_emails(
             }
             let mut out_c_idx = 0;
             for (c_idx, field) in row.original_row.iter().enumerate() {
-                if is_exception_idx == Some(c_idx) || position_idx == Some(c_idx) || skip_team_idx == Some(c_idx) {
+                if is_exception_idx == Some(c_idx)
+                    || position_idx == Some(c_idx)
+                    || skip_team_idx == Some(c_idx)
+                {
                     continue;
                 }
                 worksheet.write_string(write_r_idx as u32, out_c_idx, field)?;

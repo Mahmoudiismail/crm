@@ -207,7 +207,12 @@ pub fn run_app(args: Vec<String>) -> Result<()> {
         info!("Running task #{}", task_idx);
         match task {
             TaskConfig::CsvAnalysis(csv_config) => {
-                if let Err(e) = csv_task::run(csv_config, only_call_center, only_call_center2, send_exceptions) {
+                if let Err(e) = csv_task::run(
+                    csv_config,
+                    only_call_center,
+                    only_call_center2,
+                    send_exceptions,
+                ) {
                     error!("Error running CsvAnalysis task: {:?}", e);
                 }
             }
