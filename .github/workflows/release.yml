@@ -27,9 +27,13 @@ jobs:
       matrix:
         binary: ${{ fromJson(github.event.inputs.binary == 'all' && '["crm", "runner", "yasweb", "wcxx", "tasker"]' || format('["{0}"]', github.event.inputs.binary)) }}
 
+    outputs:
+      version: ${{ steps.set_vars.outputs.VERSION }}
+      build_date: ${{ steps.set_vars.outputs.BUILD_DATE }}
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -54,13 +58,17 @@ jobs:
         shell: bash
         run: cd "target/release" && 7z a -p123456 ${{ matrix.binary }}_windows.zip ${{ matrix.binary }}.exe
 
-      - name: Get build date
+      - name: Get build date and set outputs
+        id: set_vars
         shell: bash
         run: |
-          echo "BUILD_DATE=$(date -u +'%Y%m%d_%H%M%S')" >> $GITHUB_ENV
+          BUILD_DATE=$(date -u +'%Y%m%d_%H%M%S')
+          echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_ENV
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_OUTPUT
 
       - name: Create or update GitHub release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.VERSION }}-${{ matrix.binary }}
           name: Release v${{ env.VERSION }} (${{ matrix.binary }})
@@ -71,6 +79,27 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifact for GDrive upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.binary }}_windows_zip
+          path: target/release/${{ matrix.binary }}_windows.zip
+          retention-days: 1
+
+  upload_gdrive:
+    name: Upload to Google Drive
+    needs: release
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        binary: ${{ fromJson(github.event.inputs.binary == 'all' && '["crm", "runner", "yasweb", "wcxx", "tasker"]' || format('["{0}"]', github.event.inputs.binary)) }}
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.binary }}_windows_zip
 
       - name: Base64 Encode Google Drive Credentials
         id: encode_creds
@@ -87,7 +116,7 @@ jobs:
         uses: adityak74/google-drive-upload-git-action@main
         with:
           credentials: ${{ env.B64_CREDS }}
-          filename: "target/release/${{ matrix.binary }}_windows.zip"
+          filename: "${{ matrix.binary }}_windows.zip"
           folderId: ${{ secrets.GDRIVE_FOLDER_ID }}
-          name: "v${{ env.VERSION }}-${{ matrix.binary }}_${{ env.BUILD_DATE }}_windows.zip"
+          name: "v${{ needs.release.outputs.version }}-${{ matrix.binary }}_${{ needs.release.outputs.build_date }}_windows.zip"
           overwrite: "true"
