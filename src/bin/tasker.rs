@@ -227,6 +227,8 @@ fn print_manifest() {
                 required: false,
                 default_value: None,
                 options: None,
+                depends_on: None,
+                autofill: None,
             },
             AppArg {
                 name: "--task".to_string(),
@@ -234,6 +236,8 @@ fn print_manifest() {
                 required: false,
                 default_value: None,
                 options: None,
+                depends_on: None,
+                autofill: None,
             },
             AppArg {
                 name: "--only-call-center".to_string(),
@@ -241,6 +245,8 @@ fn print_manifest() {
                 required: false,
                 default_value: Some("false".to_string()),
                 options: None,
+                depends_on: None,
+                autofill: None,
             },
             AppArg {
                 name: "--send-exceptions".to_string(),
@@ -248,6 +254,8 @@ fn print_manifest() {
                 required: false,
                 default_value: Some("false".to_string()),
                 options: None,
+                depends_on: None,
+                autofill: None,
             },
         ],
     };
