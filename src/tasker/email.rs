@@ -336,8 +336,16 @@ fn generate_pivot_html(rows: &[TicketRow], statuses: &[String], include_team_col
     html.push_str("</table>");
     html
 }
-fn generate_leads_report(download_dir: &str, minutes_ago: i64) -> Result<Option<PathBuf>> {
+fn generate_leads_report(
+    download_dir: &str,
+    minutes_ago: i64,
+    exclude_branches: &[String],
+) -> Result<Option<PathBuf>> {
     let download_dir_path = std::path::PathBuf::from(download_dir);
+    let exclude_branches_lower: HashSet<String> = exclude_branches
+        .iter()
+        .map(|s| s.trim().to_lowercase())
+        .collect();
     let now = Local::now().naive_local();
     let threshold = now - Duration::minutes(minutes_ago);
     let mut target_files = Vec::new();
@@ -433,11 +441,12 @@ fn generate_leads_report(download_dir: &str, minutes_ago: i64) -> Result<Option<
                 .trim()
                 .to_lowercase();
 
-            let branch_matches =
-                branch == "dr. soliman fakeeh hospital jeddah" || branch.is_empty();
-            let status_matches = status == "new" || status == "follow-up";
+            let is_excluded_branch = exclude_branches_lower.contains(&branch);
 
-            if branch_matches && status_matches {
+            let status_matches =
+                status == "new" || status == "follow up" || status == "جديد" || status == "متابعة";
+
+            if !is_excluded_branch && status_matches {
                 all_records.push(record);
             }
         }
@@ -469,6 +478,7 @@ fn generate_leads_report(download_dir: &str, minutes_ago: i64) -> Result<Option<
     Ok(Some(xlsx_path))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn process_emails(
     results_file: &str,
     config: &EmailConfig,
@@ -477,6 +487,7 @@ pub fn process_emails(
     download_dir: &str,
     minutes_ago: i64,
     category_exceptions: Option<&[crate::tasker::config::CategoryException]>,
+    exclude_branches: &[String],
 ) -> Result<()> {
     info!(
         "Starting email processing module. Reading output from {} (only_call_center: {}, send_exceptions: {})",
@@ -768,7 +779,7 @@ pub fn process_emails(
 
         let mut leads_report_path = None;
         if bucket_name.eq_ignore_ascii_case("call center") {
-            match generate_leads_report(download_dir, minutes_ago) {
+            match generate_leads_report(download_dir, minutes_ago, exclude_branches) {
                 Ok(path_opt) => leads_report_path = path_opt,
                 Err(e) => error!("Failed to generate leads report for Call Center: {}", e),
             }
@@ -1177,6 +1188,7 @@ mod tests {
             download_dir.path().to_str().unwrap(),
             60,
             None,
+            &[],
         );
 
         assert!(result.is_ok());
