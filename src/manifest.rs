@@ -25,4 +25,6 @@ pub struct AppArg {
     pub default_value: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub options: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub depends_on: Option<std::collections::HashMap<String, Vec<String>>>,
 }

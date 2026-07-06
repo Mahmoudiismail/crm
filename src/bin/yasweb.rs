@@ -883,15 +883,27 @@ fn run_browser_tab(
 
 fn print_manifest(config_path: Option<PathBuf>) {
     let mut report_names = Vec::new();
-    let mut unique_filters = std::collections::HashSet::new();
+    let mut filter_dependencies: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
 
     if let Some(path) = config_path.clone() {
         if let Ok(config_str) = std::fs::read_to_string(&path) {
             if let Ok(config) = serde_json::from_str::<YaswebConfig>(&config_str) {
                 for (name, report) in &config.reports {
                     report_names.push(name.clone());
+
+                    let start_key = report.start_date_key.clone().unwrap_or_default();
+                    let end_key = report.end_date_key.clone().unwrap_or_default();
+
                     for filter_key in report.filters.keys() {
-                        unique_filters.insert(filter_key.clone());
+                        // Skip generating filter args for standard date keys since we map --start-date/--end-date to them
+                        if filter_key == &start_key || filter_key == &end_key {
+                            continue;
+                        }
+                        filter_dependencies
+                            .entry(filter_key.clone())
+                            .or_default()
+                            .push(name.clone());
                     }
                 }
             }
@@ -905,6 +917,7 @@ fn print_manifest(config_path: Option<PathBuf>) {
             required: false,
             default_value: None,
             options: None,
+            depends_on: None,
         },
         AppArg {
             name: "--name".to_string(),
@@ -920,6 +933,7 @@ fn print_manifest(config_path: Option<PathBuf>) {
             } else {
                 Some(report_names)
             },
+            depends_on: None,
         },
         AppArg {
             name: "--type".to_string(),
@@ -927,6 +941,7 @@ fn print_manifest(config_path: Option<PathBuf>) {
             required: false,
             default_value: None,
             options: None,
+            depends_on: None,
         },
         AppArg {
             name: "--monthly".to_string(),
@@ -934,6 +949,7 @@ fn print_manifest(config_path: Option<PathBuf>) {
             required: false,
             default_value: None,
             options: None,
+            depends_on: None,
         },
         AppArg {
             name: "--start-date".to_string(),
@@ -941,6 +957,7 @@ fn print_manifest(config_path: Option<PathBuf>) {
             required: false,
             default_value: None,
             options: None,
+            depends_on: None,
         },
         AppArg {
             name: "--end-date".to_string(),
@@ -948,18 +965,23 @@ fn print_manifest(config_path: Option<PathBuf>) {
             required: false,
             default_value: None,
             options: None,
+            depends_on: None,
         },
     ];
 
-    let mut sorted_filters: Vec<_> = unique_filters.into_iter().collect();
-    sorted_filters.sort();
-    for f_name in sorted_filters {
+    let mut sorted_filters: Vec<_> = filter_dependencies.into_iter().collect();
+    sorted_filters.sort_by(|a, b| a.0.cmp(&b.0));
+    for (f_name, deps) in sorted_filters {
+        let mut depends_map = std::collections::HashMap::new();
+        depends_map.insert("--name".to_string(), deps);
+
         arguments.push(AppArg {
             name: format!("--filter-{}", f_name),
             arg_type: ArgType::String,
             required: false,
             default_value: None,
             options: None,
+            depends_on: Some(depends_map),
         });
     }
 
@@ -1256,16 +1278,31 @@ async fn main() -> Result<()> {
             let active_report_type_task = active_report_type.clone();
 
             let mut run_filters = active_filters.clone();
-            if is_monthly && !start_dt.is_empty() && !end_dt.is_empty() {
-                let report_conf = config
-                    .reports
-                    .get(&active_report_name)
-                    .context("Report name not found in config")?;
+            let report_conf_opt = config.reports.get(&active_report_name);
+
+            // Map the global --start-date and --end-date values into the respective internal report filters
+            // This is done both for monthly chunking AND standard executions, provided the report has the keys configured.
+            let s_dt = if is_monthly && !start_dt.is_empty() {
+                Some(start_dt.clone())
+            } else {
+                start_date_str.clone()
+            };
+            let e_dt = if is_monthly && !end_dt.is_empty() {
+                Some(end_dt.clone())
+            } else {
+                end_date_str.clone()
+            };
+
+            if let Some(report_conf) = report_conf_opt {
                 if let Some(sk) = &report_conf.start_date_key {
-                    run_filters.insert(sk.clone(), start_dt.clone());
+                    if let Some(s) = s_dt.clone() {
+                        run_filters.insert(sk.clone(), s);
+                    }
                 }
                 if let Some(ek) = &report_conf.end_date_key {
-                    run_filters.insert(ek.clone(), end_dt.clone());
+                    if let Some(e) = e_dt.clone() {
+                        run_filters.insert(ek.clone(), e);
+                    }
                 }
             }
 

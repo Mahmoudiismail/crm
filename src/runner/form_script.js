@@ -574,6 +574,16 @@
             currentValue = arg.default_value;
           }
 
+          let dependsAttr = "";
+          let hiddenClass = "";
+          if (arg.depends_on) {
+            dependsAttr = `data-depends-on='${JSON.stringify(arg.depends_on).replace(/'/g, "&#39;")}'`;
+            hiddenClass = "hidden";
+          }
+
+          let wrapperStart = `<div class="arg-wrapper ${hiddenClass}" ${dependsAttr}>`;
+          let wrapperEnd = `</div>`;
+
           if (arg.arg_type === "boolean") {
             const checked =
               currentValue === "true" ||
@@ -581,7 +591,7 @@
               currentValue === true
                 ? "checked"
                 : "";
-            html += `<label class="flex items-center gap-2"><input type="checkbox" id="${argId}" data-arg-name="${arg.name}" data-arg-type="boolean" ${checked}> <span class="text-sm font-semibold text-gray-800">${arg.name}</span></label>`;
+            html += `${wrapperStart}<label class="flex items-center gap-2"><input type="checkbox" id="${argId}" data-arg-name="${arg.name}" data-arg-type="boolean" ${checked}> <span class="text-sm font-semibold text-gray-800">${arg.name}</span></label>${wrapperEnd}`;
           } else if (arg.arg_type === "list") {
             let optionsHtml = "";
             if (arg.options) {
@@ -590,12 +600,12 @@
                 optionsHtml += `<option value="${opt}" ${sel}>${opt}</option>`;
               });
             }
-            html += `<label class="block">${labelSpan}<select id="${argId}" data-arg-name="${arg.name}" data-arg-type="list" class="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm" ${requiredAttr}>${optionsHtml}</select></label>`;
+            html += `${wrapperStart}<label class="block">${labelSpan}<select id="${argId}" data-arg-name="${arg.name}" data-arg-type="list" class="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm" ${requiredAttr}>${optionsHtml}</select></label>${wrapperEnd}`;
           } else if (arg.arg_type === "number") {
-            html += `<label class="block">${labelSpan}<input type="number" id="${argId}" data-arg-name="${arg.name}" data-arg-type="number" value="${currentValue || ""}" class="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm" ${requiredAttr}></label>`;
+            html += `${wrapperStart}<label class="block">${labelSpan}<input type="number" id="${argId}" data-arg-name="${arg.name}" data-arg-type="number" value="${currentValue || ""}" class="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm" ${requiredAttr}></label>${wrapperEnd}`;
           } else {
             // string
-            html += `<label class="block">${labelSpan}<input type="text" id="${argId}" data-arg-name="${arg.name}" data-arg-type="string" value="${currentValue || ""}" class="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm" ${requiredAttr}></label>`;
+            html += `${wrapperStart}<label class="block">${labelSpan}<input type="text" id="${argId}" data-arg-name="${arg.name}" data-arg-type="string" value="${currentValue || ""}" class="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm" ${requiredAttr}></label>${wrapperEnd}`;
           }
         });
         html += "</div>";
@@ -605,6 +615,65 @@
       }
 
       externalAppDynamicInputs.innerHTML = html;
+
+      // Setup dynamic visibility evaluation
+      function evaluateDependencies() {
+        const inputs = externalAppDynamicInputs.querySelectorAll("input[data-arg-name], select[data-arg-name]");
+        const currentValues = {};
+        inputs.forEach(input => {
+          if (input.type === "checkbox") {
+            currentValues[input.getAttribute("data-arg-name")] = input.checked;
+          } else {
+            currentValues[input.getAttribute("data-arg-name")] = input.value;
+          }
+        });
+
+        const wrappers = externalAppDynamicInputs.querySelectorAll(".arg-wrapper");
+        wrappers.forEach(wrapper => {
+          const dependsStr = wrapper.getAttribute("data-depends-on");
+          if (!dependsStr) return;
+
+          try {
+            const dependsOn = JSON.parse(dependsStr);
+            let isVisible = true;
+            for (const [depArgName, allowedValues] of Object.entries(dependsOn)) {
+               const val = currentValues[depArgName];
+               if (val === undefined || !allowedValues.includes(val)) {
+                  isVisible = false;
+                  break;
+               }
+            }
+
+            if (isVisible) {
+              wrapper.classList.remove("hidden");
+              // Re-enable required if it was required before
+              const input = wrapper.querySelector("input[data-arg-name], select[data-arg-name]");
+              if (input && input.hasAttribute("data-was-required")) {
+                input.required = true;
+              }
+            } else {
+              wrapper.classList.add("hidden");
+              // Disable required so form can submit
+              const input = wrapper.querySelector("input[data-arg-name], select[data-arg-name]");
+              if (input && input.required) {
+                 input.setAttribute("data-was-required", "true");
+                 input.required = false;
+              }
+            }
+          } catch(e) {
+             console.error("Failed to parse depends_on", e);
+          }
+        });
+      }
+
+      const inputs = externalAppDynamicInputs.querySelectorAll("input[data-arg-name], select[data-arg-name]");
+      inputs.forEach(input => {
+         input.addEventListener("change", evaluateDependencies);
+         input.addEventListener("input", evaluateDependencies);
+      });
+      // Initial evaluation
+      evaluateDependencies();
+
     } catch (e) {
       console.error("Failed to load app manifest", e);
       externalAppDynamicInputs.innerHTML =
