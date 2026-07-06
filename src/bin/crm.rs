@@ -119,6 +119,7 @@ fn print_manifest() {
                 required: false,
                 default_value: Some("all".to_string()),
                 depends_on: None,
+                autofill: None,
                 options: Some(vec![
                     "all".to_string(),
                     "tickets".to_string(),
@@ -134,6 +135,7 @@ fn print_manifest() {
                 default_value: None,
                 options: None,
                 depends_on: None,
+                autofill: None,
             },
         ],
     };

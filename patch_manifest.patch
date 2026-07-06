@@ -1,0 +1,8 @@
+--- src/manifest.rs
++++ src/manifest.rs
+@@ -4,7 +4,7 @@
+ pub struct AppManifest {
+     pub name: String,
+     pub description: String,
+     pub arguments: Vec<AppArg>,
+ }

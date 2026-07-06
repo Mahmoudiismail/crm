@@ -1,0 +1,10 @@
+--- md/MANIFEST_SCHEMA.md
++++ md/MANIFEST_SCHEMA.md
+@@ -73,6 +73,7 @@
+         "arg_type": "string",
+         "required": false,
+         "default_value": "report.csv",
++        "options": ["report.csv", "summary.csv", "detail.csv"],
+         "depends_on": {
+             "--type": ["detailed"]
+         },

@@ -41,6 +41,7 @@ fn print_manifest() {
             default_value: None,
             options: None,
             depends_on: None,
+            autofill: None,
         }],
     };
     if let Ok(json) = serde_json::to_string(&manifest) {

@@ -956,14 +956,10 @@ fn print_manifest(config_path: Option<PathBuf>) {
         },
         AppArg {
             name: "--type".to_string(),
-            arg_type: ArgType::List,
+            arg_type: ArgType::String,
             required: false,
             default_value: None,
-            options: Some(vec![
-                "".to_string(),
-                "standard report".to_string(),
-                "report manager".to_string(),
-            ]),
+            options: None,
             depends_on: None,
             autofill: if type_autofills.is_empty() {
                 None

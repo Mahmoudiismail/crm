@@ -1,0 +1,16 @@
+--- src/runner/form_script.js
++++ src/runner/form_script.js
+@@ -608,8 +608,12 @@
+             html += `${wrapperStart}<label class="block">${labelSpan}<input type="number" id="${argId}" data-arg-name="${arg.name}" data-arg-type="number" value="${currentValue || ""}" class="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm" ${autofillAttr} ${requiredAttr}></label>${wrapperEnd}`;
+           } else {
+             // string
+-            html += `${wrapperStart}<label class="block">${labelSpan}<input type="text" id="${argId}" data-arg-name="${arg.name}" data-arg-type="string" value="${currentValue || ""}" class="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm" ${autofillAttr} ${requiredAttr}></label>${wrapperEnd}`;
++            if (arg.name === "--start-date" || arg.name === "--end-date") {
++                html += `${wrapperStart}<label class="block">${labelSpan}<input type="date" id="${argId}" data-arg-name="${arg.name}" data-arg-type="string" value="${currentValue || ""}" class="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm" ${autofillAttr} ${requiredAttr}></label>${wrapperEnd}`;
++            } else {
++                html += `${wrapperStart}<label class="block">${labelSpan}<input type="text" id="${argId}" data-arg-name="${arg.name}" data-arg-type="string" value="${currentValue || ""}" class="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm" ${autofillAttr} ${requiredAttr}></label>${wrapperEnd}`;
++            }
+           }
+         });
+         html += "</div>";
+       } else {
