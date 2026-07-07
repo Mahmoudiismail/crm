@@ -129,7 +129,6 @@ pub struct CsvAnalysisParams<'a> {
     pub exclude_branches: &'a [String],
     pub exclude_categories: &'a [String],
     pub category_exceptions: Option<&'a Vec<crate::tasker::config::CategoryException>>,
-    pub start_date: Option<&'a String>,
 }
 
 impl<'a> From<&'a CsvAnalysisConfig> for CsvAnalysisParams<'a> {
@@ -144,7 +143,6 @@ impl<'a> From<&'a CsvAnalysisConfig> for CsvAnalysisParams<'a> {
             exclude_branches: &config.exclude_branches,
             exclude_categories: &config.exclude_categories,
             category_exceptions: config.category_exceptions.as_ref(),
-            start_date: config.start_date.as_ref(),
         }
     }
 }
@@ -161,7 +159,6 @@ impl<'a> From<&'a crate::tasker::config::DashboardUpdaterConfig> for CsvAnalysis
             exclude_branches: &config.exclude_branches,
             exclude_categories: &config.exclude_categories,
             category_exceptions: config.category_exceptions.as_ref(),
-            start_date: config.start_date.as_ref(),
         }
     }
 }
