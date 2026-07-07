@@ -1,6 +1,6 @@
 use crate::tasker::config::CsvAnalysisConfig;
 use anyhow::{Context, Result};
-use chrono::{DateTime, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime};
+use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime};
 use csv::{ReaderBuilder, StringRecord, WriterBuilder};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
@@ -25,6 +25,35 @@ pub struct AssignmentSettings {
     pub subtype: String,
     #[serde(alias = "Auto agent/team assignment")]
     pub auto_agent_team_assignment: Option<String>,
+}
+
+pub fn parse_start_date(val: &str) -> Option<NaiveDateTime> {
+    let trimmed = val.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    if let Ok(dt) = NaiveDate::parse_from_str(trimmed, "%Y-%m-%d") {
+        return Some(dt.and_hms_opt(0, 0, 0).unwrap());
+    }
+
+    if let Ok(dt) = NaiveDate::parse_from_str(trimmed, "%d-%b-%Y") {
+        return Some(dt.and_hms_opt(0, 0, 0).unwrap());
+    }
+
+    // e.g. "1-May" -> "1-May-2026" (append current year)
+    let with_year = format!("{}-{}", trimmed, Local::now().year());
+    if let Ok(dt) = NaiveDate::parse_from_str(&with_year, "%d-%b-%Y") {
+        return Some(dt.and_hms_opt(0, 0, 0).unwrap());
+    }
+
+    // try d-b format
+    let with_year2 = format!("{}-{}", trimmed, Local::now().year());
+    if let Ok(dt) = NaiveDate::parse_from_str(&with_year2, "%e-%b-%Y") {
+        return Some(dt.and_hms_opt(0, 0, 0).unwrap());
+    }
+
+    None
 }
 
 pub fn parse_created_at(val: &str) -> Option<NaiveDateTime> {
@@ -96,6 +125,7 @@ pub struct CsvAnalysisParams<'a> {
     pub download_path: &'a str,
     pub output_file: &'a str,
     pub minutes_ago: i64,
+    pub start_date: Option<&'a str>,
     pub exclude_branches: &'a [String],
     pub exclude_categories: &'a [String],
     pub category_exceptions: Option<&'a Vec<crate::tasker::config::CategoryException>>,
@@ -110,6 +140,7 @@ impl<'a> From<&'a CsvAnalysisConfig> for CsvAnalysisParams<'a> {
             download_path: &config.download_path,
             output_file: &config.output_file,
             minutes_ago: config.minutes_ago,
+            start_date: config.start_date.as_deref(),
             exclude_branches: &config.exclude_branches,
             exclude_categories: &config.exclude_categories,
             category_exceptions: config.category_exceptions.as_ref(),
@@ -126,6 +157,7 @@ impl<'a> From<&'a crate::tasker::config::DashboardUpdaterConfig> for CsvAnalysis
             download_path: &config.download_path,
             output_file: &config.output_file,
             minutes_ago: config.minutes_ago,
+            start_date: config.start_date.as_deref(),
             exclude_branches: &config.exclude_branches,
             exclude_categories: &config.exclude_categories,
             category_exceptions: config.category_exceptions.as_ref(),
@@ -310,6 +342,7 @@ pub fn generate_csv(params: &CsvAnalysisParams) -> Result<Option<std::path::Path
     }
 
     // Parse logic
+    let filter_start_date_dt = params.start_date.and_then(parse_start_date);
 
     info!(
         "Processing ticket files and writing to output: {}",
@@ -505,6 +538,18 @@ pub fn generate_csv(params: &CsvAnalysisParams) -> Result<Option<std::path::Path
                 is_exception_val = "Yes";
             }
 
+            if let Some(start_dt) = filter_start_date_dt {
+                if let Some(created_dt) = created_at_idx
+                    .and_then(|idx| record.get(idx))
+                    .and_then(parse_created_at)
+                {
+                    if created_dt < start_dt {
+                        total_filtered_rows += 1;
+                        continue;
+                    }
+                }
+            }
+
             record.push_field(position.as_deref().unwrap_or(""));
             record.push_field(team.as_deref().unwrap_or(""));
             record.push_field(is_exception_val);
@@ -573,6 +618,7 @@ pub fn run(
                 &config.download_path,
                 config.minutes_ago,
                 config.category_exceptions.as_deref(),
+                &config.exclude_branches,
             ) {
                 error!("Error processing emails: {}", e);
             }

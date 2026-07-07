@@ -233,7 +233,7 @@ $Mail = $Outlook.CreateItem(0)
 $Mail.To = "{}"
 $Mail.CC = "{}"
 $Mail.Subject = "CRM Tickets Dashboard"
-$Mail.Body = "Dear Aya,`r`nPlease find the CRM Ticket dashboard attached."
+$Mail.HTMLBody = "<html><body>Dear Aya,<br/><div style='margin-left: 20px;'>Please find the CRM Ticket dashboard attached.</div></body></html>"
 $Mail.Attachments.Add("{}")
 $Mail.Send()
 "#,
