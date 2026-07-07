@@ -49,7 +49,6 @@ pub struct CsvAnalysisConfig {
     pub category_exceptions: Option<Vec<CategoryException>>,
     pub output_file: String,
     pub email_config: Option<EmailConfig>,
-    pub start_date: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -69,7 +68,6 @@ pub struct DashboardUpdaterConfig {
     pub dashboard_table_name: String,
     pub email_to: Option<String>,
     pub email_cc: Option<String>,
-    pub start_date: Option<String>,
 }
 
 #[cfg(test)]
