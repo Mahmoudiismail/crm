@@ -61,12 +61,20 @@ pub fn parse_created_at(val: &str) -> Option<NaiveDateTime> {
     if trimmed.is_empty() {
         return None;
     }
+    // Try DD-MMM-YYYY (e.g. 01-May-2026)
+    if let Ok(dt) = NaiveDate::parse_from_str(trimmed, "%d-%b-%Y") {
+        return Some(dt.and_hms_opt(0, 0, 0).unwrap());
+    }
     // Try dd/mm/yyyy hh:mm:ss
     if let Ok(dt) = NaiveDateTime::parse_from_str(trimmed, "%d/%m/%Y %H:%M:%S") {
         return Some(dt);
     }
     // Try mm/dd/yyyy hh:mm:ss
     if let Ok(dt) = NaiveDateTime::parse_from_str(trimmed, "%m/%d/%Y %H:%M:%S") {
+        return Some(dt);
+    }
+    // Try YYYY-MM-DD HH:MM:SS
+    if let Ok(dt) = NaiveDateTime::parse_from_str(trimmed, "%Y-%m-%d %H:%M:%S") {
         return Some(dt);
     }
     // Try float
@@ -121,6 +129,7 @@ pub struct CsvAnalysisParams<'a> {
     pub exclude_branches: &'a [String],
     pub exclude_categories: &'a [String],
     pub category_exceptions: Option<&'a Vec<crate::tasker::config::CategoryException>>,
+    pub start_date: Option<&'a String>,
 }
 
 impl<'a> From<&'a CsvAnalysisConfig> for CsvAnalysisParams<'a> {
@@ -135,6 +144,7 @@ impl<'a> From<&'a CsvAnalysisConfig> for CsvAnalysisParams<'a> {
             exclude_branches: &config.exclude_branches,
             exclude_categories: &config.exclude_categories,
             category_exceptions: config.category_exceptions.as_ref(),
+            start_date: config.start_date.as_ref(),
         }
     }
 }
@@ -151,6 +161,7 @@ impl<'a> From<&'a crate::tasker::config::DashboardUpdaterConfig> for CsvAnalysis
             exclude_branches: &config.exclude_branches,
             exclude_categories: &config.exclude_categories,
             category_exceptions: config.category_exceptions.as_ref(),
+            start_date: config.start_date.as_ref(),
         }
     }
 }
@@ -319,6 +330,17 @@ pub fn generate_csv(params: &CsvAnalysisParams) -> Result<Option<std::path::Path
         .map(|s| s.trim().to_lowercase())
         .collect();
 
+    // Parse start_date if provided
+    let parsed_start_date = if let Some(sd_str) = params.start_date {
+        crate::tasker::csv_task::parse_created_at(sd_str)
+    } else {
+        None
+    };
+
+    if let Some(sd) = &parsed_start_date {
+        info!("Filtering records with created_at >= {:?}", sd);
+    }
+
     // Parse logic
     let filter_start_date_dt = params.start_date.and_then(parse_start_date);
 
@@ -365,7 +387,9 @@ pub fn generate_csv(params: &CsvAnalysisParams) -> Result<Option<std::path::Path
                 ticket_id_idx = Some(i);
             } else if h_trim == "Branch" {
                 branch_idx = Some(i);
-            } else if h_trim == "Created At" || h_trim == "Creation Date" {
+            } else if h_trim.eq_ignore_ascii_case("created at")
+                || h_trim.eq_ignore_ascii_case("creation date")
+            {
                 created_at_idx = Some(i);
             }
         }
@@ -382,6 +406,19 @@ pub fn generate_csv(params: &CsvAnalysisParams) -> Result<Option<std::path::Path
         for result in rdr.records() {
             let mut record = result?;
             let mut is_exception_val = "No";
+
+            // Check start_date filter
+            if let Some(start_dt) = parsed_start_date {
+                if let Some(created_idx) = created_at_idx {
+                    let created_val = record.get(created_idx).unwrap_or("").trim();
+                    if let Some(dt) = parse_created_at(created_val) {
+                        if dt < start_dt {
+                            total_filtered_rows += 1;
+                            continue;
+                        }
+                    }
+                }
+            }
 
             // Clean
             // Optimize: Collect fields directly into an array or iterator and push_record

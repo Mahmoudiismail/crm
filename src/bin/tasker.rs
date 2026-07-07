@@ -79,6 +79,7 @@ pub fn run_app(args: Vec<String>) -> Result<()> {
       "users_file": "./task1/users.csv",
       "assignment_settings_file": "./task1/assignments.csv",
       "minutes_ago": 15,
+      "start_date": "01-May-2026",
       "exclude_branches": [
         "Dr. Soliman Fakeeh Hospital Madinah",
         "Medical Fakeeh"
@@ -103,7 +104,8 @@ pub fn run_app(args: Vec<String>) -> Result<()> {
           "DSFMH"
         ],
         "send_call_center": false,
-        "send_exceptions": false
+        "send_exceptions": false,
+        "indentation_spaces": 4
       }
     }
   ]
@@ -227,6 +229,8 @@ fn print_manifest() {
                 required: false,
                 default_value: None,
                 options: None,
+                depends_on: None,
+                autofill: None,
             },
             AppArg {
                 name: "--task".to_string(),
@@ -234,6 +238,8 @@ fn print_manifest() {
                 required: false,
                 default_value: None,
                 options: None,
+                depends_on: None,
+                autofill: None,
             },
             AppArg {
                 name: "--only-call-center".to_string(),
@@ -241,6 +247,8 @@ fn print_manifest() {
                 required: false,
                 default_value: Some("false".to_string()),
                 options: None,
+                depends_on: None,
+                autofill: None,
             },
             AppArg {
                 name: "--send-exceptions".to_string(),
@@ -248,6 +256,8 @@ fn print_manifest() {
                 required: false,
                 default_value: Some("false".to_string()),
                 options: None,
+                depends_on: None,
+                autofill: None,
             },
         ],
     };

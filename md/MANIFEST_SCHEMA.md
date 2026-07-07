@@ -23,6 +23,8 @@ The manifest defines the application's metadata and the arguments it accepts via
 | `required` | Boolean | Whether the argument must be provided by the user. |
 | `default_value` | String (Optional) | The default value used if the user provides no input. |
 | `options` | Array of String (Optional) | Required if `arg_type` is `"list"`. Specifies the valid choices for the dropdown. |
+| `depends_on` | Object (Optional) | A map where keys are parent argument names and values are arrays of strings (acceptable values). The argument will only be visible in the GUI if the parent argument currently matches one of the specified values. |
+| `autofill` | Object (Optional) | A map where keys are parent argument names and values are nested maps linking parent argument values to the desired autofill value. Useful for automatically populating inputs when a related dropdown changes. |
 
 ## Example JSON Representation
 
@@ -42,6 +44,19 @@ The manifest defines the application's metadata and the arguments it accepts via
       "arg_type": "number",
       "required": false,
       "default_value": "300"
+    },
+    {
+      "name": "--filter-branch",
+      "arg_type": "string",
+      "required": false,
+      "depends_on": {
+        "--report-type": ["daily"]
+      },
+      "autofill": {
+        "--report-type": {
+          "daily": "main_branch"
+        }
+      }
     },
     {
       "name": "--headless",

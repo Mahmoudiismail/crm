@@ -420,10 +420,15 @@ async fn route_request(
 
         if let Some(app) = cfg.registered_apps.iter().find(|a| a.id == app_id) {
             let executable = crate::runner::engine::resolve_executable(&app.executable_path);
-            let output_result = tokio::process::Command::new(executable)
-                .arg("--manifest")
-                .output()
-                .await;
+            let mut cmd = tokio::process::Command::new(executable);
+            cmd.arg("--manifest");
+
+            #[cfg(target_os = "windows")]
+            {
+                cmd.creation_flags(0x08000000);
+            }
+
+            let output_result = cmd.output().await;
 
             match output_result {
                 Ok(output) if output.status.success() => {

@@ -27,6 +27,7 @@ pub struct EmailConfig {
     pub send_per_team_branches: Option<Vec<String>>,
     pub send_call_center: Option<bool>,
     pub send_exceptions: Option<bool>,
+    pub indentation_spaces: Option<u32>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -48,6 +49,7 @@ pub struct CsvAnalysisConfig {
     pub category_exceptions: Option<Vec<CategoryException>>,
     pub output_file: String,
     pub email_config: Option<EmailConfig>,
+    pub start_date: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -67,6 +69,7 @@ pub struct DashboardUpdaterConfig {
     pub dashboard_table_name: String,
     pub email_to: Option<String>,
     pub email_cc: Option<String>,
+    pub start_date: Option<String>,
 }
 
 #[cfg(test)]

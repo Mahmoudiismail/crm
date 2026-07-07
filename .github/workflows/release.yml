@@ -4,17 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       binary:
-        description: Binary to release
+        description: Binary to release (comma separated, or "all")
         required: true
-        default: crm
-        type: choice
-        options:
-          - crm
-          - runner
-          - yasweb
-          - wcxx
-          - tasker
-          - all
+        default: all
+        type: string
 
 permissions:
   contents: write
@@ -45,10 +38,6 @@ jobs:
     needs: prepare
     runs-on: windows-latest
 
-    strategy:
-      matrix:
-        binary: ${{ fromJson(github.event.inputs.binary == 'all' && '["crm","runner","yasweb","wcxx","tasker"]' || format('["{0}"]', github.event.inputs.binary)) }}
-
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
       BUILD_DATE: ${{ needs.prepare.outputs.build_date }}
@@ -65,125 +54,61 @@ jobs:
           shared-key: crm-rust-shared-cache
 
       - name: Build
-        run: cargo build --release --bin ${{ matrix.binary }}
+        shell: bash
+        run: |
+          if [ "${{ github.event.inputs.binary }}" == "all" ]; then
+            cargo build --release --bin crm --bin runner --bin yasweb --bin wcxx --bin tasker
+          else
+            BINS="${{ github.event.inputs.binary }}"
+            IFS=',' read -ra BIN_ARRAY <<< "$BINS"
+            CMD="cargo build --release"
+            for bin in "${BIN_ARRAY[@]}"; do
+              bin=$(echo $bin | xargs)
+              if [ -n "$bin" ]; then
+                CMD="$CMD --bin $bin"
+              fi
+            done
+            eval $CMD
+          fi
 
       - name: Zip
         shell: bash
         run: |
           cd target/release
-          7z a -p123456 ${{ matrix.binary }}_windows.zip ${{ matrix.binary }}.exe
+          EXE_FILES=""
+          if [ "${{ github.event.inputs.binary }}" == "all" ]; then
+            EXE_FILES="crm.exe runner.exe yasweb.exe wcxx.exe tasker.exe"
+          else
+            BINS="${{ github.event.inputs.binary }}"
+            IFS=',' read -ra BIN_ARRAY <<< "$BINS"
+            for bin in "${BIN_ARRAY[@]}"; do
+              bin=$(echo $bin | xargs)
+              if [ -n "$bin" ]; then
+                EXE_FILES="$EXE_FILES $bin.exe"
+              fi
+            done
+          fi
+          7z a -p123456 crm_tool_v${{ env.VERSION }}_${{ env.BUILD_DATE }}_windows.zip $EXE_FILES
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ env.VERSION }}-${{ matrix.binary }}
-          name: Release v${{ env.VERSION }} (${{ matrix.binary }})
+          tag_name: v${{ env.VERSION }}
+          name: Release v${{ env.VERSION }}
+          body: |
+            Built binaries: ${{ github.event.inputs.binary }}
+            The application was builded in this action
           draft: false
           prerelease: false
           overwrite_files: true
           generate_release_notes: true
-          files: target/release/${{ matrix.binary }}_windows.zip
+          files: target/release/crm_tool_v${{ env.VERSION }}_${{ env.BUILD_DATE }}_windows.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.binary }}_windows_zip
-          path: target/release/${{ matrix.binary }}_windows.zip
+          name: crm_tool_windows_zip
+          path: target/release/crm_tool_v${{ env.VERSION }}_${{ env.BUILD_DATE }}_windows.zip
           retention-days: 1
-
-  upload_gdrive:
-    name: Upload to Google Drive
-    needs:
-      - prepare
-      - release
-
-    runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        binary: ${{ fromJson(github.event.inputs.binary == 'all' && '["crm","runner","yasweb","wcxx","tasker"]' || format('["{0}"]', github.event.inputs.binary)) }}
-
-    env:
-      VERSION: ${{ needs.prepare.outputs.version }}
-      BUILD_DATE: ${{ needs.prepare.outputs.build_date }}
-
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: ${{ matrix.binary }}_windows_zip
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - run: npm install googleapis
-
-      - uses: actions/github-script@v7
-        env:
-          GDRIVE_CLIENT_ID: ${{ secrets.GDRIVE_CLIENT_ID }}
-          GDRIVE_CLIENT_SECRET: ${{ secrets.GDRIVE_CLIENT_SECRET }}
-          GDRIVE_REFRESH_TOKEN: ${{ secrets.GDRIVE_REFRESH_TOKEN }}
-          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
-
-          FILENAME: ${{ matrix.binary }}_windows.zip
-          DRIVE_NAME: v${{ env.VERSION }}-${{ matrix.binary }}_${{ env.BUILD_DATE }}_windows.zip
-
-        with:
-          script: |
-            const fs = require('fs');
-            const { google } = require('googleapis');
-
-            const oauth2Client = new google.auth.OAuth2(
-              process.env.GDRIVE_CLIENT_ID,
-              process.env.GDRIVE_CLIENT_SECRET
-            );
-
-            oauth2Client.setCredentials({
-              refresh_token: process.env.GDRIVE_REFRESH_TOKEN
-            });
-
-            await oauth2Client.getAccessToken();
-
-            const drive = google.drive({
-              version: 'v3',
-              auth: oauth2Client
-            });
-
-            const folderId = process.env.GDRIVE_FOLDER_ID;
-            const fileName = process.env.DRIVE_NAME;
-            const localFile = process.env.FILENAME;
-
-            try {
-              const existing = await drive.files.list({
-                q: `'${folderId}' in parents and name='${fileName}' and trashed=false`,
-                fields: 'files(id,name)'
-              });
-
-              for (const file of existing.data.files) {
-                console.log(`Deleting ${file.name}`);
-                await drive.files.delete({
-                  fileId: file.id
-                });
-              }
-
-              const result = await drive.files.create({
-                requestBody: {
-                  name: fileName,
-                  parents: [folderId]
-                },
-                media: {
-                  mimeType: 'application/zip',
-                  body: fs.createReadStream(localFile)
-                },
-                fields: 'id,webViewLink'
-              });
-
-              console.log(`Uploaded successfully`);
-              console.log(result.data.webViewLink);
-
-            } catch (e) {
-              console.error(e);
-              core.setFailed(e.message);
-            }

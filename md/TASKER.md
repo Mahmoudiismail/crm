@@ -51,6 +51,7 @@ This task is designed to process multiple ticket report CSV files and augment th
       "users_file": "./data/users.csv",
       "assignment_settings_file": "./data/assignments.csv",
       "minutes_ago": 15,
+      "start_date": "01-May-2026",
       "exclude_branches": [
         "Dr. Soliman Fakeeh Hospital Madinah",
         "Medical Fakeeh"
@@ -76,7 +77,8 @@ This task is designed to process multiple ticket report CSV files and augment th
         "send_per_team_all_branches": ["PRE-AUTHORIZATION"],
         "send_per_branch_branches": ["dsfmc", "DSFMH"],
         "send_per_team_branches": ["Dr. Soliman Fakeeh Hospital Jeddah"],
-        "send_call_center": true
+        "send_call_center": true,
+        "indentation_spaces": 4
       }
     }
   ]
@@ -89,6 +91,7 @@ This task is designed to process multiple ticket report CSV files and augment th
 - `users_file`: Path to the users mapping CSV (formerly PowerQuery Table11).
 - `assignment_settings_file`: Path to the assignment settings CSV containing category, type, and subtype mappings.
 - `minutes_ago`: Will only process ticket CSV files that have been modified within the last X minutes.
+- `start_date`: (Optional) String representing a date (e.g. "01-May-2026") to filter out tickets created before this date.
 - `exclude_branches`: Array of strings. Tickets belonging to these branches will be excluded from the final output (case-insensitive).
 - `exclude_categories`: Array of strings. Tickets belonging to these categories will be excluded from the final output (case-insensitive).
 - `category_exceptions`: (Optional) List of objects specifying conditional inclusions for otherwise excluded categories.
@@ -106,6 +109,7 @@ This task is designed to process multiple ticket report CSV files and augment th
   - `send_per_branch_branches`: List of branches that will receive *one email for the entire branch* instead of separated by team.
   - `send_per_team_branches`: List of branches that should have their emails sent per team.
   - `send_call_center`: Boolean, if true unifies the "Call Center" tickets from all allowed branches into a single email instead of being grouped with the others. It also automatically discovers, parses, and attaches any matching `lead_report_*.csv` files for the Call Center bucket (even if there are zero open tickets for the target period).
+  - `indentation_spaces`: (Optional) Customizable number of non-breaking spaces before the email body content for indentation. Defaults to 4.
 
 ### `dashboard_updater` Task
 
@@ -121,6 +125,7 @@ This task is similar to `csv_analysis`, in that it processes raw ticket CSVs bas
       "users_file": "./data/users.csv",
       "assignment_settings_file": "./data/assignments.csv",
       "minutes_ago": 15,
+      "start_date": "01-May-2026",
       "exclude_branches": [],
       "exclude_categories": [],
       "output_file": "./results.csv",
@@ -134,7 +139,7 @@ This task is similar to `csv_analysis`, in that it processes raw ticket CSVs bas
 ```
 
 #### Fields Description
-- Shares all core CSV generation fields with `csv_analysis` (`download_path`, `users_file`, `minutes_ago`, `exclude_branches`, etc.).
+- Shares all core CSV generation fields with `csv_analysis` (`download_path`, `users_file`, `minutes_ago`, `start_date`, `exclude_branches`, etc.).
 - `dashboard_file`: Path to the existing `.xlsx` dashboard file you want to update.
 - `dashboard_table_name`: The name of the Excel Table (ListObject) inside the workbook that should be cleared and filled with the new CSV data (e.g., `"table2"`).
 - `email_to`: (Optional) Email address to send the final updated dashboard to.
