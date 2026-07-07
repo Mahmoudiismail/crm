@@ -6,6 +6,7 @@
       "users_file": "./users.csv",
       "assignment_settings_file": "./assignments.csv",
       "minutes_ago": 15,
+      "start_date": "01-May-2026",
       "exclude_branches": [
         "Dr. Soliman Fakeeh Hospital Madinah",
         "Medical Fakeeh"
@@ -28,7 +29,8 @@
           "dsfmc",
           "DSFMH"
         ],
-        "send_call_center": true
+        "send_call_center": true,
+        "indentation_spaces": 4
       }
     }
   ]

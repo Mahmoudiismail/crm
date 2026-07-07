@@ -337,6 +337,10 @@ fn generate_pivot_html(rows: &[TicketRow], statuses: &[String], include_team_col
     html
 }
 fn generate_leads_report(download_dir: &str, minutes_ago: i64) -> Result<Option<PathBuf>> {
+    info!(
+        "Starting leads report generation from directory: {}",
+        download_dir
+    );
     let download_dir_path = std::path::PathBuf::from(download_dir);
     let now = Local::now().naive_local();
     let threshold = now - Duration::minutes(minutes_ago);
@@ -364,8 +368,16 @@ fn generate_leads_report(download_dir: &str, minutes_ago: i64) -> Result<Option<
     }
 
     if target_files.is_empty() {
+        info!(
+            "No lead_report CSV files found within the last {} minutes.",
+            minutes_ago
+        );
         return Ok(None);
     }
+    info!(
+        "Found {} lead_report files for processing.",
+        target_files.len()
+    );
 
     // Sort files with modification date newer first
     target_files.sort_by(|a, b| {
@@ -444,6 +456,7 @@ fn generate_leads_report(download_dir: &str, minutes_ago: i64) -> Result<Option<
     }
 
     if all_records.is_empty() {
+        info!("No valid lead records found after processing files.");
         return Ok(None);
     }
 
@@ -466,6 +479,11 @@ fn generate_leads_report(download_dir: &str, minutes_ago: i64) -> Result<Option<
 
     workbook.save(&xlsx_path)?;
 
+    info!(
+        "Successfully generated leads report with {} records at: {}",
+        all_records.len(),
+        xlsx_path.display()
+    );
     Ok(Some(xlsx_path))
 }
 
@@ -727,10 +745,13 @@ pub fn process_emails(
         let allowed_branch = send_per_branch_branches.contains(&b_low);
 
         if is_cc {
-            if send_cc && only_call_center {
-                call_center_bucket.push(row);
+            // Include Call Center tickets if send_cc is enabled, regardless of only_call_center flag
+            if send_cc {
+                call_center_bucket.push(row.clone());
             }
-        } else if !only_call_center {
+        }
+
+        if !only_call_center {
             if effective_send_exceptions {
                 per_team_buckets
                     .entry(row.team.clone())
@@ -939,15 +960,21 @@ pub fn process_emails(
                 .replace("&nbsp;&nbsp;&nbsp;&nbsp;", "")
                 .replace("Dear All", "Dear {receiver_name}");
 
+            let indent_spaces = config.indentation_spaces.unwrap_or(4);
+            let nbsps = "&nbsp;".repeat(indent_spaces as usize);
+
             // Dynamically upgrade old layouts if they don't have the new full-wrap div structure.
             // If it contains the exact text "Kindly find below" without being inside a layout div, wrap it.
             let old_pattern = "Kindly find below the list of open tickets in {bucket_name} for the period from {from_date_str} until {today_str}.<br/><br/>\n    {html_table}";
             let old_pattern_r = "Kindly find below the list of open tickets in {bucket_name} for the period from {from_date_str} until {today_str}.<br/><br/>\r\n    {html_table}";
 
-            let new_pattern = r#"<div style="margin-left: 20px;">
-        Kindly find below the list of open tickets in {bucket_name} for the period from {from_date_str} until {today_str}.<br/><br/>
-        {html_table}
-    </div>"#;
+            let new_pattern = format!(
+                r#"<div>
+        {}Kindly find below the list of open tickets in {{bucket_name}} for the period from {{from_date_str}} until {{today_str}}.<br/><br/>
+        {{html_table}}
+    </div>"#,
+                nbsps
+            );
 
             let _prev_table_pattern = r#"<table border="0" cellpadding="0" cellspacing="0">
         <tr>
@@ -958,13 +985,19 @@ pub fn process_emails(
             </td>
         </tr>
     </table>"#;
+            let _prev_div_pattern = r#"<div style="margin-left: 20px;">
+        Kindly find below the list of open tickets in {bucket_name} for the period from {from_date_str} until {today_str}.<br/><br/>
+        {html_table}
+    </div>"#;
+
             extracted_body = extracted_body
-                .replace(old_pattern, new_pattern)
-                .replace(old_pattern_r, new_pattern);
+                .replace(old_pattern, &new_pattern)
+                .replace(old_pattern_r, &new_pattern)
+                .replace(_prev_div_pattern, &new_pattern);
 
             // Just in case it was a single line version
             let old_pattern_inline = "Kindly find below the list of open tickets in {bucket_name} for the period from {from_date_str} until {today_str}.<br/><br/>{html_table}";
-            extracted_body = extracted_body.replace(old_pattern_inline, new_pattern);
+            extracted_body = extracted_body.replace(old_pattern_inline, &new_pattern);
 
             // Replace placeholders
             let final_body = extracted_body
@@ -977,19 +1010,16 @@ pub fn process_emails(
             let wrapped_body = format!("<html><body>{}</body></html>", final_body);
             (extracted_subject, wrapped_body)
         } else {
+            let indent_spaces = config.indentation_spaces.unwrap_or(4);
+            let nbsps = "&nbsp;".repeat(indent_spaces as usize);
             let body = format!(
                 r#"<html><body style="font-family: Arial, sans-serif;">Dear {},<br/>
-    <table border="0" cellpadding="0" cellspacing="0">
-        <tr>
-            <td width="20"></td>
-            <td>
-                Kindly find below the list of open tickets in {} for the period from {} until {}.<br/><br/>
-                {}
-            </td>
-        </tr>
-    </table>
+    <div>
+        {}Kindly find below the list of open tickets in {} for the period from {} until {}.<br/><br/>
+        {}
+    </div>
 </body></html>"#,
-                receiver_name, bucket_name, from_date_str, today_str, html_table
+                receiver_name, nbsps, bucket_name, from_date_str, today_str, html_table
             );
             let subject = format!("Open TKTs - {}", bucket_name);
             (subject, body)
@@ -1117,7 +1147,7 @@ $Mail.Display()
 
     // 3. Process Call Center
     // Call Center gets special treatment because even if they have NO open tickets, they might have leads.
-    if send_cc && only_call_center {
+    if send_cc {
         send_email_for_bucket("Call Center", &call_center_bucket, true)?;
     }
 
@@ -1165,6 +1195,7 @@ mod tests {
             send_per_team_branches: None,
             send_call_center: Some(false),
             send_exceptions: Some(false),
+            indentation_spaces: None,
         };
 
         // If the email script runs but finds only closed tickets, it should skip.
