@@ -100,7 +100,8 @@ fn run_browser_tab(
             let tabs = browser.get_tabs().lock().unwrap_or_else(|e| e.into_inner());
             let mut found = None;
             for t in tabs.iter() {
-                if t.get_url().contains("about:blank") {
+                let url = t.get_url();
+                if url.contains("about:blank") || url.is_empty() {
                     found = Some(t.clone());
                     break;
                 }
