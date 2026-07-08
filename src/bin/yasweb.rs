@@ -96,20 +96,24 @@ fn run_browser_tab(
     let mut discovered_filters = Vec::new();
 
     let tab = if is_initial_tab {
-        let tabs = browser.get_tabs().lock().unwrap_or_else(|e| e.into_inner());
-        let mut blank_tab = None;
-        for t in tabs.iter() {
-            if t.get_url().contains("about:blank") {
-                blank_tab = Some(t.clone());
-                break;
+        let blank_tab = {
+            let tabs = browser.get_tabs().lock().unwrap_or_else(|e| e.into_inner());
+            let mut found = None;
+            for t in tabs.iter() {
+                if t.get_url().contains("about:blank") {
+                    found = Some(t.clone());
+                    break;
+                }
             }
-        }
 
-        if blank_tab.is_none() {
-            let urls: Vec<String> = tabs.iter().map(|t| t.get_url()).collect();
-            info!("Warning: No about:blank tab found. Open tabs: {:?}", urls);
-            blank_tab = tabs.first().cloned();
-        }
+            if found.is_none() {
+                let urls: Vec<String> = tabs.iter().map(|t| t.get_url()).collect();
+                info!("Warning: No about:blank tab found. Open tabs: {:?}", urls);
+                found = tabs.first().cloned();
+            }
+            found
+        };
+
         match blank_tab {
             Some(t) => t,
             None => browser.new_tab().context("Failed to open new tab")?,
