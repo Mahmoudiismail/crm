@@ -1409,12 +1409,22 @@ fn parse_schedules_text(value: &str) -> Result<Vec<TaskSchedule>> {
                     }
                 }
 
-                let every_str = every_str.strip_prefix("every").unwrap_or(every_str).trim();
+                let mut base_str = every_str.strip_prefix("every").unwrap_or(every_str).trim();
+                let mut start_time = None;
+                if let Some((e, st_str)) = base_str.split_once("; st:") {
+                    base_str = e.trim();
+                    let st_val = st_str.trim();
+                    if !st_val.is_empty() {
+                        start_time = Some(st_val.to_string());
+                    }
+                }
+
                 schedules.push(TaskSchedule::Interval {
                     enabled: true,
-                    every_seconds: parse_duration_text(every_str)?,
+                    every_seconds: parse_duration_text(base_str)?,
                     next_run_at: Utc::now().to_rfc3339(),
                     working_hours,
+                    start_time,
                 });
             }
             "daily" => {
@@ -1455,25 +1465,71 @@ fn parse_schedules_text(value: &str) -> Result<Vec<TaskSchedule>> {
                 });
             }
             "weekly" => {
+                let mut rest_str = rest;
+                let mut working_hours = None;
+                if let Some((r, wh_str)) = rest_str.split_once("; wh:") {
+                    rest_str = r.trim();
+                    let mut wh_map = std::collections::HashMap::new();
+                    for part in wh_str.split(',') {
+                        if let Some((day, times)) = part.split_once('=') {
+                            if let Some((start, end)) = times.split_once('-') {
+                                wh_map.insert(
+                                    day.trim().to_string(),
+                                    crate::runner::config::WorkingHours {
+                                        start: start.trim().to_string(),
+                                        end: end.trim().to_string(),
+                                    },
+                                );
+                            }
+                        }
+                    }
+                    if !wh_map.is_empty() {
+                        working_hours = Some(wh_map);
+                    }
+                }
                 schedules.push(TaskSchedule::Weekly {
                     enabled: true,
-                    day_of_week: rest.to_string(),
+                    day_of_week: rest_str.to_string(),
                     at_time: "09:00".to_string(),
                     next_run_at: Utc::now().to_rfc3339(),
+                    working_hours,
                 });
             }
             "monthly" => {
-                let day_str = rest
+                let mut rest_str = rest;
+                let mut working_hours = None;
+                if let Some((r, wh_str)) = rest_str.split_once("; wh:") {
+                    rest_str = r.trim();
+                    let mut wh_map = std::collections::HashMap::new();
+                    for part in wh_str.split(',') {
+                        if let Some((day, times)) = part.split_once('=') {
+                            if let Some((start, end)) = times.split_once('-') {
+                                wh_map.insert(
+                                    day.trim().to_string(),
+                                    crate::runner::config::WorkingHours {
+                                        start: start.trim().to_string(),
+                                        end: end.trim().to_string(),
+                                    },
+                                );
+                            }
+                        }
+                    }
+                    if !wh_map.is_empty() {
+                        working_hours = Some(wh_map);
+                    }
+                }
+                let day_str = rest_str
                     .strip_prefix("day")
-                    .unwrap_or(rest)
+                    .unwrap_or(rest_str)
                     .trim()
                     .parse::<u32>()
-                    .with_context(|| format!("Invalid day of month '{}'", rest))?;
+                    .with_context(|| format!("Invalid day of month '{}'", rest_str))?;
                 schedules.push(TaskSchedule::Monthly {
                     enabled: true,
                     day_of_month: day_str.clamp(1, 31),
                     at_time: "09:00".to_string(),
                     next_run_at: Utc::now().to_rfc3339(),
+                    working_hours,
                 });
             }
             "once" => {
