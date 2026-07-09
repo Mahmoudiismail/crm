@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use chrono::{Datelike, NaiveDate};
+use chrono::{Datelike, Local, NaiveDate};
 use crm_tool::manifest::{AppArg, AppManifest, ArgType};
 use headless_chrome::protocol::cdp::types::Event;
 use headless_chrome::{Browser, LaunchOptions};
@@ -1005,6 +1005,15 @@ fn print_manifest(config_path: Option<PathBuf>) {
             depends_on: None,
             autofill: None,
         },
+        AppArg {
+            name: "--add-time-to-file".to_string(),
+            arg_type: ArgType::Boolean,
+            required: false,
+            default_value: None,
+            options: None,
+            depends_on: None,
+            autofill: None,
+        },
     ];
 
     let mut sorted_filters: Vec<_> = filter_dependencies.into_iter().collect();
@@ -1120,6 +1129,7 @@ async fn main() -> Result<()> {
     let mut is_monthly = false;
     let mut start_date_str = None;
     let mut end_date_str = None;
+    let mut add_time_to_file = false;
 
     let mut i = 1;
     while i < args.len() {
@@ -1166,8 +1176,14 @@ async fn main() -> Result<()> {
                 end_date_str = Some(args[i + 1].clone());
                 i += 1;
             }
+            "--add-time-to-file" if i + 1 < args.len() => {
+                if args[i + 1].to_lowercase() == "true" || args[i + 1] == "1" {
+                    add_time_to_file = true;
+                }
+                i += 1;
+            }
             "--type" | "--name" | "--filters" | "--config" | "--monthly" | "--start-date"
-            | "--end-date" => {}
+            | "--end-date" | "--add-time-to-file" => {}
             _ => {}
         }
         i += 1;
@@ -1177,6 +1193,51 @@ async fn main() -> Result<()> {
         error!("Validation failed: --name is required.");
         anyhow::bail!("Validation failed: --name is required.");
     }
+
+    // Handle special date strings
+    let replace_date_vars = |val: &str, base_date: Option<&str>| -> String {
+        let val_lower = val.trim().to_lowercase();
+        match val_lower.as_str() {
+            "today" => Local::now().format("%d-%m-%Y").to_string(),
+            "yesterday" => (Local::now() - chrono::TimeDelta::days(1))
+                .format("%d-%m-%Y")
+                .to_string(),
+            "eomonth" => {
+                let current_month = if let Some(bd) = base_date {
+                    NaiveDate::parse_from_str(bd, "%d-%m-%Y").ok()
+                } else {
+                    None
+                };
+                let dt = current_month.unwrap_or_else(|| Local::now().date_naive());
+                let next_month = if dt.month() == 12 {
+                    NaiveDate::from_ymd_opt(dt.year() + 1, 1, 1).unwrap()
+                } else {
+                    NaiveDate::from_ymd_opt(dt.year(), dt.month() + 1, 1).unwrap()
+                };
+                next_month
+                    .pred_opt()
+                    .unwrap()
+                    .format("%d-%m-%Y")
+                    .to_string()
+            }
+            _ => val.to_string(),
+        }
+    };
+
+    if let Some(ref s) = start_date_str {
+        start_date_str = Some(replace_date_vars(s, None));
+    }
+
+    // For eomonth in end_date, pass the start_date as base
+    if let Some(ref e) = end_date_str {
+        end_date_str = Some(replace_date_vars(e, start_date_str.as_deref()));
+    }
+
+    let mut new_filters = HashMap::new();
+    for (k, v) in active_filters.into_iter() {
+        new_filters.insert(k, replace_date_vars(&v, start_date_str.as_deref()));
+    }
+    active_filters = new_filters;
 
     // Determine configuration to use
     if !active_report_type.is_empty() || !active_filters.is_empty() {
@@ -1383,7 +1444,15 @@ async fn main() -> Result<()> {
             };
 
             let temp_dl_dir_clone = temp_dl_dir.clone();
-            let final_filename = format!("{}_{}.xlsx", active_report_name, date_suffix);
+
+            let mut final_filename = format!("{}_{}.xlsx", active_report_name, date_suffix);
+            if add_time_to_file {
+                let time_suffix = Local::now().format("%H%M%S").to_string();
+                final_filename = format!(
+                    "{}_{}_{}.xlsx",
+                    active_report_name, date_suffix, time_suffix
+                );
+            }
 
             tasks.push(tokio::task::spawn_blocking(move || {
                 let res = match run_browser_tab(

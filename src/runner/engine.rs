@@ -10,8 +10,9 @@ use tokio::sync::{mpsc, Mutex};
 use tracing::{debug, error, info};
 
 use super::config::{
-    next_daily_run_after, next_monthly_run_after, parse_rfc3339_utc, Repetition, RunnerConfig,
-    RunnerTask, ShellCommandMode, ShellCommandSpec, TaskKind, TaskSchedule,
+    next_daily_run_after, next_monthly_run_after, next_weekly_run_after, parse_rfc3339_utc,
+    Repetition, RunnerConfig, RunnerTask, ShellCommandMode, ShellCommandSpec, TaskKind,
+    TaskSchedule,
 };
 
 #[derive(Debug, Clone)]
@@ -1028,13 +1029,51 @@ fn normalize_and_validate_schedules(
             TaskSchedule::Interval {
                 every_seconds,
                 next_run_at,
+                start_time,
+                working_hours,
                 ..
             } => {
                 *every_seconds = (*every_seconds).max(min_task_interval_seconds);
                 *next_run_at = next_run_at.trim().to_string();
-                // Always compute next_run_at based on interval to ensure it reflects the current schedule
-                let next = Utc::now() + chrono::TimeDelta::seconds(*every_seconds as i64);
-                *next_run_at = next.to_rfc3339();
+                if let Some(st) = start_time {
+                    *st = st.trim().to_string();
+                    if !st.is_empty() {
+                        chrono::NaiveTime::parse_from_str(st, "%H:%M").with_context(|| {
+                            format!("Invalid interval start time '{}'. Use HH:MM", st)
+                        })?;
+                    }
+                }
+
+                // If it doesn't have a next_run_at, we need to compute it.
+                // If start_time is set, we use it to find the *first* execution
+                if next_run_at.is_empty() {
+                    let now = Utc::now();
+                    if let Some(st) = start_time {
+                        if !st.is_empty() {
+                            match next_daily_run_after(std::slice::from_ref(st), now, working_hours.as_ref()) {
+                                Ok(next) => *next_run_at = next,
+                                Err(_) => {
+                                    let next =
+                                        now + chrono::TimeDelta::seconds(*every_seconds as i64);
+                                    *next_run_at = next.to_rfc3339();
+                                }
+                            }
+                        } else {
+                            let next = now + chrono::TimeDelta::seconds(*every_seconds as i64);
+                            *next_run_at = next.to_rfc3339();
+                        }
+                    } else {
+                        let next = now + chrono::TimeDelta::seconds(*every_seconds as i64);
+                        *next_run_at = next.to_rfc3339();
+                    }
+                } else {
+                    parse_rfc3339_utc(next_run_at).with_context(|| {
+                        format!(
+                            "Invalid interval next_run_at '{}'. Use RFC3339",
+                            next_run_at
+                        )
+                    })?;
+                }
             }
             TaskSchedule::DailyTimes {
                 times,
@@ -1069,6 +1108,7 @@ fn normalize_and_validate_schedules(
                 day_of_week,
                 at_time,
                 next_run_at,
+                working_hours,
                 ..
             } => {
                 *day_of_week = day_of_week.trim().to_string();
@@ -1078,11 +1118,24 @@ fn normalize_and_validate_schedules(
                         .with_context(|| format!("Invalid weekly time '{}'. Use HH:MM", at_time))?;
                 }
                 *next_run_at = next_run_at.trim().to_string();
+                if next_run_at.is_empty() {
+                    *next_run_at = next_weekly_run_after(
+                        day_of_week,
+                        at_time,
+                        Utc::now(),
+                        working_hours.as_ref(),
+                    )?;
+                } else {
+                    parse_rfc3339_utc(next_run_at).with_context(|| {
+                        format!("Invalid weekly next_run_at '{}'. Use RFC3339", next_run_at)
+                    })?;
+                }
             }
             TaskSchedule::Monthly {
                 day_of_month,
                 at_time,
                 next_run_at,
+                working_hours,
                 ..
             } => {
                 *day_of_month = (*day_of_month).clamp(1, 31);
@@ -1093,7 +1146,12 @@ fn normalize_and_validate_schedules(
                     })?;
                 }
                 // Compute next_run_at
-                *next_run_at = next_monthly_run_after(*day_of_month, at_time, Utc::now())?;
+                *next_run_at = next_monthly_run_after(
+                    *day_of_month,
+                    at_time,
+                    Utc::now(),
+                    working_hours.as_ref(),
+                )?;
             }
         }
     }
@@ -1127,17 +1185,27 @@ fn advance_schedule(
         TaskSchedule::Interval {
             every_seconds,
             next_run_at,
-            working_hours,
+            working_hours: _,
+            start_time: _,
             ..
         } => {
             let effective_frequency = (*every_seconds).max(min_task_interval_seconds.max(1));
+
+            // Advance by the interval
             let next = now + chrono::TimeDelta::seconds(effective_frequency as i64);
 
-            if let Some(_wh) = working_hours {
-                // If the naturally computed next run is outside working hours, `schedule_is_due`
-                // will hold the task back until working hours open, at which point it fires immediately.
-            }
+            // If we have working hours or a start time, we just set the next run.
+            // If the next computed run is outside working hours, `schedule_is_due`
+            // will hold the task back until working hours open, at which point it fires immediately,
+            // or if start_time is set, we shouldn't delay it past the interval unless it's a new day,
+            // but the requirement is "start time for the first interval execution happens on a given day".
+            // Since we're advancing, we just add the interval.
+            // Wait, if it advances past the working day, it should wait until the start_time of the next working day.
+            // Let's keep it simple: just add the interval. `schedule_is_due` will pause it if outside working hours.
+            // However, if `start_time` is present AND it's outside working hours (e.g. overnight),
+            // when the new day starts, it should wait until `start_time` to begin again.
 
+            // For now, setting it to `next` is fine, `schedule_is_due` handles the gating.
             *every_seconds = effective_frequency;
             *next_run_at = next.to_rfc3339();
         }
@@ -1150,13 +1218,26 @@ fn advance_schedule(
             Ok(next) => *next_run_at = next,
             Err(e) => *next_run_at = format!("invalid: {}", e),
         },
-        TaskSchedule::Weekly { next_run_at, .. } => {
-            *next_run_at = (now + chrono::TimeDelta::days(7)).to_rfc3339();
-        }
-        TaskSchedule::Monthly { next_run_at, .. } => {
-            let next = now + chrono::TimeDelta::days(30);
-            *next_run_at = next.to_rfc3339();
-        }
+        TaskSchedule::Weekly {
+            next_run_at,
+            day_of_week,
+            at_time,
+            working_hours,
+            ..
+        } => match next_weekly_run_after(day_of_week, at_time, now, working_hours.as_ref()) {
+            Ok(next) => *next_run_at = next,
+            Err(e) => *next_run_at = format!("invalid: {}", e),
+        },
+        TaskSchedule::Monthly {
+            next_run_at,
+            day_of_month,
+            at_time,
+            working_hours,
+            ..
+        } => match next_monthly_run_after(*day_of_month, at_time, now, working_hours.as_ref()) {
+            Ok(next) => *next_run_at = next,
+            Err(e) => *next_run_at = format!("invalid: {}", e),
+        },
     }
 }
 
@@ -1234,6 +1315,7 @@ fn schedule_is_due(schedule: &TaskSchedule, now: DateTime<Utc>) -> bool {
         TaskSchedule::Interval {
             next_run_at,
             working_hours,
+            start_time,
             ..
         } => {
             let is_due = if next_run_at.is_empty() {
@@ -1247,10 +1329,25 @@ fn schedule_is_due(schedule: &TaskSchedule, now: DateTime<Utc>) -> bool {
 
             if is_due {
                 if let Some(wh) = working_hours {
-                    crate::runner::config::is_within_working_hours(wh, now)
-                } else {
-                    true
+                    if !crate::runner::config::is_within_working_hours(wh, now) {
+                        return false;
+                    }
                 }
+
+                // If it is due, and we are within working hours, we need to check if there is a start_time
+                // If there's a start_time, we shouldn't run until the current time is >= start_time
+                if let Some(st) = start_time {
+                    if !st.is_empty() {
+                        if let Ok(st_time) = chrono::NaiveTime::parse_from_str(st, "%H:%M") {
+                            let now_local = now.with_timezone(&chrono::Local);
+                            if now_local.time() < st_time {
+                                return false;
+                            }
+                        }
+                    }
+                }
+
+                true
             } else {
                 false
             }

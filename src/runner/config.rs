@@ -109,6 +109,8 @@ pub enum TaskSchedule {
         next_run_at: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         working_hours: Option<std::collections::HashMap<String, WorkingHours>>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        start_time: Option<String>,
     },
     DailyTimes {
         #[serde(default = "default_true")]
@@ -127,6 +129,8 @@ pub enum TaskSchedule {
         day_of_week: String,
         #[serde(default)]
         at_time: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        working_hours: Option<std::collections::HashMap<String, WorkingHours>>,
         #[serde(default)]
         next_run_at: String,
     },
@@ -137,6 +141,8 @@ pub enum TaskSchedule {
         day_of_month: u32,
         #[serde(default)]
         at_time: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        working_hours: Option<std::collections::HashMap<String, WorkingHours>>,
         #[serde(default)]
         next_run_at: String,
     },
@@ -322,10 +328,21 @@ impl TaskSchedule {
             Self::Interval {
                 enabled,
                 every_seconds,
+                start_time,
                 ..
             } => {
                 let state = if *enabled { "" } else { " (disabled)" };
-                format!("Every {}{}", human_duration(*every_seconds), state)
+                let start_info = if let Some(st) = start_time {
+                    format!(" starting at {}", st)
+                } else {
+                    "".to_string()
+                };
+                format!(
+                    "Every {}{}{}",
+                    human_duration(*every_seconds),
+                    start_info,
+                    state
+                )
             }
             Self::DailyTimes { enabled, times, .. } => {
                 let state = if *enabled { "" } else { " (disabled)" };
@@ -623,6 +640,7 @@ pub fn next_weekly_run_after(
     day_of_week: &str,
     at_time: &str,
     now: DateTime<Utc>,
+    working_hours: Option<&std::collections::HashMap<String, WorkingHours>>,
 ) -> Result<String> {
     let day_lower = day_of_week.trim().to_lowercase();
     let target_weekday = match day_lower.as_str() {
@@ -657,38 +675,39 @@ pub fn next_weekly_run_after(
         + 7)
         % 7;
 
-    let target_date = today + chrono::TimeDelta::days(days_until_target);
-    let local_dt = target_date.and_time(time);
-    let candidate = match Local.from_local_datetime(&local_dt) {
-        chrono::LocalResult::Single(dt) => dt,
-        chrono::LocalResult::Ambiguous(dt, _) => dt,
-        chrono::LocalResult::None => {
-            return Err(anyhow::anyhow!("Could not resolve weekly schedule time"))
-        }
-    }
-    .with_timezone(&Utc);
-
-    if candidate <= now {
-        let next_week = today + chrono::TimeDelta::days(7);
-        let local_dt = next_week.and_time(time);
-        let next_dt = match Local.from_local_datetime(&local_dt) {
+    // We will check up to 52 weeks ahead
+    for week_offset in 0_i64..52 {
+        let total_days_offset = days_until_target + (week_offset * 7);
+        let target_date = today + chrono::TimeDelta::days(total_days_offset);
+        let local_dt = target_date.and_time(time);
+        let candidate = match Local.from_local_datetime(&local_dt) {
             chrono::LocalResult::Single(dt) => dt,
             chrono::LocalResult::Ambiguous(dt, _) => dt,
-            chrono::LocalResult::None => {
-                return Err(anyhow::anyhow!("Could not resolve weekly schedule time"))
-            }
+            chrono::LocalResult::None => continue,
         }
         .with_timezone(&Utc);
-        Ok(next_dt.to_rfc3339())
-    } else {
-        Ok(candidate.to_rfc3339())
+
+        if candidate > now {
+            if let Some(wh) = working_hours {
+                if is_working_day(wh, candidate) {
+                    return Ok(candidate.to_rfc3339());
+                }
+            } else {
+                return Ok(candidate.to_rfc3339());
+            }
+        }
     }
+
+    Err(anyhow::anyhow!(
+        "Could not resolve weekly schedule time on a valid working day"
+    ))
 }
 
 pub fn next_monthly_run_after(
     day_of_month: u32,
     at_time: &str,
     now: DateTime<Utc>,
+    working_hours: Option<&std::collections::HashMap<String, WorkingHours>>,
 ) -> Result<String> {
     let now_local = now.with_timezone(&Local);
     let today = now_local.date_naive();
@@ -723,12 +742,18 @@ pub fn next_monthly_run_after(
         .with_timezone(&Utc);
 
         if candidate > now {
-            return Ok(candidate.to_rfc3339());
+            if let Some(wh) = working_hours {
+                if is_working_day(wh, candidate) {
+                    return Ok(candidate.to_rfc3339());
+                }
+            } else {
+                return Ok(candidate.to_rfc3339());
+            }
         }
     }
 
     Err(anyhow::anyhow!(
-        "Could not find a valid monthly schedule date"
+        "Could not find a valid monthly schedule date on a valid working day"
     ))
 }
 
@@ -813,6 +838,7 @@ mod tests {
                 every_seconds: 7200,
                 next_run_at: Utc::now().to_rfc3339(),
                 working_hours: None,
+                start_time: None,
             }],
             kind: TaskKind::ShellCommand {
                 mode: ShellCommandMode::Sequential,
@@ -947,6 +973,7 @@ mod tests {
                     every_seconds: 86400,
                     next_run_at: Utc::now().to_rfc3339(),
                     working_hours: None,
+                    start_time: None,
                 }],
                 kind: TaskKind::ShellCommand {
                     mode: ShellCommandMode::Sequential,
@@ -1087,7 +1114,7 @@ mod tests {
         let base_now = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap();
 
         // 1. Same day, future time
-        let res = next_weekly_run_after("Monday", "15:00", base_now).unwrap();
+        let res = next_weekly_run_after("Monday", "15:00", base_now, None).unwrap();
         let dt = DateTime::parse_from_rfc3339(&res).unwrap();
         assert_eq!(dt.with_timezone(&Utc).year(), 2024);
         assert_eq!(dt.with_timezone(&Utc).month(), 1);
@@ -1097,7 +1124,7 @@ mod tests {
         assert!(dt.with_timezone(&Utc) > base_now);
 
         // 2. Same day, past time (should wrap to next week)
-        let res = next_weekly_run_after("Monday", "10:00", base_now).unwrap();
+        let res = next_weekly_run_after("Monday", "10:00", base_now, None).unwrap();
         let dt = DateTime::parse_from_rfc3339(&res).unwrap();
         assert!(dt.with_timezone(&Utc) > base_now);
         // It should be 7 days later
@@ -1105,28 +1132,28 @@ mod tests {
         assert!(diff.num_days() >= 6); // roughly a week
 
         // 3. Different day formats
-        assert!(next_weekly_run_after("mon", "10:00", base_now).is_ok());
-        assert!(next_weekly_run_after("1", "10:00", base_now).is_ok()); // 1 is Monday
-        assert!(next_weekly_run_after("monday", "10:00", base_now).is_ok());
+        assert!(next_weekly_run_after("mon", "10:00", base_now, None).is_ok());
+        assert!(next_weekly_run_after("1", "10:00", base_now, None).is_ok()); // 1 is Monday
+        assert!(next_weekly_run_after("monday", "10:00", base_now, None).is_ok());
 
         // 4. Later in the week
-        let res = next_weekly_run_after("Wednesday", "12:00", base_now).unwrap();
+        let res = next_weekly_run_after("Wednesday", "12:00", base_now, None).unwrap();
         let dt = DateTime::parse_from_rfc3339(&res).unwrap();
         assert_eq!(dt.with_timezone(&Utc).weekday(), chrono::Weekday::Wed);
 
         // 5. Earlier in the week (should wrap)
-        let res = next_weekly_run_after("Sunday", "12:00", base_now).unwrap();
+        let res = next_weekly_run_after("Sunday", "12:00", base_now, None).unwrap();
         let dt = DateTime::parse_from_rfc3339(&res).unwrap();
         assert_eq!(dt.with_timezone(&Utc).weekday(), chrono::Weekday::Sun);
         assert!(dt.with_timezone(&Utc) > base_now);
 
         // 6. Invalid inputs
-        assert!(next_weekly_run_after("InvalidDay", "12:00", base_now).is_err());
-        assert!(next_weekly_run_after("Monday", "25:00", base_now).is_err());
-        assert!(next_weekly_run_after("Monday", "not-a-time", base_now).is_err());
+        assert!(next_weekly_run_after("InvalidDay", "12:00", base_now, None).is_err());
+        assert!(next_weekly_run_after("Monday", "25:00", base_now, None).is_err());
+        assert!(next_weekly_run_after("Monday", "not-a-time", base_now, None).is_err());
 
         // 7. Empty time (should default to 00:00)
-        let res = next_weekly_run_after("Tuesday", "", base_now).unwrap();
+        let res = next_weekly_run_after("Tuesday", "", base_now, None).unwrap();
         let dt = DateTime::parse_from_rfc3339(&res).unwrap();
         assert_eq!(dt.with_timezone(&Utc).weekday(), chrono::Weekday::Tue);
     }
