@@ -337,7 +337,12 @@ impl TaskSchedule {
                 } else {
                     "".to_string()
                 };
-                format!("Every {}{}{}", human_duration(*every_seconds), start_info, state)
+                format!(
+                    "Every {}{}{}",
+                    human_duration(*every_seconds),
+                    start_info,
+                    state
+                )
             }
             Self::DailyTimes { enabled, times, .. } => {
                 let state = if *enabled { "" } else { " (disabled)" };
@@ -693,7 +698,9 @@ pub fn next_weekly_run_after(
         }
     }
 
-    Err(anyhow::anyhow!("Could not resolve weekly schedule time on a valid working day"))
+    Err(anyhow::anyhow!(
+        "Could not resolve weekly schedule time on a valid working day"
+    ))
 }
 
 pub fn next_monthly_run_after(

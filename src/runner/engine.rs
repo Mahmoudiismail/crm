@@ -10,8 +10,9 @@ use tokio::sync::{mpsc, Mutex};
 use tracing::{debug, error, info};
 
 use super::config::{
-    next_daily_run_after, next_monthly_run_after, next_weekly_run_after, parse_rfc3339_utc, Repetition, RunnerConfig,
-    RunnerTask, ShellCommandMode, ShellCommandSpec, TaskKind, TaskSchedule,
+    next_daily_run_after, next_monthly_run_after, next_weekly_run_after, parse_rfc3339_utc,
+    Repetition, RunnerConfig, RunnerTask, ShellCommandMode, ShellCommandSpec, TaskKind,
+    TaskSchedule,
 };
 
 #[derive(Debug, Clone)]
@@ -1037,8 +1038,9 @@ fn normalize_and_validate_schedules(
                 if let Some(st) = start_time {
                     *st = st.trim().to_string();
                     if !st.is_empty() {
-                        chrono::NaiveTime::parse_from_str(st, "%H:%M")
-                            .with_context(|| format!("Invalid interval start time '{}'. Use HH:MM", st))?;
+                        chrono::NaiveTime::parse_from_str(st, "%H:%M").with_context(|| {
+                            format!("Invalid interval start time '{}'. Use HH:MM", st)
+                        })?;
                     }
                 }
 
@@ -1051,7 +1053,8 @@ fn normalize_and_validate_schedules(
                             match next_daily_run_after(&[st.clone()], now, working_hours.as_ref()) {
                                 Ok(next) => *next_run_at = next,
                                 Err(_) => {
-                                    let next = now + chrono::TimeDelta::seconds(*every_seconds as i64);
+                                    let next =
+                                        now + chrono::TimeDelta::seconds(*every_seconds as i64);
                                     *next_run_at = next.to_rfc3339();
                                 }
                             }
@@ -1065,7 +1068,10 @@ fn normalize_and_validate_schedules(
                     }
                 } else {
                     parse_rfc3339_utc(next_run_at).with_context(|| {
-                        format!("Invalid interval next_run_at '{}'. Use RFC3339", next_run_at)
+                        format!(
+                            "Invalid interval next_run_at '{}'. Use RFC3339",
+                            next_run_at
+                        )
                     })?;
                 }
             }
@@ -1113,7 +1119,12 @@ fn normalize_and_validate_schedules(
                 }
                 *next_run_at = next_run_at.trim().to_string();
                 if next_run_at.is_empty() {
-                    *next_run_at = next_weekly_run_after(day_of_week, at_time, Utc::now(), working_hours.as_ref())?;
+                    *next_run_at = next_weekly_run_after(
+                        day_of_week,
+                        at_time,
+                        Utc::now(),
+                        working_hours.as_ref(),
+                    )?;
                 } else {
                     parse_rfc3339_utc(next_run_at).with_context(|| {
                         format!("Invalid weekly next_run_at '{}'. Use RFC3339", next_run_at)
@@ -1135,7 +1146,12 @@ fn normalize_and_validate_schedules(
                     })?;
                 }
                 // Compute next_run_at
-                *next_run_at = next_monthly_run_after(*day_of_month, at_time, Utc::now(), working_hours.as_ref())?;
+                *next_run_at = next_monthly_run_after(
+                    *day_of_month,
+                    at_time,
+                    Utc::now(),
+                    working_hours.as_ref(),
+                )?;
             }
         }
     }
@@ -1202,18 +1218,26 @@ fn advance_schedule(
             Ok(next) => *next_run_at = next,
             Err(e) => *next_run_at = format!("invalid: {}", e),
         },
-        TaskSchedule::Weekly { next_run_at, day_of_week, at_time, working_hours, .. } => {
-            match next_weekly_run_after(day_of_week, at_time, now, working_hours.as_ref()) {
-                Ok(next) => *next_run_at = next,
-                Err(e) => *next_run_at = format!("invalid: {}", e),
-            }
-        }
-        TaskSchedule::Monthly { next_run_at, day_of_month, at_time, working_hours, .. } => {
-            match next_monthly_run_after(*day_of_month, at_time, now, working_hours.as_ref()) {
-                Ok(next) => *next_run_at = next,
-                Err(e) => *next_run_at = format!("invalid: {}", e),
-            }
-        }
+        TaskSchedule::Weekly {
+            next_run_at,
+            day_of_week,
+            at_time,
+            working_hours,
+            ..
+        } => match next_weekly_run_after(day_of_week, at_time, now, working_hours.as_ref()) {
+            Ok(next) => *next_run_at = next,
+            Err(e) => *next_run_at = format!("invalid: {}", e),
+        },
+        TaskSchedule::Monthly {
+            next_run_at,
+            day_of_month,
+            at_time,
+            working_hours,
+            ..
+        } => match next_monthly_run_after(*day_of_month, at_time, now, working_hours.as_ref()) {
+            Ok(next) => *next_run_at = next,
+            Err(e) => *next_run_at = format!("invalid: {}", e),
+        },
     }
 }
 

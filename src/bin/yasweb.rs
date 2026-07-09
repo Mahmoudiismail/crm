@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use chrono::{Datelike, NaiveDate, Local};
+use chrono::{Datelike, Local, NaiveDate};
 use crm_tool::manifest::{AppArg, AppManifest, ArgType};
 use headless_chrome::protocol::cdp::types::Event;
 use headless_chrome::{Browser, LaunchOptions};
@@ -1218,7 +1218,11 @@ async fn main() -> Result<()> {
                 } else {
                     NaiveDate::from_ymd_opt(dt.year(), dt.month() + 1, 1).unwrap()
                 };
-                next_month.pred_opt().unwrap().format("%d-%m-%Y").to_string()
+                next_month
+                    .pred_opt()
+                    .unwrap()
+                    .format("%d-%m-%Y")
+                    .to_string()
             }
             _ => val.to_string(),
         }
@@ -1448,7 +1452,10 @@ async fn main() -> Result<()> {
             let mut final_filename = format!("{}_{}.xlsx", active_report_name, date_suffix);
             if add_time_to_file {
                 let time_suffix = Local::now().format("%H%M%S").to_string();
-                final_filename = format!("{}_{}_{}.xlsx", active_report_name, date_suffix, time_suffix);
+                final_filename = format!(
+                    "{}_{}_{}.xlsx",
+                    active_report_name, date_suffix, time_suffix
+                );
             }
 
             tasks.push(tokio::task::spawn_blocking(move || {
