@@ -625,7 +625,7 @@ fn run_browser_tab(
                                                 let divs = doc.querySelectorAll('div.fw-semibold');
                                                 for (let d of divs) {{
                                                     let textLower = d.textContent.toLowerCase();
-                                                    if (textLower.includes('report manager') || textLower.includes('report manger') || textLower.includes(reportType.toLowerCase()) || textLower.includes('enquiry') || textLower.includes('standard report')) {{
+                                                    if (textLower.includes('report manager') || textLower.includes('report manger') || textLower.includes(reportType.toLowerCase()) || textLower.includes('enquiry') || textLower.includes('Standard Report'.toLowerCase())) {{
                                                         listLoaded = true; break;
                                                     }}
                                                 }}
@@ -966,8 +966,8 @@ fn print_manifest(config_path: Option<PathBuf>) {
             default_value: None,
             options: Some(vec![
                 "".to_string(),
-                "standard report".to_string(),
-                "report manager".to_string(),
+                "Standard Report".to_string(),
+                "Report Manager".to_string(),
             ]),
             depends_on: None,
             autofill: if type_autofills.is_empty() {
