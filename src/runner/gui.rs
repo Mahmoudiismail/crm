@@ -528,10 +528,15 @@ fn render_dashboard(
 }
 
 fn render_status_cards(status: &crate::runner::engine::RunnerStatus, task_count: usize) -> String {
-    let running = if status.currently_running {
-        "Running"
+    let running = if status.running_tasks_count > 0 {
+        format!(
+            "Running ({} active, {} queued)",
+            status.running_tasks_count, status.queued_tasks_count
+        )
+    } else if status.queued_tasks_count > 0 {
+        format!("Idle ({} queued)", status.queued_tasks_count)
     } else {
-        "Idle"
+        "Idle".to_string()
     };
     let last_task = if status.last_task_id.is_empty() {
         "None"
@@ -555,7 +560,7 @@ fn render_status_cards(status: &crate::runner::engine::RunnerStatus, task_count:
             <p class='mt-2 text-lg font-semibold text-gray-900 break-words'>{}\
                 <span class='block text-xs text-gray-500 mt-1'>{}</span>\
             </p></div>",
-        metric_card("State", running),
+        metric_card("State", &running),
         metric_card("Tasks", &task_count.to_string()),
         metric_card("Last Task", last_task),
         escape_html(&last_run),
@@ -1691,14 +1696,17 @@ mod tests {
 
         let (tx, _rx) = mpsc::channel(1);
         let status = Arc::new(Mutex::new(RunnerStatus {
-            currently_running: true,
+            running_tasks_count: 1,
+            queued_tasks_count: 0,
             last_error: "Test Error".to_string(),
             last_task_id: "test_task".to_string(),
             last_run_at: "2024-01-01T00:00:00Z".to_string(),
         }));
 
+        let (exec_tx, _) = mpsc::channel(128);
         let handle = RunnerHandle {
             command_tx: tx,
+            exec_tx,
             status,
             runner_config_path: config_path.clone(),
         };
