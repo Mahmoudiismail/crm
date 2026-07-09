@@ -1032,45 +1032,89 @@ pub fn process_emails(
             (subject, body)
         };
 
-        // Save Excel file
         let tmp_dir = std::env::temp_dir();
         let safe_name = bucket_name.replace(|c: char| !c.is_ascii_alphanumeric(), "_");
-        let xlsx_path = tmp_dir.join(format!("{}_open_tickets.xlsx", safe_name));
-
-        let mut workbook = Workbook::new();
-        let worksheet = workbook.add_worksheet();
 
         let skip_team_col = !is_branch && team_idx.is_some();
         let skip_team_idx = if skip_team_col { team_idx } else { None };
 
-        let mut out_col_idx = 0;
-        for (i, h) in headers.iter().enumerate() {
-            if is_exception_idx == Some(i) || position_idx == Some(i) || skip_team_idx == Some(i) {
-                continue;
-            }
-            worksheet.write_string(0, out_col_idx, h)?;
-            out_col_idx += 1;
-        }
-
-        let mut write_r_idx = 1;
-        for row in rows.iter() {
-            if row.status.eq_ignore_ascii_case("closed") {
-                continue;
-            }
-            let mut out_c_idx = 0;
-            for (c_idx, field) in row.original_row.iter().enumerate() {
-                if is_exception_idx == Some(c_idx)
-                    || position_idx == Some(c_idx)
-                    || skip_team_idx == Some(c_idx)
-                {
+        let save_as_csv = config.save_attachment_as_csv.unwrap_or(false);
+        let attachment_path = if save_as_csv {
+            let csv_path = tmp_dir.join(format!("{}_open_tickets.csv", safe_name));
+            let mut wtr = csv::WriterBuilder::new().from_path(&csv_path)?;
+            let mut header_rec = vec![];
+            for (i, h) in headers.iter().enumerate() {
+                if is_exception_idx == Some(i) || position_idx == Some(i) || skip_team_idx == Some(i) {
                     continue;
                 }
-                worksheet.write_string(write_r_idx as u32, out_c_idx, field)?;
-                out_c_idx += 1;
+                header_rec.push(h.to_string());
             }
-            write_r_idx += 1;
+            wtr.write_record(&header_rec)?;
+
+            for row in rows.iter() {
+                if row.status.eq_ignore_ascii_case("closed") {
+                    continue;
+                }
+                let mut data_rec = vec![];
+                for (c_idx, field) in row.original_row.iter().enumerate() {
+                    if is_exception_idx == Some(c_idx)
+                        || position_idx == Some(c_idx)
+                        || skip_team_idx == Some(c_idx)
+                    {
+                        continue;
+                    }
+                    data_rec.push(field.to_string());
+                }
+                wtr.write_record(&data_rec)?;
+            }
+            wtr.flush()?;
+            csv_path
+        } else {
+            let xlsx_path = tmp_dir.join(format!("{}_open_tickets.xlsx", safe_name));
+            let mut workbook = Workbook::new();
+            let worksheet = workbook.add_worksheet();
+
+            let mut out_col_idx = 0;
+            for (i, h) in headers.iter().enumerate() {
+                if is_exception_idx == Some(i) || position_idx == Some(i) || skip_team_idx == Some(i) {
+                    continue;
+                }
+                worksheet.write_string(0, out_col_idx, h)?;
+                out_col_idx += 1;
+            }
+
+            let mut write_r_idx = 1;
+            for row in rows.iter() {
+                if row.status.eq_ignore_ascii_case("closed") {
+                    continue;
+                }
+                let mut out_c_idx = 0;
+                for (c_idx, field) in row.original_row.iter().enumerate() {
+                    if is_exception_idx == Some(c_idx)
+                        || position_idx == Some(c_idx)
+                        || skip_team_idx == Some(c_idx)
+                    {
+                        continue;
+                    }
+                    worksheet.write_string(write_r_idx as u32, out_c_idx, field)?;
+                    out_c_idx += 1;
+                }
+                write_r_idx += 1;
+            }
+            workbook.save(&xlsx_path)?;
+            xlsx_path
+        };
+
+        let save_as_html = config.save_email_as_html.unwrap_or(false);
+
+        if save_as_html {
+            let html_path = tmp_dir.join(format!("{}_email.html", safe_name));
+            let mut f = std::fs::File::create(&html_path)?;
+            f.write_all(body.as_bytes())?;
+            f.sync_all()?;
+            info!("Saved email HTML for {} to {}", bucket_name, html_path.display());
+            return Ok(());
         }
-        workbook.save(&xlsx_path)?;
 
         let display_or_send = if config.send_emails.unwrap_or(false) {
             "Send()"
@@ -1096,7 +1140,7 @@ $Mail.HTMLBody = '{}'
         if !all_closed {
             ps_script.push_str(&format!(
                 "$Mail.Attachments.Add(\"{}\")\n",
-                xlsx_path.display()
+                attachment_path.display()
             ));
         }
 
@@ -1133,7 +1177,7 @@ $Mail.Display()
             info!("Successfully processed email for {}", bucket_name);
         }
 
-        let _ = std::fs::remove_file(xlsx_path);
+        let _ = std::fs::remove_file(attachment_path);
 
         if let Some(ref leads_path) = leads_report_path {
             let _ = std::fs::remove_file(leads_path);
@@ -1203,6 +1247,8 @@ mod tests {
             send_call_center: Some(false),
             send_exceptions: Some(false),
             indentation_spaces: None,
+            save_attachment_as_csv: None,
+            save_email_as_html: None,
         };
 
         // If the email script runs but finds only closed tickets, it should skip.

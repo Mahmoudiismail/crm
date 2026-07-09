@@ -28,6 +28,8 @@ pub struct EmailConfig {
     pub send_call_center: Option<bool>,
     pub send_exceptions: Option<bool>,
     pub indentation_spaces: Option<u32>,
+    pub save_attachment_as_csv: Option<bool>,
+    pub save_email_as_html: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

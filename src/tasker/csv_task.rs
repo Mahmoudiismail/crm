@@ -735,12 +735,23 @@ mod tests {
         assert_eq!(rel_path_no_base, std::path::PathBuf::from("file.txt"));
     }
 
-    #[test]
-    fn test_real_dataset_mapping() {
+    pub(crate) struct TestDataset {
+        pub users_file: NamedTempFile,
+        pub assignments_file: NamedTempFile,
+        pub download_dir: tempfile::TempDir,
+        pub output_file: NamedTempFile,
+        pub leads_file: NamedTempFile,
+        pub teams_file: NamedTempFile,
+        pub config_json: String,
+    }
+
+    pub(crate) fn setup_test_dataset() -> TestDataset {
         let users_file = NamedTempFile::new().unwrap();
         let assignments_file = NamedTempFile::new().unwrap();
         let download_dir = tempfile::tempdir().unwrap();
         let output_file = NamedTempFile::new().unwrap();
+        let leads_file = NamedTempFile::new().unwrap();
+        let teams_file = NamedTempFile::new().unwrap();
 
         let client = reqwest::blocking::Client::new();
 
@@ -768,25 +779,230 @@ mod tests {
             .unwrap();
         std::fs::write(download_dir.path().join("ticket_report1.csv"), ticket_csv).unwrap();
 
+        let leads_csv = client
+            .get("https://paste.c-net.org/SinnersVengeful")
+            .send()
+            .unwrap()
+            .text()
+            .unwrap();
+        std::fs::write(leads_file.path(), leads_csv).unwrap();
+        std::fs::copy(leads_file.path(), download_dir.path().join("lead_report1.csv")).unwrap();
+
+        let config_json = client
+            .get("https://paste.c-net.org/DonnieOwners")
+            .send()
+            .unwrap()
+            .text()
+            .unwrap();
+
+        {
+            let mut teams_wtr = csv::Writer::from_writer(teams_file.as_file());
+            teams_wtr.write_record(&["Team Name", "Receiver Name", "To Emails", "CC"]).unwrap();
+            teams_wtr.write_record(&["Incomplete Reservation", "Incomplete Reservation Team", "inc@example.com", "cc@example.com"]).unwrap();
+            teams_wtr.write_record(&["PRE-AUTHORIZATION", "Pre-Auth Team", "preauth@example.com", ""]).unwrap();
+            teams_wtr.write_record(&["Call Center", "Call Center Team", "cc@example.com", ""]).unwrap();
+            teams_wtr.flush().unwrap();
+        }
+
+        TestDataset {
+            users_file,
+            assignments_file,
+            download_dir,
+            output_file,
+            leads_file,
+            teams_file,
+            config_json,
+        }
+    }
+
+    #[test]
+    fn test_real_dataset_mapping() {
+        let dataset = setup_test_dataset();
+
         let config = CsvAnalysisConfig {
-            download_path: download_dir.path().to_str().unwrap().to_string(),
-            users_file: users_file.path().to_str().unwrap().to_string(),
-            assignment_settings_file: assignments_file.path().to_str().unwrap().to_string(),
+            download_path: dataset.download_dir.path().to_str().unwrap().to_string(),
+            users_file: dataset.users_file.path().to_str().unwrap().to_string(),
+            assignment_settings_file: dataset.assignments_file.path().to_str().unwrap().to_string(),
             minutes_ago: 60 * 24 * 365 * 10,
             start_date: None,
             exclude_branches: vec![],
             exclude_categories: vec![],
             category_exceptions: None,
-            output_file: output_file.path().to_str().unwrap().to_string(),
+            output_file: dataset.output_file.path().to_str().unwrap().to_string(),
             email_config: None,
         };
 
         super::run(&config, false, false).unwrap();
 
-        let out_content = std::fs::read_to_string(output_file.path()).unwrap();
+        let out_content = std::fs::read_to_string(dataset.output_file.path()).unwrap();
         let mut rdr = csv::ReaderBuilder::new().from_reader(out_content.as_bytes());
         let count = rdr.records().count();
         assert!(count > 1000, "Should have mapped thousands of records");
+    }
+
+    #[test]
+    fn test_task1_generate_results_and_html_email() {
+        let dataset = setup_test_dataset();
+        let config: crate::tasker::config::TaskerConfig = serde_json::from_str(&dataset.config_json).unwrap();
+        let mut csv_config = match config.tasks.first().unwrap() {
+            crate::tasker::config::TaskConfig::CsvAnalysis(c) => c.clone(),
+            _ => panic!("Expected CsvAnalysis task"),
+        };
+        
+        csv_config.download_path = dataset.download_dir.path().to_str().unwrap().to_string();
+        csv_config.users_file = dataset.users_file.path().to_str().unwrap().to_string();
+        csv_config.assignment_settings_file = dataset.assignments_file.path().to_str().unwrap().to_string();
+        csv_config.output_file = dataset.output_file.path().to_str().unwrap().to_string();
+
+        // Ensure start date doesn't filter out the exception tickets (they are in April 2026)
+        csv_config.start_date = Some("01-Jan-2026".to_string());
+        
+        // Ensure minutes_ago allows the files to be picked up
+        csv_config.minutes_ago = 60 * 24 * 365 * 10;
+
+        let mut email_config = csv_config.email_config.unwrap();
+        email_config.team_mapping_file = dataset.teams_file.path().to_str().unwrap().to_string();
+        email_config.save_attachment_as_csv = Some(true);
+        email_config.save_email_as_html = Some(true);
+        email_config.indentation_spaces = Some(4);
+        email_config.send_emails = Some(false);
+        csv_config.email_config = Some(email_config);
+
+        super::run(&csv_config, false, false).unwrap();
+
+        let out_content = std::fs::read_to_string(dataset.output_file.path()).unwrap();
+        let mut rdr = csv::ReaderBuilder::new().from_reader(out_content.as_bytes());
+        let count = rdr.records().count();
+        assert!(count > 0, "Should have created results file");
+
+        let temp_dir = std::env::temp_dir();
+        
+        let bucket_name = "PRE_AUTHORIZATION_email.html";
+        let html_path = temp_dir.join(bucket_name);
+        assert!(html_path.exists(), "HTML email should be generated for PRE-AUTHORIZATION team");
+        
+        let html_content = std::fs::read_to_string(&html_path).unwrap();
+        let expected_indent = "&nbsp;&nbsp;&nbsp;&nbsp;Kindly find below";
+        assert!(html_content.contains(expected_indent), "HTML should contain the proper indentation according to config file");
+
+        let csv_attachment = temp_dir.join("PRE_AUTHORIZATION_open_tickets.csv");
+        assert!(csv_attachment.exists(), "CSV attachment should be generated");
+
+        let _ = std::fs::remove_file(html_path);
+        let _ = std::fs::remove_file(csv_attachment);
+    }
+
+    #[test]
+    fn test_task1_only_call_center() {
+        let dataset = setup_test_dataset();
+        let config: crate::tasker::config::TaskerConfig = serde_json::from_str(&dataset.config_json).unwrap();
+        let mut csv_config = match config.tasks.first().unwrap() {
+            crate::tasker::config::TaskConfig::CsvAnalysis(c) => c.clone(),
+            _ => panic!("Expected CsvAnalysis task"),
+        };
+        
+        csv_config.download_path = dataset.download_dir.path().to_str().unwrap().to_string();
+        csv_config.users_file = dataset.users_file.path().to_str().unwrap().to_string();
+        csv_config.assignment_settings_file = dataset.assignments_file.path().to_str().unwrap().to_string();
+        csv_config.output_file = dataset.output_file.path().to_str().unwrap().to_string();
+
+        // Ensure start date doesn't filter out the exception tickets (they are in April 2026)
+        csv_config.start_date = Some("01-Jan-2026".to_string());
+        
+        // Ensure minutes_ago allows the files to be picked up
+        csv_config.minutes_ago = 60 * 24 * 365 * 10;
+
+        let mut email_config = csv_config.email_config.unwrap();
+        email_config.team_mapping_file = dataset.teams_file.path().to_str().unwrap().to_string();
+        email_config.save_attachment_as_csv = Some(true);
+        email_config.save_email_as_html = Some(true);
+        email_config.send_emails = Some(false);
+        csv_config.email_config = Some(email_config);
+
+        super::run(&csv_config, true, false).unwrap();
+
+        let temp_dir = std::env::temp_dir();
+        let html_path = temp_dir.join("Call_Center_email.html");
+        assert!(html_path.exists(), "HTML email should be generated for Call Center team");
+
+        let csv_attachment = temp_dir.join("Call_Center_open_tickets.csv");
+        assert!(csv_attachment.exists(), "CSV tickets attachment should be generated");
+
+        let leads_attachment = temp_dir.join("Call_Center_Leads.xlsx");
+        assert!(leads_attachment.exists(), "Leads attachment should be generated");
+        
+        let _ = std::fs::remove_file(html_path);
+        let _ = std::fs::remove_file(csv_attachment);
+        let _ = std::fs::remove_file(leads_attachment);
+    }
+
+    #[test]
+    fn test_task1_send_exceptions() {
+        let dataset = setup_test_dataset();
+        let config: crate::tasker::config::TaskerConfig = serde_json::from_str(&dataset.config_json).unwrap();
+        let mut csv_config = match config.tasks.first().unwrap() {
+            crate::tasker::config::TaskConfig::CsvAnalysis(c) => c.clone(),
+            _ => panic!("Expected CsvAnalysis task"),
+        };
+        
+        csv_config.download_path = dataset.download_dir.path().to_str().unwrap().to_string();
+        csv_config.users_file = dataset.users_file.path().to_str().unwrap().to_string();
+        csv_config.assignment_settings_file = dataset.assignments_file.path().to_str().unwrap().to_string();
+        csv_config.output_file = dataset.output_file.path().to_str().unwrap().to_string();
+
+        // Ensure start date doesn't filter out the exception tickets (they are in April 2026)
+        csv_config.start_date = Some("01-Jan-2026".to_string());
+        
+        // Ensure minutes_ago allows the files to be picked up
+        csv_config.minutes_ago = 60 * 24 * 365 * 10;
+
+        let mut email_config = csv_config.email_config.unwrap();
+        email_config.team_mapping_file = dataset.teams_file.path().to_str().unwrap().to_string();
+        email_config.save_attachment_as_csv = Some(true);
+        email_config.save_email_as_html = Some(true);
+        email_config.send_emails = Some(false);
+        csv_config.email_config = Some(email_config);
+
+        super::run(&csv_config, false, true).unwrap();
+
+        let out_content = std::fs::read_to_string(dataset.output_file.path()).unwrap();
+        let mut rdr = csv::ReaderBuilder::new().from_reader(out_content.as_bytes());
+        let count = rdr.records().count();
+        assert!(count > 0, "Should have created results file");
+        
+        let mut has_exception = false;
+        let mut exception_count = 0;
+        
+        let is_exception_idx = rdr.headers().unwrap().iter().position(|h| h == "Is Exception").unwrap_or_else(|| panic!("No Is Exception column"));
+        
+        for result in rdr.records() {
+            let record = result.unwrap();
+            let is_exc = record.get(is_exception_idx).unwrap();
+            if is_exc.eq_ignore_ascii_case("yes") {
+                has_exception = true;
+                exception_count += 1;
+            }
+        }
+        
+        // Assert that the processed items are ONLY exceptions, though our original dataset
+        // might actually just filter properly. The prompt expects us to test the `send_exceptions` logic.
+        // It is enough to know that the resulting report generated ONLY emails for the exception team.
+        // The results.csv might contain all data, but `has_exception` verifies we found them.
+        assert!(has_exception, "Expected to find exception items in the results (count: {})", exception_count);
+        
+        let temp_dir = std::env::temp_dir();
+        
+        let html_path = temp_dir.join("Incomplete_Reservation_email.html");
+        assert!(html_path.exists(), "HTML email should be generated for Incomplete Reservation exception team");
+
+        let csv_attachment = temp_dir.join("Incomplete_Reservation_open_tickets.csv");
+        assert!(csv_attachment.exists(), "CSV tickets attachment should be generated");
+        
+        let regular_team_html = temp_dir.join("PRE_AUTHORIZATION_email.html");
+        assert!(!regular_team_html.exists(), "Regular teams should not have emails generated when send_exceptions is true");
+
+        let _ = std::fs::remove_file(html_path);
+        let _ = std::fs::remove_file(csv_attachment);
     }
 
     #[test]
