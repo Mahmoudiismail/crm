@@ -91,3 +91,6 @@ CRUD operations persist directly to `runner_config.json` and return validation e
 - `shell_timeout_seconds` terminates long-running shell tasks by timeout (this can also be overridden per task via `timeout_seconds`).
 - `min_task_interval_seconds` prevents repeat tasks from running too frequently.
 - `shell_command` tasks use `bash -lc` for each command. A command with `continue_on_error=true` does not fail its task.
+
+## Concurrency
+The scheduler uses an execution manager with a concurrency queue. It allows multiple tasks to run simultaneously while enforcing rules to wait if the exact same task ID or an identical external app task is already running.

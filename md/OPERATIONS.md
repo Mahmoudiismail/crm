@@ -54,3 +54,6 @@ The test workflow (`.github/workflows/test.yml`) ensures strict code formatting 
 2. `cargo clippy`
 3. `cargo test`
 4. `cargo build`
+
+## Concurrency
+Task execution is concurrent, with an execution manager enforcing collision prevention rules.

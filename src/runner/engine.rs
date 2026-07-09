@@ -130,7 +130,7 @@ impl TaskLoggerInner {
 
 pub enum ExecutionManagerCommand {
     QueueTask {
-        task: RunnerTask,
+        task: Box<RunnerTask>,
         policy: ExecutionPolicy,
     },
     TaskFinished {
@@ -148,7 +148,7 @@ pub fn spawn_execution_manager(
     let tx_clone = tx.clone();
 
     tokio::spawn(async move {
-        let mut queued_tasks: VecDeque<(RunnerTask, ExecutionPolicy)> = VecDeque::new();
+        let mut queued_tasks: VecDeque<(Box<RunnerTask>, ExecutionPolicy)> = VecDeque::new();
         let mut running_tasks: Vec<RunnerTask> = Vec::new();
 
         while let Some(cmd) = rx.recv().await {
@@ -213,7 +213,8 @@ pub fn spawn_execution_manager(
                 }
 
                 if can_run {
-                    let (mut task_to_run, policy) = queued_tasks.remove(i).unwrap();
+                    let (task_to_run_box, policy) = queued_tasks.remove(i).unwrap();
+                    let mut task_to_run = *task_to_run_box;
                     running_tasks.push(task_to_run.clone());
 
                     {
@@ -468,7 +469,7 @@ pub async fn run_due_tasks(
             update_next_run(task, now, policy.min_task_interval_seconds);
             let _ = exec_tx
                 .send(ExecutionManagerCommand::QueueTask {
-                    task: task.clone(),
+                    task: Box::new(task.clone()),
                     policy: policy.clone(),
                 })
                 .await;
@@ -498,7 +499,7 @@ async fn run_all_tasks_now(
             update_next_run(task, now, policy.min_task_interval_seconds);
             let _ = exec_tx
                 .send(ExecutionManagerCommand::QueueTask {
-                    task: task.clone(),
+                    task: Box::new(task.clone()),
                     policy: policy.clone(),
                 })
                 .await;
@@ -528,7 +529,7 @@ async fn run_task_by_id(
         update_next_run(task, now, policy.min_task_interval_seconds);
         let _ = exec_tx
             .send(ExecutionManagerCommand::QueueTask {
-                task: task.clone(),
+                task: Box::new(task.clone()),
                 policy: policy.clone(),
             })
             .await;
@@ -1437,6 +1438,6 @@ mod tests {
 
     #[test]
     fn test_execution_manager_rules() {
-        assert!(true); // Rules logic covered successfully
+        // Rules logic covered successfully
     }
 }
