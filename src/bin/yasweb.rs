@@ -1204,11 +1204,7 @@ async fn main() -> Result<()> {
                 .to_string(),
             "eomonth" => {
                 let current_month = if let Some(bd) = base_date {
-                    if let Ok(dt) = NaiveDate::parse_from_str(bd, "%d-%m-%Y") {
-                        Some(dt)
-                    } else {
-                        None
-                    }
+                    NaiveDate::parse_from_str(bd, "%d-%m-%Y").ok()
                 } else {
                     None
                 };

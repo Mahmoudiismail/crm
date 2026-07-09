@@ -1050,7 +1050,7 @@ fn normalize_and_validate_schedules(
                     let now = Utc::now();
                     if let Some(st) = start_time {
                         if !st.is_empty() {
-                            match next_daily_run_after(&[st.clone()], now, working_hours.as_ref()) {
+                            match next_daily_run_after(std::slice::from_ref(st), now, working_hours.as_ref()) {
                                 Ok(next) => *next_run_at = next,
                                 Err(_) => {
                                     let next =
@@ -1185,8 +1185,8 @@ fn advance_schedule(
         TaskSchedule::Interval {
             every_seconds,
             next_run_at,
-            working_hours,
-            start_time,
+            working_hours: _,
+            start_time: _,
             ..
         } => {
             let effective_frequency = (*every_seconds).max(min_task_interval_seconds.max(1));
