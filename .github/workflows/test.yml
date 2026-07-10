@@ -8,6 +8,9 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
 
+on:
+  workflow_dispatch:
+
 permissions:
   contents: read
 
