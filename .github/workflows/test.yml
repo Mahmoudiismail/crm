@@ -7,8 +7,6 @@ on:
       - '**/*.rs'
       - 'Cargo.toml'
       - 'Cargo.lock'
-
-on:
   workflow_dispatch:
 
 permissions:
