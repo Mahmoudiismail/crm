@@ -744,7 +744,7 @@ mod tests {
         pub assignments_file: NamedTempFile,
         pub download_dir: tempfile::TempDir,
         pub output_file: NamedTempFile,
-        pub leads_file: NamedTempFile,
+        // // pub leads_file: NamedTempFile,
         pub teams_file: NamedTempFile,
         pub config_json: String,
     }
@@ -754,7 +754,7 @@ mod tests {
         let assignments_file = NamedTempFile::new().unwrap();
         let download_dir = tempfile::tempdir().unwrap();
         let output_file = NamedTempFile::new().unwrap();
-        let leads_file = NamedTempFile::new().unwrap();
+        // // let leads_file = NamedTempFile::new().unwrap();
         let teams_file = NamedTempFile::new().unwrap();
 
         let agents_csv = "cognito_username,UserDepartmentName / Team Name\nmahmoud_iismail,PRE-AUTHORIZATION\nNaira Bahaaeldin Bahaaeldin,Incomplete Reservation".to_string();
@@ -768,21 +768,17 @@ mod tests {
 
         let leads_csv =
             "Lead Id,Branch,Status\n1,Dr. Soliman Fakeeh Hospital Jeddah,new".to_string();
-        std::fs::write(leads_file.path(), leads_csv).unwrap();
-        std::fs::copy(
-            leads_file.path(),
-            download_dir.path().join("lead_report1.csv"),
-        )
-        .unwrap();
+        let leads_file_path = download_dir.path().join("lead_report1.csv");
+        std::fs::write(&leads_file_path, leads_csv).unwrap();
 
         let config_json = "{ \"tasks\": [ { \"assignment_settings_file\": \"./task1/assignments.csv\", \"category_exceptions\": [ { \"branch\": \"Dr. Soliman Fakeeh Hospital Jeddah\", \"category\": \"incomplete reservation\", \"team\": \"Incomplete Reservation\" } ], \"download_path\": \"../crm_windows/Downloads\", \"email_config\": { \"body_template_file\": \"./task1/email_template.html\", \"default_to_email\": \"mahmoud_iismail@rayacx.com\", \"ending_cc\": \"Adel_TGomaa@rayacx.com; mahmoud_iismail@rayacx.com;\", \"indentation_spaces\": 4, \"initial_cc\": \"aaabdulhamid@fakeeh.care\", \"send_call_center\": true, \"send_emails\": true, \"send_exceptions\": false, \"send_per_branch_branches\": [ \"DSFMC-Nuzha\", \"DSFMC-Basateen\", \"executive clinic\" ], \"send_per_team_all_branches\": [ \"PRE-AUTHORIZATION\" ], \"send_per_team_branches\": [ \"Dr. Soliman Fakeeh Hospital Jeddah\" ], \"team_mapping_file\": \"./task1/teams.csv\" }, \"exclude_branches\": [ \"Dr. Soliman Fakeeh Hospital Madinah\", \"Medical Fakeeh\" ], \"exclude_categories\": [ \"incomplete reservation\" ], \"minutes_ago\": 6000000, \"output_file\": \"./results.csv\", \"start_date\": \"01-Jan-2026\", \"type\": \"csv_analysis\", \"users_file\": \"./task1/users.csv\" } ] }".to_string();
         {
             let mut teams_wtr = csv::Writer::from_writer(teams_file.as_file());
             teams_wtr
-                .write_record(&["Team Name", "Receiver Name", "To Emails", "CC"])
+                .write_record(["Team Name", "Receiver Name", "To Emails", "CC"])
                 .unwrap();
             teams_wtr
-                .write_record(&[
+                .write_record([
                     "Incomplete Reservation",
                     "Incomplete Reservation Team",
                     "inc@example.com",
@@ -790,7 +786,7 @@ mod tests {
                 ])
                 .unwrap();
             teams_wtr
-                .write_record(&[
+                .write_record([
                     "PRE-AUTHORIZATION",
                     "Pre-Auth Team",
                     "preauth@example.com",
@@ -798,7 +794,7 @@ mod tests {
                 ])
                 .unwrap();
             teams_wtr
-                .write_record(&["Call Center", "Call Center Team", "cc@example.com", ""])
+                .write_record(["Call Center", "Call Center Team", "cc@example.com", ""])
                 .unwrap();
             teams_wtr.flush().unwrap();
         }
@@ -808,7 +804,7 @@ mod tests {
             assignments_file,
             download_dir,
             output_file,
-            leads_file,
+            // // leads_file,
             teams_file,
             config_json,
         }
