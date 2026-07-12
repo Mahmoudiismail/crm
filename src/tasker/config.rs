@@ -70,6 +70,9 @@ pub struct DashboardUpdaterConfig {
     pub dashboard_table_name: String,
     pub email_to: Option<String>,
     pub email_cc: Option<String>,
+
+    pub save_email_as_html: Option<bool>,
+    pub indentation_spaces: Option<u32>,
 }
 
 #[cfg(test)]
