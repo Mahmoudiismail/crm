@@ -744,6 +744,7 @@ mod tests {
         pub assignments_file: NamedTempFile,
         pub download_dir: tempfile::TempDir,
         pub output_file: NamedTempFile,
+        #[allow(dead_code)]
         pub leads_file: NamedTempFile,
         pub teams_file: NamedTempFile,
         pub config_json: String,
@@ -793,10 +794,10 @@ mod tests {
         {
             let mut teams_wtr = csv::Writer::from_writer(teams_file.as_file());
             teams_wtr
-                .write_record(&["Team Name", "Receiver Name", "To Emails", "CC"])
+                .write_record(["Team Name", "Receiver Name", "To Emails", "CC"])
                 .unwrap();
             teams_wtr
-                .write_record(&[
+                .write_record([
                     "Incomplete Reservation",
                     "Incomplete Reservation Team",
                     "inc@example.com",
@@ -804,7 +805,7 @@ mod tests {
                 ])
                 .unwrap();
             teams_wtr
-                .write_record(&[
+                .write_record([
                     "PRE-AUTHORIZATION",
                     "Pre-Auth Team",
                     "preauth@example.com",
@@ -812,7 +813,7 @@ mod tests {
                 ])
                 .unwrap();
             teams_wtr
-                .write_record(&["Call Center", "Call Center Team", "cc@example.com", ""])
+                .write_record(["Call Center", "Call Center Team", "cc@example.com", ""])
                 .unwrap();
             teams_wtr.flush().unwrap();
         }
