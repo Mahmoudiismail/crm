@@ -1189,8 +1189,6 @@ fn advance_schedule(
         TaskSchedule::Interval {
             every_seconds,
             next_run_at,
-            working_hours: _,
-            start_time: _,
             ..
         } => {
             let effective_frequency = (*every_seconds).max(min_task_interval_seconds.max(1));
