@@ -1,0 +1,544 @@
+﻿S.No.,EmployeeCode,Agent ID (only for calling agents),User extension,Role (Agent or Supervisor),Branch,UserDepartmentName / Team Name,LocationName,Full Name,FirstName,Middle Name,LastName,Gender,MobileNumber,OfficialMailID (@fakeeh.care),DesignationName,"cognito_username
+(Filled by THB)",Responabilty
+,,x,,Supervisor,DSFH, Patient Experience,Jeddah,Abdullah Emad Salama,Abdullah,Emad,Salama,M,966564217024,aesalama@fakeeh.care,,Abdullah Emad  Salama, Patient Experience 
+,,,,Supervisor,DSFH, Patient Experience,Jeddah,Abdulrahman Ahmed   Alzubaidi,Abdulrahman,Ahmed , Alzubaidi,M,966551229808,aaalzubaidi@fakeeh.care,,abdulrahman ahmed alzubaidi, Patient Experience 
+,,,,Admin + Supervisor,DSFH,Admin,Jeddah,Sohail Salem Bajammal,Sohail,Salem,Bajammal,M,966505619687,ssbajammal@fakeeh.care,,sohail salem bajammal,Admin
+,,Abdelrahamn.Foued,3151,Supervisor,DSFH,Admission and Discharge,Jeddah,Abdulrhman Gamal Bakhashb,Abdulrhman,Gamal,Bakhashb,M,966564063227,agbakhashb@fakeeh.care,,abdulrhman gamal bakhashb,Admission and Discharge
+,,Abdelrhamn.Kayed,3231,Supervisor,DSFH,Admission and Discharge,Jeddah,Aisha Maiesh Alhasni,Aisha,Maiesh,Alhasni,F,966569186570,aalhasani@fakeeh.care,,aisha maiesh alhasni,Admission and Discharge
+,,Abeer.Mohamed,3944,Supervisor,DSFH,Admission and Discharge,Jeddah,Ammar Mohammed Qattan,Ammar,Mohammed,Qattan,M,966593259421,amqattan@fakeeh.care,,ammar mohammed qattan,Admission and Discharge
+,,Adham.Mohamed,3950,Supervisor,DSFH,Admission and Discharge,Jeddah,Deya Ellaw,Deya,Ellaw,,M,966593258915,djellaw@fakeeh.care,,deya ellaw ellaw,Admission and Discharge
+,,,,Supervisor,DSFH,Admission and Discharge,Jeddah,Ghassan Kamal Boghdadi,Ghassan,Kamal,Boghdadi,M,966593259422,gkboghdadi@fakeeh.care,,ghassan kamal boghdadi,Admission and Discharge
+,,Ahmed.Hamdy,3208,Supervisor,DSFMC-Nuzha,Admin,Jeddah,khader jihad hanieh,Khader,Jihad,Hanieh,M,966540411873,khanieh@fakeeh.care,,khader jihad hanieh,Admin
+,,Alyaa.Mohamed,3951,Supervisor,DSFH,Admission and Discharge,Jeddah,Mahroos Awadallah Omer,Mahroos,Awadallah,Omer,M,966542793101,maomar@fakeeh.care,,mahroos awadallah omer,Admission and Discharge
+,,Amira,3052,Supervisor,DSFH,Admission and Discharge,Jeddah,Maysoon Hassan Qise,Maysoon,Hassan,Qise,F,96656454805,mqaisi@fakeeh.care,,maysoon hassan qise,Admission and Discharge
+,,Amr.Ali,3192,Supervisor,DSFH,Admission and Discharge,Jeddah,Nadia Jubran Alkhardali,Nadia,Jubran,Alkhardali,F,966593259331,nalkhardali@fakeeh.care,,nadia jubran alkhardali,Admission and Discharge
+,,Asmaa,3035,Supervisor,DSFH,Admission and Discharge,Jeddah,Sara Khair Albarodi,Sara,Khair,Albarodi,F,966567141780,skalbaroudi@fakeeh.care,,sara khair albarodi,Admission and Discharge
+,,aaabdulhamid,2005,Supervisor,DSFH,Admission and Discharge,Jeddah,Shaker Ahmed Hejazi,Shaker,Ahmed,Hejazi,M,966547866327,salhijazi@fakeeh.care,,shaker ahmed hejazi,Admission and Discharge
+,,,,Agent + Supervisor,DSFH,Call Center,Egypt,Abdallh Sayed Said,Abdallh,Sayed,Said,M,201155536276,abdallh_ssaid@rayacx.com,,abdallh sayed said,Call Center
+,,,,Agent + Supervisor,DSFH,Call Center,Egypt,Abdel Rahman Saad,Abdel,Rahman,Saad,M,201122106952,AbdelRahman_MSaad@rayacx.com,,abdel rahman saad,Call Center
+,,Aya.Momtaz,3193,Agent + Supervisor,DSFH,Call Center,Egypt,Abdelrahamn Foued Hassan,Abdelrahamn,Foued,Hassan,M,201141815229,AbdElRahman_FHassan@rayacx.com,,abdelrahamn foued hassan,Call Center
+,,Basant.Hisham,3226,Agent + Supervisor,DSFH,Call Center,Egypt,Abdelrhamn Kayed Abdlmatemed,Abdelrhamn,Kayed,Abdlmatemed,M,201098089216,Abdelrhamn_Kkayed@rayacx.com,,abdelrhamn kayed abdlmatemed,Call Center
+,,Bassant.Mohamed,3946,Agent + Supervisor,DSFH,Call Center,Egypt,Abeer Mohamed Ali,Abeer,Mohamed,Ali,F,201093089841,Abeer_MAli@rayacx.com,,abeer mohamed ali,Call Center
+,,,,Admin + Supervisor,DSFH,call center,Jeddah,Adel Gomaa,Adel,,Gomaa,M,201070788032,Adel_TGomaa@rayacx.com,,adel gomaa,call center
+,,Dina.Saeed,3227,Agent + Supervisor,DSFH,Call Center,Egypt,Adham Mohamed Metwaly,Adham,Mohamed,Metwaly,M,201141819731,adham_mmetwaly@rayacx.com,,adham mohamed metwaly,Call Center
+,,,,Agent + Supervisor,DSFH,Call Center,Egypt,Ahmed Abd Ali,Ahmed,Abd,Ali,,201015965251,Ahmed_AArfan@rayacx.com,,ahmed abd ali,Call Center
+,,Asmaa.Adel,5057,Agent + Supervisor,DSFH,Call Center,Egypt,Ahmed Hamdy Elsayed,Ahmed,Hamdy,Elsayed,M,201112009011,Ahmad_Helsayed@rayacx.com,,ahmed hamdy elsayed,Call Center
+,,Ehab.Sayed,5020,Agent + Supervisor,DSFH,Call Center,Egypt,Alyaa Mohamed Kamal,Alyaa,Mohamed,Kamal,F,201211052277,aliaa_mkamal@rayacx.com,,alyaa mohamed kamal,Call Center
+,,,,Agent + Supervisor,DSFH,Call Center,Egypt,Amira Mohamed Saad,Amira,Mohamed,Saad,,201222876116,Amira_MNourelden@rayacx.com,,amira mohamed saad,Call Center
+,,Eman.AbdelKader,3223,Agent + Supervisor,DSFH,Call Center,Egypt,Amira Mohamed Sayed,Amira,Mohamed,Sayed,F,201142711204,Amira_MMohammed@rayacx.com,,amira mohamed sayed,Call Center
+,,Eslam.Ehab,3080,Agent + Supervisor,DSFH,Call Center,Egypt,Amr Ali Abdelazim,Amr,Ali,Abdelazim,M,201150186673,amr_aabdelazem@rayacx.com,,amr ali abdelazim,Call Center
+,,Marian.Adly,3207,Agent + Supervisor,DSFH,Call Center,Egypt,Anas Khaled Ahmed,Anas,Khaled,Ahmed,M,201113087548,Anas_KAbdelAziz@rayacx.com,,anas khaled ahmed,Call Center
+,,Ismail.Awad,5031,Agent + Supervisor,DSFH,Call Center,Egypt,Asmaa Adel Ahmed,Asmaa,Adel,Ahmed,F,201017646453,Asmaa_AAbdelFatah@rayacx.com,,asmaa adel ahmed,Call Center
+,,Esraa.Ayman,3177,Agent + Supervisor,DSFH,Call Center,Egypt,Asmaa Ezz Eldin,Asmaa,Ezz,Eldin,F,201113179787,Asmaa_EAhmed@rayacx.com,,asmaa ezz eldin,Call Center
+,,Fatma.ElZahraa,5059,Admin + Supervisor,DSFH,Call Center,Jeddah,Aya Abdelhamed Ahmed,Aya,Abdelhamed,Ahmed,F,966567247763,aaabdulhamid@fakeeh.care,,aya abdelhamed ahmed,Call Center
+,,Fatma.Khaled,3228,Agent + Supervisor,DSFH,Call Center,Egypt,Aya Momtaz Hassanein,Aya,Momtaz,Hassanein,F,201142438095,Aya_MHassanin@rayacx.com,,aya momtaz hassanein,Call Center
+,,,,Agent + Supervisor,DSFH,Call Center,Egypt,Ayman Sayed Hashem,Ayman,Sayed,Hashem,M,201119107835,Ayman_SSayed@rayacx.com,,ayman sayed hashem,Call Center
+,,Hadeer.Adel,5058,Agent + Supervisor,DSFH,Call Center,Egypt,Basant Hisham Zainelabidin,Basant,Hisham,Zainelabidin,F,201141660107,Basant_HMohamed@rayacx.com,,basant hisham zainelabidin,Call Center
+,,,,Agent + Supervisor,DSFH,Call Center,Egypt,Bassant Ahmed Bassant,Bassant,Ahmed,Bassant,,201064979952,Bassant_AKhaled@rayacx.com,,bassant ahmed bassant,Call Center
+,,Hagar.Shawkat,3219,Agent + Supervisor,DSFH,Call Center,Egypt,Bassant Mohamed Ahmed,Bassant,Mohamed,Ahmed,F,201114878749,Bassant_MAhmed@rayacx.com,,bassant mohamed ahmed,Call Center
+,,Maimona,4017,Agent + Supervisor,DSFH,Call Center,Egypt,Bayan Gamal Salem,Bayan,Gamal,Salem,F,201021573772,Bayan_Gelsayed@Rayacx.com,,bayan gamal salem,Call Center
+,,,,Agent + Supervisor,DSFH,Call Center,Jeddah,Call Center   tls,Call Center, ,tls,M,966564238916,RCX-Fakeeh-Hospital-TL@rayacx.com,,call center tls,Call Center
+,,Hager,3046,Agent + Supervisor,DSFH,Call Center,Egypt,Dina Montaser Allam,Dina,Montaser,Allam,F,201023565821,Dina_MAllam@rayacx.com,,dina montaser allam,Call Center
+,,Nada.Alzaharani,3915,Agent + Supervisor,DSFH,Call Center,Egypt,Dina Osama Abdeltawab,Dina,Osama,Abdeltawab,F,201125292084,Dina_Oabdullah@rayacx.com,,dina osama abdeltawab,Call Center
+,,Hagar.Nasser,3224,Agent + Supervisor,DSFH,Call Center,Egypt,Dina Saeed Mohamed,Dina,Saeed,Mohamed,F,201090473555,Dina_SElThabet@rayacx.com,,dina saeed mohamed,Call Center
+,,,,Admin + Supervisor,DSFH,call center,Jeddah,Elshaimaa mansour,Elshaimaa,,mansour,F,201020706727,elshaimaa_hmansour@rayacx.com,,elshaimaa mansour,call center
+,,Mahmoud.AbdRabo,3921,Agent + Supervisor,DSFH,Call Center,Egypt,Eman Abdelkader Mohamed,Eman,Abdelkader,Mohamed,F,201285667406,Eman_AbMohamed@rayacx.com,,eman abdelkader mohamed,Call Center
+,,,,Agent + Supervisor,DSFH,Call Center,Egypt,Eman Nasr Fathy,Eman,Nasr,Fathy,,201017939381,Eman_NHamed@rayacx.com,,eman nasr fathy,Call Center
+,,,,Agent + Supervisor,DSFH,Call Center,Egypt,Engy Hassan Engy,Engy,Hassan,Engy,,201554891695,Engy_HSayed@rayacx.com,,engy hassan engy,Call Center
+,,Mai.Fouad,3212,Agent + Supervisor,DSFH,Call Center,Egypt,Eslam Ehab Mohamed,Eslam,Ehab,Mohamed,M,201140071821,Eslam_EhMohamed@rayacx.com,,eslam ehab mohamed,Call Center
+,,,,Agent + Supervisor,DSFH,Call Center,Egypt,Esraa Abdelmanaf Fakhery,Esraa,Abdelmanaf,Fakhery,,201551124849,Esraa_AHaroun@rayacx.com,,esraa abdelmanaf fakhery,Call Center
+,,Mariam.Adel,3216,Agent + Supervisor,DSFH,Call Center,Egypt,Esraa Ayman Sayed,Esraa,Ayman,Sayed,F,201117640803,Israa_Asayed@rayacx.com,,esraa ayman sayed,Call Center
+,,Hanin.Alotaibi,3089,Agent + Supervisor,DSFH,Call Center,Egypt,Esraa Mohamed Abushalaby,Esraa,Mohamed,Abushalaby,F,201027413532,Esraa_Mibrahim@rayacx.com,,esraa mohamed abushalaby,Call Center
+,,,,Agent + Supervisor,DSFH,Call Center,Egypt,Esraa Nabiel Abdelhameed,Esraa,Nabiel,Abdelhameed,,201009789461,Esraa_NMohamed@rayacx.com,,esraa nabiel abdelhameed,Call Center
+,,,,Agent + Supervisor,DSFH,Call Center,Egypt,Fatma Elsayed Mohamed,Fatma,Elsayed,Mohamed,,201096234272,Fatma_EAbdelmaged@rayacx.com,,fatma elsayed mohamed,Call Center
+,,Mohamed,3007,Agent + Supervisor,"DSFH , Madinah",Call Center,Egypt,Fatma Elzahraa Gamal,Fatma,Elzahraa,Gamal,F,201115481201,fatma_gahmed@rayacx.com,,fatma elzahraa gamal,Call Center
+,,Mohamed.Hany,4114,Agent + Supervisor,DSFH,Call Center,Egypt,Fatma Khaled Abdelshakour,Fatma,Khaled,Abdelshakour,F,201116524940,Fatma_kHassan@rayacx.com,,fatma khaled abdelshakour,Call Center
+,,Mohamed.Osama,3238,Agent + Supervisor,DSFH,Call Center,Egypt,Hadeer Adel Shaker,Hadeer,Adel,Shaker,F,201061539788,Hadeer_AShaker@rayacx.com,,hadeer adel shaker,Call Center
+,,Nada.Ali,3222,Agent + Supervisor,DSFH,Call Center,Egypt,Hagar Nasser Ahmed,Hagar,Nasser,Ahmed,F,201143309699,Hagar_NHussien@rayacx.com,,hagar nasser ahmed,Call Center
+,,Mohamed.Abosrea,3968,Agent + Supervisor,DSFH,Call Center,Egypt,Hagar Shawkat Kamal,Hagar,Shawkat,Kamal,F,201276924430,Hager_ShMohamed@rayacx.com,,hagar shawkat kamal,Call Center
+,,Nada.Essam1,3189,Agent + Supervisor,DSFH,Call Center,Egypt,Ismail Mohamed Abdel,Ismail,Mohamed,Abdel,M,201551182780,Ismail_MAwad@rayacx.com,,ismail mohamed abdel,Call Center
+,,,,Agent + Supervisor,DSFH,Call Center,Egypt,Karim Akram Mohamed,Karim,Akram,Mohamed,M,201064160038,Kareem_AbMohamed@rayacx.com,,karim akram mohamed,Call Center
+,,Reem.Ahmed,3156,Agent + Supervisor,DSFH,Call Center,Egypt,Mahitab Saad Ramadan,Mahitab,Saad,Ramadan,F,201156648189,Mahitab_SBahgat@rayacx.com,,mahitab saad ramadan,Call Center
+,,,,Agent + Supervisor,DSFH,Call Center,Egypt,Mahmoud Ahmed Mahmoud,Mahmoud,Ahmed,Mahmoud,,201029255132,Mahmoud_AAboelhamed@rayacx.com,,mahmoud ahmed mahmoud,Call Center
+,,Nahla.Abdulmohsen,3304,Agent + Supervisor,DSFH,Call Center,Egypt,Mahmoud Hamdy Mohamed,Mahmoud,Hamdy,Mohamed,M,201093502741,Mahmoud_HAbdrabo@rayacx.com,,mahmoud hamdy mohamed,Call Center
+,,Nada.Essam,3961,Admin + Supervisor,DSFH,Call Center,Egypt,Mahmoud Ibrahim Ismail,Mahmoud,Ibrahim,Ismail,M,201155520811,miismail@fakeeh.care,,mahmoud ibrahim ismail,Call Center
+,,Nehad.Wessam,3962,Agent + Supervisor,DSFH,Call Center,Egypt,Mai Fouad Ahmed,Mai,Fouad,Ahmed,F,201097749898,Mai_FAttia@rayacx.com,,mai fouad ahmed,Call Center
+,,Manal.Almowalad,3574,Agent + Supervisor,DSFH,Call Center,Egypt,Mai Yahia Abdullah,Mai,Yahia,Abdullah,F,201211070621,Mai_Yhassan@rayacx.com,,mai yahia abdullah,Call Center
+,,Rana.Ahmed,5101,Agent + Supervisor,DSFH,Call Center,Egypt,Malak Fathy Abdelqawey,Malak,Fathy,Abdelqawey,F,201018598989,Malak_FMahmoud@rayacx.com,,malak fathy abdelqawey,Call Center
+,,Salma.Mohamed,4100,Agent + Supervisor,DSFH,Call Center,Egypt,Manar Yahia Abdullah,Manar,Yahia,Abdullah,F,201204433938,Manar_YHassan@rayacx.com,,manar yahia abdullah,Call Center
+,,Omar.Adel,3943,Agent + Supervisor,DSFH,Call Center,Egypt,Mariam Adel Hanna,Mariam,Adel,Hanna,F,201273484841,Mariam_AHanna@rayacx.com,,mariam adel hanna,Call Center
+,,Sara.Samir,3235,Agent + Supervisor,DSFH,Call Center,Egypt,Mohamed Abosrea,Mohamed,Abosrea,,M,201009310575,Mohamed_AAbosrea@rayacx.com,,mohamed abosrea,Call Center
+,,Rahma.Mohamed,3234,Agent + Supervisor,DSFH,Call Center,Egypt,Mohamed Hany Esmail,Mohamed,Hany,Esmail,M,201064303513,Mohamed_HEsmail@rayacx.com,,mohamed hany esmail,Call Center
+,,Osama.Abdelhady,3239,Agent + Supervisor,DSFH,Call Center,Egypt,Mohamed Mosaad Abdelhamid,Mohamed,Mosaad,Abdelhamid,M,201141736132,Mohamed_MHamid@rayacx.com,,mohamed mosaad abdelhamid,Call Center
+,,Salah.Hashem,3102,Agent + Supervisor,DSFH,Call Center,Egypt,Mohamed Osama Aboalsaoud,Mohamed,Osama,Aboalsaoud,M,201286500388,Mohamed_OIbrahim@rayacx.com,,mohamed osama aboalsaoud,Call Center
+,,,,Agent + Supervisor,DSFH,Call Center,Egypt,Mona Ashraf Mona,Mona,Ashraf,Mona,,201112373987,Mona_AAli@rayacx.com,,mona ashraf mona,Call Center
+,,Mai.Abdelnaser,4101,Agent + Supervisor,DSFH,Call Center,Egypt,Mostafa Hany Ahmed,Mostafa,Hany,Ahmed,M,201033195099,Mostafa_Hmostafa@rayacx.com,,mostafa hany mostafa,Call Center
+,,,,Agent + Supervisor,DSFH,Call Center,Egypt,Mostafa Ragab Abdelrazek,Mostafa,Ragab,Abdelrazek,,201024231609,Moustafa_RAbdelfattah@rayacx.com,,mostafa ragab abdelrazek,Call Center
+,,Sherouk.Hatem,3964,Agent + Supervisor,DSFH,Call Center,Egypt,Nada Ali Hassan,Nada,Ali,Hassan,F,201224235835,Nada_AHassan@rayacx.com,,nada ali hassan,Call Center
+,,Yara.Ibarhem,3157,Agent + Supervisor,DSFH,Call Center,Egypt,Nada Essam Aldeen,Nada,Essam,Aldeen,F,201094840772,nada_emoawad@rayacx.com,,nada essam aldeen,Call Center
+,,Yehya.Mostafa,4115,Agent + Supervisor,DSFH,Call Center,Egypt,Nada Essam Elsayed,Nada,Essam,Elsayed,F,201148678839,Nada_EElSayed@rayacx.com,,nada essam elsayed,Call Center
+,,Zainb.Mohmed,3925,Agent + Supervisor,DSFH,Call Center,Egypt,Nahla Abdulmohsen Mohamed,Nahla,Abdulmohsen,Mohamed,F,201030061635,Nahla_AElKatan@rayacx.com,,nahla abdulmohsen mohamed,Call Center
+,,Haidy.Omar,5024,Agent + Supervisor,DSFH,Call Center,Egypt,Naira Bahaaeldin hamed,Naira,Bahaaeldin,hamed,F,201115432753,Naira_BGharib@rayacx.com,,naira bahaaeldin bahaaeldin,Call Center
+,,Maryem.Assiri,3573,Agent + Supervisor,DSFH,Call Center,Egypt,Neamaallah Youssaf Mohamed,NeamaAllah,Youssaf,Mohamed,F,201153968105,NeamaAllah_Yabduallah@rayacx.com,,neamaallah youssaf mohamed,Call Center
+,,Ammar.Yasser,3104,Agent + Supervisor,DSFH,Call Center,Egypt,Nehad Wessam Elhouda,Nehad,Wessam,Elhouda,F,201228592407,nehad_welhoda@rayacx.com,,nehad wessam elhouda,Call Center
+,,sadyiah,4022,Agent + Supervisor,DSFH,Call Center,Egypt,Nouran Mahmoud Mohamed,Nouran,Mahmoud,Mohamed,F,201062623288,Nouran_MAbdelRahman@rayacx.com,,nouran mahmoud mohamed,Call Center
+,,stelshake,8114,Agent + Supervisor,DSFH,Call Center,Egypt,Osama Abdelhady Abdelhamied,Osama,Abdelhady,Abdelhamied,M,201141277419,Osama_AAbdelmoniem@rayacx.com,,osama abdelhady abdelhamied,Call Center
+,,Hawra.Almuzayen,5158,Agent + Supervisor,DSFH,Call Center,Egypt,Rahma Mohamed Abelateef,Rahma,Mohamed,Abelateef,F,201022339002,Rahma_AbMohamed@rayacx.com,,rahma mohamed abelateef,Call Center
+,,Waad.Alharbi,6054,Agent + Supervisor,DSFH,Call Center,Egypt,Rana Medhat Ahmed,Rana,Medhat,Ahmed,F,201016081514,Rana_Mbasiony@rayacx.com,,rana medhat ahmed,Call Center
+,,,,Agent + Supervisor,DSFH,Call Center,Egypt,Reem Samir Sami,Reem,Samir,Sami,,201121192661,Reem_SAbdelkhalk@rayacx.com,,reem samir sami,Call Center
+,,Yomna.Yasser,3161,Agent + Supervisor,DSFH,Call Center,Egypt,Reem Yasser Elsayed,Reem,Yasser,Elsayed,F,201099023960,Reem_Yfathy@rayacx.com,,reem yasser elsayed,Call Center
+,,mobantasan,8101,Agent + Supervisor,DSFH,Call Center,Egypt,Salah Hashem Salah,Salah,Hashem,Salah,M,201117659500,Salah_hSalah@rayacx.com,,salah hashem salah,Call Center
+,,Abdallh.Sayed,3928,Agent + Supervisor,DSFH,Call Center,Egypt,Salama Mohmed Ibrahim,Salama,Mohmed,Ibrahim,F,201099104921,Salama_Msaeed@rayacx.com,,salama mohmed ibrahim,Call Center
+,,nsalem,8108,Agent + Supervisor,DSFH,Call Center,Egypt,Sara Samir Kamal,Sara,Samir,Kamal,F,201111937889,Sara_Sabdelkhalek@rayacx.com,,sara samir kamal,Call Center
+,,,,Agent + Supervisor,DSFH,Call Center,Egypt,Sarah Ezzat Abdelmonim,Sarah,Ezzat,Abdelmonim,,201002939565,Sara_EObid@rayacx.com,,sarah ezzat abdelmonim,Call Center
+,,Mohamed.Elsayed,3140,Agent + Supervisor,DSFH,Call Center,Egypt,Sherouk Hatem Masbah,Sherouk,Hatem,Masbah,F,201202960849,shrouk_hmosbah@rayacx.com,,sherouk hatem masbah,Call Center
+,,,,Agent + Supervisor,DSFH,Call Center,Egypt,Tarek Abdelrahmn Mohmed,Tarek,Abdelrahmn,Mohmed,M,201096230497,Tarek_AMohamed@rayacx.com,,tarek abdelrahmn mohmed,Call Center
+,,Amal.Alkhaldii,5161,Agent + Supervisor,DSFH,Call Center,Egypt,Yara Ibarhem Mohmed,Yara,Ibarhem,Mohmed,F,201118243097,Yara_IMohamed@rayacx.com,,yara ibarhem mohmed,Call Center
+,,AbdelRahman.Mohamed,3070,Agent + Supervisor,DSFH,Call Center,Egypt,Yasmin Ahmad Sopah,Yasmin,Ahmad,Sopah,F,201100012040,Yasmin_Amohmed@rayacx.com,,yasmin ahmad sopah,Call Center
+,,Bassant.Hossam,3194,Agent + Supervisor,DSFH,Call Center,Egypt,Yehya Mostafa Zakaria,Yehya,Mostafa,Zakaria,M,201092089975,Yehya_Mzakaria@rayacx.com,,yehya mostafa zakaria,Call Center
+,,,,Agent + Supervisor,DSFH,Call Center,Egypt,Yomna Essam El Deen,Yomna,Essam,El Deen,F,201140544412,Yomna_EMoawad@rayacx.com,,yomna essam el deen,Call Center
+,,,,Agent + Supervisor,DSFH,Call Center,Egypt,Youmna Yasser Adely,Youmna,Yasser,Adely,M,201111576771,Youmna_YAdely@rayacx.com,,youmna yasser adely,Call Center
+,,Israa.Farahat,3134,Agent + Supervisor,DSFH,Call Center,Egypt,Zainb Mohmed Shabaan,Zainb,Mohmed,Shabaan,F,201118991473,Zainab_Mshaaban@rayacx.com,,zainab shabaan,Call Center
+,,,,Agent + Supervisor,DSFH,Call Center,Egypt,Zeinab Shabaan Zeinab,Zeinab,Shabaan,Zeinab,,201140192727,Zeinab_SMohamed@rayacx.com,,zeinab shabaan zeinab,Call Center
+,,Ayman.Sayed,3953,Supervisor,DSFH,Call Center - schedule,Jeddah,Maimouna Adoum Abdallah,Maimouna,Adoum,Abdallah,M,966531942364,mabdullahali@fakeeh.care,,maimouna adoum abdallah,Call Center - schedule
+,,Karim.Akram,3147,Supervisor,DSFH,Call Center - schedule,Jeddah,Nada Saad Mohammed,Nada,Saad,Mohammed,M,966530975464,nsalzahrani@fakeeh.care,,nada saad mohammed,Call Center - schedule
+,,Tarek.Abdelrahmn,3930,Supervisor,DSFH,Call Center - source,Jeddah,Hanin Mohammed Alotaibi,Hanin,Mohammed,Alotaibi,F,966566733478,hmalotaibi@fakeeh.care,,hanin mohammed alotaibi,Call Center - source
+,,Yomna.Moawad,5032,Supervisor,DSFH,Call Center - source,Jeddah,Manal Almowalad,Manal,Almowalad,,F,966564369055,malmowalad@fakeeh.care,,manal almowalad,Call Center - source
+,,,,Supervisor,DSFH,Call Center - source,Jeddah,Maryem Ibrahem Assiri,Maryem,Ibrahem,Assiri,F,966547099714,miassiri@fakeeh.care,,maryem ibrahem assiri,Call Center - source
+,,,,Admin + Supervisor,DSFH,Call Center - source,Jeddah,Sadyia Abakar Abdalla,Sadyia,Abakar,Abdalla,F,966593259440,sabduallahali@fakeeh.care,,sadyia abakar abdalla,Call Center - source
+,,,,Supervisor,DSFH,Call Center - source,Jeddah,Waad Fahad Alharbi,Waad,Fahad,Alharbi,M,966507103575,wfalharbi@fakeeh.care,,waad fahad alharbi,Call Center - source
+,,,,Supervisor,DSFH,Case Manager,Jeddah,Aisha Esmail,Aisha,Esmail,,F,966540411280,aeaismail@fakeeh.care,,aisha esmail,Case Manager
+,,,,Supervisor,DSFH,Case Manager,Jeddah,Asma Hasan Hatab,Asma,Hasan,Hatab,F,966540411032,ahhatab@fakeeh.care,,asma hasan hatab,Case Manager
+,,,,Supervisor,DSFH,Case Manager,Jeddah,Khadra Mohamed Omar,Khadra,Mohamed,Omar,F,966593259242,komar@fakeeh.care,,khadra mohamed omar,Case Manager
+,,,,Supervisor,DSFH,Case Manager,Jeddah,Nouf Ali Altherwi,Nouf,Ali,Altherwi,F,966567119470,noaaltherwi@fakeeh.care,,nouf ali altherwi,Case Manager
+,,,,Supervisor,DSFH,Case Manager,Jeddah,Nourah Adris,Nourah,Adris,,F,966593259149,noadris@fakeeh.care,,nourah adris,Case Manager
+,,,,Supervisor,DSFH,Case Manager,Jeddah,Seham Okaylah,Seham,Okaylah,,F,966540411382,swokaylah@fakeeh.care,,seham okaylah,Case Manager
+,,,,Supervisor,DSFH,Case Manager,Jeddah,Taha Gamal Abdalla,Taha,Gamal,Abdalla,M,966556331969,tgabdalla@fakeeh.care,,taha gamal abdalla,Case Manager
+,,,,Supervisor,DSFH,Case Manager,Jeddah,Zeinab Hosny Abelhakiem,Zeinab,Hosny,Abelhakiem,F,966593258873,zhabelhakiem@fakeeh.care,,zeinab hosny abelhakiem,Case Manager
+,,,,Supervisor,DSFH,ELITE LOUNGE ,Jeddah,Lamis Mohammed Binsalman,Lamis,Mohammed,Binsalman,F,966559894583,lmsalman@fakeeh.care,,lamis mohammed binsalman,ELITE LOUNGE 
+,,,,Supervisor,DSFH,ELITE LOUNGE ,Jeddah,Layla Farid Farid,Layla,Farid,Farid,F,966540001985,lfarid@fakeeh.care,,layla farid farid,ELITE LOUNGE 
+,,,,Supervisor,DSFH,Estimation Cost,Jeddah,Elsayed Ahmed Hassanein,Elsayed,Ahmed,Hassanein,M,966593258840,ssadiek@fakeeh.care,,elsayed ahmed hassanein,Estimation Cost
+,,,,Supervisor,DSFH,Estimation Cost,Jeddah,Muhammed Nadeem Khan,Muhammed,Nadeem,Khan,M,966543544008,mnkhan@fakeeh.care,,muhammed nadeem khan,Estimation Cost
+,,,,Supervisor,DSFH,Fakeeh Tech & Mobile App Development,Jeddah,Ehtisham Ahmad Qureshi,Ehtisham,Ahmad,Qureshi,F,966597602404,eaqureshi@fakeeh.tech,,ehtisham ahmad qureshi,"Fakeeh Tech  ,  Mobile App Development"
+,,,,Supervisor,DSFH,Fakeeh Tech & Mobile App Development,Jeddah,Omar Alattas,Omar,Alattas,,M,966544687795,oalattas@fakeeh.tech,,omar alattas,"Fakeeh Tech  ,  Mobile App Development"
+,,,,Supervisor,DSFH,Home Healthcare,Jeddah,Jehan Mohamed Almoulad,Jehan,Mohamed,Almoulad,F,966560446471,jalmowalad@fakeeh.care,,jehan mohamed almoulad,Home Healthcare
+,,,,Supervisor,DSFH,Home Healthcare,Jeddah,Layan Ali Alghamdi,Layan,Ali,Alghamdi,F,966543716996,laaalghamdi@fakeeh.care,,layan alghamdi,Home Healthcare
+,,,,Supervisor,DSFH,Home Healthcare,Jeddah,Marwan Ahmed Diraz,Marwan,Ahmed,Diraz,M,966582455574,madiraz@fakeeh.care,,marwan diraz,Home Healthcare
+,,,,Supervisor,DSFH,Home Healthcare,Jeddah,Noura Abdelmenem Hammad,Noura,Abdelmenem,Hammad,F,966580522802,nahammad@fakeeh.care,,noura abdelmenem hammad,Home Healthcare
+,,,,Supervisor,DSFH,Home Healthcare,Jeddah,Omar Faisal Mandili,Omar,Faisal,Mandili,M,966544454687,omandili@fakeeh.care,,omar mandili,Home Healthcare
+,,,,Supervisor,DSFH,Home Healthcare,Jeddah,Osama Sabdelmaaboud,Osama,Sabdelmaaboud,,M,201201562687,osama_sabdelmaaboud@rayacx.com,,osama sabdelmaaboud,Home Healthcare
+,,,,Supervisor,DSFH,Home Healthcare,Jeddah,Raneem Ahmed Sheasha,Raneem,Ahmed,Sheasha,F,966560345136,rasheasha@fakeeh.care,,raneem sheasha,Home Healthcare
+,,,,Supervisor,DSFH,Home Healthcare,Jeddah,Thamer Mohammed Aljonaid,Thamer,Mohammed,Aljonaid,M,966593258821,tmaljonaid@fakeeh.care,,thamer aljonaid,Home Healthcare
+,,,,Agent + Supervisor,DSFH,Information Technology & IT Support,Jeddah,Abdullah Mahmoud Aldebany,Abdullah,Mahmoud,Aldebany,M,966546000992,amaldebani@fakeeh.care,,abdullah mahmoud aldebany,"Information Technology  ,  IT Support"
+,,,,Agent + Supervisor,DSFH,Information Technology & IT Support,Jeddah,Ahmed Hamdy Badran,Ahmed,Hamdy,Badran,M,966593259398,aebadran@fakeeh.care,,ahmed hamdy badran,"Information Technology  ,  IT Support"
+,,,,Agent + Supervisor,DSFH,Information Technology & IT Support,Jeddah,Ahmed Salem  Almalki,Ahmed,Salem, Almalki,M,966593259045,asalmalki@fakeeh.care,,ahmed salem almalki,"Information Technology  ,  IT Support"
+,,,,Agent + Supervisor,DSFH,Information Technology & IT Support,Jeddah,Khaleel Khusro Merza,Khaleel,Khusro,Merza,M,966593259284,kmirza@fakeeh.care,,khaleel khusro merza,"Information Technology  ,  IT Support"
+,,,,Agent + Supervisor,DSFH,Information Technology & IT Support,Jeddah,Mohammed Shabeeudin Shabeeudin,Mohammed,Shabeeudin,Shabeeudin,M,966593259388,mshabeeuddin@fakeeh.care,,mohammed shabeeudin shabeeudin,"Information Technology  ,  IT Support"
+,,,,Supervisor,DSFH,Lab Team,Jeddah, Abdelrahman  Obaid Alalawi, Abdelrahman, Obaid,Alalawi,M,966532040252,aoalalawi@fakeeh.care,,abdelrahman obaid alalawi,Lab Team
+,,,,Supervisor,DSFH,Lab Team,Jeddah, Haytham Mohammad  Mostafa , Haytham,Mohammad ,Mostafa ,M,966548401718,hmmostafa@fakeeh.care,,haytham mohammad mostafa,Lab Team
+,,,,Supervisor,DSFH,Lab Team,Jeddah, Sahar Gamil  Elwakil , Sahar,Gamil ,Elwakil ,F,966553481619,selwakil@fakeeh.care,,sahar gamil elwakil,Lab Team
+,,,,Supervisor,DSFH,Lab Team,Jeddah,Ahmad Labib Alatrouni,Ahmad,Labib,Alatrouni,M,966546367598,alalatrouni@fakeeh.care,,lab team,Lab Team
+,,,,Supervisor,DSFH,Lab Team,Jeddah,Ahmed Salahuddin Nassar,Ahmed,Salahuddin,Nassar,M,0,asmrnassar@fakeeh.care,,ahmad nassar,Lab Team
+,,,,Supervisor,DSFH,Lab Team,Jeddah,Ashwaq Hashim Alzamur,Ashwaq,Hashim,Alzamur,F,966593259390,Aalzamer@fakeeh.care,,ashwaq hashim alzamur,Lab Team
+,,,,Supervisor,DSFH,Lab Team,Jeddah,Bashaer Omar Bajaber, Bashaer,Omar,Bajaber,M,966546038805,Bobajaber@fakeeh.care,,bashaer omar bajaber,Lab Team
+,,,,Supervisor,DSFH,Lab Team,Jeddah,Belal Bashar Qanbar,Belal,Bashar,Qanbar,M,966506050360,bbqanbar@fakeeh.care,,belal bashar qanbar,Lab Team
+,,,,Supervisor,DSFH,Lab Team,Jeddah,Bushra Hasan Alzabidi,Bushra,Hasan,Alzabidi,F,966563463457,Balzabidi@fakeeh.care,,bushra hasan alzabidi,Lab Team
+,,,,Supervisor,DSFH,Lab Team,Jeddah,Eilaf Abdullah Noorsaeed,Eilaf,Abdullah,Noorsaeed,F,96654140992,eanoorsaeed@fakeeh.care,,eilaf abdullah noorsaeed,Lab Team
+,,,,Supervisor,DSFH,Lab Team,Jeddah,Hadir Mohamed Elseidi,Hadir,Mohamed,Elseidi,F,966548100391,helseid@fakeeh.care,,hadir mohamed elseidi,Lab Team
+,,,,Supervisor,DSFH,Lab Team,Jeddah,Rasha Kamal Desuqi,Rasha,Kamal,Desuqi,F,966502682990,rdesuqi@fakeeh.care,,rasha kamal desuqi,Lab Team
+,,,,Supervisor,DSFH,Marketing Team,Jeddah, Raghad  Abdulrahman Alharbi , Raghad, Abdulrahman,Alharbi ,M,  +966534468505 ,raalharbi@fakeeh.care,,raghad abdulrahman alharbi,Marketing Team
+,,,,Supervisor,DSFH,Marketing Team,Jeddah,Amani  Mohammed  Shahadah ,Amani ,Mohammed ,Shahadah ,F, +966567110687,amshahadah@fakeeh.care,,amani mohammed shahadah,Marketing Team
+,,,,Supervisor,DSFH,Marketing Team,Jeddah,Ashraf  Adnan   Attar,Ashraf ,Adnan , Attar,M,  +966570110670,asattar@fakeeh.care,,ashraf adnan attar,Marketing Team
+,,,,Supervisor,DSFH,Marketing Team,Jeddah,Hind    Ali Beraik ,Hind  , Ali,Beraik ,M,  +966593259389,haberaik@fakeeh.care,,hind ali beraik,Marketing Team
+,,,,Supervisor,DSFH,Marketing Team,Jeddah,Soliman  Mazen  Fakeeh ,Soliman ,Mazen ,Fakeeh ,M,  +966566535505 ,sfakeeh@fakeeh.care,,soliman mazen fakeeh,Marketing Team
+,,,,Supervisor,DSFH,Medical Report Team,Jeddah, Raghad  Sameer  Hanbali , Raghad, Sameer ,Hanbali ,F,966555365412,rshanbali@fakeeh.care,,raghad sameer hanbali,Medical Report Team
+,,,,Supervisor,DSFH,Medical Report Team,Jeddah,Adel Abdulaziz Gashash,Adel,Abdulaziz,Gashash,M,966593259314,aalghamdi@fakeeh.care,,adel abdulaziz gashash,Medical Report Team
+,,,,Supervisor,DSFH,Medical Report Team,Jeddah,Enas Yahya Awan,Enas,Yahya,Awan,F,966565800233,eyawan@fakeeh.care,,enas yahya awan,Medical Report Team
+,,,,Supervisor,DSFH,Medical Report Team,Jeddah,Faridah Salem Alhabib ,Faridah,Salem,Alhabib ,F,966565563682,fsalhabib@fakeeh.care,,faridah salem alhabib,Medical Report Team
+,,,,Supervisor,DSFH,Medical Report Team,Jeddah,Mayar Abdulrahman Alkhattabi,Mayar,Abdulrahman,Alkhattabi,F,966543542555,maalkhattabi@fakeeh.care,,mayar abdulrahman alkhattabi,Medical Report Team
+,,,,Supervisor,DSFH,Medical Report Team,Jeddah,Wafaa Hamed Madhin,Wafaa,Hamed,Madhin,F,966562146783,whamed@fakeeh.care,,wafaa hamed madhin,Medical Report Team
+,,,,Supervisor + Agent,DSFH,NM - PET team,Jeddah,Abdurahman Mowafaq Salamah,Abdurahman,Mowafaq,Salamah,F,966555615503,amsalamah@fakeeh.care,,abdurahman mowafaq salamah,NM - PET team
+,,,,Supervisor,DSFH,NM - PET team,Jeddah,Denver Tan Pinlac,Denver,Tan,Pinlac,M,966593259448,dpinlac@fakeeh.care,,denver tan pinlac,NM - PET team
+,,,,Supervisor + Agent,DSFH,NM - PET team,Jeddah,Maha Felemban,Maha,Felemban,,F,966540566613,mmfelemban@fakeeh.care,,maha felemban,NM - PET team
+,,,,Supervisor,DSFH,Patient Experience ,Jeddah,Abdullah Omar Hamad,Abdullah,Omar,Hamad,M,966568171805,aohamad@fakeeh.care,,abdullah omar hamad,Patient Experience 
+,,,,Supervisor,DSFH,Patient Experience ,Jeddah,Daie Mohammed Naqro,Daie,Mohammed,Naqro,F,966536631666,dnaqro@fakeeh.care,,daie mohammed naqro,Patient Experience 
+,,,,Supervisor,DSFH,Patient Experience ,Jeddah,Rudainah Fouad Almashwali,Rudainah,Fouad,Almashwali,F,966505593058,rfalmashwali@fakeeh.care,,rudainah fouad almashwali,Patient Experience 
+,,,,Supervisor,DSFH,Patient Experience ,Jeddah,Sara Abdullah  Alrumikhani,Sara,Abdullah,Alrumikhani,F,966543459386,saalrumikhani@fakeeh.care,,sara abdullah alrumikhani,Patient Experience 
+,,,,Supervisor,DSFH,Pharmacy Management,Jeddah,Hind Mohammed Alhafezy,Hind,Mohammed,Alhafezy,F,966567115238,hralhafezy@fakeeh.care,,hind mohammed alhafezy,Pharmacy Management
+,,,,Supervisor,DSFH,Pharmacy Management,Jeddah,Inas Abdelmoutaleb Ismail,Inas,Abdelmoutaleb,Ismail,F,966593259010,eismail@fakeeh.care,,inas abdelmoutaleb ismail,Pharmacy Management
+,,,,Supervisor,DSFH,Pharmacy Management,Jeddah,Marwa Awadh,Marwa,Awadh,,F,966567972467,mmaawad@fakeeh.care,,marwa awadh,Pharmacy Management
+,,,,Supervisor,DSFH,Pharmacy Management,Jeddah,Mawaddah Rokun,Mawaddah,Rokun,,F,966567247764,mmrokun@fakeeh.care,,mawaddah rokun,Pharmacy Management
+,,,,Supervisor,DSFH,Pharmacy Management,Jeddah,Rania Gad Elshahhat,Rania,Gad,Elshahhat,F,966540411784,relsayed@fakeeh.care,,rania gad elshahhat,Pharmacy Management
+,,,,Supervisor,DSFH,Pharmacy Management,Jeddah,Rawan Dawood Alnajjar,Rawan,Dawood,Alnajjar,F,966593259272,rdalnajjar@fakeeh.care,,rawan dawood alnajjar,Pharmacy Management
+,,,,Supervisor,DSFH,Pharmacy Management,Jeddah,Sara Almofareh,Sara,Almofareh,,F,966593259273,smalmofareh@fakeeh.care,,sara almofareh,Pharmacy Management
+,,,,Supervisor,DSFH,Policy registration,Jeddah, Ahmed Zakri , Ahmed,,Zakri ,M,966504162993,aozakri@fakeeh.care,,ahmed zakri,Policy registration
+,,,,Supervisor,DSFH,Policy registration,Jeddah, Mahmoud Fayiz   Afify, Mahmoud,Fayiz , Afify,M,966544342513,maveve@fakeeh.care,,mahmoud fayiz afify,Policy registration
+,,,,Supervisor,DSFH,Policy registration,Jeddah,Mohamed   Shokri Helali ,Mohamed , Shokri,Helali ,M,966568563474,mhelali@fakeeh.care,,mohamed shokri helali,Policy registration
+,,,,supervisor + agent,DSFH,PRE-AUTHORIZATION,Jeddah, Mazin Hussain Albariqi, Mazin,Hussain,Albariqi,M,966504487661,mhalbariqi@fakeeh.care,,mazin hussain albariqi,PRE-AUTHORIZATION
+,,,,supervisor + agent,DSFH,PRE-AUTHORIZATION,Jeddah,Abrar  Jamil Othman,Abrar, Jamil,Othman,F,966567247239,ajothman@fakeeh.care,,abrar jamil othman,PRE-AUTHORIZATION
+,,,,supervisor + agent,DSFH,PRE-AUTHORIZATION,Jeddah,Dalia Dalia,Dalia,,Dalia,F,201100516501,delemam@anvilsa.com,,dalia dalia,PRE-AUTHORIZATION
+,,,,supervisor + agent,DSFH,PRE-AUTHORIZATION,Jeddah,Emad Shoukri Helali,Emad,Shoukri,Helali,M,966593259445,ealhelali@fakeeh.care,,emad shoukri helali,PRE-AUTHORIZATION
+,,,,supervisor + agent,DSFH,PRE-AUTHORIZATION,Jeddah,Habiba Waleed Afandy,Habiba,Waleed,Afandy,F,201111897967,hafandy@anvilsa.com,,#N/A,PRE-AUTHORIZATION
+,,,,supervisor + agent,DSFH,PRE-AUTHORIZATION,Jeddah,Johney Sultanah,Johney,,Sultanah,M,966599076909,jbsultanah@fakeeh.care,,johney sultanah,PRE-AUTHORIZATION
+,,,,supervisor + agent,DSFH,PRE-AUTHORIZATION,Jeddah,Moahmmed Bahjat,Moahmmed,, Bahjat,M,96545557544,mbabosabaa@fakeeh.care,,moahmmed bahjat,PRE-AUTHORIZATION
+,,,,supervisor + agent,DSFH,PRE-AUTHORIZATION,Jeddah,Mohamed Ahmed Ismail,Mohamed,Ahmed,Ismail,M,966565492797,mhassanismail@fakeeh.care,,mohamed ahmed ismail,PRE-AUTHORIZATION
+,,,,supervisor + agent,DSFH,PRE-AUTHORIZATION,Jeddah,Mohammed Saeed  Alghamdi,Mohammed ,Saeed ,Alghamdi ,M,966533190308,mssalghamdi@fakeeh.care,,mohammed saeed alghamdi,PRE-AUTHORIZATION
+,,,,Supervisor,Madinah,PRE-AUTHORIZATION,Jeddah,Rachid Lhaoud,Rachid,Lhaoud,,M,966544000624,rrahal@fakeeh.care,,rachid lahoud,PRE-AUTHORIZATION
+,,,,supervisor + agent,DSFH,PRE-AUTHORIZATION,Jeddah,Rasheed Abdullah Alsharief,Rasheed,Abdullah,Alsharief,M,966544000624,relshareef@fakeeh.care,,rasheed abdullah alsharief,PRE-AUTHORIZATION
+,,,,supervisor + agent,DSFH,PRE-AUTHORIZATION,Jeddah,Shada Ahmed Siam,Shada,Ahmed,Shada,F,201100513089,sahmed@anvilsa.com,,shada ahmed siam,PRE-AUTHORIZATION
+,,,,supervisor + agent,DSFH,PRE-AUTHORIZATION,Jeddah,Tarik Alotaibi,Tarik,Alotaibi,,M,966591801249,talotabi@fakeeh.care,,tarik alotaibi,PRE-AUTHORIZATION
+,,,,Supervisor + Agent,DSFH,Radiology Team,Jeddah,Ahmed Mohammed Saeed Alraydhi,Ahmed,Mohammed Saeed,Alraydhi,,966569796605,amalraydhi@fakeeh.care,,ahmed mohammed saeed alraydhi,Radiology Team
+,,,,Supervisor + Agent,DSFH,Radiology Team,Jeddah,Ayman Mohamed Esmail,Ayman,Mohamed,Esmail,M,966593259068,aesmail@fakeeh.care,,ayman mohamed esmail,Radiology Team
+,,,,Supervisor + Agent,DSFH,Radiology Team,Jeddah,Charlie Villa Cabutija,Charlie,Villa,Cabutija,F,966502770105,ccabutija@fakeeh.care,,charlie villa cabutija,Radiology Team
+,,,,Supervisor + Agent,DSFH,Radiology Team,Jeddah,Elena Borbe Dimaunahan,Elena,Borbe,Dimaunahan,F,966593201195,edimaunahan@fakeeh.care,,elena borbe dimaunahan,Radiology Team
+,,,,Supervisor + Agent,DSFH,Radiology Reception,Jeddah,Sondos Mohamed Khan,Sondos,Mohamed,Khan,F,966541313860,skhan@fakeeh.care,,sondos mohamed khan,Radiology Team
+,,,,Supervisor + Agent,DSFH,Radiology Reception,Jeddah,Saleh Saleh,Saleh,,Saleh,M,966553076890,ssalzahrani@fakeeh.care,,saleh saeed alzahrani,"Radiology Team, REGISTRATION AND ELIGBILITY"
+,,,,Supervisor,DSFH,REGISTRATION AND ELIGBILITY,Jeddah,Ali Alzahrani,Ali,Alzahrani,,M,966593259358,ajaralnabi@fakeeh.care,,ali alzahrani,REGISTRATION AND ELIGBILITY
+,,,,Supervisor,DSFH,REGISTRATION AND ELIGBILITY,Jeddah,Asmaa Mohamed Moustafa,Asmaa,Mohamed,Moustafa,F,966593259293,amoustafa@fakeeh.care,,asmaa mohamed moustafa,REGISTRATION AND ELIGBILITY
+,,,,Supervisor,DSFH,REGISTRATION AND ELIGBILITY,Jeddah,Ehab Mohamed Mahmoud,Ehab,Mohamed,Mahmoud,M,966593259296,emahmoud@fakeeh.care,,ehab mohamed mahmoud,REGISTRATION AND ELIGBILITY
+,,,,Supervisor,DSFH,REGISTRATION AND ELIGBILITY,Jeddah,Ghazi Saqer Alsulami,Ghazi,Saqer,Alsulami,M,966545595341,gsalsulami@fakeeh.care,,ghazi saqer alsulami,REGISTRATION AND ELIGBILITY
+,,,,Supervisor,DSFH,REGISTRATION AND ELIGBILITY,Jeddah,Mohammed Abdullah Alghamdi,Mohammed,Abdullah,Alghamdi,M,966501796271,maalghamdi@fakeeh.care,,mohammed abdullah alghamdi,REGISTRATION AND ELIGBILITY
+,,,,Supervisor,DSFH,REGISTRATION AND ELIGBILITY,Jeddah,Mohammed Saeed Alsiraj,Mohammed,Saeed,Alsiraj,M,966501736557,msalsiraj@fakeeh.care,,mohammed saeed alsiraj,REGISTRATION AND ELIGBILITY
+,,,,Supervisor,DSFH,REGISTRATION AND ELIGBILITY,Jeddah,Saeed Khalid Alashqer,Saeed,Khalid,Alashqer,M,966533609049,salashkar@fakeeh.care,,saeed khalid alashqer,REGISTRATION AND ELIGBILITY
+,,,,Supervisor,DSFH,REGISTRATION AND ELIGBILITY,Jeddah,Sherin Rezk Daoud,Sherin,Rezk,Daoud,F,966598187103,sdawod@fakeeh.care,,sherin rezk daoud,Registration and eligbility
+,,,,Supervisor,DSFH,REGISTRATION AND ELIGBILITY,Jeddah,Waad Jamal Bakhashab,Waad,Jamal,Bakhashab,F,966593259276,wbakhashab@fakeeh.care,,waad jamal bakhashab,REGISTRATION AND ELIGBILITY
+,,,,Supervisor,DSFH,Sahty,Jeddah,Hilda Mae Bernado,Hilda,Mae,Bernado,F,966557811048,hmae@fakeeh.care,,hilda mae bernado,Sahty
+,,,,Supervisor,DSFH,Sleep lab team,Jeddah, Yousef   Bandar Alkabariti , Yousef , Bandar,Alkabariti ,M,966502047216,ybalkabariti@fakeeh.care,,yousef bandar alkabariti,Sleep lab team
+,,,,Supervisor,DSFH,Sleep lab team,Jeddah,Heide Joyosa Hey,Heide,Joyosa,Hey,F,966550199840,hhey@fakeeh.care,,heide joyosa hey,Sleep lab team
+,,,,Supervisor,DSFH,Sleep lab team,Jeddah,Princess Galope,Princess,Galope,,F,966593259404,ppgalope@fakeeh.care,,princess galope,Sleep lab team
+,,,,Supervisor,DSFH,Sleep lab team,Jeddah,Princess  Bico  Abdullah ,Princess ,Bico ,Abdullah ,F,966502766264,pbabdullah@fakeeh.care,,princess bico abdullah,Sleep lab team
+,,,,Supervisor,DSFH,Telecommunication,Jeddah,Abdulmajeed Hassan Alathawwahbi,Abdulmajeed,Hassan,Alathawwahbi,M,966507698001,ahalathawwahbi@fakeeh.care,,abdulmajeed hassan alathawwahbi,Telecommunication
+,,,,Supervisor,DSFH,Telecommunication,Jeddah,Adel Osama Alzurqi,Adel,Osama,Alzurqi,M,966552244122,aoalzurqi@fakeeh.care,,adel osama alzurqi,Telecommunication
+,,,,Supervisor,DSFH,Telecommunication,Jeddah,Ammar Abdullah Almaqadi,Ammar,Abdullah,Almaqadi,M,966553545703,aaalmaqadi@fakeeh.care,,ammar abdullah almaqadi,Telecommunication
+,,,,Supervisor,DSFH,Telecommunication,Jeddah,Fahad Taher Fadag,Fahad,Taher,Fadag,M,966542977717,ftfadag@fakeeh.care,,fahad taher fadag,Telecommunication
+,,,,Supervisor,DSFH,Telecommunication,Jeddah,Gihad Sami Kamal,Gihad,Sami,Kamal,M,966566699562,gskamal@fakeeh.care,,gihad sami kamal,Telecommunication
+,,,,Supervisor,DSFH,Telecommunication,Jeddah,Hassan Mohammed Qawwas,Hassan,Mohammed,Qawwas,M,966553394880,hmqawwas@fakeeh.care,,hassan mohammed qawwas,Telecommunication
+,,,,Supervisor,DSFH,Telecommunication,Jeddah,Khaled Mahmoud Mahgoub,Khaled ,Mahmoud,Mahgoub,M,966593259292,kmahmoud@fakeeh.care,,khaled mahmoud mahgoub,Telecommunication
+,,,,Supervisor,DSFH,Telecommunication,Jeddah,Mohamed Abdulgawad Farag,Mohamed,Abdulgawad,Farag,M,966549299236,mgawad@fakeeh.care,,mohamed abdulgawad farag,Telecommunication
+,,,,Supervisor,DSFH,Telecommunication,Jeddah,Mohamed Abdulrahman Shadi,Mohamed,Abdulrahman,Shadi,M,966542862475,mshadi@fakeeh.care,,mohamed abdulrahman shadi,Telecommunication
+,,,,Supervisor,DSFH,Telecommunication,Jeddah,Mohamed Ali Alhelal,Mohamed,Ali,Alhelal,M,96651557449,maalhelal@fakeeh.care,,mohamed ali alhelal,Telecommunication
+,,,,Supervisor,DSFH,Telecommunication,Jeddah,Mohamed Elsayed Mitwalli,Mohamed,Elsayed,Mitwalli,M,966568562250,malsaid@fakeeh.care,,mohamed elsayed mitwalli,Telecommunication
+,,,,Supervisor,DSFH,Telecommunication,Jeddah,Mohamed Hammad Alsuwat,Mohamed,Hammad,Alsuwat,M,966554065050,mhalsuwat@fakeeh.care,,mohamed hammad alsuwat,Telecommunication
+,,,,Supervisor,DSFH,Telecommunication,Jeddah,Nada Hussian Gharawi,Nada,Hussian,Gharawi,F,966541006740,nhgharawi@fakeeh.care,,nada hussian gharawi,Telecommunication
+,,,,Supervisor,DSFH,Telecommunication,Jeddah,Sami Rasheed Omar,Sami,Rasheed,Omar,M,966560207172,sshabak@fakeeh.care,,sami rasheed omar,Telecommunication
+,,,,Supervisor,DSFH,Telecommunication,Jeddah,Sarah Abdullah Fatini,Sarah,Abdullah,Fatini,F,966562284142,sfatini@fakeeh.care,,sarah abdullah fatini,Telecommunication
+,,,,supervisor + agent,DSFMC-Basateen,Case Manager,Jeddah,Ahmed Mohammed Othman,Ahmed,Mohammed,Othman,Male,966566488446,amothman@fakeeh.care,,ahmed othman,"Case Manager,operations coordinators"
+,,,,supervisor + agent,DSFMC-Basateen,Case Manager,Jeddah,Aimee Cheryll JumaoAs,Aimee,Cheryll,JumaoAs,F,966582415320,accjumaoas@fakeeh.care,,aimee jumaoas,"Case Manager,operations coordinators"
+,,,,supervisor + agent,DSFMC-Basateen,Case Manager,Jeddah,Amal Hala,Amal,Mokhtar,Hala,Female,966558709635,amhala@fakeeh.care,,amal hala,"Case Manager,operations coordinators"
+,,,,supervisor + agent,DSFMC-Basateen,Case Manager,Jeddah,Arra Salagatar Ing,Arra,Salagatar,Ing,F,966546782717,asing@fakeeh.care,,Arra Ing,"Case Manager,operations coordinators"
+,,,,supervisor + agent,DSFMC-Basateen,Case Manager,Jeddah,Catherine Telan,Catherine,,Telan,Female,966547591589,ctelan@fakeeh.care,,catherine telan,"Case Manager,operations coordinators"
+,,,,supervisor + agent,DSFMC-Basateen,Case Manager,Jeddah,Diocel Petrasanta,Diocel,Marica,Petrasanta,Female,966560290798,dmpetrasanta@fakeeh.care,,diocel diocel,"Case Manager,operations coordinators"
+,,,,supervisor + agent,DSFMC-Basateen,Case Manager,Jeddah,Kholoud Mohammed Aburahmeh,Kholoud,Mohammed,Aburahmeh,F,966543558432,kmaburahmeh@fakeeh.care,,Kholoud Aburahmeh,"Case Manager,operations coordinators"
+,,,,supervisor + agent,DSFMC-Basateen,Case Manager,Jeddah,Marianne Borja,Marianne,,Borja,Female,966532872047,maborja@fakeeh.care,,marianne borja,"Case Manager,operations coordinators"
+,,,,supervisor + agent,DSFMC-Basateen,Case Manager,Jeddah,Nada Mlaybari,Nada,Abdullah,Mlaybari,Female,966551260141,namlaybari@fakeeh.care,,nada mlaybari,"Case Manager,operations coordinators"
+,,,,supervisor + agent,DSFMC-Basateen,Case Manager,Jeddah,Nour Elsabah Elsalamony,Nour,Elsabah,Elsalamony,Female,966569697209,nealsalamony@fakeeh.care,,nour elsalamony,"Case Manager,operations coordinators"
+,,,,supervisor + agent,DSFMC-Basateen,Case Manager,Jeddah,Rahaf Mohammed Alrefaei,Rahaf,Mohammed,Alrefaei,Female,966564820664,rmalrefaei@fakeeh.care,,rahaf alrefaei,"Case Manager,operations coordinators"
+,,,,supervisor + agent,DSFMC-Basateen,Case Manager,Jeddah,Sheren Foda,Sheren,,Foda,Female,966570450482,sefoda@fakeeh.care,,sheren foda,"Case Manager,operations coordinators"
+,,,,supervisor + agent,DSFMC-Basateen,Case Manager,Jeddah,Tahani Ammar Altalhi,Tahani,Ammar,Altalhi,Female,966581071282,taaltalhi@fakeeh.care,,tahani altalhi,"Case Manager,operations coordinators"
+,,,,supervisor + agent,DSFMC-Basateen,REGISTRATION AND ELIGBILITY,Jeddah,Abdullah Ibrahim Matran,Abdullah,Ibrahim,Matran,M,966567247286,aimatran@fakeeh.care,Customer Services supervisor ,abdullah matran,"gastro endoscopy,laboratory result,virtual,add insurance,billing,merge files - dublicated"
+,,,,supervisor + agent,DSFMC-Basateen,REGISTRATION AND ELIGBILITY,Jeddah,Hattan Kallaf ,Hattan,Mohammed,Kallaf ,M,966568985338,hkhallaf@fakeeh.care,Customer Services supervisor ,hattan kallaf,"gastro endoscopy,laboratory result,virtual,add insurance,billing,merge files - dublicated"
+,,,,supervisor,DSFMC-Basateen,REGISTRATION AND ELIGBILITY,Jeddah,Hisham Abdullah Alitrah,Hisham,Abdullah,Alitrah,M,966567247660,haalitrah@fakeeh.care,Customer Services Manager ,hisham alitrah,"gastro endoscopy,laboratory result,virtual,add insurance,billing,merge files - dublicated"
+,,,,supervisor + agent,DSFMC-Basateen,REGISTRATION AND ELIGBILITY,Jeddah,Ibrahim Abdullah Alghamdi,Ibrahim,Abdullah,Alghamdi,M,966567973064,iaalghamdi@fakeeh.care,,ibrahim alghamdi,"gastro endoscopy,laboratory result,virtual,add insurance,billing,merge files - dublicated"
+,,,,supervisor + agent,DSFMC-Basateen,REGISTRATION AND ELIGBILITY,Jeddah,Raad Homaid Mohammed Alyahiby,Raad,Homaid,Alyahiby,M,966567247324,rhalyahiby@fakeeh.care,Customer Services supervisor ,raad alyahiby,"gastro endoscopy,laboratory result,virtual,add insurance,billing,merge files - dublicated"
+,,,,supervisor + agent,DSFMC-Basateen,REGISTRATION AND ELIGBILITY,Jeddah,Renad Khalid Alsalik,Renad,Khalid,Alsalik,F,966541868642,rkalsalik@fakeeh.care,,renad alsalik,"gastro endoscopy,laboratory result,virtual,add insurance,billing,merge files - dublicated"
+,,,,supervisor + agent,DSFMC-Basateen,Lab Team,Jeddah,Abdullah Hilali Asiri,Abdullah ,Hilali,Asiri,M,966537280056,ahasiri@fakeeh.care,,abdullah hilali asiri,"Lab Team, lab results"
+,,,,supervisor + agent,DSFMC-Basateen,Lab Team,Jeddah,Abdulmajeed Rafiq Alsharif,Abdulmajeed,Rafiq,Alsharif,M,966565544479,aralsharif@fakeeh.care,,abdulmajeed alsharif,"Lab Team, lab results"
+,,,,supervisor + agent,DSFMC-Basateen,Lab Team,Jeddah,Abdulsalam Areef Elbayouk,Abdulsalam ,Areef,Elbayouk,M,966544880462,aaelbayouk@fakeeh.care,,abdulsalam elbayouk,"Lab Team, lab results"
+,,,,supervisor + agent,DSFMC-Basateen,Lab Team,Jeddah,Abrar Mohammed Alshaer ,Abrar,Mohammed,Alshaer,F,966500784477,amalshaer@fakeeh.care,,abrar mohammed alshaer,"Lab Team, lab results"
+,,,,supervisor + agent,DSFMC-Basateen,Lab Team,Jeddah,Abrar Omer Baflah ,Abrar,Omer ,Baflah,F,966568568055,aobaflah@fakeeh.care,,abrar baflah,"Lab Team, lab results"
+,,,,supervisor + agent,DSFMC-Basateen,Lab Team,Jeddah,Alhanouf Mansour Rashwan,Alhanouf,Mansour,Rashwan,F,966568703774,amrahwan@fakeeh.care,,Alhanouf Rashwan,"Lab Team, lab results"
+,,,,supervisor + agent,DSFMC-Basateen,Lab Team,Jeddah,Ayesha Ahmed Badahdah,Ayesha,Ahmed ,Badahdah,F,966543392879,aabadahdah@fakeeh.care,,ayesha ahmed badahdah,"Lab Team, lab results"
+,,,,supervisor + agent,DSFMC-Basateen,Lab Team,Jeddah,Fatimah Faisal Saeed,Fatimah ,Faisal,Saeed,F,966537972794,ffsaeed@fakeeh.care,,fatimah faisal saeed,"Lab Team, lab results"
+,,,,supervisor + agent,DSFMC-Basateen,Lab Team,Jeddah,Ibrahim Ahmed Asiri,Ibrahim  , Ahmed , Asiri,M,966556247211,iaasiri@fakeeh.care,,ibrahim asiri,"Lab Team, lab results"
+,,,,supervisor + agent,DSFMC-Basateen,Lab Team,Jeddah,Jumanah Muneer Wali,Jumanah ,Muneer,Wali ,F,966541117156,jmwali@fakeeh.care,,jumanah wali,"Lab Team, lab results"
+,,,,supervisor + agent,DSFMC-Basateen,Lab Team,Jeddah,Lama Jehad Hamoui,Lama,Jehad,Hamoui,F,966501968107,ljhamaoui@fakeeh.care,,Lama Hamoui,"Lab Team, lab results"
+,,,,supervisor + agent,DSFMC-Basateen,Lab Team,Jeddah,Mohammed Yahya Asiri, Mohammed , Yahya, Asiri,M,966561661610,myasiri@fakeeh.care,,mohammed asiri,"Lab Team, lab results"
+,,,,supervisor + agent,DSFMC-Basateen,Lab Team,Jeddah,Shahd Farouk Alshareef,Shahd , Farouk , Alshareef,F,966536316363,salshareef@fakeeh.care,,shahd alshareef,"Lab Team, lab results"
+,,,,supervisor + agent,DSFMC-Basateen,Lab Team,Jeddah,Walaa Ahmed Alkotani ,Walaa ,Ahmed ,Alkotani ,F,966592202010,waalkhotani@fakeeh.care,,walaa alkotani,"Lab Team, lab results"
+,,,,supervisor + agent,DSFMC-Basateen,Lab Team,Jeddah,Wed Sameer Jambi ,wed,Sameer,Jambi,F,966549293491,wsjambi@fakeeh.care,,wed sameer jambi,"Lab Team, lab results"
+,,,,supervisor + agent,DSFMC-Basateen,Patient Experience,Jeddah,Abdulhameed Ahmed Mandura,Abdulhameed,Ahmed,Mandura,M,966564811303,aamandura@fakeeh.care,Patient experience officer ,abdulhameed mandura,"Patient Experience , Telecommunication , Radiology Team ,approval - complaint, services - availability,application issues,sick leave"
+,,,,supervisor + agent,DSFMC-Basateen,Patient Experience,Jeddah,Fatima Ali Aleqab,Fatima,Ali,Aleqab,F,966537325508,faaleqab@fakeeh.care,,fatima aleqab,"Patient Experience , Telecommunication , Radiology Team ,approval - complaint, services - availability,application issues,sick leave"
+,,,,supervisor + agent,DSFMC-Basateen,Patient Experience,Jeddah,Fouad Haitham Hawari,Fouad,Haitham,Hawari,M,966564839625,fhawari@fakeeh.care,,fouad hawari,"Patient Experience , Telecommunication , Radiology Team ,approval - complaint, services - availability,application issues,sick leave"
+,,,,supervisor + agent,DSFMC-Basateen,Patient Experience,Jeddah,Sahar Abdulgader Alghamdi,Sahar,Abdulgader,Alghamdi,F,966541451624,saaalghamdi@fakeeh.care,,sahar alghamdi,"Patient Experience , Telecommunication , Radiology Team ,approval - complaint, services - availability,application issues,sick leave"
+,,,,supervisor + agent,DSFMC-Basateen,Pharmacy Management,Jeddah,Amjad Atiah  Alzahrani,Amjad,Atiah, Alzahrani,F,966553593140,amaalzahrani@fakeeh.care,,Amjad Alzahrani,Pharmacy Management
+,,,,supervisor + agent,DSFMC-Basateen,Pharmacy Management,Jeddah,Jehan Mohammed Rustum,Jehan,Mohammed,Rustum,F,966567974720,jmrustum@fakeeh.care,,Jehan Rustum,Pharmacy Management
+,,,,supervisor + agent,DSFMC-Basateen,Pharmacy Management,Jeddah,Reef Nahedh AlNounou,Reef,Nahedh,AlNounou,F,966567247540,ralnounou@fakeeh.care,,Reef AlNounou,Pharmacy Management
+,,,,supervisor + agent,DSFMC-Basateen,Pre-Authorization,Jeddah,Ameen Ahmed sanyour,Ibrahim,Mohamed,alymani,M,966533635357,imalyamani@fakeeh.care,,ibrahim alymani,Pre-Authorization
+,,,,supervisor + agent,DSFMC-Basateen,Pre-Authorization,Jeddah,Ibrahim Mohamed alymani,Ameen,Ahmed,sanyour,M,966548999917,amasanyour@fakeeh.care,,ameen sanyour,Pre-Authorization
+,,,,supervisor + agent,DSFMC-Basateen + DSFMC-Nuzha,Lab Team,Jeddah,Mai Mohmed Aboumoussa,Mai,Mohmed,Aboumoussa,F,966593259179,mmaboumoussa@fakeeh.care,,Mai Aboumoussa,"Lab Team, lab results"
+,,,,supervisor + agent,DSFMC-Nuzha,Case Manager,Jeddah,Anilyn Nebria Yangan,Anilyn,Nebria,Yangan,F,966552655960,anyangan@fakeeh.care,,Anilyn Yangan,Case Manager
+,,,,supervisor + agent,DSFMC-Nuzha,Case Manager,Jeddah,Doaa Salah Elsaadani,Doaa,Salah,Elsaadani,F,966542720514,dselsaadani@fakeeh.care,,Doaa Elsaadani,Case Manager
+,,,,supervisor + agent,DSFMC-Nuzha,Case Manager,Jeddah,Hanaa Elsayed Hemeida,Hanaa,Elsayed,Hemeida,F,966542445386,hehemeida@fakeeh.care,,Hanaa Hemeida,Case Manager
+,,,,supervisor + agent,DSFMC-Nuzha,Case Manager,Jeddah,Jinkie Jumang Malicse,Jinkie,Jumang,Malicse,F,966567247058,jjmalicse@fakeeh.care,,Jinkie Malicse,Case Manager
+,,,,supervisor + agent,DSFMC-Nuzha,Case Manager,Jeddah,Maria Corazon Castro,Maria,Corazon,Castro,F,966568487460,mscastro@fakeeh.care,,Maria Castro,Case Manager
+,,,,supervisor + agent,DSFMC-Nuzha,Case Manager,Jeddah,Marisol Banchiran Jucar,Marisol,Banchiran,Jucar,F,966567974906,mbjucar@fakeeh.care,,Marisol Jucar,Case Manager
+,,,,supervisor + agent,DSFMC-Nuzha,Case Manager,Jeddah,Marwa Ahmed Alamir,Marwa,Ahmed,Alamir,F,966564527403,maalamir@fakeeh.care,,Marwa Alamir,Case Manager
+,,,,supervisor + agent,DSFMC-Nuzha,Case Manager,Jeddah,Sheila Mae Venzon,Sheila,Mae,Venzon,F,966555357021,svenson@fakeeh.care,,Sheila Venzon,Case Manager
+,,,,supervisor + agent,DSFMC-Nuzha,Customer Service,Jeddah,Nawaf Saeed Alzahrani,Nawaf,Saeed,Alzahrani,F,966537177402,nasalzahrani@fakeeh.care,,nawaf alzahrani,"Customer Service,prices"
+,,,,supervisor + agent,DSFMC-Nuzha,Customer Service,Jeddah,Omar Shaeel Althabaiti,Omar,Shaeel,Althabaiti,M,966543484716,osalthabaiti@fakeeh.care,,omar althabaiti,"Customer Service,prices"
+,,,,supervisor + agent,DSFMC-Nuzha,Customer Service,Jeddah,Rowyd Fouad Hafiz,Rowyd,Fouad,Hafiz,F,966547525300,rfhafiz@fakeeh.care,,rowyd hafiz,"Customer Service,prices"
+,,,,supervisor + agent,DSFMC-Nuzha,Customer Service,Jeddah,Yahya Mohammed Aqdi,Yahya,Mohammed,Aqdi,M,966541466729,ymaqdi@fakeeh.care,,yahya aqdi,"Customer Service,prices"
+,,,,supervisor + agent,DSFMC-Nuzha,Customer Service,Jeddah,Ahmed Abdulrahman Alzahrani,Ahmed,Abdulrahman,Alzahrani,M,966559069989,aaaalzahrani@fakeeh.care,,ahmed alzahrani,"elegabilty, Customer Service,sick leaves,prices"
+,,,,supervisor + agent,DSFMC-Nuzha,Customer Service,Jeddah,Rotana Mohammed Habbani,Rotana,Mohammed,Habbani,F,966561173030,rmhabbani@fakeeh.care,,rotana habbani,"elegabilty, Customer Service,sick leaves,prices"
+,,,,supervisor + agent,DSFMC-Nuzha,Lab Team,Jeddah,Ahmed AliAhmed Osman,Ahmed,AliAhmed,Osman,M,966534245007,aaosman@fakeeh.care,,Ahmed Osman,"Lab Team, lab results"
+,,,,supervisor + agent,DSFMC-Nuzha,Lab Team,Jeddah,Alaa Aref Elbyouk,Alaa,Aref,Elbyouk,M,966542024420,aelbyouk@fakeeh.care,,alaa elbyouk,"Lab Team, lab results"
+,,,,supervisor + agent,DSFMC-Nuzha,Lab Team,Jeddah,Amnah Mohammed Labad,Amnah,Mohammed,Labad,F,966566331496,amlabad@fakeeh.care,,Amnah Labad,"Lab Team, lab results"
+,,,,supervisor + agent,DSFMC-Nuzha,Lab Team,Jeddah,Lujain Jamal Aboradi,Lujain,Jamal,Aboradi,F,966533328690,laburadhi@fakeeh.care,,Lujain Aboradi,"Lab Team, lab results"
+,,,,supervisor + agent,DSFMC-Nuzha,Lab Team,Jeddah,Mashael Aldarbi,Mashael,,Aldarbi,M,966561001594,maaldarbi@fakeeh.care,,Mashael Aldarbi,"Lab Team, lab results"
+,,,,supervisor + agent,DSFMC-Nuzha,Lab Team,Jeddah,Morug Abdulaziz Hamdan,Morug,Abdulaziz,Hamdan,F,966569941284,mhamdan@fakeeh.care,,Morug Hamdan,"Lab Team, lab results"
+,,,,supervisor + agent,DSFMC-Nuzha,Lab Team,Jeddah,Yahya Ahmed Abualghayth,Yahya,Ahmed,Abualghayth,M,966500635389,yaabualghayth@fakeeh.care,,Yahya Abualghayth,"Lab Team, lab results"
+,,,,supervisor + agent,DSFMC-Nuzha,Patient Experience,Jeddah,Hamsah Hashim Mazuzah,Hamsah,Hashim,Mazuzah,F,966561978368,hhamazuzah@fakeeh.care,,hamsah mazuzah,"Patient Experience ,general inquiries,Medical Report Team"
+,,,,supervisor + agent,DSFMC-Nuzha,Pharmacy Management,Jeddah,Deema Ahmed Bahnshal,Deema,Ahmed,Bahnshal,F,966540450308,dabahnshal@fakeeh.care,,Deema Bahnshal,Pharmacy Management
+,,,,supervisor + agent,DSFMC-Nuzha,Pharmacy Management,Jeddah,Halah Abdulghani Suruji,Halah,Abdulghani,Suruji,F,966508003242,hasuruji@fakeeh.care,,halah suruji,Pharmacy Management
+,,,,supervisor + agent,DSFMC-Nuzha,Pharmacy Management,Jeddah,Hamza Nazeeh Alothmany,Hamza,Nazeeh,Alothmany,M,966553854099,hnalothmany@fakeeh.care,,Hamza Alothmany,Pharmacy Management
+,,,,supervisor + agent,DSFMC-Nuzha,Pharmacy Management,Jeddah,Noor Eid Aladwani,Noor,Eid,Aladwani,F,966565624229,nealadwani@fakeeh.care,,Noor Aladwani,Pharmacy Management
+,,,,supervisor + agent,DSFMC-Nuzha,Radiology Team,Jeddah,Ayyat Mohammed Abdallah,Ayyat,Mohammed,Abdallah,Y,966546409517,aabdalla@fakeeh.care,,Ayyat Abdallah,"Radiology Team,  radio results"
+,,,,supervisor + agent,DSFMC-Nuzha,Radiology Team,Jeddah,Hatim Fahad Alshahrani,Hatim,Fahad,Alshahrani,Y,966556383893,hfalshahrani@fakeeh.care,,Hatim Alshahrani,"Radiology Team,  radio results"
+,,,,supervisor + agent,DSFMC-Nuzha,Radiology Team,Jeddah,Mohammed Abdullah Altilali,Mohammed,Abdullah,Altilali,M,966544969996,maaltilali@fakeeh.care,,Mohammed Altilali,"Radiology Team,  radio results"
+,,,,supervisor + agent,DSFMC-Nuzha,Radiology Team,Jeddah,Tayseer Mohamed Ali,Tayseer,Mohamed,Ali,Y,966558798829,taali@fakeeh.care,,Tayseer Ali,"Radiology Team,  radio results"
+,,,,supervisor,Executive Clinic,"Customer Service  ,  All departments",Jeddah,Amnah Yahya Halawi,Amnah,Yahya,Halawi,F,966502094617,ayhalawi@fakeeh.care,,amnah halawi,"Customer Service  ,  All departments"
+,,,,supervisor,Executive Clinic,"Customer Service  ,  All departments",Jeddah,Gehad Mamduh Amin,Gehad,Mamduh,Amin,F,966593259392,gmamin@fakeeh.care,,gehad amin,"Customer Service  ,  All departments"
+,,,,supervisor,Executive Clinic,"Customer Service  ,  All departments",Jeddah,Nura Alazrgie,Nura,,Alazrgie,F,966562040795,naalazrgie@fakeeh.care,Officer,nura alazrgie,"Customer Service  ,  All departments"
+,,,,supervisor,Executive Clinic,"Customer Service  ,  All departments",Jeddah,Walaa Esam Khalil,Walaa,Esam,Khalil,F,966546697725,wekhalil@fakeeh.care,,walaa khalil,"Customer Service  ,  All departments"
+,,,,agent ,Madinah,"Admission and Discharge , Estimation Cost",DSFHM,abdulaziz mohammed alzahrani,abdulaziz ,mohammed ,alzahrani,male,966567788089,amgalzahrani@fakeeh.care,,abdulaziz alzahrani,"Admission and Discharge , Estimation Cost"
+,,,,agent ,Madinah,"Admission and Discharge , Estimation Cost",DSFHM,abdulrahman hussain alsubhi,abdulrahman,hussain ,alsubhi,male,966535854062,ahalsubhi@fakeeh.care,,abdulrahman alsubhi,"Admission and Discharge , Estimation Cost"
+,,,,agent ,Madinah,"Admission and Discharge , Estimation Cost",DSFHM,adnan saleh alnawar,adnan,saleh,alnawar,male,966543341709,ashalnawar@fakeeh.care,,adnan alnawar,"Admission and Discharge , Estimation Cost"
+,,,,supervisor,Madinah,"Admission and Discharge , Estimation Cost",DSFHM,ahmed mohammed alshareef,ahmed,mohammed ,alshareef,male,966582062409,amsalshareef@fakeeh.care,,ahmed mohammed alshareef,"Admission and Discharge , Estimation Cost"
+,,,,agent ,Madinah,"Admission and Discharge , Estimation Cost",DSFHM,areen yousef bouq,areen ,yousef,bouq,female,966541966111,aybouq@fakeeh.care,,areen bouq,"Admission and Discharge , Estimation Cost"
+,,,,agent ,Madinah,"Admission and Discharge , Estimation Cost",DSFHM,fahad hameed aljohani,fahad ,hameed,aljohani,male,966508950447,fhmaljohani@fakeeh.care,,fahad aljohani,"Admission and Discharge , Estimation Cost"
+,,,,,Madinah,"Admission and Discharge , Estimation Cost",,,,,,,,smaalmohanna@fakeeh.care,,sarah almhohanna,"Admission and Discharge , Estimation Cost"
+,,,,,Madinah,"Admission and Discharge , Estimation Cost",,,,,,,,ahasharif@fakeeh.care,,alaa sheraif,"Admission and Discharge , Estimation Cost"
+,,,,,Madinah,"Admission and Discharge , Estimation Cost",,,,,,,,afjalarawi@fakeeh.care,,amer fadhi alarawi,"Admission and Discharge , Estimation Cost"
+,,Moaaz.Mohamed,6000,Agent + Supervisor,Madinah,Call Center,Egypt,Abdelrahamn Foued Hassan,Abdelrahamn,Foued,Hassan,M,201141815229,Moaaz_Ashor@rayacx.com,,moaaz ashor,Call Center
+,,Mohamed.Abdelsalam,6010,Agent + Supervisor,Madinah,Call Center,Egypt,Ashrakat Essam Shehata,Ashrakat,Essam,Shehata,M,201014256334,Mohamed_Amahmoud@rayacx.com,,mohamed mahmoud,Call Center
+,,Rawan.Mohamed,6002,Agent + Supervisor,Madinah,Call Center,Egypt,Moaaz Ashor,Moaaz,Mohamed,Ashor,F,201119297149,Rawan_MFahmy@rayacx.com,,rawan fahmy,Call Center
+,,Youssef.Hisham,6013,Agent + Supervisor,Madinah,Call Center,Egypt,Mohamed Abdelsalam Mahmoud,Mohamed,Abdelsalam,Mahmoud,M,201024746507,Youssef_HeMohamed@rayacx.com,,youssef hisham mohamed,Call Center
+,,Omar.Adel,3943,Agent + Supervisor,"DSFH , Madinah",Call Center,Egypt,Omar Adel Farouk,Omar,Adel,Farouk,M,201094983479,Omar_Ftaha@rayacx.com,,omar adel farouk,Call Center
+,,Sherry.Samy,6004,Agent + Supervisor,Madinah,Call Center,Egypt,Rawan mohamed fahmy,Rawan,mohamed,fahmy,F,201271579818,Sherry_SGhattas@rayacx.com,,sherry ghattase,Call Center
+,,Ashrakat.Essam,6005,Agent + Supervisor,Madinah,Call Center,Egypt,Sherry samy ghattase,Sherry,samy,ghattase,F,201023792351,Ashrakat_EShehata@rayacx.com,,ashrakat shehata,Call Center
+,,,,Agent,Madinah,Case Manager,DSFH-M,Israa yahya Aljazaeri,Israa,yahya,Aljazaeri,F,966561513784,iyaljazaeri@fakeeh.care,,israa aljazaeri,Case Manager
+,,,,Agent,Madinah,Case Manager,DSFH-M,Mohammed Abdulgader Khan,Mohammed,Abdulgader,Khan,M,966551231931,mabdkhan@fakeeh.care,,mohammed abdulgader khan,Case Manager
+,,,,Supervisor,Madinah,Case Manager,DSFH-M,Nada Siraj Massoudi,Nada,Siraj,Massoudi,F,966554205445,nsmassoudi@fakeeh.care,,Nada Massoudi,Case Manager
+,,,,Supervisor,Madinah,Home HealthCare,DSFH-M,Ahmed Osama Raghib,Ahmed ,Osama,Raghib ,Male,966556600053,aoraghib@fakeeh.care,,Ahmed Raghib,Home HealthCare
+,,,,Agent,Madinah,Home HealthCare,DSFH-M,Amal Suliman Zabroq,Amal,Suliman ,Zabroq ,Female ,966543931426,azabruq@fakeeh.care,,Amal Zabroq,Home HealthCare
+,,,,Agent,Madinah,Home HealthCare,DSFH-M,Shahid Abbas Nawaz,Shahid ,Abbas,Nawaz,Male ,966506180499,sanawaz@fakeeh.care,,Shahid Nawaz,Home HealthCare
+,,,,Supervisor,Madinah,Lab Team,DSFHM,Ahmad Nassar,Ahmad,,Nassar,M,966504545616,asmrnassar@fakeeh.care,,ahmad nassar,Lab Team
+,,,,Agent,Madinah,Lab Team,DSFHM,Alaa Bulushi Bulushi,Alaa Bulushi,,Bulushi,F,966551030600,afalbulushi@fakeeh.care,,Alaa Bulushi Bulushi,Lab Team
+,,,,Agent,Madinah,Lab Team,DSFHM,Ameera Radwan,Ameera,, Radwan,F,966506309180,aasradwan@fakeeh.care,,ameera radwan,Lab Team
+,,,,Agent,Madinah,Lab Team,DSFHM,Asma Abdualhai Abdualhai,Asma Abdualhai,,Abdualhai,F,966541003364,aaabdulkarim@fakeeh.care,,Asma Abdualhai Abdualhai,Lab Team
+,,,,Agent,Madinah,Lab Team,DSFHM,Ghaidaa qashaqari,Ghaidaa ,,qashaqari,F,966550033900,gsqashqari@fakeeh.care,,Ghaidaa qashaqari,Lab Team
+,,,,Agent,Madinah,Lab Team,DSFHM,Waleed Alsaadi,Waleed ,,Alsaadi,M,966590118890,wsalsaedi@fakeeh.care,,Waleed Alsaadi,Lab Team
+,,,,,Madinah,Lab Team,,,,,,,,tlaljohani@fakeeh.care,,taif aljohani,Lab Team
+,,,,,Madinah,Lab Team,,,,,,,,gamalghafari@fakeeh.care,,ghufran ghaffari,Lab Team
+,,,,,Madinah,Lab Team,,,,,,,,mmhhejazi@fakeeh.care,,manal hejazi,Lab Team
+,,,,,Madinah,Lab Team,,,,,,,,imaalharbi@fakeeh.care,,ibrahim alharbi,Lab Team
+,,,,,Madinah,Lab Team,,,,,,,,asalmasabi@fakeeh.care,,ahmed almasabi,Lab Team
+,,,,Agent,Madinah,Marketing,DSFH-M,Ahlam Mohammed Saleh,Ahlam,Mohammed,Saleh,F,966544541234,amsaleh@fakeeh.care,,Ahlam Saleh,Marketing
+,,,,Supervisor,Madinah,Marketing,DSFH-M,Mohamed Essam Rady,Mohamed,Essam,Rady,M,966568228002,merady@fakeeh.care,,mohamed rady,Marketing
+,,,,,Madinah,Medical Report Team,,,,,,,,mtmaljuhani@fakeeh.care,,moneera aljohani,Medical Report Team
+,,,11963,agent ,Madinah,"NM - PET team , Sleep lab team, Call Center - source",DSFHM,mohammed adnan ouzbek,mohammed ,adnan,ouzbek,male ,966592400130,mayozbuk@fakeeh.care,,mohammed ouzbek,"NM - PET team , Sleep lab team, Call Center - source"
+,,,12018,agent ,Madinah,"NM - PET team , Sleep lab team, Call Center - source",DSFHM,Razan mohmmed alhazmi,Razan,mohmmed ,alhazmi ,Female ,966556366353,rmsalhazmi@fakeeh.care,,razan alhazmi,"NM - PET team , Sleep lab team, Call Center - source"
+,,,,Agent,Madinah,"Patient Experience , Medical Report Team ,  Call Centre source",DSFH-M,Ahmed Waleed Mahrous,Ahmed ,Waleed,Mahrous,M,966542896287,awzmah@fakeeh.care,,ahmed mahrous,"Patient Experience , Medical Report Team ,  Call Centre source"
+,,,,Agent,Madinah,"Patient Experience , Medical Report Team ,  Call Centre source",DSFH-M,Ammar Nuaifia Alharbi,Ammar,Nuaifia,Alharbi,M,966563822116,anualharbi@fakeeh.care,,ammar alharbi,"Patient Experience , Medical Report Team ,  Call Centre source"
+,,,,Agent,Madinah,"Patient Experience , Medical Report Team ,  Call Centre source",DSFH-M,Baydaa Ameen Abdulsamad,Baydaa,Ameen,Abdulsamad,F,966569318050,bamabdulsamad@fakeeh.care,,baydaa abdulsamad,"Patient Experience , Medical Report Team ,  Call Centre source"
+,,,,Agent,Madinah,"Patient Experience , Medical Report Team ,  Call Centre source",DSFH-M,Dakheelallah Mohammed Alhafithi,Dakheelallah,Mohammed,Alhafithi,M,966563303651,dmdalhafithi@fakeeh.care,,dakheelallah alhafithi,"Patient Experience , Medical Report Team ,  Call Centre source"
+,,,,Agent,Madinah,"Patient Experience , Medical Report Team ,  Call Centre source",DSFH-M,Hadeel Ali Osailan,Hadeel,Ali,Osailan,F,966555317907,hahosailan@fakeeh.care,,hadeel osailan,"Patient Experience , Medical Report Team ,  Call Centre source"
+,,,,Agent,Madinah,"Patient Experience , Medical Report Team ,  Call Centre source",DSFH-M,Turki Fahad Iqali,Turki,Fahad ,Iqali,M,966546854855,tfaiqali@fakeeh.care,,turki iqali,"Patient Experience , Medical Report Team ,  Call Centre source"
+,,,,Agent,Madinah,"Patient Experience , Medical Report Team , Elite lounge ,  Call Centre source",DSFH-M,Omar Abbas Gumgumji,Omar,Abbas,Gumgumji,M,966555351512,oaagumgumji@fakeeh.care,,omar gumgumji,"Patient Experience , Medical Report Team , Elite lounge ,  Call Centre source"
+,,,,Supervisor,Madinah,"Patient Experience , Medical Report Team , Sehaty , Elite Lounge ,  Call Centre source",DSFH-M,Abdulaziz Faisal Alrehaily,Abdulaziz,Faisal,Alrehaily,M,966540072970,afalrehaily@fakeeh.care,,Abdulaziz Alrehaily,"Patient Experience , Medical Report Team , Sehaty , Elite Lounge ,  Call Centre source"
+,,,,Supervisor,Madinah,"Patient Experience , Medical Report Team , Sehaty , Elite Lounge ,  Call Centre source",DSFH-M,Marwah Abdullah Alhalawani,Marwah,Abdullah,Alhalawani,F,966507231255,mahalawani@fakeeh.care,,marwah alhalawani,"Patient Experience , Medical Report Team , Sehaty , Elite Lounge ,  Call Centre source"
+,,,,Agent,Madinah,Pharmacy Management,DSFH-M,Abdulaziz Faraj Al Otaibi,Abdulaziz,Faraj,Al Otaibi,M,966530529930,afsalotabi@fakeeh.care,,Abdulaziz Al Otaibi,Pharmacy Management
+,,,,Agent,Madinah,Pharmacy Management,DSFH-M,Abdullah Altori,Abdullah,,Altori,M,966583078426,afaltori@fakeeh.care,,Abdullah Altori,Pharmacy Management
+,,,,Agent,Madinah,Pharmacy Management,DSFH-M,Ahmed Saleh Alshareef,Ahmed,Saleh,Alshareef,M,966540412560,asalshareef@fakeeh.care,,Ahmed Alshareef,Pharmacy Management
+,,,,Agent,Madinah,Pharmacy Management,DSFH-M,Ali Hassan Alqarafi,Ali,Hassan,Alqarafi,M,966546621841,ahmalqarafi@fakeeh.care,,Ali Alqarafi,Pharmacy Management
+,,,,Agent,Madinah,Pharmacy Management,DSFH-M,Amal Hassan Abu Sada,Amal ,Hassan,Abu Sada,F,966550594499,ahabusaadah@fakeeh.care,,Amal Abu Sada,Pharmacy Management
+,,,,Agent,Madinah,Pharmacy Management,DSFH-M,Asma Meshal Aloufi,Asma,Meshal,Aloufi,F,966501967653,amaloufi@fakeeh.care,,Asma Aloufi,Pharmacy Management
+,,,,Agent,Madinah,Pharmacy Management,DSFH-M,Bushra Alharbi,Bushra,,Alharbi,F,966557046085,bsalharbi@fakeeh.care,,Bushra Alharbi,Pharmacy Management
+,,,,Agent,Madinah,Pharmacy Management,DSFH-M,Esraa Abdulgader Mohammed,Esraa ,Abdulgader,Mohammed,F,966553515172,eamoham@fakeeh.care,,Esraa Mohammed,Pharmacy Management
+,,,1433,Supervisor,Madinah,Pharmacy Management,DSFH-M,Hashim Mamdouh Yamany,Hashim,Mamdouh,Yamany,M,966566599714,HMAYamany@fakeeh.care,,Hashim Yamany,Pharmacy Management
+,,,,Agent,Madinah,Pharmacy Management,DSFH-M,Ibrahim Naif Aloufi,Ibrahim,Naif,Aloufi,M,966569062085,inabaloufi@fakeeh.care,,Ibrahim Aloufi,Pharmacy Management
+,,,,Agent,Madinah,Pharmacy Management,DSFH-M,Khawla Ali Alhothify,Khawla,Ali,Alhothify,F,966595213406,kaalhoithafi@fakeeh.care,,Khawla Alhothify,Pharmacy Management
+,,,,Agent,Madinah,Pharmacy Management,DSFH-M,Lama Ahmad Aljahani,Lama,Ahmad,Aljahani,F,966503375333,lmmljahani@fakeeh.care,,Lama Aljahani,Pharmacy Management
+,,,,Agent,Madinah,Pharmacy Management,DSFH-M,Mohammad Khalaf Al Harbi,Mohammad,Khalaf,Al Harbi,M,966599269297,mkaalharbi@fakeeh.care,,Mohammad Al Harbi,Pharmacy Management
+,,,,Agent,Madinah,Pharmacy Management,DSFH-M,Mohammed ahmed Atef,Mohammed,ahmed,Atef,M,966551280698,maaamin@fakeeh.care,,Mohammed Atef,Pharmacy Management
+,,,,Agent,Madinah,Pharmacy Management,DSFH-M,Mohammed Alamr,Mohammed,,Alamr,M,966591666105,msalamr@fakeeh.care,,Mohammed Alamr,Pharmacy Management
+,,,3600,Agent,Madinah,Pharmacy Management,DSFH-M,Moustafa Mohamed El Ashkar,Moustafa ,Mohamed,El Ashkar,M,966569390203,mmaelashkar@fakeeh.care,,Moustafa El Ashkar,Pharmacy Management
+,,,,Agent,Madinah,Pharmacy Management,DSFH-M,Raghad Hussain khushaim,Raghad,Hussain,khushaim,F,966555308195,rhmkhushaim@fakeeh.care,,Raghad khushaim,Pharmacy Management
+,,,,Agent,Madinah,Pharmacy Management,DSFH-M,Razan Saleh Al Amri,Razan,Saleh,Al Amri,F,966533576280,rsmalamri@fakeeh.care,,Razan Al Amri,Pharmacy Management
+,,,,Supervisor,Madinah,Pharmacy Management,DSFH-M,Reema Taha Taha,Reema,Taha,Taha,F,966538932553,rttaha@fakeeh.care,,Reema Taha,Pharmacy Management
+,,,,Agent,Madinah,Pharmacy Management,DSFH-M,Reeman Abdulrahim Alaeq,Reeman,Abdulrahim,Alaeq,F,966503040130,raalaeq@fakeeh.care,,Reeman Alaeq,Pharmacy Management
+,,,,Agent,Madinah,Pharmacy Management,DSFH-M,Saeid Abdullah Basalamah,Saeid,Abdullah,Basalamah,M,966560960485,sasbasalamah@fakeeh.care,,Saeid Basalamah,Pharmacy Management
+,,,,Agent,Madinah,Pharmacy Management,DSFH-M,Samer Sami Alrehaili,Samer,Sami,Alrehaili,M,966562347375,ssmalrehaili@fakeeh.care,,Samer Alrehaili,Pharmacy Management
+,,,,Agent,Madinah,Pharmacy Management,DSFH-M,Wujud Mohammad Aljohani,Wujud,Mohammad,Aljohani,F,966580327639,wmaaljohani@fakeeh.care,,Wujud Aljohani,Pharmacy Management
+,,,,,Madinah,Pharmacy Management,,,,,,,,amdaljuhani@fakeeh.care,,abdulrahman muhammed aljuhani,Pharmacy Management
+,,,,,Madinah,Pharmacy Management,,,,,,,,afaalharbi@fakeeh.care,,abdullah fahad alharbi,Pharmacy Management
+,,,1010,Agent,Madinah,PRE-AUTHORIZATION,DSFH-M,Maha Mohamed Al Thaqafy,Maha,Mohamed,Al Thaqafy,F,966596697573,mmalthaqafi@fakeeh.care,,Maha Al Thaqafy,PRE-AUTHORIZATION
+,,,1011,Supervisor,Madinah,PRE-AUTHORIZATION,DSFH-M,Mohamed Helmy Said,Mohamed,Helmy,Said,M,966552298038,mhasaeed@fakeeh.care,,Mohamed Said,PRE-AUTHORIZATION
+,,,1010,Agent,Madinah,PRE-AUTHORIZATION,DSFH-M,Mohamed Nasreldin Hamadelneel,Mohamed,Nasreldin,Hamadelneel,M,966578008084,mnhamadelneel@fakeeh.care,,Mohamed Hamadelneel,PRE-AUTHORIZATION
+,,,1010,Agent,Madinah,PRE-AUTHORIZATION,DSFH-M,Naser Hassan Safeera,Naser,Hassan,Safeera,M,966509998684,nhssafeera@fakeeh.care,,Naser Safeera,PRE-AUTHORIZATION
+,,,1009,Agent,Madinah,PRE-AUTHORIZATION,DSFH-M,Reem Mosallam Al Harbi,Reem,Mosallam,Al Harbi,F,966557985386,remalharbi@fakeeh.care,,Reem Al Harbi,PRE-AUTHORIZATION
+,,,1009,Agent,Madinah,PRE-AUTHORIZATION,DSFH-M,Samar Mohamed Al Hashmi,Samar,Mohamed,Al Hashmi,F,966566619744,smalhashmi@fakeeh.care,,Samar Al Hashmi,PRE-AUTHORIZATION
+,,,,Agent,Madinah,Radiology Team,DSFH-M,Asif Mahmood Ulhassan,Asif,Mahmood ,Ulhassan,M,966502941028,amulhassan@fakeeh.care,,Asif Ulhassan,Radiology Team
+,,,,Agent,Madinah,Radiology Team,DSFH-M,Asifa Awan Ul abadin,Asifa,Awan ,Ul abadin ,F,966548931835,aazulabadin@fakeeh.care,,Asifa Ul abadin,Radiology Team
+,,,,Agent,Madinah,Radiology Team,DSFH-M,Esraa Osama Mosrsy,Esraa ,Osama ,Mosrsy,F,966570873079,eofmosrsy@fakeeh.care,,Esraa Mosrsy,Radiology Team
+,,,,Agent,Madinah,Radiology Team,DSFH-M,Faisal Mohammed Alraddadi,Faisal,Mohammed ,Alraddadi,M,966550011372,fmaalraddadi@fakeeh.care,,Faisal Alraddadi,Radiology Team
+,,,,Agent,Madinah,Radiology Team,DSFH-M,Fawwaz Abdulwahed Aljukhaydib,Fawwaz,Abdulwahed ,Aljukhaydib,M,966596080204,faialjukhaydib@fakeeh.care,,fawwaz aljukhaydib,Radiology Team
+,,,,Agent,Madinah,Radiology Team,DSFH-M,Fawwaz Saleh Alnehmi,Fawwaz,Saleh ,Alnehmi,M,966535571787,fsaalnehmi@fakeeh.care,,Fawwaz Alnehmi,Radiology Team
+,,,,Agent,Madinah,Radiology Team,DSFH-M,Hamzah Mohammed Aljohani,Hamzah,Mohammed ,Aljohani ,M,966506303090,hamaljohani@fakeeh.care,,Hamzah Aljohani,Radiology Team
+,,,,Agent,Madinah,Radiology Team,DSFH-M,Hiaitham Mohammed Alsaedi,Hiaitham ,Mohammed ,Alsaedi ,M,966505893325,hmhalsaedi@fakeeh.care,,Hiaitham Alsaedi,Radiology Team
+,,,,Supervisor,Madinah,Radiology Team,DSFH-M,Hiba Hussein Hamad,Hiba,Hussein,Hamad,F,966566248952,hhmhamad@fakeeh.care,,Hiba Hamad,Radiology Team
+,,,,Agent,Madinah,Radiology Team,DSFH-M,Omar Mohammed Alraddadi,Omar ,Mohammed ,Alraddadi,M,966540058565,omhalraddadi@fakeeh.care,,Omar Alraddadi,Radiology Team
+,,,,Agent,Madinah,Radiology Team,DSFH-M,Rayan Saleh Alhazmi,Rayan,Saleh ,Alhazmi ,M,966566024149,rsbalhazmi@fakeeh.care,,Rayan Alhazmi,Radiology Team
+,,,,Agent,Madinah,Radiology Team,DSFH-M,Sara Hassan Mohamed,Sara,Hassan ,Mohamed,F,966502379415,shsmohamed@fakeeh.care,,Sara Mohamed,Radiology Team
+,,,,Agent,Madinah,Radiology Team,DSFH-M,Seba Abdulfattah Abualola,Seba ,Abdulfattah ,Abualola,F,966541724664,sayabualola@fakeeh.care,,Seba Abualola,Radiology Team
+,,,,Agent,Madinah,Radiology Team,DSFH-M,Shahed Awwad Alheajaili,Shahed,Awwad,Alheajaili ,F,966563802714,saalhejaili@fakeeh.care,,Shahed Alheajaili,Radiology Team
+,,,,Agent,Madinah,Radiology Team,DSFH-M,Shyma Tareq Alsaadi,Shyma,Tareq ,Alsaadi ,F,966558539680,staalsaadi@fakeeh.care,,Shyma Alsaadi,Radiology Team
+,,,,Agent,Madinah,Radiology Team,DSFH-M,Suzan Ahmed Hashim,Suzan,Ahmed ,Hashim,F,966542895818,safhashim@fakeeh.care,,Suzan Hashim,Radiology Team
+,,,,Agent,Madinah,Radiology Team,DSFH-M,Tsabeeh Abdelmounam Fadul,Tsabeeh ,Abdelmounam,Fadul,F,966558964338,tafadul@fakeeh.care,,Tsabeeh Fadul,Radiology Team
+,,,,Agent,Madinah,Radiology Team,DSFH-M,Yazzed Ahmed Bawakid,Yazzed,Ahmed ,Bawakid,M,966568895529,yaobawakid@fakeeh.care,,Yazzed Bawakid,Radiology Team
+,,,,Agent,Madinah,REGISTRATION AND ELIGBILITY,DSFH-M,Ahmed Abdulaziz Tashkandi,Ahmed ,Abdulaziz, Tashkandi,M,966580689698,aabdtashkandi@fakeeh.care,,Ahmed Tashkandi,REGISTRATION AND ELIGBILITY
+,,,,Agent,Madinah,REGISTRATION AND ELIGBILITY,DSFH-M,Fahad Mamdouh Alhemaiyed,Fahad ,Mamdouh , Alhemaiyed,M,966556554240,fmsalhemaiyed@fakeeh.care,,Fahad Alhemaiyed,REGISTRATION AND ELIGBILITY
+,,,,Supervisor,Madinah,REGISTRATION AND ELIGBILITY,DSFH-M,Faten Abdulaziz Qadri,Faten,Abdulaziz,Qadri,F,966554059068,Fayqadri@fakeeh.care,,faten qadri,REGISTRATION AND ELIGBILITY
+,,,,Agent,Madinah,REGISTRATION AND ELIGBILITY,DSFH-M,Ghadi Ahmad Alsehami,Ghadi,Ahmad,Alsehami,F,966542047499,gahalshami@fakeeh.care,,ghadi alsehami,REGISTRATION AND ELIGBILITY
+,,,,Agent,Madinah,REGISTRATION AND ELIGBILITY,DSFH-M,Ghazal Basim Nashar,Ghazal,Basim,Nashar,F,966536646367,gbsnashar@fakeeh.care,,Ghazal Nashar,REGISTRATION AND ELIGBILITY
+,,,,Agent,Madinah,REGISTRATION AND ELIGBILITY,DSFH-M,Ghina Haytham Othman,Ghina  ,Haytham,Othman,F,966506228786,ghothman@fakeeh.care,,Ghina Othman,REGISTRATION AND ELIGBILITY
+,,,,Agent,Madinah,REGISTRATION AND ELIGBILITY,DSFH-M,ibtehal salamah albeladi,ibtehal,salamah,albeladi,F,966556211100,isaalbeladi@fakeeh.care,,ibtehal albeladi,REGISTRATION AND ELIGBILITY
+,,,,Agent,Madinah,REGISTRATION AND ELIGBILITY,DSFH-M,Maha Nasser Sharfan,Maha,Nasser,Sharfan,F,966541902751,mnalsharfan@fakeeh.care,,maha sharfan,REGISTRATION AND ELIGBILITY
+,,,,Agent,Madinah,REGISTRATION AND ELIGBILITY,DSFH-M,moath muidh alzahrani,moath,muidh ,alzahrani,M,966537519601,mmalhasani@fakeeh.care,,moath alzahrani,REGISTRATION AND ELIGBILITY
+,,,,Agent,Madinah,REGISTRATION AND ELIGBILITY,DSFH-M,Mohamed Nasser Alballaa,Mohamed,Nasser,Alballaa,M,966510703731,mnalballaa@fakeeh.care,,Mohamed Alballaa,REGISTRATION AND ELIGBILITY
+,,,,Agent,Madinah,REGISTRATION AND ELIGBILITY,DSFH-M,Mohannad Almazmumi,Mohannad ,,Almazmumi,M,966547918856,malmazmumi@fakeeh.care,,mohannad almazmumi,REGISTRATION AND ELIGBILITY
+,,,,Agent,Madinah,REGISTRATION AND ELIGBILITY,DSFH-M,Nawaf Mohamed Alfuraydi,Nawaf,Mohamed,Alfuraydi,M,966591310048,nmoalfuraydi@fakeeh.care,,Nawaf Alfuraydi,REGISTRATION AND ELIGBILITY
+,,,,Supervisor,Madinah,REGISTRATION AND ELIGBILITY,DSFH-M,Nawaf Rizq Alharbi,Nawaf,Rizq,Alharbi,M,966567600941,nralharbi@fakeeh.care,,Nawaf Alharbi,REGISTRATION AND ELIGBILITY
+,,,,Agent,Madinah,REGISTRATION AND ELIGBILITY,DSFH-M,rawan saad ahmed,rawan,saad,ahmed,F,966541514415,rsaalsursyhi@fakeeh.care,,rawan ahmed,REGISTRATION AND ELIGBILITY
+,,,,Agent,Madinah,REGISTRATION AND ELIGBILITY,DSFH-M,reem muneer jalal,reem,muneer,jalal,F,966558009494,rmjabdulrahim@fakeeh.care,,reem jalal,REGISTRATION AND ELIGBILITY
+,,,,Agent,Madinah,REGISTRATION AND ELIGBILITY,DSFH-M,sarah awadh alshehri,sarah,awadh,alshehri,F,966557248977,saaalshehari@fakeeh.care,,sarah alshehri,REGISTRATION AND ELIGBILITY
+,,,,Agent,Madinah,REGISTRATION AND ELIGBILITY,DSFH-M,sulaiman mohammed alazab,sulaiman,mohammed,alazab,M,966568856880,smsalazab@fakeeh.care,,sulaiman alazab,REGISTRATION AND ELIGBILITY
+,,,,Agent,Madinah,REGISTRATION AND ELIGBILITY,DSFH-M,wed freed kamakhi,wed,freed,kamakhi,F,966566453990,wfakamakhi@fakeeh.care,,wed kamakhi,REGISTRATION AND ELIGBILITY
+,,,,Supervisor,Madinah,"REGISTRATION AND ELIGBILITY ,  Admission & Discharge ,  PRE-AUTHORIZATION",DSFH-M,Wessam Mohamed Dahroug,Wessam, Mohamed , Dahroug,M,966594074773,wmmdahroug@fakeeh.care,,Wessam Dahroug,"REGISTRATION AND ELIGBILITY ,  Admission & Discharge ,  PRE-AUTHORIZATION"
+,,,,Agent,Madinah,Sehaty,DSFH-M,Omar Abdulrahman Al-Oufi,Omar,Abdulrahman,Al-Oufi,M,966597480036,oasaloufi@fakeeh.care,,omar al oufi,Sehaty
+,,,11829,agent ,Madinah,"Telecommunication ,  NM - PET team , Sleep lab team",DSFHM,ahad essam sheera,ahad,essam,sheera,Female ,966555328853,aehshirah@fakeeh.care,,ahad sheera,"Telecommunication ,  NM - PET team , Sleep lab team"
+,,,11324,supervisor,Madinah,"Telecommunication ,  NM - PET team , Sleep lab team",DSFHM,arwa mohammed alahmadi,arwa,mohammed ,alahmadi ,Female ,966547710249,amalahmadi@fakeeh.care,,arwa alahmadi,"Telecommunication ,  NM - PET team , Sleep lab team"
+,,,11576,supervisor,Madinah,"Telecommunication ,  NM - PET team , Sleep lab team",DSFHM,AYMAN MUSLIH ALMUZINI,AYMAN,MUSLIH,ALMUZINI,male,966534012321,amialmuzini@fakeeh.care,,ayman almuzini,"Telecommunication ,  NM - PET team , Sleep lab team"
+,,,11828,agent ,Madinah,"Telecommunication ,  NM - PET team , Sleep lab team",DSFHM,randa khalid dashash,randa  ,khalid,dashash,Female ,966582609007,rkedashdah@fakeeh.care,,randa dashash,"Telecommunication ,  NM - PET team , Sleep lab team"
+,,,12048,agent ,Madinah,"Telecommunication ,  NM - PET team , Sleep lab team",DSFH-M,reema mohmmed alharbi,reema ,mohmmed ,alharbi,Female ,966535716389,rmhalharbi@fakeeh.care,,reema alharbi,"Telecommunication ,  NM - PET team , Sleep lab team"
+,,,11827,agent ,Madinah,"Telecommunication ,  NM - PET team , Sleep lab team",DSFHM,rinad nabeel mahmoud,rinad,nabeel,mahmoud,Female ,966568811391,rnamahmoud@fakeeh.care,,rinad mahmoud,"Telecommunication ,  NM - PET team , Sleep lab team"
+,,Abdallah.Atef,3150,Agent + Supervisor,Medical Fakeeh,Call Center,Egypt,Abdallah Mahmoud Eldmrdash,Abdallah,Mahmoud, Eldmrdash,M,201145266352,Abdullah_MAbdelaziz@rayacx.com,,abdallah eldmrdash,Call Center
+,,Ahmed.Nasr,4133,Agent + Supervisor,Medical Fakeeh,Call Center,Egypt,Ahmed Nasr Ibrahim,Ahmed ,Nasr,Ibrahim,M,201559002897,Ahmed_Naibrahim@rayacx.com,,ahmed nasr ibrahim,Call Center
+,,Amir.Adnan,5056,Agent + Supervisor,Medical Fakeeh,Call Center,Egypt,Amir Adnan Mahfouz,Amir,Adnan,Mahfouz,M,201019459900,amir_aahmed@rayacx.com,,amir mahfouz,Call Center
+,,Doaa.Mohamed,4135,Agent + Supervisor,Medical Fakeeh,Call Center,Egypt,Doaa Mohamed Ahmed,Doaa,Mohamed,Ahmed,F,201028852683,Doaa_Mahmed@rayacx.com,,doaa ahmed,Call Center
+,,Fatma.Ahmed,3213,Agent + Supervisor,Medical Fakeeh,Call Center,Egypt,Fatma Ahmed Abdelrazik,Fatma,Ahmed ,Abdelrazik ,F,201112099925,Fatma_abdelrazik@rayacx.com,,fatma abdelrazik,Call Center
+,,Fatma.Mohamed,4108,Agent + Supervisor,Medical Fakeeh,Call Center,Egypt,Fatma Mohamed Ali,Fatma,Mohamed,Ali,F,201114731146,Fatma_MAli@rayacx.com,,fatma ali,Call Center
+,,Ihab.Nasr,3077,Agent + Supervisor,Medical Fakeeh,Call Center,Egypt,Hagar Rabeaa Fadl,Hagar,Rabeaa,Fadl,F,201026674561,Hagar_RHassan@rayacx.com,,hagar fadl,Call Center
+,,Hania.Mohamed,3093,Agent + Supervisor,Medical Fakeeh,Call Center,Egypt,Jana Khaled Saad,Jana,Khaled,Saad,F,201097578371,jana_kmohamed@rayacx.com,,jana khaled,Call Center
+,,Khaled.Sayed,4104,Agent + Supervisor,Medical Fakeeh,Call Center,Egypt,Khaled Sayed Gomaa,Khaled,Sayed,Gomaa,M,201016110311,Khaled_sgomaa@rayacx.com,,khaled gomaa,Call Center
+,,Mohamed.Mahmoud,3188,Agent + Supervisor,Medical Fakeeh,Call Center,Egypt,Mahmoud Maher Abdelmagid,Mahmoud,Maher,Abdelmagid,M,201040713585,Mahmoud_MAbdelMagid@rayacx.com,,mahmoud abdelmagid,Call Center
+,,Faisal.Nabeel,2480,Agent + Supervisor,Medical Fakeeh,Call Center,Egypt,Mariam Mohamed Saied,Mariam,Mohamed,Saied,F,201141023805,Mariam_MAbdullah@rayacx.com,,mariam saied,Call Center
+,,Mayar.Badwy,4105,Agent + Supervisor,Medical Fakeeh,Call Center,Egypt,Mayar Badwy Hussien,Mayar,Badwy,Hussien,F,20109006719,Mayar_BHussein@rayacx.com,,mayar hussien,Call Center
+,,Mohamed.Abdelmonem,3198,Agent + Supervisor,Medical Fakeeh,Call Center,Egypt,Mohamed Abdelmonem Abbas,Mohamed,Abdelmonem,Abbas,M,201111576867,mohamed_aabbass@RAYACX.COM,,mohamed abbas,Call Center
+,,micheal.emad,3092,Agent + Supervisor,Medical Fakeeh,Call Center,Egypt,Mohamed Adel Abdo,Mohamed,Adel,Abdo,M,201025718545,Mohamed_ADMahmoud@rayacx.com,,mohamed abdo,Call Center
+,,Mohamed.Shebl,3203,Agent + Supervisor,Medical Fakeeh,Call Center,Egypt,Mohamed Ashraf shebl,Mohamed,Ashraf,shebl,M,201019164428,mohamed_ashebl@rayacx.com,,mohamed shebl,Call Center
+,,Nayer.Eid,4122,Agent + Supervisor,Medical Fakeeh,Call Center,Egypt,Nayera Eid Abdelrahman,Nayera,Eid,Abdelrahman,F,201206467453,nayera_eabdelrahman@rayacx.com,,nayera abdelrahman,Call Center
+,,Samaa.Tarak,3178,Agent + Supervisor,Medical Fakeeh,Call Center,Egypt,Radwa Bassel Ezzat,Radwa,Bassel,Ezzat,F,201225553032,Radwa_BEzzat@rayacx.com,,radwa ezzat,Call Center
+,,Nada.Sameh,3160,Agent + Supervisor,Medical Fakeeh,Call Center,Egypt,Rana  Ibrahem Ahmed ,Rana ,Ibrahem,Ahmed ,F,201112679039,Rana_IBIbrahim@rayacx.com,,rana ahmed,Call Center
+,,Yasmin.mohamed,4102,Agent + Supervisor,Medical Fakeeh,Call Center,Egypt,Yasmin Mohamed Awad,Yasmin,Mohamed, Awad,F,201026707269,yasmin_mawad@rayacx.com,,yasmin awad,Call Center
+,,,,Agent,Medical Fakeeh,Call Center - source,Jeddah,Marram khalid Khan,Marram,khalid,Khan,F,966553003554,marakhan@fakeeh.care,Call Center Coordinator,Marram Khan,Call Center - source
+,,,,Agent,Medical Fakeeh,Call Center - source,Jeddah,Yusra Ghazi Suroji,Yusra,Ghazi,Suroji,F,966568777330,ysuroji@fakeeh.care,Call Center Supervisor,Yusra Suroji,Call Center - source
+,,,,Agent,Medical Fakeeh,Customer Service,Jeddah,Abdulaziz Humid AlJedaani,Abdulaziz,Humid,AlJedaani,M,966543055933,abaljadaani@fakeeh.care,Patient Services Senior Offcer,Abdulaziz AlJedaani,Customer Service
+,,,,Agent,Medical Fakeeh,Customer Service,Jeddah,Emad Saud AlBalwai,Emad,Saud,AlBalwai,M,966534266968,EAALBALWAI@fakeeh.care,Patient Experience Senior Officer,emad albalwai,Customer Service
+,,,,Agent,Medical Fakeeh,Customer Service,Jeddah,Essam Mustafa Katib,Essam,Mustafa,Katib,M,966533553521,EKatib@fakeeh.care,Patient Services Senior Offcer,Essam Katib,Customer Service
+,,,,Agent,Medical Fakeeh,Customer Service,Jeddah,Faris Mohammed Qaysi,Faris,Mohammed,Qaysi,M,966536059009,fqaysi@fakeeh.care,Patient Services Senior Offcer,faris qaysi,Customer Service
+,,,,Agent,Medical Fakeeh,"Customer Service, Radiology, Lab",Jeddah,Adham Mamdouh Hassan,Adham,Mamdouh,Hassan,M,966561253522,adhassan@fakeeh.care,Patient Relation Senior Officer,Adham Hassan,"Customer Service, Radiology, Lab"
+,,,,Agent,Medical Fakeeh,"Customer Service, Radiology, Lab",Jeddah,Ali Nasser AlAqeel,Ali,Nasser,AlAqeel,M,966539119338,aalaqeel@fakeeh.care,Patient Relation Officer,Ali AlAqeel,"Customer Service, Radiology, Lab"
+,,,,Agent,Medical Fakeeh,"Customer Service, Radiology, Lab",Jeddah,Mohammed Taufik Kurdi,Mohammed,Taufik,Kurdi ,M,966505649695,Mkurdi@fakeeh.care,Patient Relation Officer,mohammed kurdi,"Customer Service, Radiology, Lab"
+,,,,Agent,Medical Fakeeh,"Customer Service, Radiology, Lab",Jeddah,Rawan Fahad Abuhabrah,Rawan,Fahad,Abuhabrah,F,966564902999,rabuhabrah@fakeeh.care,Patient Relation Officer,Rawan Abuhabrah,"Customer Service, Radiology, Lab"
+,,,,Agent,Medical Fakeeh,Medical Report Team,Jeddah,Naif Abdulaziz AlOtaibi,Naif,Abdulaziz,AlOtaibi,M,966555351011,naalotaibi@fakeeh.care,Medical Record officer,Naif AlOtaibi,Medical Report Team
+,,,,Agent,Medical Fakeeh,Pharmacy Management,Jeddah,Sultan Abdulfattah Malibari,Sultan,Abdulfattah,Malibari,M,966534555274,smalibari@fakeeh.care,Pharmacist,Sultan Malibari,Pharmacy Management
+,,,,Agent,Medical Fakeeh,Pharmacy Management,Jeddah,Wassan Ahmed Abutaleb,Wassan,Ahmed,Abutaleb,F,966507155990,wabutaleb@fakeeh.care,Pharmacist,Wassan Abutaleb,Pharmacy Management
+,,,,Agent,Medical Fakeeh,PRE-AUTHORIZATION,Jeddah,Adnan Abdullah AlShoakay,Adnan,Abdullah,AlShoakay,M,966542271107,aalshoakay@fakeeh.care,Insurance Coordinator,Adnan AlShoakay,PRE-AUTHORIZATION
+,,,,Supervisor,Medical Fakeeh,"PRE-AUTHORIZATION, Pharmacy Management, Customer Service, Radiology, Lab, Call Center - source",Jeddah,Samar Mansour Sulaimani,Samar,Mansour,Sulaimani,F,966546709078,smsulaimani@fakeeh.care,Patient Services and Experience Manager,samar mansour sulaimani,"PRE-AUTHORIZATION, Pharmacy Management, Customer Service, Radiology, Lab, Call Center - source"
+,,,,Agent + Supervisor,,Call Center,,,,,,,,mohamed_adsalah@rayacx.com,,muhammed adel salah,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,da_mkamal@rayacx.com,,nada mohamed kamal,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,ia_amohamed@rayacx.com,,omnia abdelhameed mohamed,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,salma_feldin@rayacx.com,,salma fakhreldin mohamed,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,ab_nabdelrahim@rayacx.com,,shehab nasser abdel rahim,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,sherouq_mmahmoud@rayacx.com,,sherouq mohammed mahmoud,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,ahmed_wkhaliel@rayacx.com,,ahmed wahied khalil,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,habiba_moibrahim@rayacx.com,,habiba mohamed ibrahim,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,ha_mgalal@rayacx.com,,heba medhat galal,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,raa_fabdelkawy@rayacx.com,,israa farahat abdelgawad,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,ashraf_assedeek@rayacx.com,,ashraf abbas saber,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,moaaz_admohamed@rayacx.com,,moaz adel mohamed,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,hamed_lfekry@rayacx.com,,mohamed lotfy fekry,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,hamed_masayed@rayacx.com,,mohamed mahmoud sayed,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,aed_ssaber@rayacx.com,,ahmed sayed saber,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,hamed_mabdullah@rayacx.com,,mohamed mohamed abdullah,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,ra_rraafat@rayacx.com,,amira raafat mohamed,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,foaud@rayacx.com,,logiun ayman mohamed,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,kbakr@rayacx.com,,omar khaled mohamed,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,adham_aahmad@rayacx.com,,adham ahmd hassanein,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,yousef_wmohamed@rayacx.com,,yousef mohamed,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,abdelrahman_smohmed@rayacx.com,,abdelrahman sayed mohmed,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,aziza_hosalah@rayacx.com,,aziza salah,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,belal_amohmed@rayacx.com,,belal mohmed,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,eman_sabdelhamid@rayacx.com,,eman abdelhamid,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,jomana_kmohamed@rayacx.com,,jomana mohamed,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,mariam_mhmahmoud@rayacx.com,,mariam mahmoud,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,mariem_hali@rayacx.com,,mariem ali,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,nada_ahmmohamed@rayacx.com,,nada mohamed,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,sherine_mmohmed@rayacx.com,,sherine mohmed,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,abdelrhman_mabdullah@rayacx.com,,abdelrhman mohamed,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,abduallah_afarouk@rayacx.com,,abduallah abdelazem,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,adham_aaly@rayacx.com,,adham aly,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,ahmd_mmahmoud@rayacx.com,,ahmd mohamed,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,ahmed_khsayed@rayacx.com,,ahmed khaled ahmed,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,ali_momahmoud@rayacx.com,,ali mohamed,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,bassem_khahmed@rayacx.com,,bassem haddad,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,fady_eshafik@rayacx.com,,fady awad,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,hagar_moismai@rayacx.com,,hagar aboella,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,hazem_msayed@rayacx.com,,hazem sayed,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,ibrahim_mismail@rayacx.com,,ibrahim mohamed ibrahim,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,mohamed_ahmeali@rayacx.com,,mohamed abdelrahman,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,mohamed_hoemam@rayacx.com,,mohamed hussien,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,moustafa_yali@rayacx.com,,moustafa labib,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,saif_fmohamed@rayacx.com,,saif bayumi,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,youssef_melsayed@rayacx.com,,youssaf elsayed,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,zeinab_staha@rayacx.com,,zeinab ahmed,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,khadija_eahmed@rayacx.com,,khadija ezzeldin,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,mohamed_aabdrabou@rayacx.com,,mohamed ahmed,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,sammar_sadly@rayacx.com,,sammar sayed,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,yasmien_ghussein@rayacx.com,,yasmien gamal,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,ziad_khahmed@rayacx.com,,ziad khaled,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,mohamed_sabdelnaby@rayacx.com,,mohamed saad,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,nada_ezohry@rayacx.com,,nada elsayed zohry morsy,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,alsayed_aelsayed@rayacx.com,,alsayed ashraf elsayed,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,asmaa_hhamdy@rayacx.com,,asmaa hussien hamdy hussien ali,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,fatma_shmohamed@rayacx.com,,fatma sherif mohamed,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,mona_khamohamed@rayacx.com,,mona khaled mohamed abdel azeem,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,sara_abaraka@rayacx.com,,sara ashraf mohamed mohamed,Call Center
+,,,,Agent + Supervisor,,Call Center,,,,,,,,zeinab_aabdelghffar@rayacx.com,,zeinab ali abdelghffar ali,Call Center
+,,,,,,,,,,,,,,emr-notification+4@thb.co.in,,medi internal user,
+,,,,,,,,,,,,,,emr-notification@thb.co.in,,system internal user,
+,,,,,,,,,,,,,,himanshu.goel@thb.co.in,,demo agent,
+,,,,,,,,,,,,,,nmgalal@fakeeh.care,,nahed mahmoud galal,
+,,,,,,,,,,,,,,satyendramishra@thb.co.in,,satyendra mishra,
+,,,,,,,,,,,,,,agazzaz@fakeeh.care,,anmar gazzaz,
+,,,,,,,,,,,,,,meen@fakeeh.care,,somaya ameen,
+,,,,,,,,,,,,,,hadmohamed@fakeeh.care,,hesham attia,
+,,,,,,,,,,,,,,weskurdi@fakeeh.care,,wafaa essam kurdi,
+,,,,,,,,,,,,,,rgiron@fakeeh.care,,sanjeev test,
+,,,,,,,,,,,,,,vinay@thb.co.in,,vipin test,
+,,,,,,,,,,,,,,hnyalballa@fakeeh.care,,hanin nasser alballaa,
+,,,,,,,,,,,,,,rhmfallatah@fakeeh.care,,reham hasan fallatah,
+,,,,,Medical Fakeeh,Customer Service,,,,,,,,fabuaish@fakeeh.care,,farah abuaesh,
+,,,,,,,,,,,,,,raaalharbi@fakeeh.care,,rawan alharbi,
+,,,,,,,,,,,,,,amalasmar@fakeeh.care,,abrar alasmar,
+,,,,,,,,,,,,,,akalrashidi@fakeeh.care,,ali alrashedi,
+,,,,,,,,,,,,,,asmalharbi@fakeeh.care,,abdullah alharbi,
+,,,,,,,,,,,,,,sfaltaweeli@fakeeh.care,,samaher altaweeli,
+,,,,,,,,,,,,,,rmjalahmadi@fakeeh.care,,rayan alahmadi,
+,,,,,,,,,,,,,,moaaalghamdi@fakeeh.care,,mohammed abdulrahaman aburas alghamdi,
+,,,,,,,,,,,,,,abalmaddah@fakeeh.care,,abdullah bahjat al maddah,
+,,,,,,,,,,,,,,test@thb.com,,test test,
+,,,,,,,,,,,,,,ashraf.kamal@fakeeh.care,,ashraf khateeb,
+,,,,,,,,,,,,,,admin@thb.co.in,,admin,
+,,,,supervisor + agent,DSFMC-Basateen,Radiology Team,Jeddah,,,,,,,,,#N/A,radiology result

@@ -59,6 +59,8 @@ Supported CRM args:
 - `--manifest`
 - `--report all|tickets|calls|leads|none`
 - `--config <path>`
+- `--start-date <YYYY-MM-DD>` (Optional. Defaults to `from_date` in config.json)
+- `--end-date <YYYY-MM-DD>` (Optional. Defaults to `to_date` in config.json, which dynamically falls back to today)
 
 CRM always performs login.
 

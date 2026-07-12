@@ -11,8 +11,25 @@ use tracing::error;
 use config::AppConfig;
 use types::ReportType;
 
-pub async fn run_once(crm_config_path: &str, report: ReportType) -> Result<()> {
+pub async fn run_once(
+    crm_config_path: &str,
+    report: ReportType,
+    start_date: Option<String>,
+    end_date: Option<String>,
+) -> Result<()> {
     let mut config = AppConfig::load(crm_config_path)?;
+
+    if let Some(sd) = start_date {
+        if !sd.is_empty() {
+            config.from_date = sd;
+        }
+    }
+    if let Some(ed) = end_date {
+        if !ed.is_empty() {
+            config.to_date = ed;
+        }
+    }
+
     config.finalize_runtime_fields();
 
     let client = build_client(&config)?;

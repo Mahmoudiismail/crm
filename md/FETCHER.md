@@ -26,8 +26,8 @@ Based on `ReportType`:
 
 Query parameters:
 
-- `from_date`
-- `to_date`
+- `from_date` (can be overridden via CLI `--start-date`)
+- `to_date` (can be overridden via CLI `--end-date`)
 - `email`
 - plus report-specific extras
 

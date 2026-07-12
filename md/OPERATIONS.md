@@ -23,7 +23,7 @@ If you need to bypass the runner, invoke the apps directly:
 
 **CRM One-Shot:**
 ```bash
-./crm --report tickets --config custom_config.json
+./crm --report tickets --config custom_config.json --start-date 2024-01-01 --end-date 2024-01-31
 ```
 
 **Tasker Worker:**

