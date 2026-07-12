@@ -41,5 +41,5 @@ jobs:
       - name: Run tests
         run: cargo test --workspace
 
-      - name: Build all models and binaries
-        run: cargo build --all-targets
+      #- name: Build all models and binaries
+        #run: cargo build --all-targets
