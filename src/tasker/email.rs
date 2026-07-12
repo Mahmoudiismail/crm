@@ -1044,7 +1044,10 @@ pub fn process_emails(
             let mut wtr = csv::WriterBuilder::new().from_path(&csv_path)?;
             let mut header_rec = vec![];
             for (i, h) in headers.iter().enumerate() {
-                if is_exception_idx == Some(i) || position_idx == Some(i) || skip_team_idx == Some(i) {
+                if is_exception_idx == Some(i)
+                    || position_idx == Some(i)
+                    || skip_team_idx == Some(i)
+                {
                     continue;
                 }
                 header_rec.push(h.to_string());
@@ -1076,7 +1079,10 @@ pub fn process_emails(
 
             let mut out_col_idx = 0;
             for (i, h) in headers.iter().enumerate() {
-                if is_exception_idx == Some(i) || position_idx == Some(i) || skip_team_idx == Some(i) {
+                if is_exception_idx == Some(i)
+                    || position_idx == Some(i)
+                    || skip_team_idx == Some(i)
+                {
                     continue;
                 }
                 worksheet.write_string(0, out_col_idx, h)?;
@@ -1112,7 +1118,11 @@ pub fn process_emails(
             let mut f = std::fs::File::create(&html_path)?;
             f.write_all(body.as_bytes())?;
             f.sync_all()?;
-            info!("Saved email HTML for {} to {}", bucket_name, html_path.display());
+            info!(
+                "Saved email HTML for {} to {}",
+                bucket_name,
+                html_path.display()
+            );
             return Ok(());
         }
 

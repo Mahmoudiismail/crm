@@ -17,7 +17,7 @@ For a detailed guide on how to fundamentally reconstruct these components and th
 
 The runner GUI exposes a central execution dashboard. If a user sets up a new application via the **Apps** page, the `runner` fetches its manifest via the `--manifest` flag (e.g. `crm.exe --manifest`).
 
-When a `TaskKind::ExternalApp` is executed on its schedule, the `runner/engine.rs` dynamically converts the configured `AppManifest` argument values into CLI arguments, spawning the registered process (e.g. `crm.exe --report tickets --config path/to/config.json`), piping its logs, and tracking its termination status.
+When a `TaskKind::ExternalApp` is executed on its schedule, the `runner/engine.rs` dynamically converts the configured `AppManifest` argument values into CLI arguments, spawning the registered process (e.g. `crm.exe --report tickets --config path/to/config.json --start-date 2024-01-01`), piping its logs, and tracking its termination status.
 
 ## Data Persistence
 
