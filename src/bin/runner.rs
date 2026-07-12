@@ -2,12 +2,12 @@
 
 use anyhow::Result;
 use clap::Parser;
+use crm_tool::manifest::AppManifest;
 #[cfg(target_os = "windows")]
 use crm_tool::runner::engine::RunnerHandle;
 use crm_tool::runner::engine::{start_scheduler, RunnerCommand};
 use crm_tool::runner::gui::start_gui_server;
-use crm_tool::utils::{executable_dir, setup_logging, intercept_manifest};
-use crm_tool::manifest::AppManifest;
+use crm_tool::utils::{executable_dir, intercept_manifest, setup_logging};
 #[cfg(target_os = "windows")]
 use muda::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem};
 #[cfg(target_os = "windows")]
@@ -202,4 +202,3 @@ fn load_icon() -> Icon {
     let rgba = [0, 255, 0, 255].repeat((width * height) as usize);
     Icon::from_rgba(rgba, width, height).unwrap_or_else(|_| panic!("Failed to create icon"))
 }
-

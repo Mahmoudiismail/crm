@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use crm_tool::manifest::{AppArg, AppManifest, ArgType};
-use crm_tool::utils::{intercept_manifest, setup_logging, load_or_create_config};
+use crm_tool::utils::{intercept_manifest, load_or_create_config, setup_logging};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

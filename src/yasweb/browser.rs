@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use headless_chrome::{Browser, protocol::cdp::types::Event};
+use headless_chrome::{protocol::cdp::types::Event, Browser};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};

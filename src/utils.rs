@@ -1,5 +1,5 @@
-use anyhow::{Context, Result};
 use crate::manifest::AppManifest;
+use anyhow::{Context, Result};
 use serde::{de::DeserializeOwned, Serialize};
 use std::path::{Path, PathBuf};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Layer};

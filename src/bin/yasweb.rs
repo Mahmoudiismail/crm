@@ -8,12 +8,12 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use clap::Parser;
+use crm_tool::utils::{executable_dir, intercept_manifest, setup_logging};
+use crm_tool::yasweb::browser::run_browser_tab;
+use crm_tool::yasweb::config::{ReportConfig, YaswebConfig};
 use tokio::fs;
 use tracing::{error, info};
-use crm_tool::utils::{executable_dir, intercept_manifest, setup_logging};
-use crm_tool::yasweb::config::{ReportConfig, YaswebConfig};
-use crm_tool::yasweb::browser::run_browser_tab;
-use clap::Parser;
 
 #[derive(Parser)]
 #[command(name = "yasweb", about = "YAS Web Scraper")]
@@ -37,12 +37,6 @@ pub struct YaswebCliOptions {
     #[arg(long, hide = true)]
     manifest: bool,
 }
-
-
-
-
-
-
 
 fn get_manifest(config_path: Option<PathBuf>) -> AppManifest {
     let mut report_names = Vec::new();
@@ -219,7 +213,8 @@ async fn main() -> Result<()> {
             }
         }
 
-        let config_path = config_path_opt.unwrap_or_else(|| executable_dir().join("yasweb_config.json"));
+        let config_path =
+            config_path_opt.unwrap_or_else(|| executable_dir().join("yasweb_config.json"));
         intercept_manifest(get_manifest(Some(config_path)));
     }
 
@@ -233,14 +228,17 @@ async fn main() -> Result<()> {
         executable_dir().join(p)
     };
 
-    let mut config: YaswebConfig = crm_tool::utils::load_or_create_config(&config_path, &YaswebConfig {
-        url: "https://example.com".to_string(),
-        username: "user".to_string(),
-        password: Some("pass".to_string()),
-        reports: HashMap::new(),
-        headless: false,
-        keep_open: false,
-    })?;
+    let mut config: YaswebConfig = crm_tool::utils::load_or_create_config(
+        &config_path,
+        &YaswebConfig {
+            url: "https://example.com".to_string(),
+            username: "user".to_string(),
+            password: Some("pass".to_string()),
+            reports: HashMap::new(),
+            headless: false,
+            keep_open: false,
+        },
+    )?;
     let mut config_updated = false;
 
     let active_report_name = options.name;
@@ -249,15 +247,19 @@ async fn main() -> Result<()> {
     let mut active_filters: HashMap<String, String> = HashMap::new();
     if let Some(filters_str) = options.filters {
         if !filters_str.trim().is_empty() {
-            active_filters = serde_json::from_str(&filters_str)
-                .context("Failed to parse filters JSON")?;
+            active_filters =
+                serde_json::from_str(&filters_str).context("Failed to parse filters JSON")?;
         }
     }
 
-    let is_monthly = options.monthly.map_or(false, |m| m.to_lowercase() == "true" || m == "1");
+    let is_monthly = options
+        .monthly
+        .map_or(false, |m| m.to_lowercase() == "true" || m == "1");
     let mut start_date_str = options.start_date;
     let mut end_date_str = options.end_date;
-    let add_time_to_file = options.add_time_to_file.map_or(false, |a| a.to_lowercase() == "true" || a == "1");
+    let add_time_to_file = options
+        .add_time_to_file
+        .map_or(false, |a| a.to_lowercase() == "true" || a == "1");
 
     if active_report_name.is_empty() {
         error!("Validation failed: --name is required.");
