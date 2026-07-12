@@ -26,7 +26,13 @@ async fn main() -> Result<()> {
     info!("CRM - One-shot run started");
     info!("==================================================");
 
-    crm::run_once(&config_path, options.report).await?;
+    crm::run_once(
+        &config_path,
+        options.report,
+        options.start_date,
+        options.end_date,
+    )
+    .await?;
 
     info!("CRM - One-shot run completed successfully");
     Ok(())
@@ -36,6 +42,8 @@ async fn main() -> Result<()> {
 struct CrmCliOptions {
     report: ReportType,
     config: Option<String>,
+    start_date: Option<String>,
+    end_date: Option<String>,
 }
 
 fn parse_args() -> Result<CrmCliOptions> {
@@ -58,6 +66,18 @@ fn parse_args() -> Result<CrmCliOptions> {
                     .next()
                     .ok_or_else(|| anyhow::anyhow!("Missing value for --config"))?;
                 options.config = Some(value);
+            }
+            "--start-date" => {
+                let value = args
+                    .next()
+                    .ok_or_else(|| anyhow::anyhow!("Missing value for --start-date"))?;
+                options.start_date = Some(value);
+            }
+            "--end-date" => {
+                let value = args
+                    .next()
+                    .ok_or_else(|| anyhow::anyhow!("Missing value for --end-date"))?;
+                options.end_date = Some(value);
             }
             "--help" | "-h" => {
                 print_help();
@@ -137,6 +157,24 @@ fn print_manifest() {
                 depends_on: None,
                 autofill: None,
             },
+            AppArg {
+                name: "--start-date".to_string(),
+                arg_type: ArgType::String,
+                required: false,
+                default_value: None,
+                options: None,
+                depends_on: None,
+                autofill: None,
+            },
+            AppArg {
+                name: "--end-date".to_string(),
+                arg_type: ArgType::String,
+                required: false,
+                default_value: None,
+                options: None,
+                depends_on: None,
+                autofill: None,
+            },
         ],
     };
     if let Ok(json) = serde_json::to_string(&manifest) {
@@ -152,7 +190,7 @@ fn executable_dir() -> std::path::PathBuf {
 }
 
 fn print_help() {
-    eprintln!("crm usage:\n  --report <all|tickets|calls|leads|none>\n  --config <path>");
+    eprintln!("crm usage:\n  --report <all|tickets|calls|leads|none>\n  --config <path>\n  --start-date <YYYY-MM-DD>\n  --end-date <YYYY-MM-DD>");
 }
 
 fn setup_logging() -> Result<tracing_appender::non_blocking::WorkerGuard> {
