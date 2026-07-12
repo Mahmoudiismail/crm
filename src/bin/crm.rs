@@ -1,24 +1,34 @@
 use anyhow::Result;
+use clap::Parser;
 use crm_tool::crm;
 use crm_tool::crm::types::ReportType;
 use crm_tool::manifest::{AppArg, AppManifest, ArgType};
+use crm_tool::utils::{executable_dir, intercept_manifest, setup_logging};
+
 use tracing::info;
-use tracing_subscriber::filter::LevelFilter;
-use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Layer};
+
+#[derive(Parser)]
+#[command(name = "crm", about = "CRM One-Shot Fetcher")]
+struct CrmCliOptions {
+    #[arg(long, value_enum, default_value_t = ReportType::All)]
+    report: ReportType,
+    #[arg(long)]
+    config: Option<String>,
+    #[arg(long)]
+    start_date: Option<String>,
+    #[arg(long)]
+    end_date: Option<String>,
+    #[arg(long, hide = true)]
+    manifest: bool,
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Intercept --manifest before anything else
-    for arg in std::env::args().skip(1) {
-        if arg == "--manifest" {
-            print_manifest();
-            std::process::exit(0);
-        }
-    }
+    intercept_manifest(get_manifest());
 
-    let _log_guard = setup_logging()?;
+    let _log_guard = setup_logging("crm")?;
 
-    let options = parse_args()?;
+    let options = CrmCliOptions::parse();
     let exe_dir = executable_dir();
     let config_path = resolve_config_path(options.config.as_deref(), &exe_dir);
 
@@ -38,82 +48,6 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-#[derive(Default)]
-struct CrmCliOptions {
-    report: ReportType,
-    config: Option<String>,
-    start_date: Option<String>,
-    end_date: Option<String>,
-}
-
-fn parse_args() -> Result<CrmCliOptions> {
-    let mut options = CrmCliOptions {
-        report: ReportType::All,
-        ..Default::default()
-    };
-
-    let mut args = std::env::args().skip(1);
-    while let Some(arg) = args.next() {
-        match arg.as_str() {
-            "--report" => {
-                let value = args
-                    .next()
-                    .ok_or_else(|| anyhow::anyhow!("Missing value for --report"))?;
-                options.report = parse_report(&value)?;
-            }
-            "--config" => {
-                let value = args
-                    .next()
-                    .ok_or_else(|| anyhow::anyhow!("Missing value for --config"))?;
-                options.config = Some(value);
-            }
-            "--start-date" => {
-                let value = args
-                    .next()
-                    .ok_or_else(|| anyhow::anyhow!("Missing value for --start-date"))?;
-                options.start_date = Some(value);
-            }
-            "--end-date" => {
-                let value = args
-                    .next()
-                    .ok_or_else(|| anyhow::anyhow!("Missing value for --end-date"))?;
-                options.end_date = Some(value);
-            }
-            "--help" | "-h" => {
-                print_help();
-                std::process::exit(0);
-            }
-            "--manifest" => {
-                // Handled earlier, but keep here just in case
-                print_manifest();
-                std::process::exit(0);
-            }
-            other => {
-                return Err(anyhow::anyhow!(
-                    "Unknown argument '{}'. Use --help to see supported options.",
-                    other
-                ));
-            }
-        }
-    }
-
-    Ok(options)
-}
-
-fn parse_report(value: &str) -> Result<ReportType> {
-    match value.to_ascii_lowercase().as_str() {
-        "all" => Ok(ReportType::All),
-        "tickets" => Ok(ReportType::Tickets),
-        "calls" => Ok(ReportType::Calls),
-        "leads" => Ok(ReportType::Leads),
-        "none" => Ok(ReportType::None),
-        _ => Err(anyhow::anyhow!(
-            "Invalid report '{}' (expected: all|tickets|calls|leads|none)",
-            value
-        )),
-    }
-}
-
 fn resolve_config_path(config_arg: Option<&str>, base_dir: &std::path::Path) -> String {
     match config_arg {
         Some(path) => {
@@ -128,8 +62,8 @@ fn resolve_config_path(config_arg: Option<&str>, base_dir: &std::path::Path) -> 
     }
 }
 
-fn print_manifest() {
-    let manifest = AppManifest {
+fn get_manifest() -> AppManifest {
+    AppManifest {
         name: "CRM One-Shot Fetcher".to_string(),
         description: "Fetches CRM data on a one-off basis.".to_string(),
         arguments: vec![
@@ -176,51 +110,7 @@ fn print_manifest() {
                 autofill: None,
             },
         ],
-    };
-    if let Ok(json) = serde_json::to_string(&manifest) {
-        println!("{}", json);
     }
-}
-
-fn executable_dir() -> std::path::PathBuf {
-    std::env::current_exe()
-        .ok()
-        .and_then(|path| path.parent().map(|p| p.to_path_buf()))
-        .unwrap_or_else(|| std::path::PathBuf::from("."))
-}
-
-fn print_help() {
-    eprintln!("crm usage:\n  --report <all|tickets|calls|leads|none>\n  --config <path>\n  --start-date <YYYY-MM-DD>\n  --end-date <YYYY-MM-DD>");
-}
-
-fn setup_logging() -> Result<tracing_appender::non_blocking::WorkerGuard> {
-    let exe_path = std::env::current_exe()?;
-    let exe_dir = exe_path
-        .parent()
-        .unwrap_or_else(|| std::path::Path::new("."));
-
-    let file_appender = tracing_appender::rolling::never(exe_dir, "crm.log");
-    let (non_blocking_file, guard) = tracing_appender::non_blocking(file_appender);
-
-    let file_layer = fmt::layer()
-        .with_writer(non_blocking_file)
-        .with_ansi(false)
-        .with_target(true)
-        .with_thread_ids(true)
-        .with_filter(LevelFilter::DEBUG);
-
-    let stdout_layer = fmt::layer()
-        .with_writer(std::io::stdout)
-        .with_target(false)
-        .with_thread_ids(false)
-        .with_filter(LevelFilter::INFO);
-
-    tracing_subscriber::registry()
-        .with(file_layer)
-        .with(stdout_layer)
-        .init();
-
-    Ok(guard)
 }
 
 #[cfg(test)]

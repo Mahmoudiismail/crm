@@ -40,6 +40,8 @@ chrono-tz = "0.10.4"
 open = "5.3.5"
 headless_chrome = "1.0.21"
 rust_xlsxwriter = "0.95.0"
+clap = { version = "4.6.1", features = ["derive"] }
+lazy_static = "1.5.0"
 
 
 [profile.release]

@@ -1,21 +1,20 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 use anyhow::Result;
-#[cfg(target_os = "windows")]
+use clap::Parser;
 #[cfg(target_os = "windows")]
 use crm_tool::runner::engine::RunnerHandle;
 use crm_tool::runner::engine::{start_scheduler, RunnerCommand};
 use crm_tool::runner::gui::start_gui_server;
+use crm_tool::utils::{executable_dir, setup_logging, intercept_manifest};
+use crm_tool::manifest::AppManifest;
 #[cfg(target_os = "windows")]
 use muda::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem};
-use std::path::PathBuf;
 #[cfg(target_os = "windows")]
 use std::time::Duration;
 #[cfg(target_os = "windows")]
 use tracing::error;
 use tracing::info;
-use tracing_subscriber::filter::LevelFilter;
-use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Layer};
 #[cfg(target_os = "windows")]
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
 #[cfg(target_os = "windows")]
@@ -27,8 +26,25 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 #[cfg(target_os = "windows")]
 use winit::window::WindowId;
 
+#[derive(Parser)]
+#[command(name = "runner", about = "Runner daemon")]
+struct RunnerCliOptions {
+    #[arg(long, hide = true)]
+    manifest: bool,
+}
+
+fn get_manifest() -> AppManifest {
+    AppManifest {
+        name: "runner".to_string(),
+        description: "Runner daemon".to_string(),
+        arguments: vec![],
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
+    intercept_manifest(get_manifest());
+    let _options = RunnerCliOptions::parse();
     let _instance_lock = match std::net::TcpListener::bind("127.0.0.1:14592") {
         Ok(listener) => listener,
         Err(e) => {
@@ -37,7 +53,7 @@ async fn main() -> Result<()> {
         }
     };
 
-    let _log_guard = match setup_logging() {
+    let _log_guard = match setup_logging("runner") {
         Ok(guard) => guard,
         Err(e) => {
             eprintln!("Failed to set up logging: {}", e);
@@ -187,36 +203,3 @@ fn load_icon() -> Icon {
     Icon::from_rgba(rgba, width, height).unwrap_or_else(|_| panic!("Failed to create icon"))
 }
 
-fn setup_logging() -> Result<tracing_appender::non_blocking::WorkerGuard> {
-    let exe_dir = executable_dir();
-
-    let file_appender = tracing_appender::rolling::never(exe_dir, "runner.log");
-    let (non_blocking_file, guard) = tracing_appender::non_blocking(file_appender);
-
-    let file_layer = fmt::layer()
-        .with_writer(non_blocking_file)
-        .with_ansi(false)
-        .with_target(true)
-        .with_thread_ids(true)
-        .with_filter(LevelFilter::DEBUG);
-
-    let stdout_layer = fmt::layer()
-        .with_writer(std::io::stdout)
-        .with_target(false)
-        .with_thread_ids(false)
-        .with_filter(LevelFilter::DEBUG);
-
-    tracing_subscriber::registry()
-        .with(file_layer)
-        .with(stdout_layer)
-        .init();
-
-    Ok(guard)
-}
-
-fn executable_dir() -> PathBuf {
-    std::env::current_exe()
-        .ok()
-        .and_then(|path| path.parent().map(|p| p.to_path_buf()))
-        .unwrap_or_else(|| PathBuf::from("."))
-}

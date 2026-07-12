@@ -1,14 +1,25 @@
 use anyhow::{Context, Result};
+use clap::Parser;
 use crm_tool::manifest::{AppArg, AppManifest, ArgType};
+use crm_tool::utils::{intercept_manifest, setup_logging, load_or_create_config};
 use reqwest::Client;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::env;
 use std::fs;
 use std::path::PathBuf;
-use tracing::{error, info, Level};
+use tracing::{error, info};
 
-#[derive(Debug, Deserialize)]
+#[derive(Parser)]
+#[command(name = "wcxx", about = "Webex Contact Center Fetcher")]
+struct WcxxCliOptions {
+    #[arg(long, default_value = "wcxx_config.json")]
+    config: String,
+    #[arg(long, hide = true)]
+    manifest: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 struct Config {
     #[serde(default = "default_base_url")]
     base_url: String,
@@ -30,8 +41,8 @@ fn default_base_url() -> String {
     "https://webexapis.com/v1".to_string()
 }
 
-fn print_manifest() {
-    let manifest = AppManifest {
+fn get_manifest() -> AppManifest {
+    AppManifest {
         name: "Webex Contact Center Fetcher".to_string(),
         description: "Fetches data from the Webex Contact Center API.".to_string(),
         arguments: vec![AppArg {
@@ -43,47 +54,27 @@ fn print_manifest() {
             depends_on: None,
             autofill: None,
         }],
-    };
-    if let Ok(json) = serde_json::to_string(&manifest) {
-        println!("{}", json);
     }
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Intercept --manifest before anything else
-    for arg in env::args().skip(1) {
-        if arg == "--manifest" {
-            print_manifest();
-            std::process::exit(0);
-        }
-    }
+    intercept_manifest(get_manifest());
 
-    // Read command line arguments to find the config file path (default: wcxx_config.json)
-    let args: Vec<String> = env::args().collect();
-    let mut config_path = PathBuf::from("wcxx_config.json");
+    let options = WcxxCliOptions::parse();
+    let config_path = PathBuf::from(options.config);
 
-    let mut i = 1;
-    while i < args.len() {
-        if args[i] == "--config" && i + 1 < args.len() {
-            config_path = PathBuf::from(&args[i + 1]);
-            break;
-        }
-        i += 1;
-    }
+    let default_config = Config {
+        base_url: "https://webexapis.com/v1".to_string(),
+        token: "YOUR_BEARER_TOKEN_HERE".to_string(),
+        org_id: Some("".to_string()),
+        client_id: Some("".to_string()),
+        client_secret: Some("".to_string()),
+        refresh_token: Some("".to_string()),
+    };
 
     if !config_path.exists() {
-        // Create a default config file if it doesn't exist
-        let default_config = serde_json::json!({
-            "base_url": "https://webexapis.com/v1",
-            "token": "YOUR_BEARER_TOKEN_HERE",
-            "org_id": "",
-            "client_id": "",
-            "client_secret": "",
-            "refresh_token": ""
-        });
-        fs::write(&config_path, serde_json::to_string_pretty(&default_config)?)
-            .context("Failed to write default wcxx_config.json")?;
+        load_or_create_config(&config_path, &default_config)?;
         println!(
             "Created default configuration file at {:?}. Please edit it and re-run.",
             config_path
@@ -91,21 +82,13 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
-    let config_content = fs::read_to_string(&config_path)
-        .context(format!("Failed to read config file at {:?}", config_path))?;
-    let config: Config = serde_json::from_str(&config_content)
-        .context("Failed to parse config file. Please ensure it contains 'base_url' and 'token'")?;
+    let config: Config = load_or_create_config(&config_path, &default_config)?;
 
     if config.token == "YOUR_BEARER_TOKEN_HERE" || config.token.trim().is_empty() {
         anyhow::bail!("Please update {:?} with a valid token.", config_path);
     }
 
-    // Set up logging to wcxx.log
-    let file_appender = tracing_appender::rolling::never(".", "wcxx.log");
-    tracing_subscriber::fmt()
-        .with_max_level(Level::INFO)
-        .with_writer(file_appender)
-        .init();
+    let _guard = setup_logging("wcxx")?;
 
     info!("Starting wcxx tool");
 
