@@ -760,14 +760,28 @@ mod tests {
         let agents_csv = std::fs::read_to_string("TestingDownloads/users.csv").unwrap();
         std::fs::write(users_file.path(), agents_csv).unwrap();
 
-        let assignment_csv = std::fs::read_to_string("TestingDownloads/assignement settings.csv").unwrap();
+        let assignment_csv =
+            std::fs::read_to_string("TestingDownloads/assignement settings.csv").unwrap();
         std::fs::write(assignments_file.path(), assignment_csv).unwrap();
 
-        std::fs::copy("TestingDownloads/ticket_report_1783634497568.csv", download_dir.path().join("ticket_report_1783634497568.csv")).unwrap();
-        std::fs::copy("TestingDownloads/ticket_report_1783634532999.csv", download_dir.path().join("ticket_report_1783634532999.csv")).unwrap();
-        std::fs::copy("TestingDownloads/ticket_report_1783634535708.csv", download_dir.path().join("ticket_report_1783634535708.csv")).unwrap();
+        std::fs::copy(
+            "TestingDownloads/ticket_report_1783634497568.csv",
+            download_dir.path().join("ticket_report_1783634497568.csv"),
+        )
+        .unwrap();
+        std::fs::copy(
+            "TestingDownloads/ticket_report_1783634532999.csv",
+            download_dir.path().join("ticket_report_1783634532999.csv"),
+        )
+        .unwrap();
+        std::fs::copy(
+            "TestingDownloads/ticket_report_1783634535708.csv",
+            download_dir.path().join("ticket_report_1783634535708.csv"),
+        )
+        .unwrap();
 
-        let leads_csv = std::fs::read_to_string("TestingDownloads/lead_report_1783627642439.csv").unwrap();
+        let leads_csv =
+            std::fs::read_to_string("TestingDownloads/lead_report_1783627642439.csv").unwrap();
         std::fs::write(leads_file.path(), leads_csv).unwrap();
         std::fs::copy(
             leads_file.path(),
@@ -967,7 +981,6 @@ mod tests {
             csv_attachment.exists(),
             "CSV tickets attachment should be generated"
         );
-
 
         let _ = std::fs::remove_file(html_path);
         let _ = std::fs::remove_file(csv_attachment);
