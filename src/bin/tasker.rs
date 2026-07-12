@@ -310,7 +310,7 @@ mod tests {
         let args = vec![
             "tasker".to_string(),
             "--config".to_string(),
-            config_path.to_str().unwrap().to_string(),
+            config_path.to_string_lossy().to_string(),
             "--only-call-center".to_string(),
             "--send-exceptions".to_string(),
         ];

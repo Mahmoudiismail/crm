@@ -1660,7 +1660,7 @@ fn render_apps_page(apps: &[crate::runner::config::RegisteredApp]) -> String {
             escape_html(&app.id),
             escape_html(&app.id)
         )
-    }).collect::<Vec<_>>().join("");
+    }).collect::<String>();
 
     html_page(
         "Registered Apps",
