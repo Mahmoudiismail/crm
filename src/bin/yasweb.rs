@@ -254,12 +254,12 @@ async fn main() -> Result<()> {
 
     let is_monthly = options
         .monthly
-        .map_or(false, |m| m.to_lowercase() == "true" || m == "1");
+        .is_some_and(|m| m.to_lowercase() == "true" || m == "1");
     let mut start_date_str = options.start_date;
     let mut end_date_str = options.end_date;
     let add_time_to_file = options
         .add_time_to_file
-        .map_or(false, |a| a.to_lowercase() == "true" || a == "1");
+        .is_some_and(|a| a.to_lowercase() == "true" || a == "1");
 
     if active_report_name.is_empty() {
         error!("Validation failed: --name is required.");
