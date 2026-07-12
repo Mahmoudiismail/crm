@@ -1,73 +1,43 @@
 use anyhow::{Context, Result};
+use clap::Parser;
 use crm_tool::manifest::{AppArg, AppManifest, ArgType};
 use crm_tool::tasker::config::{TaskConfig, TaskerConfig};
 use crm_tool::tasker::{csv_task, dashboard_updater};
+use crm_tool::utils::{executable_dir, intercept_manifest, setup_logging};
 use serde_json::Value;
-use std::env;
-use std::fs;
-use tracing::{error, info};
-use tracing_appender::rolling::{RollingFileAppender, Rotation};
-use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
-pub fn run_app(args: Vec<String>) -> Result<()> {
+use std::fs;
+use std::path::PathBuf;
+use tracing::{error, info};
+
+#[derive(Parser)]
+#[command(name = "tasker", about = "Tasker Reporting Tool")]
+pub struct TaskerCliOptions {
+    #[arg(long)]
+    pub config: Option<String>,
+    #[arg(long)]
+    pub task: Option<usize>,
+    #[arg(long)]
+    pub only_call_center: bool,
+    #[arg(long)]
+    pub send_exceptions: bool,
+    #[arg(long, hide = true)]
+    pub manifest: bool,
+
+    // Support the legacy positional argument for config
+    #[arg(hide = true)]
+    pub legacy_config: Option<String>,
+}
+
+pub fn run_app(options: TaskerCliOptions) -> Result<()> {
     info!("Tasker started.");
 
-    // Parse arguments
+    let config_path_arg = options.config.or(options.legacy_config).map(PathBuf::from);
+    let task_filter = options.task;
+    let only_call_center = options.only_call_center;
+    let send_exceptions = options.send_exceptions;
 
-    let mut config_path_arg = None;
-    let mut task_filter: Option<usize> = None;
-    let mut only_call_center = false;
-    let mut send_exceptions = false;
-
-    let skip_count = if args.first().is_some_and(|a| !a.starts_with('-')) {
-        1
-    } else {
-        0
-    };
-    let mut args_iter = args.into_iter().skip(skip_count).peekable();
-    while let Some(arg) = args_iter.next() {
-        match arg.as_str() {
-            "--config" => {
-                if let Some(path) = args_iter.peek() {
-                    if !path.starts_with("-") {
-                        config_path_arg =
-                            Some(std::path::PathBuf::from(args_iter.next().ok_or_else(
-                                || anyhow::anyhow!("Missing value for --config"),
-                            )?));
-                    } else {
-                        tracing::warn!(
-                            "--config flag provided but next argument starts with '-'. Ignoring."
-                        );
-                    }
-                }
-            }
-            "--task" => {
-                if let Some(task_num) = args_iter.peek() {
-                    if let Ok(idx) = task_num.parse::<usize>() {
-                        task_filter = Some(idx);
-                        args_iter.next(); // Consume the number
-                    }
-                }
-            }
-            "--only-call-center" => {
-                only_call_center = true;
-            }
-            "--send-exceptions" => {
-                send_exceptions = true;
-            }
-            // Support the legacy positional config path if they don't provide a flag
-            val if !val.starts_with("-") && config_path_arg.is_none() => {
-                config_path_arg = Some(std::path::PathBuf::from(val));
-            }
-            _ => {}
-        }
-    }
-
-    let default_config_path = env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|p| p.join("tasker_config.json")))
-        .unwrap_or_else(|| std::path::PathBuf::from("tasker_config.json"));
-
+    let default_config_path = executable_dir().join("tasker_config.json");
     let config_path = config_path_arg.unwrap_or(default_config_path);
 
     let default_config_content = r#"{
@@ -216,8 +186,8 @@ pub fn run_app(args: Vec<String>) -> Result<()> {
     Ok(())
 }
 
-fn print_manifest() {
-    let manifest = AppManifest {
+fn get_manifest() -> AppManifest {
+    AppManifest {
         name: "Tasker Reporting Tool".to_string(),
         description:
             "Executes configured background workflows such as CSV analysis and email dispatching."
@@ -260,36 +230,17 @@ fn print_manifest() {
                 autofill: None,
             },
         ],
-    };
-    if let Ok(json) = serde_json::to_string(&manifest) {
-        println!("{}", json);
     }
 }
 
 fn main() -> Result<()> {
-    // Intercept --manifest before anything else
-    for arg in env::args().skip(1) {
-        if arg == "--manifest" {
-            print_manifest();
-            std::process::exit(0);
-        }
-    }
+    intercept_manifest(get_manifest());
 
-    // Setup file logging in the same directory as the executable
-    let log_dir = env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-        .unwrap_or_else(|| std::path::PathBuf::from("."));
+    let _guard = setup_logging("task_csv_analysis")?;
 
-    let file_appender = RollingFileAppender::new(Rotation::NEVER, log_dir, "task_csv_analysis.log");
+    let options = TaskerCliOptions::parse();
 
-    // We can also have a stdout logger if desired, but we'll stick to a simple combined setup.
-    tracing_subscriber::registry()
-        .with(fmt::layer().with_writer(file_appender))
-        .with(fmt::layer().with_writer(std::io::stdout))
-        .init();
-
-    if let Err(e) = run_app(env::args().collect()) {
+    if let Err(e) = run_app(options) {
         error!("Fatal application error: {:#}", e);
         anyhow::bail!(e);
     }
@@ -299,6 +250,7 @@ fn main() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::Parser;
 
     #[test]
     fn test_tasker_args_parsing() {
@@ -315,9 +267,8 @@ mod tests {
             "--send-exceptions".to_string(),
         ];
 
-        let _res = run_app(args);
-        // It should succeed or fail cleanly, but mostly we just verify it doesn't crash on parse
-        // It will actually create the mock config and then exit cleanly or with an error
+        let options = TaskerCliOptions::parse_from(args);
+        let _res = run_app(options);
         let _ = std::fs::remove_file(&config_path);
     }
 }
