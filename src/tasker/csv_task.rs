@@ -34,23 +34,23 @@ pub fn parse_start_date(val: &str) -> Option<NaiveDateTime> {
     }
 
     if let Ok(dt) = NaiveDate::parse_from_str(trimmed, "%Y-%m-%d") {
-        return Some(dt.and_hms_opt(0, 0, 0).unwrap());
+        return dt.and_hms_opt(0, 0, 0);
     }
 
     if let Ok(dt) = NaiveDate::parse_from_str(trimmed, "%d-%b-%Y") {
-        return Some(dt.and_hms_opt(0, 0, 0).unwrap());
+        return dt.and_hms_opt(0, 0, 0);
     }
 
     // e.g. "1-May" -> "1-May-2026" (append current year)
     let with_year = format!("{}-{}", trimmed, Local::now().year());
     if let Ok(dt) = NaiveDate::parse_from_str(&with_year, "%d-%b-%Y") {
-        return Some(dt.and_hms_opt(0, 0, 0).unwrap());
+        return dt.and_hms_opt(0, 0, 0);
     }
 
     // try d-b format
     let with_year2 = format!("{}-{}", trimmed, Local::now().year());
     if let Ok(dt) = NaiveDate::parse_from_str(&with_year2, "%e-%b-%Y") {
-        return Some(dt.and_hms_opt(0, 0, 0).unwrap());
+        return dt.and_hms_opt(0, 0, 0);
     }
 
     None
@@ -63,7 +63,7 @@ pub fn parse_created_at(val: &str) -> Option<NaiveDateTime> {
     }
     // Try DD-MMM-YYYY (e.g. 01-May-2026)
     if let Ok(dt) = NaiveDate::parse_from_str(trimmed, "%d-%b-%Y") {
-        return Some(dt.and_hms_opt(0, 0, 0).unwrap());
+        return dt.and_hms_opt(0, 0, 0);
     }
     // Try dd/mm/yyyy hh:mm:ss
     if let Ok(dt) = NaiveDateTime::parse_from_str(trimmed, "%d/%m/%Y %H:%M:%S") {

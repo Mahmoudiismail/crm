@@ -1210,13 +1210,13 @@ async fn main() -> Result<()> {
                 };
                 let dt = current_month.unwrap_or_else(|| Local::now().date_naive());
                 let next_month = if dt.month() == 12 {
-                    NaiveDate::from_ymd_opt(dt.year() + 1, 1, 1).unwrap()
+                    NaiveDate::from_ymd_opt(dt.year() + 1, 1, 1).expect("valid next year")
                 } else {
-                    NaiveDate::from_ymd_opt(dt.year(), dt.month() + 1, 1).unwrap()
+                    NaiveDate::from_ymd_opt(dt.year(), dt.month() + 1, 1).expect("valid next month")
                 };
                 next_month
                     .pred_opt()
-                    .unwrap()
+                    .expect("valid preceding day")
                     .format("%d-%m-%Y")
                     .to_string()
             }
