@@ -448,8 +448,10 @@ fn generate_leads_report(
                             } else {
                                 "    "
                             };
-                            diagnostic_info
-                                .push_str(&format!("{}{:4} | {}\n", marker, current_line_num, line));
+                            diagnostic_info.push_str(&format!(
+                                "{}{:4} | {}\n",
+                                marker, current_line_num, line
+                            ));
                         } else {
                             break;
                         }
@@ -1448,8 +1450,7 @@ mod tests {
         writeln!(lead_file, "L1,Branch1,New").unwrap();
         writeln!(lead_file, "L2,Branch2,Follow-up,ExtraField").unwrap(); // Malformed: too many fields
 
-        let result =
-            generate_leads_report(download_dir.path().to_str().unwrap(), 60, &[]);
+        let result = generate_leads_report(download_dir.path().to_str().unwrap(), 60, &[]);
 
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();

@@ -412,8 +412,10 @@ pub fn generate_csv(params: &CsvAnalysisParams) -> Result<Option<std::path::Path
                             } else {
                                 "    "
                             };
-                            diagnostic_info
-                                .push_str(&format!("{}{:4} | {}\n", marker, current_line_num, line));
+                            diagnostic_info.push_str(&format!(
+                                "{}{:4} | {}\n",
+                                marker, current_line_num, line
+                            ));
                         } else {
                             break;
                         }

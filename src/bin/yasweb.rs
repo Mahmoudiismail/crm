@@ -370,10 +370,8 @@ async fn main() -> Result<()> {
             .context("--end-date is required when --monthly is true")?;
 
         use crm_tool::utils::parse_flexible_date;
-        let start_dt = parse_flexible_date(&start_date)
-            .context("Invalid --start-date format")?;
-        let end_dt = parse_flexible_date(&end_date)
-            .context("Invalid --end-date format")?;
+        let start_dt = parse_flexible_date(&start_date).context("Invalid --start-date format")?;
+        let end_dt = parse_flexible_date(&end_date).context("Invalid --end-date format")?;
 
         if start_dt > end_dt {
             anyhow::bail!("--start-date must be before or equal to --end-date");
