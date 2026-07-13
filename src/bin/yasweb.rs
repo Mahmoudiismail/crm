@@ -237,6 +237,7 @@ async fn main() -> Result<()> {
             reports: HashMap::new(),
             headless: false,
             keep_open: false,
+            concurrency: 6,
         },
     )?;
     let mut config_updated = false;
@@ -310,11 +311,22 @@ async fn main() -> Result<()> {
     // Determine configuration to use
     if !active_report_type.is_empty() || !active_filters.is_empty() {
         // We received details from CLI.
+        // Try to preserve existing date keys if they exist in the current config
+        let (existing_start_key, existing_end_key) =
+            if let Some(existing) = config.reports.get(&active_report_name) {
+                (
+                    existing.start_date_key.clone(),
+                    existing.end_date_key.clone(),
+                )
+            } else {
+                (None, None)
+            };
+
         let report_conf = ReportConfig {
             report_type: active_report_type.clone(),
             filters: active_filters.clone(),
-            start_date_key: None,
-            end_date_key: None,
+            start_date_key: existing_start_key,
+            end_date_key: existing_end_key,
         };
         config
             .reports
@@ -444,8 +456,14 @@ async fn main() -> Result<()> {
 
     let browser = Arc::new(Browser::new(launch_options).context("Failed to launch browser")?);
 
-    // Chunk runs into concurrent batches of max 6
-    for chunk in date_ranges.chunks(6) {
+    // Chunk runs into concurrent batches based on config
+    let concurrency = if config.concurrency == 0 {
+        1
+    } else {
+        config.concurrency
+    };
+
+    for chunk in date_ranges.chunks(concurrency) {
         let mut tasks = Vec::new();
         for (i, (start_dt, end_dt)) in chunk.iter().enumerate() {
             let config_task = config.clone();
