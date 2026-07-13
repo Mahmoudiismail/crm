@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, TimeZone, Utc};
 use std::collections::VecDeque;
 use tokio::sync::{mpsc, Mutex};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, trace};
 
 use super::config::{
     next_daily_run_after, next_monthly_run_after, next_weekly_run_after, parse_rfc3339_utc,
@@ -115,7 +115,8 @@ impl TaskLoggerInner {
             let _ = f.write_all(line.as_bytes());
             let _ = f.flush();
         }
-        debug!("[{}] {}", self.task_id, message);
+        // Capture into the runner's own log for unified tracing
+        debug!("[Task:{}] {}", self.task_id, message);
     }
 
     fn log_bytes(&mut self, prefix: &str, bytes: &[u8]) {
@@ -786,6 +787,7 @@ async fn run_external_app(
     logger
         .log(&format!("Executing external app: {:?}", command))
         .await;
+    trace!("Command to execute: {:?}", command);
 
     let output = tokio::time::timeout(
         Duration::from_secs(timeout_seconds.max(1)),

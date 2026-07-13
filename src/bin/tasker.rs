@@ -161,8 +161,14 @@ pub fn run_app(options: TaskerCliOptions) -> Result<()> {
     for (i, task) in config.tasks.iter().enumerate() {
         let task_idx = i + 1;
 
+        tracing::trace!("Processing task #{} from configuration.", task_idx);
         if let Some(filter) = task_filter {
             if task_idx != filter {
+                tracing::trace!(
+                    "Skipping task #{} due to filter (target: {}).",
+                    task_idx,
+                    filter
+                );
                 continue;
             }
         }
@@ -170,14 +176,18 @@ pub fn run_app(options: TaskerCliOptions) -> Result<()> {
         info!("Running task #{}", task_idx);
         match task {
             TaskConfig::CsvAnalysis(csv_config) => {
+                tracing::trace!("Executing CsvAnalysis for task #{}.", task_idx);
                 if let Err(e) = csv_task::run(csv_config, only_call_center, send_exceptions) {
-                    error!("Error running CsvAnalysis task: {:?}", e);
+                    error!("Error running CsvAnalysis task #{}: {:?}", task_idx, e);
                 }
+                tracing::trace!("CsvAnalysis for task #{} finished.", task_idx);
             }
             TaskConfig::DashboardUpdater(dash_config) => {
+                tracing::trace!("Executing DashboardUpdater for task #{}.", task_idx);
                 if let Err(e) = dashboard_updater::run(dash_config) {
-                    error!("Error running DashboardUpdater task: {:?}", e);
+                    error!("Error running DashboardUpdater task #{}: {:?}", task_idx, e);
                 }
+                tracing::trace!("DashboardUpdater for task #{} finished.", task_idx);
             }
         }
     }
