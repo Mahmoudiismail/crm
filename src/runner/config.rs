@@ -278,11 +278,84 @@ impl TaskSchedule {
             return false;
         }
 
-        match self.next_run_at() {
-            Some(next) if !next.is_empty() => {
-                parse_rfc3339_utc(next).map(|dt| dt <= now).unwrap_or(true)
+        match self {
+            Self::Once { next_run_at, .. } => {
+                if next_run_at.is_empty() {
+                    true
+                } else {
+                    parse_rfc3339_utc(next_run_at)
+                        .map(|dt| now >= dt)
+                        .unwrap_or(false)
+                }
             }
-            _ => true,
+            Self::Interval {
+                next_run_at,
+                working_hours,
+                start_time,
+                ..
+            } => {
+                let is_due = if next_run_at.is_empty() {
+                    true
+                } else {
+                    parse_rfc3339_utc(next_run_at)
+                        .map(|dt| now >= dt)
+                        .unwrap_or(false)
+                };
+
+                if is_due {
+                    if let Some(wh) = working_hours {
+                        if !is_within_working_hours(wh, now) {
+                            return false;
+                        }
+                    }
+
+                    if let Some(st) = start_time {
+                        if !st.is_empty() {
+                            if let Ok(st_time) = chrono::NaiveTime::parse_from_str(st, "%H:%M") {
+                                let now_local = now.with_timezone(&chrono::Local);
+                                if now_local.time() < st_time {
+                                    return false;
+                                }
+                            }
+                        }
+                    }
+                    true
+                } else {
+                    false
+                }
+            }
+            Self::DailyTimes {
+                next_run_at,
+                working_hours,
+                ..
+            } => {
+                let is_due = if next_run_at.is_empty() {
+                    false
+                } else {
+                    parse_rfc3339_utc(next_run_at)
+                        .map(|dt| now >= dt)
+                        .unwrap_or(false)
+                };
+
+                if is_due {
+                    if let Some(wh) = working_hours {
+                        is_working_day(wh, now)
+                    } else {
+                        true
+                    }
+                } else {
+                    false
+                }
+            }
+            Self::Weekly { next_run_at, .. } | Self::Monthly { next_run_at, .. } => {
+                if next_run_at.is_empty() {
+                    false
+                } else {
+                    parse_rfc3339_utc(next_run_at)
+                        .map(|dt| now >= dt)
+                        .unwrap_or(false)
+                }
+            }
         }
     }
 

@@ -26,13 +26,13 @@ pub struct YaswebCliOptions {
     config: String,
     #[arg(long)]
     filters: Option<String>,
-    #[arg(long)]
+    #[arg(long, action = clap::ArgAction::SetTrue)]
     monthly: bool,
     #[arg(long)]
     start_date: Option<String>,
     #[arg(long)]
     end_date: Option<String>,
-    #[arg(long)]
+    #[arg(long, action = clap::ArgAction::SetTrue)]
     add_time_to_file: bool,
     #[arg(long, hide = true)]
     manifest: bool,
@@ -263,35 +263,7 @@ async fn main() -> Result<()> {
         anyhow::bail!("Validation failed: --name is required.");
     }
 
-    // Handle special date strings
-    let replace_date_vars = |val: &str, base_date: Option<&str>| -> String {
-        let val_lower = val.trim().to_lowercase();
-        match val_lower.as_str() {
-            "today" => Local::now().format("%d-%m-%Y").to_string(),
-            "yesterday" => (Local::now() - chrono::TimeDelta::days(1))
-                .format("%d-%m-%Y")
-                .to_string(),
-            "eomonth" => {
-                let current_month = if let Some(bd) = base_date {
-                    NaiveDate::parse_from_str(bd, "%d-%m-%Y").ok()
-                } else {
-                    None
-                };
-                let dt = current_month.unwrap_or_else(|| Local::now().date_naive());
-                let next_month = if dt.month() == 12 {
-                    NaiveDate::from_ymd_opt(dt.year() + 1, 1, 1).expect("valid next year")
-                } else {
-                    NaiveDate::from_ymd_opt(dt.year(), dt.month() + 1, 1).expect("valid next month")
-                };
-                next_month
-                    .pred_opt()
-                    .expect("valid preceding day")
-                    .format("%d-%m-%Y")
-                    .to_string()
-            }
-            _ => val.to_string(),
-        }
-    };
+    use crm_tool::utils::replace_date_vars;
 
     if let Some(ref s) = start_date_str {
         start_date_str = Some(replace_date_vars(s, None));
@@ -299,12 +271,14 @@ async fn main() -> Result<()> {
 
     // For eomonth in end_date, pass the start_date as base
     if let Some(ref e) = end_date_str {
-        end_date_str = Some(replace_date_vars(e, start_date_str.as_deref()));
+        let base = start_date_str.as_deref();
+        end_date_str = Some(replace_date_vars(e, base));
     }
 
     let mut new_filters = HashMap::new();
     for (k, v) in active_filters.into_iter() {
-        new_filters.insert(k, replace_date_vars(&v, start_date_str.as_deref()));
+        let base = start_date_str.as_deref();
+        new_filters.insert(k, replace_date_vars(&v, base));
     }
     active_filters = new_filters;
 
@@ -436,6 +410,9 @@ async fn main() -> Result<()> {
     // Launch browser once
     let mut user_data_dir = executable_dir();
     user_data_dir.push("yasweb_chrome_data");
+    // Use unique data dir per report to allow simultaneous runs
+    let safe_name = active_report_name.replace(|c: char| !c.is_alphanumeric(), "_");
+    user_data_dir.push(safe_name);
 
     let args = vec![
         std::ffi::OsStr::new("--ignore-certificate-errors"),
@@ -443,6 +420,10 @@ async fn main() -> Result<()> {
         std::ffi::OsStr::new("--disable-web-security"),
         std::ffi::OsStr::new("--disable-site-isolation-trials"),
         std::ffi::OsStr::new("--disable-features=IsolateOrigins,site-per-process"),
+        std::ffi::OsStr::new("--disable-session-crashed-bubble"),
+        std::ffi::OsStr::new("--no-first-run"),
+        std::ffi::OsStr::new("--disable-infobars"),
+        std::ffi::OsStr::new("--skip-reopen-last-pages"),
     ];
 
     let launch_options = LaunchOptions::default_builder()
