@@ -1030,7 +1030,6 @@ fn normalize_and_validate_schedules(
                 every_seconds,
                 next_run_at,
                 start_time,
-                working_hours: _,
                 ..
             } => {
                 *every_seconds = (*every_seconds).max(min_task_interval_seconds);
