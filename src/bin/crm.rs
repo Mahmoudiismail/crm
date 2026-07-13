@@ -36,13 +36,14 @@ async fn main() -> Result<()> {
     info!("CRM - One-shot run started");
     info!("==================================================");
 
-    crm::run_once(
-        &config_path,
-        options.report,
-        options.start_date,
-        options.end_date,
-    )
-    .await?;
+    use crm_tool::utils::replace_date_vars;
+
+    let start_date = options.start_date.map(|s| replace_date_vars(&s, None));
+    let end_date = options
+        .end_date
+        .map(|e| replace_date_vars(&e, start_date.as_deref()));
+
+    crm::run_once(&config_path, options.report, start_date, end_date).await?;
 
     info!("CRM - One-shot run completed successfully");
     Ok(())

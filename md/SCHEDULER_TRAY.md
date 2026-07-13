@@ -34,7 +34,7 @@ The runner uses **cron-based polling** to evaluate task schedules:
 1. **Config Reload**: Re-load `runner_config.json` each cycle.
 2. **Poll Interval**: Sleep for `poll_interval_seconds` (minimum 5s, configurable in engine loop).
 3. **Cron Evaluation**: For each enabled task, check all schedules using the `schedule_is_due()` function:
-   - **Interval**: Check if current time >= `next_run_at`
+   - **Interval**: Check if current time >= `next_run_at`. If `start_time` is configured (e.g. 08:00), the task will only run during hours that are multiples of the interval relative to the start time, and only when the current local time is past the start time of the day.
    - **Once**: Check if current time >= `next_run_at` timestamp
    - **Daily**: Check if current time >= calculated `next_run_at` for today's times
    - **Weekly**: Check if current time >= calculated `next_run_at` for the target day

@@ -1,0 +1,6 @@
+2026-07-13T15:15:29.225402Z  INFO ==================================================
+2026-07-13T15:15:29.225462Z  INFO RUNNER - Starting tray scheduler mode
+2026-07-13T15:15:29.225478Z  INFO ==================================================
+2026-07-13T15:15:29.225523Z  INFO Starting scheduler with config: /app/target/debug/runner_config.json
+2026-07-13T15:15:29.225754Z  INFO Headless mode: scheduler and GUI server are running.
+2026-07-13T15:15:29.226004Z  INFO Runner GUI listening on http://127.0.0.1:8787

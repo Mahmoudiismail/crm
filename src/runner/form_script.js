@@ -95,11 +95,11 @@
     });
   }
 
-  function createScheduleRow(kind, interval, once, daily, weekly, monthly) {
+  function createScheduleRow(kind, interval, once, daily, weekly, monthly, startTime) {
     const row = document.createElement("div");
     row.setAttribute("data-schedule-row", "");
     row.className =
-      "grid md:grid-cols-5 gap-2 p-3 border border-gray-200 rounded items-end";
+      "grid md:grid-cols-6 gap-2 p-3 border border-gray-200 rounded items-end";
     const daysOfWeek = [
       "Monday",
       "Tuesday",
@@ -125,6 +125,10 @@
                 <select class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm'>
                     ${["15m", "30m", "1h", "2h", "4h", "8h", "12h", "24h", "2d", "7d"].map((opt) => `<option value='${opt}' ${opt === interval ? "selected" : ""}>${opt}</option>`).join("")}
                 </select>
+            </label>
+            <label class='block schedule-interval schedule-start-time ${kind === "interval" ? "" : "hidden"}'>
+                <span class='text-xs font-semibold text-gray-700'>Start Time (HH:MM)</span>
+                <input class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' type='time' value='${startTime || ""}'>
             </label>
             <label class='block schedule-once ${kind === "once" ? "" : "hidden"}'>
                 <span class='text-xs font-semibold text-gray-700'>Date & Time</span>
@@ -195,7 +199,7 @@
     addScheduleBtn.addEventListener("click", function () {
       const scheduleRows = document.getElementById("schedule-rows");
       if (!scheduleRows) return;
-      const row = createScheduleRow("interval", "1h", "", "", "", "");
+      const row = createScheduleRow("interval", "1h", "", "", "", "", "");
       scheduleRows.appendChild(row);
       attachScheduleEvents(row);
       scheduleIndex += 1;
@@ -225,6 +229,7 @@
         const kind = row.querySelector(".schedule-kind").value;
         if (kind === "interval") {
           const interval = row.querySelector(".schedule-interval select").value;
+          const startTime = row.querySelector(".schedule-start-time input").value;
           const whRows = Array.from(row.querySelectorAll("[data-wh-row]"))
             .map((whRow) => {
               const day = whRow.querySelector(".wh-day").value;
@@ -238,11 +243,14 @@
             .filter(Boolean)
             .join(",");
 
-          if (whRows) {
-            return "interval: every " + interval + "; wh: " + whRows;
-          } else {
-            return "interval: every " + interval;
+          let result = "interval: every " + interval;
+          if (startTime) {
+            result += "; st: " + startTime;
           }
+          if (whRows) {
+            result += "; wh: " + whRows;
+          }
+          return result;
         }
         if (kind === "once") {
           const value = row.querySelector(".schedule-once input").value;

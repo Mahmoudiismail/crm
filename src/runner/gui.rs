@@ -683,53 +683,55 @@ fn render_task_form(
 
     let form_html = format!(
         "<div class='max-w-4xl mx-auto space-y-5'>\
-            <div><a class='text-sm font-semibold text-emerald-700' href='/'>Back to dashboard</a><h1 class='text-3xl font-bold text-gray-900 mt-3'>{}</h1></div>\
-            {}\
-            <form class='bg-white border border-gray-200 rounded shadow-sm p-5 space-y-5' method='post' action='{}'>\
-                <div class='grid md:grid-cols-1 gap-4'>\
-                    {}\
-                </div>\
-                <label class='flex items-center gap-2 text-sm font-semibold text-gray-800'><input type='checkbox' name='enabled' value='on' {}> Enabled</label>\
+            <div><a class='text-sm font-semibold text-emerald-700' href='/'>Back to dashboard</a><h1 class='text-3xl font-bold text-gray-900 mt-3'>{title}</h1></div>\
+            {error_html}\
+            <form class='bg-white border border-gray-200 rounded shadow-sm p-5 space-y-5' method='post' action='{action}'>\
                 <div class='grid md:grid-cols-2 gap-4'>\
-                    {}\
-                    {}\
+                    {id_field}\
+                    {name_field}\
                 </div>\
-                <label class='block mb-4'>\
-                    <span class='text-sm font-semibold text-gray-700'>Post Run Script (Optional)</span>\
-                    <input class='mt-1 block w-full rounded border border-gray-300 px-3 py-2' type='text' name='post_run_script' value='{}' placeholder='C:\\Scripts\\after_fetch.vbs'>\
-                    <p class='text-xs text-gray-500 mt-1'>Runs a script after a task successfully completes (.txt/.vbs using cscript, .ps1, .bat, etc.)</p>\
-                </label>\
-                <label class='block mb-4'>\
-                    <span class='text-sm font-semibold text-gray-700'>Timeout (Seconds)</span>\
-                    <input class='mt-1 block w-full md:w-1/4 rounded border border-gray-300 px-3 py-2' type='number' name='timeout_seconds' value='{}' placeholder='0 (Global default)'>\
-                    <p class='text-xs text-gray-500 mt-1'>Overrides the global timeout for this task and its post run script. Leave blank or 0 to use the global timeout.</p>\
-                </label>\
-                {}\
-                {}\
+                <div class='grid md:grid-cols-2 gap-4 items-center'>\
+                    <label class='flex items-center gap-2 text-sm font-semibold text-gray-800 h-full mt-4'><input type='checkbox' name='enabled' value='on' {checked_attr}> Enabled</label>\
+                    {type_select}\
+                </div>\
+                <div class='grid md:grid-cols-2 gap-4'>\
+                    <label class='block mb-4'>\
+                        <span class='text-sm font-semibold text-gray-700'>Post Run Script (Optional)</span>\
+                        <input class='mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm' type='text' name='post_run_script' value='{post_run_val}' placeholder='C:\\Scripts\\after_fetch.vbs'>\
+                        <p class='text-xs text-gray-500 mt-1'>Runs a script after a task successfully completes.</p>\
+                    </label>\
+                    <label class='block mb-4'>\
+                        <span class='text-sm font-semibold text-gray-700'>Timeout (Seconds)</span>\
+                        <input class='mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm' type='number' name='timeout_seconds' value='{timeout_val}' placeholder='0 (Global default)'>\
+                        <p class='text-xs text-gray-500 mt-1'>Overrides the global timeout.</p>\
+                    </label>\
+                </div>\
+                {schedule_editor}\
+                {command_editor}\
                 <div id='external-app-container' class='hidden space-y-4 p-4 border border-purple-200 bg-purple-50 rounded'>\
                     <h3 class='text-lg font-semibold text-purple-800'>External Application</h3>\
                     <div id='external-app-select-container' class='mb-4'></div>\
                     <div id='external-app-dynamic-inputs' class='space-y-3'></div>\
-                    <input type='hidden' id='external_app_args' name='external_app_args' value='{}'>\
-                    <input type='hidden' id='external_app_id' name='external_app_id' value='{}'>\
+                    <input type='hidden' id='external_app_args' name='external_app_args' value='{ext_args}'>\
+                    <input type='hidden' id='external_app_id' name='external_app_id' value='{ext_id}'>\
                 </div>\
-                <button class='rounded bg-emerald-600 text-white px-4 py-2 text-sm font-semibold' type='submit'>{}</button>\
+                <button class='rounded bg-emerald-600 text-white px-4 py-2 text-sm font-semibold' type='submit'>{submit_label}</button>\
             </form>\
         </div>",
-        escape_html(title),
-        error_html,
-        action,
-        input_field("ID", "id", id),
-        input_field("Name", "name", name),
-        if enabled { "checked" } else { "" },
-        select_task_type(task_type),
-        escape_html(post_run_script),
-        escape_html(&timeout_seconds_str),
-        schedule_editor_html(task),
-        shell_command_editor_html(task),
-        ext_app_args.replace("'", "&#39;"),
-        escape_html(&ext_app_id),
-        escape_html(submit_label)
+        title = escape_html(title),
+        error_html = error_html,
+        action = action,
+        id_field = input_field("ID", "id", id),
+        name_field = input_field("Name", "name", name),
+        checked_attr = if enabled { "checked" } else { "" },
+        type_select = select_task_type(task_type),
+        post_run_val = escape_html(post_run_script),
+        timeout_val = escape_html(&timeout_seconds_str),
+        schedule_editor = schedule_editor_html(task),
+        command_editor = shell_command_editor_html(task),
+        ext_args = ext_app_args.replace("'", "&#39;"),
+        ext_id = escape_html(&ext_app_id),
+        submit_label = escape_html(submit_label)
     );
     let page_html = form_html + &form_script();
     html_page(title, &page_html)
@@ -739,7 +741,7 @@ fn schedule_editor_html(task: Option<&RunnerTask>) -> String {
     let rows = if let Some(task) = task {
         schedule_rows_html(task)
     } else {
-        schedule_row_html(0, "interval", "1h", "", "", "", "", None)
+        schedule_row_html(0, "interval", "1h", "", "", "", "", None, None)
     };
 
     format!(
@@ -820,6 +822,7 @@ fn schedule_rows_html(task: &RunnerTask) -> String {
                     "",
                     "",
                     working_hours.as_ref(),
+                    Some(task),
                 ));
                 index += 1;
             }
@@ -833,6 +836,7 @@ fn schedule_rows_html(task: &RunnerTask) -> String {
                     "",
                     "",
                     None,
+                    Some(task),
                 ));
                 index += 1;
             }
@@ -850,6 +854,7 @@ fn schedule_rows_html(task: &RunnerTask) -> String {
                     "",
                     "",
                     working_hours.as_ref(),
+                    Some(task),
                 ));
                 index += 1;
             }
@@ -863,6 +868,7 @@ fn schedule_rows_html(task: &RunnerTask) -> String {
                     day_of_week,
                     "",
                     None,
+                    Some(task),
                 ));
                 index += 1;
             }
@@ -876,13 +882,16 @@ fn schedule_rows_html(task: &RunnerTask) -> String {
                     "",
                     &day_of_month.to_string(),
                     None,
+                    Some(task),
                 ));
                 index += 1;
             }
         }
     }
     if rows.is_empty() {
-        rows.push(schedule_row_html(0, "interval", "1h", "", "", "", "", None));
+        rows.push(schedule_row_html(
+            0, "interval", "1h", "", "", "", "", None, None,
+        ));
     }
     rows.join("")
 }
@@ -915,6 +924,7 @@ fn schedule_row_html(
     weekly_value: &str,
     monthly_value: &str,
     working_hours: Option<&std::collections::HashMap<String, crate::runner::config::WorkingHours>>,
+    task: Option<&RunnerTask>,
 ) -> String {
     let interval_hidden = if kind == "interval" { "" } else { "hidden" };
     let once_hidden = if kind == "once" { "" } else { "hidden" };
@@ -961,6 +971,12 @@ fn schedule_row_html(
     .collect::<Vec<_>>()
     .join("");
 
+    let mut start_time_val = String::new();
+    if let Some(TaskSchedule::Interval { start_time, .. }) = task.and_then(|t| t.schedules.get(index))
+    {
+        start_time_val = start_time.clone().unwrap_or_default();
+    }
+
     let mut working_hours_html = String::new();
     if let Some(wh) = working_hours {
         for (day, hours) in wh {
@@ -980,7 +996,7 @@ fn schedule_row_html(
 
     format!(
         "<div class='p-3 border border-gray-200 rounded mb-2' data-schedule-row>\
-          <div class='grid md:grid-cols-5 gap-2 items-end'>\
+          <div class='grid md:grid-cols-6 gap-2 items-end'>\
             <label class='block'>\
                 <span class='text-xs font-semibold text-gray-700'>Type</span>\
                 <select class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm schedule-kind' name='schedule_kind_{}'>\
@@ -995,6 +1011,10 @@ fn schedule_row_html(
                 <span class='text-xs font-semibold text-gray-700'>Interval</span>\
                 <select class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' name='schedule_interval_{}'>{}\
                 </select>\
+            </label>\
+            <label class='block schedule-interval {}'>\
+                <span class='text-xs font-semibold text-gray-700'>Start Time (HH:MM)</span>\
+                <input class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' type='time' name='schedule_start_time_{}' value='{}'>\
             </label>\
             <label class='block schedule-once {}'>\
                 <span class='text-xs font-semibold text-gray-700'>Date & Time</span>\
@@ -1033,6 +1053,9 @@ fn schedule_row_html(
         interval_hidden,
         index,
         interval_options,
+        interval_hidden,
+        index,
+        start_time_val,
         once_hidden,
         index,
         escape_html(once_value),

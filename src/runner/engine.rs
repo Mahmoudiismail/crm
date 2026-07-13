@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use anyhow::{Context, Result};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeZone, Utc};
 use std::collections::VecDeque;
 use tokio::sync::{mpsc, Mutex};
 use tracing::{debug, error, info};
@@ -1030,7 +1030,7 @@ fn normalize_and_validate_schedules(
                 every_seconds,
                 next_run_at,
                 start_time,
-                working_hours,
+                working_hours: _,
                 ..
             } => {
                 *every_seconds = (*every_seconds).max(min_task_interval_seconds);
@@ -1045,22 +1045,35 @@ fn normalize_and_validate_schedules(
                 }
 
                 // If it doesn't have a next_run_at, we need to compute it.
-                // If start_time is set, we use it to find the *first* execution
+                // If start_time is set, we find the first valid future slot
                 if next_run_at.is_empty() {
                     let now = Utc::now();
                     if let Some(st) = start_time {
                         if !st.is_empty() {
-                            match next_daily_run_after(
-                                std::slice::from_ref(st),
-                                now,
-                                working_hours.as_ref(),
-                            ) {
-                                Ok(next) => *next_run_at = next,
-                                Err(_) => {
-                                    let next =
-                                        now + chrono::TimeDelta::seconds(*every_seconds as i64);
-                                    *next_run_at = next.to_rfc3339();
+                            if let Ok(st_time) = chrono::NaiveTime::parse_from_str(st, "%H:%M") {
+                                let now_local = now.with_timezone(&chrono::Local);
+                                let now_naive = now_local.naive_local();
+                                let mut candidate_local = now_local.date_naive().and_time(st_time);
+
+                                while candidate_local <= now_naive {
+                                    candidate_local +=
+                                        chrono::Duration::seconds(*every_seconds as i64);
                                 }
+
+                                let next = chrono::Local
+                                    .from_local_datetime(&candidate_local)
+                                    .earliest()
+                                    .or_else(|| {
+                                        chrono::Local.from_local_datetime(&candidate_local).latest()
+                                    })
+                                    .map(|dt: DateTime<chrono::Local>| dt.with_timezone(&Utc))
+                                    .unwrap_or(
+                                        now + chrono::TimeDelta::seconds(*every_seconds as i64),
+                                    );
+                                *next_run_at = next.to_rfc3339();
+                            } else {
+                                let next = now + chrono::TimeDelta::seconds(*every_seconds as i64);
+                                *next_run_at = next.to_rfc3339();
                             }
                         } else {
                             let next = now + chrono::TimeDelta::seconds(*every_seconds as i64);
@@ -1189,25 +1202,41 @@ fn advance_schedule(
         TaskSchedule::Interval {
             every_seconds,
             next_run_at,
+            start_time,
             ..
         } => {
             let effective_frequency = (*every_seconds).max(min_task_interval_seconds.max(1));
 
-            // Advance by the interval
-            let next = now + chrono::TimeDelta::seconds(effective_frequency as i64);
+            // If there's a start_time, we align with it
+            let next = if let Some(st) = start_time {
+                if !st.is_empty() {
+                    match chrono::NaiveTime::parse_from_str(st, "%H:%M") {
+                        Ok(st_time) => {
+                            let now_local = now.with_timezone(&chrono::Local);
+                            let now_naive = now_local.naive_local();
+                            let mut candidate_local = now_local.date_naive().and_time(st_time);
 
-            // If we have working hours or a start time, we just set the next run.
-            // If the next computed run is outside working hours, `schedule_is_due`
-            // will hold the task back until working hours open, at which point it fires immediately,
-            // or if start_time is set, we shouldn't delay it past the interval unless it's a new day,
-            // but the requirement is "start time for the first interval execution happens on a given day".
-            // Since we're advancing, we just add the interval.
-            // Wait, if it advances past the working day, it should wait until the start_time of the next working day.
-            // Let's keep it simple: just add the interval. `schedule_is_due` will pause it if outside working hours.
-            // However, if `start_time` is present AND it's outside working hours (e.g. overnight),
-            // when the new day starts, it should wait until `start_time` to begin again.
+                            // Calculate slots from start_time
+                            // If candidate is in the future, we probably shouldn't be here yet if due_now was true,
+                            // but let's handle it.
+                            while candidate_local <= now_naive {
+                                candidate_local += chrono::Duration::seconds(effective_frequency as i64);
+                            }
 
-            // For now, setting it to `next` is fine, `schedule_is_due` handles the gating.
+                            chrono::Local.from_local_datetime(&candidate_local).earliest()
+                                .or_else(|| chrono::Local.from_local_datetime(&candidate_local).latest())
+                                .map(|dt: DateTime<chrono::Local>| dt.with_timezone(&Utc))
+                                .unwrap_or(now + chrono::TimeDelta::seconds(effective_frequency as i64))
+                        }
+                        Err(_) => now + chrono::TimeDelta::seconds(effective_frequency as i64),
+                    }
+                } else {
+                    now + chrono::TimeDelta::seconds(effective_frequency as i64)
+                }
+            } else {
+                now + chrono::TimeDelta::seconds(effective_frequency as i64)
+            };
+
             *every_seconds = effective_frequency;
             *next_run_at = next.to_rfc3339();
         }

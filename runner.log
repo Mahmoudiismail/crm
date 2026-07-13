@@ -1,0 +1,4 @@
+   Compiling crm_tool v1.1.0 (/app)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.23s
+     Running `target/debug/runner`
+Runner already running (or port in use): Address already in use (os error 98)
