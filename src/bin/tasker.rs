@@ -164,7 +164,11 @@ pub fn run_app(options: TaskerCliOptions) -> Result<()> {
         tracing::trace!("Processing task #{} from configuration.", task_idx);
         if let Some(filter) = task_filter {
             if task_idx != filter {
-                tracing::trace!("Skipping task #{} due to filter (target: {}).", task_idx, filter);
+                tracing::trace!(
+                    "Skipping task #{} due to filter (target: {}).",
+                    task_idx,
+                    filter
+                );
                 continue;
             }
         }

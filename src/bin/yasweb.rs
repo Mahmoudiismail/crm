@@ -538,9 +538,12 @@ async fn main() -> Result<()> {
                     Some(temp_dl_dir.clone()),
                 ) {
                     Ok(filters) => {
-                        tracing::info!("Browser tab automation for task {} completed successfully.", i);
+                        tracing::info!(
+                            "Browser tab automation for task {} completed successfully.",
+                            i
+                        );
                         filters
-                    },
+                    }
                     Err(e) => {
                         error!("Browser automation failed for task {}: {:?}", i, e);
                         eprintln!("Browser automation failed for task {}: {:?}", i, e);

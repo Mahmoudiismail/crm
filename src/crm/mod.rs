@@ -33,7 +33,11 @@ pub async fn run_once(
     }
 
     config.finalize_runtime_fields();
-    tracing::trace!("Runtime fields finalized: from_date={}, to_date={}", config.from_date, config.to_date);
+    tracing::trace!(
+        "Runtime fields finalized: from_date={}, to_date={}",
+        config.from_date,
+        config.to_date
+    );
 
     let client = build_client(&config)?;
 
