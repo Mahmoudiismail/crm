@@ -19,14 +19,16 @@ pub async fn run_once(
 ) -> Result<()> {
     let mut config = AppConfig::load(crm_config_path)?;
 
+    use crate::utils::to_iso_date;
+
     if let Some(sd) = start_date {
         if !sd.is_empty() {
-            config.from_date = sd;
+            config.from_date = to_iso_date(&sd);
         }
     }
     if let Some(ed) = end_date {
         if !ed.is_empty() {
-            config.to_date = ed;
+            config.to_date = to_iso_date(&ed);
         }
     }
 
