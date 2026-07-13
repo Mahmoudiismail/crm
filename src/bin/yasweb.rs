@@ -27,13 +27,13 @@ pub struct YaswebCliOptions {
     #[arg(long)]
     filters: Option<String>,
     #[arg(long)]
-    monthly: Option<String>,
+    monthly: bool,
     #[arg(long)]
     start_date: Option<String>,
     #[arg(long)]
     end_date: Option<String>,
     #[arg(long)]
-    add_time_to_file: Option<String>,
+    add_time_to_file: bool,
     #[arg(long, hide = true)]
     manifest: bool,
 }
@@ -252,14 +252,10 @@ async fn main() -> Result<()> {
         }
     }
 
-    let is_monthly = options
-        .monthly
-        .is_some_and(|m| m.to_lowercase() == "true" || m == "1");
+    let is_monthly = options.monthly;
     let mut start_date_str = options.start_date;
     let mut end_date_str = options.end_date;
-    let add_time_to_file = options
-        .add_time_to_file
-        .is_some_and(|a| a.to_lowercase() == "true" || a == "1");
+    let add_time_to_file = options.add_time_to_file;
 
     if active_report_name.is_empty() {
         error!("Validation failed: --name is required.");
