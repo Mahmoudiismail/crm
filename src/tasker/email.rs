@@ -883,7 +883,9 @@ pub fn process_emails(
             .filter(|n| !n.trim().is_empty())
             .unwrap_or_else(|| "All".to_string());
 
-        let (subject, body) = if bucket_name.eq_ignore_ascii_case("Call Center") && !effective_send_exceptions {
+        let (subject, body) = if bucket_name.eq_ignore_ascii_case("Call Center")
+            && !effective_send_exceptions
+        {
             (format!("Open TKTs - {}", bucket_name), "".to_string())
         } else if let Some(template_path_str) = &config.body_template_file {
             let template_path =
@@ -1354,13 +1356,22 @@ mod tests {
 
         let temp_dir = std::env::temp_dir();
         let email_html_path = temp_dir.join("Call_Center_email.html");
-        assert!(email_html_path.exists(), "Email HTML should still be generated for Call Center as an exception team");
+        assert!(
+            email_html_path.exists(),
+            "Email HTML should still be generated for Call Center as an exception team"
+        );
 
         let html_content = std::fs::read_to_string(&email_html_path).unwrap();
         // If it used Call Center special logic, the body would be empty (because of `if bucket_name.eq_ignore_ascii_case("Call Center") && !effective_send_exceptions { (..., "".to_string()) }`)
         // Since it's an exception, it should use the default or template body.
-        assert!(!html_content.contains("<body></body>"), "Email body should not be empty for Call Center exception");
-        assert!(html_content.contains("Kindly find below"), "Email should contain standard template text");
+        assert!(
+            !html_content.contains("<body></body>"),
+            "Email body should not be empty for Call Center exception"
+        );
+        assert!(
+            html_content.contains("Kindly find below"),
+            "Email should contain standard template text"
+        );
 
         let _ = std::fs::remove_file(email_html_path);
         let _ = std::fs::remove_file(temp_dir.join("Call_Center_open_tickets.csv"));
