@@ -28,17 +28,13 @@ pub struct AssignmentSettings {
 }
 
 pub fn parse_start_date(val: &str) -> Option<NaiveDateTime> {
+    if let Some(dt) = crate::utils::parse_flexible_date(val) {
+        return dt.and_hms_opt(0, 0, 0);
+    }
+
     let trimmed = val.trim();
     if trimmed.is_empty() {
         return None;
-    }
-
-    if let Ok(dt) = NaiveDate::parse_from_str(trimmed, "%Y-%m-%d") {
-        return dt.and_hms_opt(0, 0, 0);
-    }
-
-    if let Ok(dt) = NaiveDate::parse_from_str(trimmed, "%d-%b-%Y") {
-        return dt.and_hms_opt(0, 0, 0);
     }
 
     // e.g. "1-May" -> "1-May-2026" (append current year)
@@ -61,8 +57,8 @@ pub fn parse_created_at(val: &str) -> Option<NaiveDateTime> {
     if trimmed.is_empty() {
         return None;
     }
-    // Try DD-MMM-YYYY (e.g. 01-May-2026)
-    if let Ok(dt) = NaiveDate::parse_from_str(trimmed, "%d-%b-%Y") {
+    // Try flexible date formats
+    if let Some(dt) = crate::utils::parse_flexible_date(trimmed) {
         return dt.and_hms_opt(0, 0, 0);
     }
     // Try dd/mm/yyyy hh:mm:ss
@@ -403,8 +399,37 @@ pub fn generate_csv(params: &CsvAnalysisParams) -> Result<Option<std::path::Path
         }
 
         for result in rdr.records() {
-            let mut record = result?;
-            tracing::trace!("Processing row: {:?}", record);
+            let mut record = match result {
+                Ok(r) => r,
+                Err(e) => {
+                    let line_num = e.position().map(|p| p.line()).unwrap_or(0) as usize;
+                    let end_line = line_num + 10;
+
+                    let mut diagnostic_info = String::new();
+                    for (idx, line) in file_content.lines().enumerate() {
+                        let current_line_num = idx + 1;
+                        if current_line_num <= end_line {
+                            let marker = if current_line_num == line_num {
+                                ">>> "
+                            } else {
+                                "    "
+                            };
+                            diagnostic_info.push_str(&format!(
+                                "{}{:4} | {}\n",
+                                marker, current_line_num, line
+                            ));
+                        } else {
+                            break;
+                        }
+                    }
+
+                    error!(
+                        "CSV parsing error in file {:?} at line {}: {}\nDiagnostic Context (from start to 10 lines after):\n{}",
+                        file_path, line_num, e, diagnostic_info
+                    );
+                    anyhow::bail!("Failed to parse ticket report CSV: {}", e);
+                }
+            };
             let mut is_exception_val = "No";
 
             // Check start_date filter

@@ -433,7 +433,37 @@ fn generate_leads_report(
         }
 
         for result in rdr.records() {
-            let record = result?;
+            let record = match result {
+                Ok(r) => r,
+                Err(e) => {
+                    let line_num = e.position().map(|p| p.line()).unwrap_or(0) as usize;
+                    let end_line = line_num + 10;
+
+                    let mut diagnostic_info = String::new();
+                    for (idx, line) in file_content.lines().enumerate() {
+                        let current_line_num = idx + 1;
+                        if current_line_num <= end_line {
+                            let marker = if current_line_num == line_num {
+                                ">>> "
+                            } else {
+                                "    "
+                            };
+                            diagnostic_info.push_str(&format!(
+                                "{}{:4} | {}\n",
+                                marker, current_line_num, line
+                            ));
+                        } else {
+                            break;
+                        }
+                    }
+
+                    error!(
+                        "CSV parsing error in file {:?} at line {}: {}\nDiagnostic Context (from start to 10 lines after):\n{}",
+                        file_path, line_num, e, diagnostic_info
+                    );
+                    anyhow::bail!("Failed to parse lead report CSV: {}", e);
+                }
+            };
 
             let lead_id = lead_id_idx
                 .and_then(|idx| record.get(idx))
@@ -1409,6 +1439,24 @@ mod tests {
         // Assert HTML structure expectations
         assert!(html.contains("Open"));
         assert!(html.contains("Grand Total"));
+    }
+
+    #[test]
+    fn test_leads_report_parsing_error_diagnostic() {
+        let download_dir = tempfile::tempdir().unwrap();
+
+        // Create a malformed lead report
+        let lead_report_path = download_dir.path().join("lead_report_error.csv");
+        let mut lead_file = File::create(&lead_report_path).unwrap();
+        writeln!(lead_file, "Lead Id,Branch,Status").unwrap();
+        writeln!(lead_file, "L1,Branch1,New").unwrap();
+        writeln!(lead_file, "L2,Branch2,Follow-up,ExtraField").unwrap(); // Malformed: too many fields
+
+        let result = generate_leads_report(download_dir.path().to_str().unwrap(), 60, &[]);
+
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("Failed to parse lead report CSV"));
     }
 
     #[test]
