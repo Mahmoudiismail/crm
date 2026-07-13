@@ -1220,13 +1220,20 @@ fn advance_schedule(
                             // If candidate is in the future, we probably shouldn't be here yet if due_now was true,
                             // but let's handle it.
                             while candidate_local <= now_naive {
-                                candidate_local += chrono::Duration::seconds(effective_frequency as i64);
+                                candidate_local +=
+                                    chrono::Duration::seconds(effective_frequency as i64);
                             }
 
-                            chrono::Local.from_local_datetime(&candidate_local).earliest()
-                                .or_else(|| chrono::Local.from_local_datetime(&candidate_local).latest())
+                            chrono::Local
+                                .from_local_datetime(&candidate_local)
+                                .earliest()
+                                .or_else(|| {
+                                    chrono::Local.from_local_datetime(&candidate_local).latest()
+                                })
                                 .map(|dt: DateTime<chrono::Local>| dt.with_timezone(&Utc))
-                                .unwrap_or(now + chrono::TimeDelta::seconds(effective_frequency as i64))
+                                .unwrap_or(
+                                    now + chrono::TimeDelta::seconds(effective_frequency as i64),
+                                )
                         }
                         Err(_) => now + chrono::TimeDelta::seconds(effective_frequency as i64),
                     }

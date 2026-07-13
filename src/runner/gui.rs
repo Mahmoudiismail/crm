@@ -972,7 +972,8 @@ fn schedule_row_html(
     .join("");
 
     let mut start_time_val = String::new();
-    if let Some(TaskSchedule::Interval { start_time, .. }) = task.and_then(|t| t.schedules.get(index))
+    if let Some(TaskSchedule::Interval { start_time, .. }) =
+        task.and_then(|t| t.schedules.get(index))
     {
         start_time_val = start_time.clone().unwrap_or_default();
     }

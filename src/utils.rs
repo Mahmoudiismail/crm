@@ -147,8 +147,14 @@ mod tests {
 
         // Test eomonth
         // May 2026 end is 31-05-2026
-        assert_eq!(replace_date_vars("eomonth", Some("01-05-2026")), "31-05-2026");
+        assert_eq!(
+            replace_date_vars("eomonth", Some("01-05-2026")),
+            "31-05-2026"
+        );
         // Feb 2024 (leap) is 29-02-2024
-        assert_eq!(replace_date_vars("eomonth", Some("2024-02-01")), "29-02-2024");
+        assert_eq!(
+            replace_date_vars("eomonth", Some("2024-02-01")),
+            "29-02-2024"
+        );
     }
 }
