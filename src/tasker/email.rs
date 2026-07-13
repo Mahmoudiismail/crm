@@ -543,6 +543,7 @@ pub fn process_emails(
     for result in map_rdr.deserialize::<TeamMapping>() {
         match result {
             Ok(mapping) => {
+                tracing::trace!("Loaded team mapping: {:?}", mapping);
                 team_maps.insert(mapping.team_name.trim().to_lowercase(), mapping);
             }
             Err(e) => {
@@ -601,6 +602,7 @@ pub fn process_emails(
 
     for result in rdr.records() {
         let record = result?;
+        tracing::trace!("Processing email record: {:?}", record);
 
         let is_exception_val = is_exception_idx
             .and_then(|idx| record.get(idx))

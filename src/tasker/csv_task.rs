@@ -199,6 +199,7 @@ pub fn generate_csv(params: &CsvAnalysisParams) -> Result<Option<std::path::Path
     if let (Some(c_idx), Some(t_idx)) = (cognito_idx, team_idx) {
         for result in users_rdr.records() {
             let record = result?;
+            tracing::trace!("Processing user record: {:?}", record);
             if let (Some(cognito), Some(team_str)) = (record.get(c_idx), record.get(t_idx)) {
                 let cognito = cognito.trim();
                 if cognito.is_empty() {
@@ -245,6 +246,7 @@ pub fn generate_csv(params: &CsvAnalysisParams) -> Result<Option<std::path::Path
     for result in assign_rdr.deserialize::<AssignmentSettings>() {
         match result {
             Ok(setting) => {
+                tracing::trace!("Processing assignment setting: {:?}", setting);
                 if let Some(team2) = setting.auto_agent_team_assignment {
                     let key = (
                         setting.category.trim().to_uppercase(),
@@ -402,6 +404,7 @@ pub fn generate_csv(params: &CsvAnalysisParams) -> Result<Option<std::path::Path
 
         for result in rdr.records() {
             let mut record = result?;
+            tracing::trace!("Processing row: {:?}", record);
             let mut is_exception_val = "No";
 
             // Check start_date filter
@@ -581,6 +584,7 @@ pub fn generate_csv(params: &CsvAnalysisParams) -> Result<Option<std::path::Path
         output_writer.write_record(record)?;
     }
 
+    tracing::trace!("Flushing output writer...");
     output_writer.flush()?;
     info!(
         "CSV generation completed successfully. Output written to {}",

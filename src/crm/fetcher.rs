@@ -7,7 +7,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::fs;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, trace};
 
 use crate::crm::config::AppConfig;
 use crate::crm::types::ReportType;
@@ -99,7 +99,9 @@ pub async fn fetch_reports(
     });
 
     for def in defs {
+        trace!("Checking report definition: {}", def.key);
         if !should_fetch(def.key) {
+            trace!("Skipping report '{}' per report_type filter", def.key);
             continue;
         }
 
@@ -118,6 +120,7 @@ pub async fn fetch_reports(
             continue;
         }
 
+        trace!("Preparing to fetch report: {}", def.key);
         let endpoint = def.endpoint;
         let extra = def.extra_params;
 
@@ -342,11 +345,14 @@ async fn fetch_single(
     debug!("Response body from {}: {}", endpoint, body);
 
     if !status.is_success() {
+        error!("{} failed with HTTP {}: {}", endpoint, status, body);
         anyhow::bail!("{} returned HTTP {}: {}", endpoint, status, body);
     }
 
+    trace!("Parsing JSON response from {}...", endpoint);
     let parsed: Value =
         serde_json::from_str(&body).with_context(|| format!("Invalid JSON from {}", endpoint))?;
+    trace!("Successfully parsed JSON from {}.", endpoint);
     Ok(parsed)
 }
 

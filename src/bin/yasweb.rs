@@ -331,6 +331,7 @@ async fn main() -> Result<()> {
         fs::write(&config_path, content)
             .await
             .context("Failed to write updated yasweb_config.json")?;
+        info!("yasweb_config.json updated successfully.");
     }
 
     info!("Loaded config for URL: {}", config.url);
@@ -524,7 +525,9 @@ async fn main() -> Result<()> {
                 );
             }
 
+            tracing::trace!("Spawning task for range: {} to {}", start_dt, end_dt);
             tasks.push(tokio::task::spawn_blocking(move || {
+                tracing::info!("Starting browser tab automation for task {}...", i);
                 let res = match run_browser_tab(
                     browser_clone,
                     &config_task,
@@ -534,10 +537,13 @@ async fn main() -> Result<()> {
                     is_initial,
                     Some(temp_dl_dir.clone()),
                 ) {
-                    Ok(filters) => filters,
+                    Ok(filters) => {
+                        tracing::info!("Browser tab automation for task {} completed successfully.", i);
+                        filters
+                    },
                     Err(e) => {
-                        error!("Browser automation failed: {:?}", e);
-                        eprintln!("Browser automation failed: {:?}", e);
+                        error!("Browser automation failed for task {}: {:?}", i, e);
+                        eprintln!("Browser automation failed for task {}: {:?}", i, e);
                         Vec::new()
                     }
                 };

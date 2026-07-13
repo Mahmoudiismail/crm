@@ -33,10 +33,13 @@ pub async fn run_once(
     }
 
     config.finalize_runtime_fields();
+    tracing::trace!("Runtime fields finalized: from_date={}, to_date={}", config.from_date, config.to_date);
 
     let client = build_client(&config)?;
 
+    tracing::info!("Ensuring authentication...");
     let token = auth::ensure_authenticated(&mut config, &client, false).await?;
+    tracing::trace!("Authentication successful.");
     config.save(crm_config_path)?;
 
     let exe_path = std::env::current_exe()?;
@@ -45,10 +48,13 @@ pub async fn run_once(
         .unwrap_or_else(|| std::path::Path::new("."));
     let download_dir = exe_dir.join("Downloads");
 
+    tracing::info!("Fetching reports for type: {:?}", report);
     let results = fetcher::fetch_reports(&config, &client, &token, report, &download_dir).await?;
+    tracing::trace!("Fetch reports results received.");
 
     if config.download_csv {
         let urls = fetcher::extract_urls(&results);
+        tracing::info!("Extracted {} download URL(s).", urls.len());
         tokio::fs::create_dir_all(&download_dir).await?;
 
         let download_futures = urls.iter().map(|(key, url)| {

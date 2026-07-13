@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tracing::{error, info, warn};
+use tracing::{error, info, trace, warn};
 
 use crate::yasweb::config::YaswebConfig;
 
@@ -86,10 +86,11 @@ pub fn run_browser_tab(
             }
             Event::NetworkResponseReceived(res) => {
                 info!(
-                    "Response: {} {} {}",
+                    "Response: {} {} {} Headers: {:?}",
                     res.params.response.status,
                     res.params.response.url,
-                    res.params.response.mime_type
+                    res.params.response.mime_type,
+                    res.params.response.headers
                 );
             }
             _ => {}
@@ -691,6 +692,7 @@ pub fn run_browser_tab(
                                     );
 
                                     info!("Evaluating JS to execute automation sequence...");
+                                    trace!("JS Script content: {}", js_script);
                                     match tab.evaluate(&js_script, true) {
                                         Ok(res) => {
                                             if let Some(v) = res.value {
