@@ -410,7 +410,11 @@ fn generate_leads_report(
         let file_content = String::from_utf8_lossy(&file_bytes);
         let mut rdr = ReaderBuilder::new()
             .has_headers(true)
-            .delimiter(if file_content.contains('\t') { b'\t' } else { b',' })
+            .delimiter(if file_content.contains('\t') {
+                b'\t'
+            } else {
+                b','
+            })
             .from_reader(file_content.as_bytes());
 
         if headers.is_none() {
@@ -454,9 +458,7 @@ fn generate_leads_report(
 
             let is_excluded_branch = exclude_branches_lower.contains(&branch);
 
-            let status_matches = status == "new"
-                || status == "follow up"
-                || status == "follow-up";
+            let status_matches = status == "new" || status == "follow up" || status == "follow-up";
 
             if !is_excluded_branch && status_matches {
                 all_records.push(record);
@@ -1422,12 +1424,9 @@ mod tests {
 
         let exclude_branches = vec!["Excluded Branch".to_string()];
 
-        let result = generate_leads_report(
-            download_dir.path().to_str().unwrap(),
-            60,
-            &exclude_branches,
-        )
-        .unwrap();
+        let result =
+            generate_leads_report(download_dir.path().to_str().unwrap(), 60, &exclude_branches)
+                .unwrap();
 
         assert!(result.is_some(), "Leads report should be generated");
         let path = result.unwrap();
@@ -1513,7 +1512,10 @@ mod tests {
         // In this case, Team A has an open ticket, so it should be included.
         // But for 'bob' who only has closed, it should be skipped.
         assert!(html_content.contains("alice"));
-        assert!(!html_content.contains("bob"), "Assignee with only closed tickets should be excluded from HTML table");
+        assert!(
+            !html_content.contains("bob"),
+            "Assignee with only closed tickets should be excluded from HTML table"
+        );
 
         let _ = std::fs::remove_file(attachment_csv);
         let _ = std::fs::remove_file(email_html);

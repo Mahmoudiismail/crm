@@ -781,8 +781,7 @@ pub mod tests {
         )
         .unwrap();
 
-        let leads_bytes =
-            std::fs::read("TestingDownloads/lead_report_1783627642439.csv").unwrap();
+        let leads_bytes = std::fs::read("TestingDownloads/lead_report_1783627642439.csv").unwrap();
         let leads_csv = String::from_utf8_lossy(&leads_bytes);
         std::fs::write(leads_file.path(), leads_csv.as_bytes()).unwrap();
         std::fs::copy(
