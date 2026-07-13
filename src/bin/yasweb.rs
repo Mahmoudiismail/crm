@@ -27,13 +27,13 @@ pub struct YaswebCliOptions {
     #[arg(long)]
     filters: Option<String>,
     #[arg(long)]
-    monthly: Option<String>,
+    monthly: bool,
     #[arg(long)]
     start_date: Option<String>,
     #[arg(long)]
     end_date: Option<String>,
     #[arg(long)]
-    add_time_to_file: Option<String>,
+    add_time_to_file: bool,
     #[arg(long, hide = true)]
     manifest: bool,
 }
@@ -237,6 +237,7 @@ async fn main() -> Result<()> {
             reports: HashMap::new(),
             headless: false,
             keep_open: false,
+            concurrency: 6,
         },
     )?;
     let mut config_updated = false;
@@ -252,14 +253,10 @@ async fn main() -> Result<()> {
         }
     }
 
-    let is_monthly = options
-        .monthly
-        .is_some_and(|m| m.to_lowercase() == "true" || m == "1");
+    let is_monthly = options.monthly;
     let mut start_date_str = options.start_date;
     let mut end_date_str = options.end_date;
-    let add_time_to_file = options
-        .add_time_to_file
-        .is_some_and(|a| a.to_lowercase() == "true" || a == "1");
+    let add_time_to_file = options.add_time_to_file;
 
     if active_report_name.is_empty() {
         error!("Validation failed: --name is required.");
@@ -314,11 +311,22 @@ async fn main() -> Result<()> {
     // Determine configuration to use
     if !active_report_type.is_empty() || !active_filters.is_empty() {
         // We received details from CLI.
+        // Try to preserve existing date keys if they exist in the current config
+        let (existing_start_key, existing_end_key) =
+            if let Some(existing) = config.reports.get(&active_report_name) {
+                (
+                    existing.start_date_key.clone(),
+                    existing.end_date_key.clone(),
+                )
+            } else {
+                (None, None)
+            };
+
         let report_conf = ReportConfig {
             report_type: active_report_type.clone(),
             filters: active_filters.clone(),
-            start_date_key: None,
-            end_date_key: None,
+            start_date_key: existing_start_key,
+            end_date_key: existing_end_key,
         };
         config
             .reports
@@ -448,8 +456,14 @@ async fn main() -> Result<()> {
 
     let browser = Arc::new(Browser::new(launch_options).context("Failed to launch browser")?);
 
-    // Chunk runs into concurrent batches of max 6
-    for chunk in date_ranges.chunks(6) {
+    // Chunk runs into concurrent batches based on config
+    let concurrency = if config.concurrency == 0 {
+        1
+    } else {
+        config.concurrency
+    };
+
+    for chunk in date_ranges.chunks(concurrency) {
         let mut tasks = Vec::new();
         for (i, (start_dt, end_dt)) in chunk.iter().enumerate() {
             let config_task = config.clone();

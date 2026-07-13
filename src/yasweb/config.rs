@@ -21,8 +21,14 @@ pub struct YaswebConfig {
     pub headless: bool,
     #[serde(default)]
     pub keep_open: bool,
+    #[serde(default = "default_concurrency")]
+    pub concurrency: usize,
     #[serde(default)]
     pub reports: HashMap<String, ReportConfig>,
+}
+
+fn default_concurrency() -> usize {
+    6
 }
 
 impl Default for YaswebConfig {
@@ -33,6 +39,7 @@ impl Default for YaswebConfig {
             password: Some("password".to_string()),
             headless: false,
             keep_open: false,
+            concurrency: 6,
             reports: HashMap::new(),
         }
     }

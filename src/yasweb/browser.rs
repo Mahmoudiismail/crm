@@ -28,9 +28,9 @@ pub fn run_browser_tab(
     let mut discovered_filters = Vec::new();
 
     let tab = if is_initial_tab {
-        let blank_tab = {
+        let mut found = None;
+        for _ in 0..5 {
             let tabs = browser.get_tabs().lock().unwrap_or_else(|e| e.into_inner());
-            let mut found = None;
             for t in tabs.iter() {
                 let url = t.get_url();
                 if url.contains("about:blank") || url.is_empty() {
@@ -38,16 +38,20 @@ pub fn run_browser_tab(
                     break;
                 }
             }
-
-            if found.is_none() {
-                let urls: Vec<String> = tabs.iter().map(|t| t.get_url()).collect();
-                info!("Warning: No about:blank tab found. Open tabs: {:?}", urls);
-                found = tabs.first().cloned();
+            if found.is_some() {
+                break;
             }
-            found
-        };
+            std::thread::sleep(Duration::from_millis(500));
+        }
 
-        match blank_tab {
+        if found.is_none() {
+            let tabs = browser.get_tabs().lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(first) = tabs.first() {
+                found = Some(first.clone());
+            }
+        }
+
+        match found {
             Some(t) => t,
             None => browser.new_tab().context("Failed to open new tab")?,
         }
@@ -105,9 +109,6 @@ pub fn run_browser_tab(
 
     // Attempt to wait until navigated, ignore error if it timeouts but page loads
     let _ = tab.wait_until_navigated();
-
-    // Give Angular more time to bootstrap and render the initial DOM
-    std::thread::sleep(Duration::from_secs(10));
 
     info!("Waiting for username input...");
     let username_selector = "input[formcontrolname='username'], #mat-input-0";
