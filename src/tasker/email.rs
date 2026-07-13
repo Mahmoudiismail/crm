@@ -751,36 +751,32 @@ pub fn process_emails(
         // "all allowed branches" means the branch must be in send_per_branch_branches.
         let allowed_branch = send_per_branch_branches.contains(&b_low);
 
-        if is_cc {
+        if effective_send_exceptions {
+            per_team_buckets
+                .entry(row.team.clone())
+                .or_default()
+                .push(row);
+        } else if is_cc {
             // Include Call Center tickets if send_cc is enabled, regardless of only_call_center flag
             if send_cc {
-                call_center_bucket.push(row.clone());
+                call_center_bucket.push(row);
             }
-        }
-
-        if !only_call_center {
-            if effective_send_exceptions {
+        } else if !only_call_center {
+            if send_per_team_all_branches.contains(&t_low) {
                 per_team_buckets
                     .entry(row.team.clone())
                     .or_default()
                     .push(row);
-            } else {
-                if send_per_team_all_branches.contains(&t_low) {
-                    per_team_buckets
-                        .entry(row.team.clone())
-                        .or_default()
-                        .push(row);
-                } else if allowed_branch {
-                    per_branch_buckets
-                        .entry(row.branch.clone())
-                        .or_default()
-                        .push(row);
-                } else if send_per_team_branches.contains(&b_low) {
-                    per_team_buckets
-                        .entry(row.team.clone())
-                        .or_default()
-                        .push(row);
-                }
+            } else if allowed_branch {
+                per_branch_buckets
+                    .entry(row.branch.clone())
+                    .or_default()
+                    .push(row);
+            } else if send_per_team_branches.contains(&b_low) {
+                per_team_buckets
+                    .entry(row.team.clone())
+                    .or_default()
+                    .push(row);
             }
         }
     }
@@ -795,7 +791,7 @@ pub fn process_emails(
         let bucket_name = bucket_name_cleaned.as_str();
 
         let mut leads_report_path = None;
-        if bucket_name.eq_ignore_ascii_case("call center") {
+        if bucket_name.eq_ignore_ascii_case("call center") && !effective_send_exceptions {
             match generate_leads_report(download_dir, minutes_ago, exclude_branches) {
                 Ok(path_opt) => leads_report_path = path_opt,
                 Err(e) => error!("Failed to generate leads report for Call Center: {}", e),
@@ -887,7 +883,7 @@ pub fn process_emails(
             .filter(|n| !n.trim().is_empty())
             .unwrap_or_else(|| "All".to_string());
 
-        let (subject, body) = if bucket_name.eq_ignore_ascii_case("Call Center") {
+        let (subject, body) = if bucket_name.eq_ignore_ascii_case("Call Center") && !effective_send_exceptions {
             (format!("Open TKTs - {}", bucket_name), "".to_string())
         } else if let Some(template_path_str) = &config.body_template_file {
             let template_path =
@@ -1230,7 +1226,7 @@ $Mail.Display()
 
     // 3. Process Call Center
     // Call Center gets special treatment because even if they have NO open tickets, they might have leads.
-    if send_cc {
+    if send_cc && !effective_send_exceptions {
         send_email_for_bucket("Call Center", &call_center_bucket, true)?;
     }
 
@@ -1297,6 +1293,77 @@ mod tests {
         );
 
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_send_exceptions_bypasses_call_center_special_logic() {
+        let download_dir = tempfile::tempdir().unwrap();
+        let results_path = download_dir.path().join("results.csv");
+        let mut ticket_file = File::create(&results_path).unwrap();
+        writeln!(
+            ticket_file,
+            "Ticket Id,Branch,Ticket Category,Ticket Type,Ticket Sub-Type,Status,Created At,Assignee,Position,team,Is Exception"
+        )
+        .unwrap();
+        // A Call Center ticket marked as Exception
+        writeln!(
+            ticket_file,
+            "2001,Main Branch,Cat1,Type1,Sub1,open,01/05/2026 12:00:00,alice,Pos1,Call Center,Yes"
+        )
+        .unwrap();
+
+        let mut teams_file = NamedTempFile::new().unwrap();
+        writeln!(teams_file, "Team Name,To Email,CC").unwrap();
+        writeln!(teams_file, "Call Center,cc@example.com,cc_boss@example.com").unwrap();
+
+        let email_config = EmailConfig {
+            team_mapping_file: teams_file.path().to_str().unwrap().to_string(),
+            body_template_file: None,
+            initial_cc: "init@example.com".to_string(),
+            ending_cc: "end@example.com".to_string(),
+            send_emails: Some(false), // Display only, but we'll skip PS
+            default_to_email: "def@example.com".to_string(),
+            send_per_team_all_branches: vec![],
+            send_per_branch_branches: vec![],
+            send_per_team_branches: None,
+            send_call_center: Some(true), // Enabled, but should be bypassed by send_exceptions
+            send_exceptions: Some(true),
+            indentation_spaces: None,
+            save_attachment_as_csv: Some(true),
+            save_email_as_html: Some(true),
+        };
+
+        // We'll also put a lead report in the download dir to see if it's NOT picked up
+        let lead_report_path = download_dir.path().join("lead_report_123.csv");
+        let mut lead_file = File::create(&lead_report_path).unwrap();
+        writeln!(lead_file, "Lead Id,Branch,Status").unwrap();
+        writeln!(lead_file, "L1,Main Branch,New").unwrap();
+
+        let result = process_emails(
+            results_path.to_str().unwrap(),
+            &email_config,
+            false,
+            true, // send_exceptions
+            download_dir.path().to_str().unwrap(),
+            60 * 24 * 365,
+            None,
+            &[],
+        );
+
+        assert!(result.is_ok());
+
+        let temp_dir = std::env::temp_dir();
+        let email_html_path = temp_dir.join("Call_Center_email.html");
+        assert!(email_html_path.exists(), "Email HTML should still be generated for Call Center as an exception team");
+
+        let html_content = std::fs::read_to_string(&email_html_path).unwrap();
+        // If it used Call Center special logic, the body would be empty (because of `if bucket_name.eq_ignore_ascii_case("Call Center") && !effective_send_exceptions { (..., "".to_string()) }`)
+        // Since it's an exception, it should use the default or template body.
+        assert!(!html_content.contains("<body></body>"), "Email body should not be empty for Call Center exception");
+        assert!(html_content.contains("Kindly find below"), "Email should contain standard template text");
+
+        let _ = std::fs::remove_file(email_html_path);
+        let _ = std::fs::remove_file(temp_dir.join("Call_Center_open_tickets.csv"));
     }
 
     #[test]
