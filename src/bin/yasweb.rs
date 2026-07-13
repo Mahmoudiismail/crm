@@ -369,10 +369,9 @@ async fn main() -> Result<()> {
             .clone()
             .context("--end-date is required when --monthly is true")?;
 
-        let start_dt = NaiveDate::parse_from_str(&start_date, "%d-%m-%Y")
-            .context("Invalid --start-date format, expected DD-MM-YYYY")?;
-        let end_dt = NaiveDate::parse_from_str(&end_date, "%d-%m-%Y")
-            .context("Invalid --end-date format, expected DD-MM-YYYY")?;
+        use crm_tool::utils::parse_flexible_date;
+        let start_dt = parse_flexible_date(&start_date).context("Invalid --start-date format")?;
+        let end_dt = parse_flexible_date(&end_date).context("Invalid --end-date format")?;
 
         if start_dt > end_dt {
             anyhow::bail!("--start-date must be before or equal to --end-date");

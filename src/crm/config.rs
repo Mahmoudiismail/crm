@@ -134,6 +134,13 @@ impl AppConfig {
 
     /// Finalize runtime-derived fields after loading config.
     pub fn finalize_runtime_fields(&mut self) {
+        use crate::utils::to_iso_date;
+
+        // Normalize existing date fields
+        self.from_date = to_iso_date(&self.from_date);
+        self.to_date = to_iso_date(&self.to_date);
+        self.calls_from_date = to_iso_date(&self.calls_from_date);
+
         // Finalize to_date: if still empty, default to today
         if self.to_date.is_empty() {
             self.to_date = Local::now().format("%Y-%m-%d").to_string();
