@@ -337,7 +337,31 @@ async fn main() -> Result<()> {
 
     // Parse date ranges
     let mut date_ranges: Vec<(String, String)> = Vec::new();
-    if is_monthly {
+
+    let mut effective_monthly = is_monthly;
+    if effective_monthly {
+        let report_conf = config
+            .reports
+            .get(&active_report_name)
+            .context("Report name not found in config")?;
+
+        if report_conf.start_date_key.is_none()
+            || report_conf.end_date_key.is_none()
+            || report_conf
+                .start_date_key
+                .as_ref()
+                .is_none_or(|k| k.is_empty())
+            || report_conf
+                .end_date_key
+                .as_ref()
+                .is_none_or(|k| k.is_empty())
+        {
+            info!("Report does not have start_date_key/end_date_key configured. Disabling monthly chunking.");
+            effective_monthly = false;
+        }
+    }
+
+    if effective_monthly {
         let start_date = start_date_str
             .clone()
             .context("--start-date is required when --monthly is true")?;
@@ -352,25 +376,6 @@ async fn main() -> Result<()> {
 
         if start_dt > end_dt {
             anyhow::bail!("--start-date must be before or equal to --end-date");
-        }
-
-        let report_conf = config
-            .reports
-            .get(&active_report_name)
-            .context("Report name not found in config")?;
-        if report_conf.start_date_key.is_none()
-            || report_conf.end_date_key.is_none()
-            || report_conf
-                .start_date_key
-                .as_ref()
-                .is_none_or(|k| k.is_empty())
-            || report_conf
-                .end_date_key
-                .as_ref()
-                .is_none_or(|k| k.is_empty())
-        {
-            error!("For monthly execution, the report must have start_date_key and end_date_key configured in yasweb_config.json.");
-            anyhow::bail!("For monthly execution, the report must have start_date_key and end_date_key configured in yasweb_config.json.");
         }
 
         let mut current_dt = start_dt;

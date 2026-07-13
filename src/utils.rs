@@ -122,6 +122,27 @@ pub fn replace_date_vars(val: &str, base_date: Option<&str>) -> String {
     }
 }
 
+pub fn to_iso_date(val: &str) -> String {
+    use chrono::NaiveDate;
+    let val = val.trim();
+    if val.is_empty() {
+        return val.to_string();
+    }
+    if let Ok(dt) = NaiveDate::parse_from_str(val, "%Y-%m-%d") {
+        return dt.format("%Y-%m-%d").to_string();
+    }
+    if let Ok(dt) = NaiveDate::parse_from_str(val, "%d-%m-%Y") {
+        return dt.format("%Y-%m-%d").to_string();
+    }
+    if let Ok(dt) = NaiveDate::parse_from_str(val, "%d/%m/%Y") {
+        return dt.format("%Y-%m-%d").to_string();
+    }
+    if let Ok(dt) = NaiveDate::parse_from_str(val, "%Y/%m/%d") {
+        return dt.format("%Y-%m-%d").to_string();
+    }
+    val.to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -156,5 +177,16 @@ mod tests {
             replace_date_vars("eomonth", Some("2024-02-01")),
             "29-02-2024"
         );
+    }
+
+    #[test]
+    fn test_to_iso_date() {
+        assert_eq!(to_iso_date("01-01-2026"), "2026-01-01");
+        assert_eq!(to_iso_date("2026-01-01"), "2026-01-01");
+        assert_eq!(to_iso_date("01/01/2026"), "2026-01-01");
+        assert_eq!(to_iso_date("2026/01/01"), "2026-01-01");
+        assert_eq!(to_iso_date("  01-01-2026  "), "2026-01-01");
+        assert_eq!(to_iso_date("invalid"), "invalid");
+        assert_eq!(to_iso_date(""), "");
     }
 }
