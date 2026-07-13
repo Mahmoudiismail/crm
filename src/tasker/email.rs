@@ -1,5 +1,4 @@
 use anyhow::{Context, Result};
-use chrono::{DateTime, Duration};
 use chrono::{Datelike, Local, NaiveDate};
 use csv::{ReaderBuilder, StringRecord};
 use rust_xlsxwriter::Workbook;
@@ -341,13 +340,17 @@ fn generate_leads_report(
     minutes_ago: i64,
     exclude_branches: &[String],
 ) -> Result<Option<PathBuf>> {
-    let download_dir_path = std::path::PathBuf::from(download_dir);
+    let download_dir_path = crate::tasker::csv_task::resolve_relative_to_exe_dir(download_dir);
     let exclude_branches_lower: HashSet<String> = exclude_branches
         .iter()
         .map(|s| s.trim().to_lowercase())
         .collect();
-    let now = Local::now().naive_local();
-    let threshold = now - Duration::minutes(minutes_ago);
+
+    let now = std::time::SystemTime::now();
+    let threshold = now
+        .checked_sub(std::time::Duration::from_secs((minutes_ago * 60) as u64))
+        .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+
     let mut target_files = Vec::new();
 
     for entry in WalkDir::new(&download_dir_path)
@@ -360,8 +363,7 @@ fn generate_leads_report(
                 if name.starts_with("lead_report") && name.ends_with(".csv") {
                     if let Ok(metadata) = entry.metadata() {
                         if let Ok(modified) = metadata.modified() {
-                            let mod_time: DateTime<Local> = modified.into();
-                            if mod_time.naive_local() >= threshold {
+                            if modified >= threshold {
                                 target_files.push(path.to_path_buf());
                             }
                         }
@@ -408,6 +410,7 @@ fn generate_leads_report(
         let file_content = String::from_utf8_lossy(&file_bytes);
         let mut rdr = ReaderBuilder::new()
             .has_headers(true)
+            .delimiter(if file_content.contains('\t') { b'\t' } else { b',' })
             .from_reader(file_content.as_bytes());
 
         if headers.is_none() {
@@ -451,8 +454,9 @@ fn generate_leads_report(
 
             let is_excluded_branch = exclude_branches_lower.contains(&branch);
 
-            let status_matches =
-                status == "new" || status == "follow up" || status == "جديد" || status == "متابعة";
+            let status_matches = status == "new"
+                || status == "follow up"
+                || status == "follow-up";
 
             if !is_excluded_branch && status_matches {
                 all_records.push(record);
@@ -1401,5 +1405,117 @@ mod tests {
         // Assert HTML structure expectations
         assert!(html.contains("Open"));
         assert!(html.contains("Grand Total"));
+    }
+
+    #[test]
+    fn test_call_center_leads_attachment_logic() {
+        let download_dir = tempfile::tempdir().unwrap();
+
+        // Create a mock lead report (tab separated like the real one)
+        let lead_report_path = download_dir.path().join("lead_report_test.csv");
+        let mut lead_file = File::create(&lead_report_path).unwrap();
+        // Use tabs as observed in the real dataset
+        writeln!(lead_file, "Lead Id\tBranch\tStatus").unwrap();
+        writeln!(lead_file, "L1\tMain Branch\tNew").unwrap();
+        writeln!(lead_file, "L2\tMain Branch\tFollow-up").unwrap();
+        writeln!(lead_file, "L3\tExcluded Branch\tNew").unwrap();
+
+        let exclude_branches = vec!["Excluded Branch".to_string()];
+
+        let result = generate_leads_report(
+            download_dir.path().to_str().unwrap(),
+            60,
+            &exclude_branches,
+        )
+        .unwrap();
+
+        assert!(result.is_some(), "Leads report should be generated");
+        let path = result.unwrap();
+        assert!(path.exists());
+        assert!(path.to_string_lossy().contains("Call_Center_Leads.xlsx"));
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn test_closed_tickets_excluded_from_attachments() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let results_path = temp_dir.path().join("results.csv");
+        let mut ticket_file = File::create(&results_path).unwrap();
+        writeln!(
+            ticket_file,
+            "Ticket Id,Branch,Ticket Category,Ticket Type,Ticket Sub-Type,Status,Created At,Assignee,Position,team,Is Exception"
+        )
+        .unwrap();
+        // One open ticket, one closed ticket
+        writeln!(
+            ticket_file,
+            "101,Branch A,Cat1,Type1,Sub1,open,01/05/2026 12:00:00,alice,Pos1,Team A,No"
+        )
+        .unwrap();
+        writeln!(
+            ticket_file,
+            "102,Branch A,Cat1,Type1,Sub1,closed,01/05/2026 12:00:00,bob,Pos1,Team A,No"
+        )
+        .unwrap();
+
+        let mut teams_file = NamedTempFile::new().unwrap();
+        writeln!(teams_file, "Team Name,To Email,CC").unwrap();
+        writeln!(teams_file, "Team A,team@example.com,cc@example.com").unwrap();
+
+        let email_config = EmailConfig {
+            team_mapping_file: teams_file.path().to_str().unwrap().to_string(),
+            body_template_file: None,
+            initial_cc: "".to_string(),
+            ending_cc: "".to_string(),
+            send_emails: Some(false),
+            default_to_email: "def@example.com".to_string(),
+            send_per_team_all_branches: vec!["Team A".to_string()],
+            send_per_branch_branches: vec![],
+            send_per_team_branches: None,
+            send_call_center: Some(false),
+            send_exceptions: Some(false),
+            indentation_spaces: None,
+            save_attachment_as_csv: Some(true),
+            save_email_as_html: Some(true),
+        };
+
+        process_emails(
+            results_path.to_str().unwrap(),
+            &email_config,
+            false,
+            false,
+            temp_dir.path().to_str().unwrap(),
+            60,
+            None,
+            &[],
+        )
+        .unwrap();
+
+        let system_temp = std::env::temp_dir();
+        let attachment_csv = system_temp.join("Team_A_open_tickets.csv");
+        assert!(attachment_csv.exists(), "Attachment should be generated");
+
+        let attachment_content = std::fs::read_to_string(&attachment_csv).unwrap();
+        assert!(
+            attachment_content.contains("101"),
+            "Open ticket should be in attachment"
+        );
+        assert!(
+            !attachment_content.contains("102"),
+            "Closed ticket should NOT be in attachment"
+        );
+
+        let email_html = system_temp.join("Team_A_email.html");
+        let html_content = std::fs::read_to_string(&email_html).unwrap();
+        // Pivot table should skip closed if they are not needed but it also skips them in the loop.
+        // Actually generate_pivot_html includes all rows but filters them out in the rendering loop if they only have closed.
+        // In this case, Team A has an open ticket, so it should be included.
+        // But for 'bob' who only has closed, it should be skipped.
+        assert!(html_content.contains("alice"));
+        assert!(!html_content.contains("bob"), "Assignee with only closed tickets should be excluded from HTML table");
+
+        let _ = std::fs::remove_file(attachment_csv);
+        let _ = std::fs::remove_file(email_html);
     }
 }
