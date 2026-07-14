@@ -77,15 +77,27 @@ pub fn run(config: &DashboardUpdaterConfig) -> Result<()> {
         let headers = rdr.headers()?.clone();
 
         let mut is_exception_idx = None;
+        let mut _position_idx = None;
+        let mut out_headers = vec![];
+        let mut skip_indices = vec![];
+
         for (i, h) in headers.iter().enumerate() {
-            if h.trim().to_lowercase() == "is exception" {
+            let lower = h.trim().to_lowercase();
+            if lower == "is exception" {
                 is_exception_idx = Some(i);
-                break;
+                skip_indices.push(i);
+            } else if lower == "position" {
+                _position_idx = Some(i);
+                skip_indices.push(i);
+            } else {
+                out_headers.push(h.to_string());
             }
         }
 
-        let mut wtr = csv::WriterBuilder::new().from_path(&filtered_csv_path)?;
-        wtr.write_record(&headers)?;
+        let mut f = std::fs::File::create(&filtered_csv_path)?;
+        f.write_all(b"\xEF\xBB\xBF")?;
+        let mut wtr = csv::WriterBuilder::new().from_writer(f);
+        wtr.write_record(&out_headers)?;
 
         for result in rdr.records() {
             let record = result?;
@@ -100,7 +112,13 @@ pub fn run(config: &DashboardUpdaterConfig) -> Result<()> {
             };
 
             if !is_exception {
-                wtr.write_record(&record)?;
+                let mut out_record = vec![];
+                for (i, field) in record.iter().enumerate() {
+                    if !skip_indices.contains(&i) {
+                        out_record.push(field);
+                    }
+                }
+                wtr.write_record(&out_record)?;
             }
         }
         wtr.flush()?;

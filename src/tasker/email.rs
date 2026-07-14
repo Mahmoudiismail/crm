@@ -624,6 +624,17 @@ pub fn process_emails(
             is_exception_idx = Some(i);
         } else if h_low == "position" {
             position_idx = Some(i);
+        } else if h_low == "month" {
+            // we reuse position_idx as a generic way to filter out columns if we want,
+            // but let's just make a new one or handle it in the filter.
+            // Actually, we can just skip it similarly:
+        }
+    }
+
+    let mut month_idx = None;
+    for (i, h) in headers.iter().enumerate() {
+        if h.trim().to_lowercase() == "month" {
+            month_idx = Some(i);
         }
     }
 
@@ -1086,12 +1097,15 @@ pub fn process_emails(
         let save_as_csv = config.save_attachment_as_csv.unwrap_or(false);
         let attachment_path = if save_as_csv {
             let csv_path = tmp_dir.join(format!("{}_open_tickets.csv", safe_name));
-            let mut wtr = csv::WriterBuilder::new().from_path(&csv_path)?;
+            let mut f = std::fs::File::create(&csv_path)?;
+            f.write_all(b"\xEF\xBB\xBF")?;
+            let mut wtr = csv::WriterBuilder::new().from_writer(f);
             let mut header_rec = vec![];
             for (i, h) in headers.iter().enumerate() {
                 if is_exception_idx == Some(i)
                     || position_idx == Some(i)
                     || skip_team_idx == Some(i)
+                    || month_idx == Some(i)
                 {
                     continue;
                 }
@@ -1108,6 +1122,7 @@ pub fn process_emails(
                     if is_exception_idx == Some(c_idx)
                         || position_idx == Some(c_idx)
                         || skip_team_idx == Some(c_idx)
+                        || month_idx == Some(c_idx)
                     {
                         continue;
                     }
@@ -1127,6 +1142,7 @@ pub fn process_emails(
                 if is_exception_idx == Some(i)
                     || position_idx == Some(i)
                     || skip_team_idx == Some(i)
+                    || month_idx == Some(i)
                 {
                     continue;
                 }
@@ -1144,6 +1160,7 @@ pub fn process_emails(
                     if is_exception_idx == Some(c_idx)
                         || position_idx == Some(c_idx)
                         || skip_team_idx == Some(c_idx)
+                        || month_idx == Some(c_idx)
                     {
                         continue;
                     }
