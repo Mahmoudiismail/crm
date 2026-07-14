@@ -343,7 +343,10 @@ pub fn generate_csv(params: &CsvAnalysisParams) -> Result<Option<std::path::Path
         "Processing ticket files and writing to output: {}",
         output_file_path.display()
     );
-    let mut output_writer = WriterBuilder::new().from_path(&output_file_path)?;
+    let mut f = std::fs::File::create(&output_file_path)?;
+    use std::io::Write;
+    f.write_all(b"\xEF\xBB\xBF")?;
+    let mut output_writer = WriterBuilder::new().from_writer(f);
     let mut all_records = Vec::new();
     let mut wrote_headers = false;
     let mut total_filtered_rows = 0;
@@ -394,6 +397,7 @@ pub fn generate_csv(params: &CsvAnalysisParams) -> Result<Option<std::path::Path
             out_headers.push_field("Position");
             out_headers.push_field("team");
             out_headers.push_field("Is Exception");
+            out_headers.push_field("Month");
             output_writer.write_record(&out_headers)?;
             wrote_headers = true;
         }
@@ -431,6 +435,14 @@ pub fn generate_csv(params: &CsvAnalysisParams) -> Result<Option<std::path::Path
                 }
             };
             let mut is_exception_val = "No";
+
+            let mut month_val = String::new();
+            if let Some(created_idx) = created_at_idx {
+                let created_val = record.get(created_idx).unwrap_or("").trim();
+                if let Some(dt) = parse_created_at(created_val) {
+                    month_val = dt.format("%m-%Y").to_string();
+                }
+            }
 
             // Check start_date filter
             if let Some(start_dt) = parsed_start_date {
@@ -582,6 +594,7 @@ pub fn generate_csv(params: &CsvAnalysisParams) -> Result<Option<std::path::Path
             record.push_field(position.as_deref().unwrap_or(""));
             record.push_field(team.as_deref().unwrap_or(""));
             record.push_field(is_exception_val);
+            record.push_field(&month_val);
 
             all_records.push((ticket_id_val_owned, record));
         }
