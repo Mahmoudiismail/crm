@@ -1013,7 +1013,7 @@ fn schedule_row_html(
                 <select class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' name='schedule_interval_{}'>{}\
                 </select>\
             </label>\
-            <label class='block schedule-interval {}'>\
+            <label class='block schedule-interval schedule-start-time {}'>\
                 <span class='text-xs font-semibold text-gray-700'>Start Time (HH:MM)</span>\
                 <input class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' type='time' name='schedule_start_time_{}' value='{}'>\
             </label>\
@@ -1446,7 +1446,7 @@ fn parse_schedules_text(value: &str) -> Result<Vec<TaskSchedule>> {
                 schedules.push(TaskSchedule::Interval {
                     enabled: true,
                     every_seconds: parse_duration_text(base_str)?,
-                    next_run_at: Utc::now().to_rfc3339(),
+                    next_run_at: String::new(),
                     working_hours,
                     start_time,
                 });

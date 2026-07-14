@@ -391,11 +391,27 @@ pub async fn create_task(path: &str, mut task: RunnerTask) -> Result<()> {
         return Err(anyhow::anyhow!("Task '{}' already exists", task.id));
     }
 
+    let task_id = task.id.clone();
+    let task_name = task.name.clone();
+    let schedules_json = serde_json::to_string(&task.schedules).unwrap_or_default();
+    let enabled = task.enabled;
+    let created_time = Utc::now().to_rfc3339();
+
     cfg.tasks.push(task);
     let path_str = path.to_string();
     tokio::task::spawn_blocking(move || cfg.save(&path_str))
         .await
         .context("spawn_blocking panic")??;
+
+    info!(
+        task_id = %task_id,
+        task_name = %task_name,
+        schedules = %schedules_json,
+        enabled = %enabled,
+        created_time = %created_time,
+        "Task Created"
+    );
+
     Ok(())
 }
 
@@ -411,7 +427,6 @@ pub async fn update_task(path: &str, task_id: &str, mut task: RunnerTask) -> Res
     if task.id.trim().is_empty() {
         task.id = task_id.to_string();
     }
-    normalize_and_validate_task(&mut task, &cfg)?;
 
     if cfg
         .tasks
@@ -422,6 +437,127 @@ pub async fn update_task(path: &str, task_id: &str, mut task: RunnerTask) -> Res
         return Err(anyhow::anyhow!("Task '{}' already exists", task.id));
     }
 
+    // Preserve schedule state if schedules haven't changed in a way that requires recalculation.
+    // GUI currently sends empty next_run_at for parsed schedules.
+    // If we can map new schedules to old schedules based on their intrinsic properties
+    // (ignoring next_run_at and enabled), we can preserve next_run_at.
+    for (i, new_schedule) in task.schedules.iter_mut().enumerate() {
+        if let Some(old_schedule) = cfg.tasks[existing_idx].schedules.get(i) {
+            let matches = match (new_schedule.clone(), old_schedule) {
+                (
+                    crate::runner::config::TaskSchedule::Interval {
+                        every_seconds: new_every,
+                        working_hours: new_wh,
+                        start_time: new_st,
+                        ..
+                    },
+                    crate::runner::config::TaskSchedule::Interval {
+                        every_seconds: old_every,
+                        working_hours: old_wh,
+                        start_time: old_st,
+                        next_run_at: old_next,
+                        ..
+                    },
+                ) => {
+                    if new_every == *old_every && new_wh == *old_wh && new_st == *old_st {
+                        if let crate::runner::config::TaskSchedule::Interval { next_run_at, .. } =
+                            new_schedule
+                        {
+                            *next_run_at = old_next.clone();
+                        }
+                        true
+                    } else {
+                        false
+                    }
+                }
+                (
+                    crate::runner::config::TaskSchedule::DailyTimes {
+                        times: new_times,
+                        working_hours: new_wh,
+                        ..
+                    },
+                    crate::runner::config::TaskSchedule::DailyTimes {
+                        times: old_times,
+                        working_hours: old_wh,
+                        next_run_at: old_next,
+                        ..
+                    },
+                ) => {
+                    if new_times == *old_times && new_wh == *old_wh {
+                        if let crate::runner::config::TaskSchedule::DailyTimes {
+                            next_run_at,
+                            ..
+                        } = new_schedule
+                        {
+                            *next_run_at = old_next.clone();
+                        }
+                        true
+                    } else {
+                        false
+                    }
+                }
+                (
+                    crate::runner::config::TaskSchedule::Weekly {
+                        day_of_week: new_dow,
+                        at_time: new_time,
+                        working_hours: new_wh,
+                        ..
+                    },
+                    crate::runner::config::TaskSchedule::Weekly {
+                        day_of_week: old_dow,
+                        at_time: old_time,
+                        working_hours: old_wh,
+                        next_run_at: old_next,
+                        ..
+                    },
+                ) => {
+                    if new_dow == *old_dow && new_time == *old_time && new_wh == *old_wh {
+                        if let crate::runner::config::TaskSchedule::Weekly { next_run_at, .. } =
+                            new_schedule
+                        {
+                            *next_run_at = old_next.clone();
+                        }
+                        true
+                    } else {
+                        false
+                    }
+                }
+                (
+                    crate::runner::config::TaskSchedule::Monthly {
+                        day_of_month: new_dom,
+                        at_time: new_time,
+                        working_hours: new_wh,
+                        ..
+                    },
+                    crate::runner::config::TaskSchedule::Monthly {
+                        day_of_month: old_dom,
+                        at_time: old_time,
+                        working_hours: old_wh,
+                        next_run_at: old_next,
+                        ..
+                    },
+                ) => {
+                    if new_dom == *old_dom && new_time == *old_time && new_wh == *old_wh {
+                        if let crate::runner::config::TaskSchedule::Monthly { next_run_at, .. } =
+                            new_schedule
+                        {
+                            *next_run_at = old_next.clone();
+                        }
+                        true
+                    } else {
+                        false
+                    }
+                }
+                _ => false, // Different kinds of schedules or Once schedule, just recalculate or leave
+            };
+            if !matches {
+                // Not a match, leave empty so normalize calculates it
+            }
+        }
+    }
+
+    normalize_and_validate_task(&mut task, &cfg)?;
+
     if task.last_run_at.is_empty() {
         task.last_run_at = cfg.tasks[existing_idx].last_run_at.clone();
     }
@@ -429,11 +565,28 @@ pub async fn update_task(path: &str, task_id: &str, mut task: RunnerTask) -> Res
         task.last_status = cfg.tasks[existing_idx].last_status.clone();
     }
 
+    let old_schedules_json =
+        serde_json::to_string(&cfg.tasks[existing_idx].schedules).unwrap_or_default();
+    let old_next_run = cfg.tasks[existing_idx].next_run_at.clone();
+
+    let new_schedules_json = serde_json::to_string(&task.schedules).unwrap_or_default();
+    let new_next_run = task.next_run_at.clone();
+
     cfg.tasks[existing_idx] = task;
     let path_str = path.to_string();
     tokio::task::spawn_blocking(move || cfg.save(&path_str))
         .await
         .context("spawn_blocking panic")??;
+
+    info!(
+        task_id = %task_id,
+        old_schedules = %old_schedules_json,
+        new_schedules = %new_schedules_json,
+        old_next_run = %old_next_run,
+        new_next_run = %new_next_run,
+        "Task Updated"
+    );
+
     Ok(())
 }
 
@@ -443,6 +596,9 @@ pub async fn delete_task(path: &str, task_id: &str) -> Result<()> {
         .await
         .context("spawn_blocking panic")??;
     let initial_len = cfg.tasks.len();
+
+    let task_to_delete = cfg.tasks.iter().find(|t| t.id == task_id).cloned();
+
     cfg.tasks.retain(|t| t.id != task_id);
     if cfg.tasks.len() == initial_len {
         return Err(anyhow::anyhow!("Task '{}' not found", task_id));
@@ -451,6 +607,22 @@ pub async fn delete_task(path: &str, task_id: &str) -> Result<()> {
     tokio::task::spawn_blocking(move || cfg.save(&path_str))
         .await
         .context("spawn_blocking panic")??;
+
+    if let Some(deleted_task) = task_to_delete {
+        let deleted_name = deleted_task.name.clone();
+        let deleted_schedules =
+            serde_json::to_string(&deleted_task.schedules).unwrap_or_default();
+        let deletion_timestamp = Utc::now().to_rfc3339();
+
+        info!(
+            task_id = %task_id,
+            task_name = %deleted_name,
+            schedules = %deleted_schedules,
+            deletion_timestamp = %deletion_timestamp,
+            "Task Deleted"
+        );
+    }
+
     Ok(())
 }
 
@@ -552,6 +724,7 @@ async fn set_task_enabled(path: &str, task_id: &str, enabled: bool) -> Result<()
         .await
         .context("spawn_blocking panic")??;
     if let Some(task) = cfg.tasks.iter_mut().find(|t| t.id == task_id) {
+        let previous_status = task.enabled;
         task.enabled = enabled;
         if enabled && task.next_run_at.is_empty() {
             task.next_run_at = Utc::now().to_rfc3339();
@@ -564,6 +737,15 @@ async fn set_task_enabled(path: &str, task_id: &str, enabled: bool) -> Result<()
         tokio::task::spawn_blocking(move || cfg_clone.save(&path_str))
             .await
             .context("spawn_blocking panic")??;
+
+        info!(
+            task_id = %task_id,
+            previous_status = %previous_status,
+            new_status = %enabled,
+            timestamp = %Utc::now().to_rfc3339(),
+            "Task Enable/Disable Status Changed"
+        );
+
         return Ok(());
     }
     Err(anyhow::anyhow!("Task '{}' not found", task_id))
@@ -674,6 +856,17 @@ async fn run_task_inner(
     let logger = TaskLogger::new(&task.id, &task.name);
     logger.log("Initializing task execution...").await;
 
+    let start_time = Utc::now();
+    let scheduled_time = task.next_run_at.clone();
+
+    info!(
+        task_id = %task.id,
+        task_name = %task.name,
+        scheduled_time = %scheduled_time,
+        actual_start_time = %start_time.to_rfc3339(),
+        "Task Execution Started"
+    );
+
     {
         let mut st = status.lock().await;
         st.last_error.clear();
@@ -735,6 +928,19 @@ async fn run_task_inner(
                         task.last_status = format!("post-run script error: {}", e);
                         let mut st = status.lock().await;
                         st.last_error = format!("post-run script error: {}", e);
+
+                        let task_id = &task.id;
+                        let err_msg = format!("post-run script error: {}", e);
+                        let schedules_json = serde_json::to_string(&task.schedules).unwrap_or_default();
+                        let next_run = task.next_run_at.clone();
+                        error!(
+                            task_id = %task_id,
+                            error_type = "PostRunError",
+                            error_message = %err_msg,
+                            schedules = %schedules_json,
+                            next_run = %next_run,
+                            "Task Execution Failed in Post Run"
+                        );
                     }
                 }
             } else {
@@ -747,8 +953,32 @@ async fn run_task_inner(
             task.last_status = format!("error: {}", e);
             let mut st = status.lock().await;
             st.last_error = format!("{}", e);
+
+            let task_id = &task.id;
+            let err_msg = format!("{}", e);
+            let schedules_json = serde_json::to_string(&task.schedules).unwrap_or_default();
+            let next_run = task.next_run_at.clone();
+            error!(
+                task_id = %task_id,
+                error_type = "ExecutionError",
+                error_message = %err_msg,
+                schedules = %schedules_json,
+                next_run = %next_run,
+                "Task Execution Failed"
+            );
         }
     }
+
+    let end_time = Utc::now();
+    let duration = end_time.signed_duration_since(start_time).num_milliseconds();
+    let status_str = task.last_status.clone();
+
+    info!(
+        task_id = %task.id,
+        duration_ms = %duration,
+        status = %status_str,
+        "Task Execution Ended"
+    );
 
     let mut st = status.lock().await;
     st.last_run_at = Utc::now().to_rfc3339();
