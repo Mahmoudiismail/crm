@@ -80,6 +80,7 @@ fn get_manifest() -> AppManifest {
                     "tickets".to_string(),
                     "calls".to_string(),
                     "leads".to_string(),
+                    "users".to_string(),
                     "none".to_string(),
                 ]),
             },

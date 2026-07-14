@@ -1,9 +1,10 @@
 use anyhow::{Context, Result};
 use futures_util::StreamExt;
 use std::path::Path;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncWriteExt, BufWriter};
-use tracing::{debug, info};
+use tracing::{debug, error, info};
+use base64::{engine::general_purpose::STANDARD as Base64Standard, Engine as _};
 
 /// Download a CSV file from a signed URL.
 /// - Extracts filename from the URL path (URL-decoded).
@@ -99,6 +100,87 @@ fn extract_filename(url: &str) -> Result<String> {
     Ok(final_name.to_string())
 }
 
+/// Process a raw Base64 payload, decode it, validate it as CSV, and save it.
+pub async fn process_base64_payload(
+    payload: &str,
+    report_key: &str,
+    target_dir: &Path,
+) -> Result<String> {
+    info!("[{}] Processing Base64 payload ({} chars)", report_key, payload.len());
+    let decode_start = SystemTime::now();
+
+    // Clean up potential surrounding quotes or whitespace from json encoding
+    let clean_payload = payload.trim().trim_matches('"');
+
+    if clean_payload.is_empty() {
+        anyhow::bail!("[{}] Payload is empty after cleaning", report_key);
+    }
+
+    let decoded = Base64Standard.decode(clean_payload)
+        .with_context(|| format!("[{}] Failed to decode Base64 payload", report_key))?;
+
+    if let Ok(duration) = decode_start.elapsed() {
+        info!("[{}] Base64 decode completed in {:?}", report_key, duration);
+    }
+
+    // Check for BOM (Byte Order Mark) and remove it if present.
+    // The UTF-8 BOM is EF BB BF.
+    let utf8_content = if decoded.starts_with(&[0xEF, 0xBB, 0xBF]) {
+        String::from_utf8(decoded[3..].to_vec())
+    } else {
+        String::from_utf8(decoded)
+    }.with_context(|| format!("[{}] Decoded payload is not valid UTF-8", report_key))?;
+
+    // Validate CSV and extract stats
+    let mut row_count = 0;
+    let mut column_count = 0;
+
+    {
+        let mut rdr = csv::ReaderBuilder::new()
+            .has_headers(true) // assume at least headers exist
+            .flexible(true)
+            .from_reader(utf8_content.as_bytes());
+
+        if let Ok(headers) = rdr.headers() {
+            column_count = headers.len();
+        }
+
+        for result in rdr.records() {
+            if result.is_err() {
+                error!("[{}] CSV Validation error at row {}", report_key, row_count + 1);
+            }
+            row_count += 1;
+        }
+    }
+
+    info!("[{}] CSV Validated: {} rows, {} columns", report_key, row_count, column_count);
+
+    // Ensure the directory exists
+    tokio::fs::create_dir_all(target_dir)
+        .await
+        .with_context(|| format!("Failed to create download directory: {:?}", target_dir))?;
+
+    // Create filename user_report_<timestamp>.csv
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+
+    let filename = format!("{}_{}.csv", report_key, timestamp);
+    let dest_path = target_dir.join(&filename);
+
+    info!("[{}] Saving CSV to {:?}", report_key, dest_path);
+
+    tokio::fs::write(&dest_path, utf8_content)
+        .await
+        .with_context(|| format!("[{}] Failed to write CSV file to {:?}", report_key, dest_path))?;
+
+    let metadata = tokio::fs::metadata(&dest_path).await?;
+    info!("[{}] Output file saved successfully. Size: {} bytes", report_key, metadata.len());
+
+    Ok(filename)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -142,5 +224,63 @@ mod tests {
         // Edge case: just double dot
         let url = "https://example.com/path/to/%2e%2e";
         assert_eq!(extract_filename(url).unwrap(), "download.csv");
+    }
+
+    #[tokio::test]
+    async fn test_process_base64_payload_success() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let target_dir = temp_dir.path();
+
+        let csv_data = "id,name\n1,Jules\n2,Smith\n";
+        let base64_payload = Base64Standard.encode(csv_data.as_bytes());
+
+        let result = process_base64_payload(&base64_payload, "test_report", target_dir).await;
+        assert!(result.is_ok());
+
+        let filename = result.unwrap();
+        assert!(filename.starts_with("test_report_"));
+        assert!(filename.ends_with(".csv"));
+
+        let file_path = target_dir.join(filename);
+        assert!(file_path.exists());
+
+        let content = std::fs::read_to_string(file_path).unwrap();
+        assert_eq!(content, csv_data);
+    }
+
+    #[tokio::test]
+    async fn test_process_base64_payload_bom_removal() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let target_dir = temp_dir.path();
+
+        let mut csv_bytes = vec![0xEF, 0xBB, 0xBF]; // UTF-8 BOM
+        csv_bytes.extend_from_slice(b"id,name\n1,Jules\n2,Smith\n");
+        let base64_payload = Base64Standard.encode(&csv_bytes);
+
+        let result = process_base64_payload(&base64_payload, "bom_report", target_dir).await;
+        assert!(result.is_ok());
+
+        let file_path = target_dir.join(result.unwrap());
+        let content_bytes = std::fs::read(file_path).unwrap();
+
+        // BOM should be stripped in the final output
+        assert!(!content_bytes.starts_with(&[0xEF, 0xBB, 0xBF]));
+        assert_eq!(String::from_utf8(content_bytes).unwrap(), "id,name\n1,Jules\n2,Smith\n");
+    }
+
+    #[tokio::test]
+    async fn test_process_base64_payload_empty_and_invalid() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let target_dir = temp_dir.path();
+
+        // Empty
+        let res = process_base64_payload("", "empty_rep", target_dir).await;
+        assert!(res.is_err());
+        assert!(res.unwrap_err().to_string().contains("Payload is empty"));
+
+        // Invalid Base64
+        let res = process_base64_payload("!@#$%", "invalid_rep", target_dir).await;
+        assert!(res.is_err());
+        assert!(res.unwrap_err().to_string().contains("Failed to decode Base64"));
     }
 }

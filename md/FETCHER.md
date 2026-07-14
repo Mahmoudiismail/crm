@@ -8,9 +8,10 @@ Fetcher retrieves report metadata JSON from CRM endpoints using the Cognito bear
 
 ## Report Definitions
 
-- `tickets` -> endpoint `download-ticket-data` + `type=ticket_report`
-- `calls` -> endpoint `download-call-log-data`
-- `leads` -> endpoint `download-lead-data` + `type=lead_report`
+- `tickets` -> endpoint `task/download-ticket-data` + `type=ticket_report`
+- `calls` -> endpoint `task/download-call-log-data`
+- `leads` -> endpoint `task/download-lead-data` + `type=lead_report`
+- `users` -> endpoint `users/download-user-data` (Direct Base64 response)
 
 ## Selection Logic
 
@@ -20,6 +21,7 @@ Based on `ReportType`:
 - `Tickets`: only tickets
 - `Calls`: only calls
 - `Leads`: only leads
+- `Users`: only users
 - `None`: return empty object immediately
 
 ## Request Metadata
@@ -53,9 +55,12 @@ Example:
   - `2026-02-01`..`2026-02-28`
   - `2026-03-01`..`2026-03-15`
 
+## Direct Fetch logic
+`users` uses a direct `GET` request via `fetch_users_report` which does not require query parameters (such as `from_date` or `to_date`) and returns the CSV content as a Base64-encoded string instead of returning a signed URL.
+
 ## Signed URL Failure Range Splitting
 
-All report fetches use `fetch_with_signed_url_split(...)`.
+For `tickets`, `calls`, and `leads`, report fetches use `fetch_with_signed_url_split(...)`.
 
 Behavior:
 

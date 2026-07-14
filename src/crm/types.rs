@@ -9,5 +9,6 @@ pub enum ReportType {
     Tickets,
     Calls,
     Leads,
+    Users,
     None,
 }

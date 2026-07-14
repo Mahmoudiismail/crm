@@ -39,18 +39,23 @@ fn report_defs() -> &'static [ReportDef] {
     &[
         ReportDef {
             key: "tickets",
-            endpoint: "download-ticket-data",
+            endpoint: "task/download-ticket-data",
             extra_params: &[("type", "ticket_report")],
         },
         ReportDef {
             key: "calls",
-            endpoint: "download-call-log-data",
+            endpoint: "task/download-call-log-data",
             extra_params: &[],
         },
         ReportDef {
             key: "leads",
-            endpoint: "download-lead-data",
+            endpoint: "task/download-lead-data",
             extra_params: &[("type", "lead_report")],
+        },
+        ReportDef {
+            key: "users",
+            endpoint: "users/download-user-data",
+            extra_params: &[],
         },
     ]
 }
@@ -82,6 +87,7 @@ pub async fn fetch_reports(
             ReportType::Tickets => key == "tickets",
             ReportType::Calls => key == "calls",
             ReportType::Leads => key == "leads",
+            ReportType::Users => key == "users",
             ReportType::None => false,
         }
     };
@@ -109,6 +115,7 @@ pub async fn fetch_reports(
             "tickets" => "ticket_report_",
             "calls" => "call_logs_",
             "leads" => "lead_report_",
+            "users" => "user_report_",
             _ => "",
         };
 
@@ -165,6 +172,36 @@ pub async fn fetch_reports(
                     (key, v)
                 }));
             }
+        } else if def.key == "users" {
+            // Users report: direct GET request, no dates, returns Base64 CSV
+            let client = client.clone();
+            let context = Arc::clone(&context);
+            let key = def.key.to_string();
+
+            handles.push(tokio::spawn(async move {
+                let params = FetchParams {
+                    base_url: &context.base_url,
+                    email: &context.email,
+                    account_id: &context.account_id,
+                    application_id: &context.application_id,
+                    tz: &context.tz,
+                    extra_params: extra,
+                };
+
+                let v = fetch_users_report(
+                    &client,
+                    &context.token,
+                    endpoint,
+                    &params,
+                )
+                .await
+                .unwrap_or_else(|e| {
+                    error!("Report '{}' failed: {}", endpoint, e);
+                    serde_json::json!({"error": format!("{}", e)})
+                });
+
+                (key, v)
+            }));
         } else {
             // Tickets / Leads: try the full range first, then split if the
             // backend refuses to generate a signed URL for a large file.
@@ -228,6 +265,53 @@ pub async fn fetch_reports(
     }
 
     Ok(Value::Object(results))
+}
+
+async fn fetch_users_report(
+    client: &reqwest::Client,
+    token: &str,
+    endpoint: &str,
+    params: &FetchParams<'_>,
+) -> Result<Value> {
+    let url = format!("{}/{}", params.base_url.trim_end_matches('/'), endpoint);
+
+    info!("Fetching {} ...", endpoint);
+    let start_time = std::time::Instant::now();
+
+    let resp = client
+        .get(&url)
+        .header("account_id", params.account_id)
+        .header("app-timezone-plus-minutes", params.tz)
+        .header("application_id", params.application_id)
+        .header("auth-type", "cognito")
+        .header("authorization", format!("Bearer {}", token))
+        .header("content-type", "application/json")
+        .header("accept", "*/*")
+        .send()
+        .await
+        .with_context(|| format!("HTTP request to {} failed", endpoint))?;
+
+    let status = resp.status();
+    let body = resp
+        .text()
+        .await
+        .with_context(|| format!("Failed to read response body from {}", endpoint))?;
+
+    if !status.is_success() {
+        anyhow::bail!("{} HTTP {}: {}", endpoint, status, body);
+    }
+
+    let duration = start_time.elapsed();
+    info!("Request to {} completed in {:?}", endpoint, duration);
+
+    if body.is_empty() {
+        anyhow::bail!("{} HTTP response is empty", endpoint);
+    }
+
+    // The endpoint returns Base64 encoded payload directly.
+    Ok(serde_json::json!({
+        "base64_data": body
+    }))
 }
 
 // ──────────────────────────────────────────────────────────────
