@@ -54,3 +54,7 @@ Before commit, run a manual checklist:
 - [ ] New CLI flags documented?
 
 If any answer is `no`, update docs before finalizing.
+
+## Fixed CSV Parsing Issues
+- Configured  to use  centrally in  via  to prevent varying-length column errors.
+- Replaced raw inline diagnostic logging loop with a shared  function limiting output to ±20 lines around the error line to keep logs compact but useful.
