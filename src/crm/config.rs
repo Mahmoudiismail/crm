@@ -43,6 +43,9 @@ pub struct AppConfig {
     #[serde(default)]
     pub scheduled_time: String,
 
+    #[serde(default)]
+    pub custom_download_folder: Option<String>,
+
     // Token / auth cache
     #[serde(default)]
     pub access_token: String,
@@ -83,8 +86,9 @@ impl Default for AppConfig {
             account_id: "233b5ff5-8aff-4445-815b-39d7916a1d46".into(),
             application_id: "83921976-97dd-4679-9b36-ee936ecf50d1".into(),
             app_timezone_plus_minutes: "180".into(),
-            base_url: "https://crm.fakeeh.care/medi-crm/vault/v1/task".into(),
+            base_url: "https://crm.fakeeh.care/medi-crm/vault/v1/".into(),
             scheduled_time: "01:00".into(),
+            custom_download_folder: None,
             access_token: String::new(),
             access_token_expiry: String::new(),
             id_token: String::new(),
