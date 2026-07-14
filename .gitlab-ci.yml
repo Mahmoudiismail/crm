@@ -1,0 +1,81 @@
+default:
+  tags:
+    - saas-windows-medium-amd64 # common tag for gitlab saas windows runners, using this or simple 'windows'
+
+variables:
+  # Setting default variables
+  BINARY_TO_BUILD:
+    value: "all"
+    description: "Binary to release (comma separated, or 'all')"
+
+stages:
+  - test
+  - release
+
+test:
+  stage: test
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+  script:
+    - rustup default stable
+    - rustup component add rustfmt clippy
+    - cargo fmt -- --check
+    - cargo clippy --all-targets --all-features
+    - cargo test --workspace
+
+release:
+  stage: release
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "web"
+  script:
+    - rustup default stable
+    - |
+      # Extract version from Cargo.toml
+      $VERSION = (Select-String -Path Cargo.toml -Pattern '^version = "(.*)"$' | Select-Object -ExpandProperty Matches | Select-Object -ExpandProperty Groups | Where-Object { $_.Name -eq '1' }).Value
+      $BUILD_DATE = (Get-Date).ToUniversalTime().ToString('yyyyMMdd_HHmmss')
+
+      Write-Host "Building version: $VERSION on date: $BUILD_DATE"
+
+      # Determine which binaries to build
+      if ($env:BINARY_TO_BUILD -eq "all") {
+          cargo build --release --bin crm --bin runner --bin yasweb --bin wcxx --bin tasker
+      } else {
+          $BINS = $env:BINARY_TO_BUILD -split ","
+          $CMD = "cargo build --release"
+          foreach ($bin in $BINS) {
+              $bin = $bin.Trim()
+              if (![string]::IsNullOrEmpty($bin)) {
+                  $CMD += " --bin $bin"
+              }
+          }
+          Invoke-Expression $CMD
+      }
+
+      # Determine which binaries to zip
+      $EXE_FILES = ""
+      if ($env:BINARY_TO_BUILD -eq "all") {
+          $EXE_FILES = "crm.exe runner.exe yasweb.exe wcxx.exe tasker.exe"
+      } else {
+          $BINS = $env:BINARY_TO_BUILD -split ","
+          foreach ($bin in $BINS) {
+              $bin = $bin.Trim()
+              if (![string]::IsNullOrEmpty($bin)) {
+                  $EXE_FILES += " $bin.exe"
+              }
+          }
+      }
+
+      Set-Location target/release
+      $ZIP_NAME = "crm_tool_v${VERSION}_${BUILD_DATE}_windows.zip"
+
+      # Use 7z to zip the binaries with password
+      $7z_CMD = "7z a -p123456 $ZIP_NAME $EXE_FILES"
+      Invoke-Expression $7z_CMD
+
+      # Move zip back to root for artifact collection
+      Move-Item $ZIP_NAME ../../
+  artifacts:
+    paths:
+      - "*.zip"
+    expire_in: 1 day
