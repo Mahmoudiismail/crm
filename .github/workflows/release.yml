@@ -52,6 +52,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: crm-rust-shared-cache
+          cache-on-failure: true
 
       - name: Build
         shell: bash
