@@ -11,7 +11,7 @@ For a detailed guide on how to fundamentally reconstruct these components and th
 3.  **CRM Fetcher (`src/bin/crm.rs`, `src/crm/*`)**: A one-shot CLI utility handling Cognito SRP authentication, report payload requests (Tickets, Calls, Leads), and CSV downloading. Handles edge cases like ignoring empty configuration flags injected by the runner.
 4.  **Yasweb Automation (`src/bin/yasweb.rs`)**: A headless Chrome automation utility used to log into an external Yasweb Angular dashboard, discover and configure filters, and extract generated data via iframe injection. It supports concurrent execution of monthly sliced reports via tab isolation and CDP file download interception.
 5.  **WCXX Fetcher (`src/bin/wcxx.rs`)**: A simple CLI utility fetching operational metrics securely from the Webex Contact Center API and outputting them to a local JSON/HTML file for inspection.
-6.  **Tasker (`src/bin/tasker.rs`, `src/tasker/*`)**: A backend utility dedicated to processing generated CSV datasets and transmitting HTML/Excel summary reports via Outlook COM automation or other channels. It also parses `lead_report` files and attaches filtered reports for the Call Center.
+6.  **Tasker (`src/bin/tasker.rs`, `src/tasker/*`)**: A backend utility dedicated to processing generated CSV datasets and transmitting HTML/Excel summary reports via Outlook COM automation or other channels. It also parses `lead_report` files and attaches filtered reports for the Call Center. All CSV reading utilizes a shared `build_csv_reader` utility (in `src/utils.rs`) configured with `.flexible(true)` to gracefully handle files with variable column lengths.
 
 ## Execution Flow (Runner -> Dynamic Task)
 

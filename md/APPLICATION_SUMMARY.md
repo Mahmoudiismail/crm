@@ -20,6 +20,7 @@ Together they:
 - Fetch CRM report payloads (tickets, calls, leads).
 - Extract signed download URLs from response JSON.
 - Download CSV files to a local folder.
+- Process CSV files robustly (using flexible CSV parsing and centralized diagnostic logic) and generate analytical reports/emails via `tasker`.
 - Run automatically on task schedule and manually from tray + GUI.
 - Fetch Webex CC metrics securely using an OAuth Access Token.
 
