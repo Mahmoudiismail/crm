@@ -50,7 +50,7 @@ They will output a JSON representation of their arguments and exit.
 
 ## CI Pipeline and Testing
 
-The GitHub Actions CI pipeline enforces the following step order for all pull requests:
+The GitHub Actions, GitLab CI, and CircleCI pipelines enforce the following step order:
 1. `cargo fmt -- --check`
 2. `cargo clippy --all-targets --all-features -- -D warnings`
 3. `cargo test --workspace`

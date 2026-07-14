@@ -460,8 +460,9 @@ pub async fn update_task(path: &str, task_id: &str, mut task: RunnerTask) -> Res
                     },
                 ) => {
                     if new_every == *old_every && new_wh == *old_wh && new_st == *old_st {
-                        if let crate::runner::config::TaskSchedule::Interval { next_run_at, .. } =
-                            new_schedule
+                        if let crate::runner::config::TaskSchedule::Interval {
+                            next_run_at, ..
+                        } = new_schedule
                         {
                             *next_run_at = old_next.clone();
                         }
@@ -485,8 +486,7 @@ pub async fn update_task(path: &str, task_id: &str, mut task: RunnerTask) -> Res
                 ) => {
                     if new_times == *old_times && new_wh == *old_wh {
                         if let crate::runner::config::TaskSchedule::DailyTimes {
-                            next_run_at,
-                            ..
+                            next_run_at, ..
                         } = new_schedule
                         {
                             *next_run_at = old_next.clone();
@@ -538,8 +538,9 @@ pub async fn update_task(path: &str, task_id: &str, mut task: RunnerTask) -> Res
                     },
                 ) => {
                     if new_dom == *old_dom && new_time == *old_time && new_wh == *old_wh {
-                        if let crate::runner::config::TaskSchedule::Monthly { next_run_at, .. } =
-                            new_schedule
+                        if let crate::runner::config::TaskSchedule::Monthly {
+                            next_run_at, ..
+                        } = new_schedule
                         {
                             *next_run_at = old_next.clone();
                         }
@@ -610,8 +611,7 @@ pub async fn delete_task(path: &str, task_id: &str) -> Result<()> {
 
     if let Some(deleted_task) = task_to_delete {
         let deleted_name = deleted_task.name.clone();
-        let deleted_schedules =
-            serde_json::to_string(&deleted_task.schedules).unwrap_or_default();
+        let deleted_schedules = serde_json::to_string(&deleted_task.schedules).unwrap_or_default();
         let deletion_timestamp = Utc::now().to_rfc3339();
 
         info!(
@@ -931,7 +931,8 @@ async fn run_task_inner(
 
                         let task_id = &task.id;
                         let err_msg = format!("post-run script error: {}", e);
-                        let schedules_json = serde_json::to_string(&task.schedules).unwrap_or_default();
+                        let schedules_json =
+                            serde_json::to_string(&task.schedules).unwrap_or_default();
                         let next_run = task.next_run_at.clone();
                         error!(
                             task_id = %task_id,
@@ -970,7 +971,9 @@ async fn run_task_inner(
     }
 
     let end_time = Utc::now();
-    let duration = end_time.signed_duration_since(start_time).num_milliseconds();
+    let duration = end_time
+        .signed_duration_since(start_time)
+        .num_milliseconds();
     let status_str = task.last_status.clone();
 
     info!(

@@ -70,13 +70,14 @@ pub fn load_or_create_config<T: DeserializeOwned + Serialize>(
 
 pub fn build_csv_reader(file_content: &str) -> csv::ReaderBuilder {
     let mut builder = csv::ReaderBuilder::new();
-    builder.has_headers(true).flexible(true).delimiter(
-        if file_content.contains('\t') {
+    builder
+        .has_headers(true)
+        .flexible(true)
+        .delimiter(if file_content.contains('\t') {
             b'\t'
         } else {
             b','
-        },
-    );
+        });
     builder
 }
 
