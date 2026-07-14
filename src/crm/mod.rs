@@ -53,11 +53,7 @@ pub async fn run_once(
 
     let download_dir = if let Some(ref custom_path) = config.custom_download_folder {
         let p = std::path::PathBuf::from(custom_path);
-        let target = if p.is_absolute() {
-            p
-        } else {
-            exe_dir.join(p)
-        };
+        let target = if p.is_absolute() { p } else { exe_dir.join(p) };
         tracing::info!("Using custom download folder: {:?}", target);
         target
     } else {
@@ -78,13 +74,18 @@ pub async fn run_once(
 
             // Validate the folder before downloading
             if let Err(e) = tokio::fs::create_dir_all(&download_dir).await {
-                error!("Failed to create download directory {:?}: {:#}", download_dir, e);
+                error!(
+                    "Failed to create download directory {:?}: {:#}",
+                    download_dir, e
+                );
             } else {
                 let download_futures = urls.iter().map(|(key, url)| {
                     let client = client.clone();
                     let download_dir = download_dir.clone();
                     async move {
-                        if let Err(e) = downloader::download_csv(&client, url, key, &download_dir).await {
+                        if let Err(e) =
+                            downloader::download_csv(&client, url, key, &download_dir).await
+                        {
                             error!("Download failed for {}: {:#}", key, e);
                         }
                     }
@@ -98,7 +99,10 @@ pub async fn run_once(
             if let Some(base64_val) = users_val.get("base64_data") {
                 if let Some(base64_str) = base64_val.as_str() {
                     tracing::info!("Extracted Base64 payload for Users Report");
-                    if let Err(e) = downloader::process_base64_payload(base64_str, "user_report", &download_dir).await {
+                    if let Err(e) =
+                        downloader::process_base64_payload(base64_str, "user_report", &download_dir)
+                            .await
+                    {
                         error!("Failed to process Users Report Base64 payload: {:#}", e);
                     }
                 }

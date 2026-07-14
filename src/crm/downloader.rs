@@ -1,10 +1,10 @@
 use anyhow::{Context, Result};
+use base64::{engine::general_purpose::STANDARD as Base64Standard, Engine as _};
 use futures_util::StreamExt;
 use std::path::Path;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncWriteExt, BufWriter};
 use tracing::{debug, error, info};
-use base64::{engine::general_purpose::STANDARD as Base64Standard, Engine as _};
 
 /// Download a CSV file from a signed URL.
 /// - Extracts filename from the URL path (URL-decoded).
@@ -106,7 +106,11 @@ pub async fn process_base64_payload(
     report_key: &str,
     target_dir: &Path,
 ) -> Result<String> {
-    info!("[{}] Processing Base64 payload ({} chars)", report_key, payload.len());
+    info!(
+        "[{}] Processing Base64 payload ({} chars)",
+        report_key,
+        payload.len()
+    );
     let decode_start = SystemTime::now();
 
     // Clean up potential surrounding quotes or whitespace from json encoding
@@ -116,7 +120,8 @@ pub async fn process_base64_payload(
         anyhow::bail!("[{}] Payload is empty after cleaning", report_key);
     }
 
-    let decoded = Base64Standard.decode(clean_payload)
+    let decoded = Base64Standard
+        .decode(clean_payload)
         .with_context(|| format!("[{}] Failed to decode Base64 payload", report_key))?;
 
     if let Ok(duration) = decode_start.elapsed() {
@@ -129,7 +134,8 @@ pub async fn process_base64_payload(
         String::from_utf8(decoded[3..].to_vec())
     } else {
         String::from_utf8(decoded)
-    }.with_context(|| format!("[{}] Decoded payload is not valid UTF-8", report_key))?;
+    }
+    .with_context(|| format!("[{}] Decoded payload is not valid UTF-8", report_key))?;
 
     // Validate CSV and extract stats
     let mut row_count = 0;
@@ -147,13 +153,20 @@ pub async fn process_base64_payload(
 
         for result in rdr.records() {
             if result.is_err() {
-                error!("[{}] CSV Validation error at row {}", report_key, row_count + 1);
+                error!(
+                    "[{}] CSV Validation error at row {}",
+                    report_key,
+                    row_count + 1
+                );
             }
             row_count += 1;
         }
     }
 
-    info!("[{}] CSV Validated: {} rows, {} columns", report_key, row_count, column_count);
+    info!(
+        "[{}] CSV Validated: {} rows, {} columns",
+        report_key, row_count, column_count
+    );
 
     // Ensure the directory exists
     tokio::fs::create_dir_all(target_dir)
@@ -173,10 +186,19 @@ pub async fn process_base64_payload(
 
     tokio::fs::write(&dest_path, utf8_content)
         .await
-        .with_context(|| format!("[{}] Failed to write CSV file to {:?}", report_key, dest_path))?;
+        .with_context(|| {
+            format!(
+                "[{}] Failed to write CSV file to {:?}",
+                report_key, dest_path
+            )
+        })?;
 
     let metadata = tokio::fs::metadata(&dest_path).await?;
-    info!("[{}] Output file saved successfully. Size: {} bytes", report_key, metadata.len());
+    info!(
+        "[{}] Output file saved successfully. Size: {} bytes",
+        report_key,
+        metadata.len()
+    );
 
     Ok(filename)
 }
@@ -265,7 +287,10 @@ mod tests {
 
         // BOM should be stripped in the final output
         assert!(!content_bytes.starts_with(&[0xEF, 0xBB, 0xBF]));
-        assert_eq!(String::from_utf8(content_bytes).unwrap(), "id,name\n1,Jules\n2,Smith\n");
+        assert_eq!(
+            String::from_utf8(content_bytes).unwrap(),
+            "id,name\n1,Jules\n2,Smith\n"
+        );
     }
 
     #[tokio::test]
@@ -281,6 +306,9 @@ mod tests {
         // Invalid Base64
         let res = process_base64_payload("!@#$%", "invalid_rep", target_dir).await;
         assert!(res.is_err());
-        assert!(res.unwrap_err().to_string().contains("Failed to decode Base64"));
+        assert!(res
+            .unwrap_err()
+            .to_string()
+            .contains("Failed to decode Base64"));
     }
 }

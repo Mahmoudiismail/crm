@@ -188,17 +188,12 @@ pub async fn fetch_reports(
                     extra_params: extra,
                 };
 
-                let v = fetch_users_report(
-                    &client,
-                    &context.token,
-                    endpoint,
-                    &params,
-                )
-                .await
-                .unwrap_or_else(|e| {
-                    error!("Report '{}' failed: {}", endpoint, e);
-                    serde_json::json!({"error": format!("{}", e)})
-                });
+                let v = fetch_users_report(&client, &context.token, endpoint, &params)
+                    .await
+                    .unwrap_or_else(|e| {
+                        error!("Report '{}' failed: {}", endpoint, e);
+                        serde_json::json!({"error": format!("{}", e)})
+                    });
 
                 (key, v)
             }));
