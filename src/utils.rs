@@ -68,6 +68,39 @@ pub fn load_or_create_config<T: DeserializeOwned + Serialize>(
     Ok(config)
 }
 
+pub fn build_csv_reader(file_content: &str) -> csv::ReaderBuilder {
+    let mut builder = csv::ReaderBuilder::new();
+    builder.has_headers(true).flexible(true).delimiter(
+        if file_content.contains('\t') {
+            b'\t'
+        } else {
+            b','
+        },
+    );
+    builder
+}
+
+pub fn generate_csv_diagnostic_context(file_content: &str, error_line_num: usize) -> String {
+    let start_line = error_line_num.saturating_sub(20).max(1_usize);
+    let end_line = error_line_num + 20;
+
+    let mut diagnostic_info = String::new();
+    for (idx, line) in file_content.lines().enumerate() {
+        let current_line_num = idx + 1;
+        if current_line_num >= start_line && current_line_num <= end_line {
+            let marker = if current_line_num == error_line_num {
+                ">>> "
+            } else {
+                "    "
+            };
+            diagnostic_info.push_str(&format!("{}{:4} | {}\n", marker, current_line_num, line));
+        } else if current_line_num > end_line {
+            break;
+        }
+    }
+    diagnostic_info
+}
+
 pub fn parse_flexible_date(val: &str) -> Option<chrono::NaiveDate> {
     use chrono::NaiveDate;
     let val = val.trim();
