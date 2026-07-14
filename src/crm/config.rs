@@ -74,8 +74,8 @@ impl Default for AppConfig {
             region: "ap-south-1".into(),
             user_pool_id: "ap-south-1_wjZE70ShT".into(),
             client_id: "i7g0t35boqicb1tdc4rgthk6".into(),
-            username: "+201155520811".into(),
-            password: "Dsfh@2502".into(),
+            username: "".into(),
+            password: "".into(),
             no_verify_ssl: true,
             remember_secrets: true,
             email: "Mahmoud_iismail@rayacx.com".into(),
@@ -242,7 +242,7 @@ mod tests {
 
         // Verify default values
         assert_eq!(config.region, "ap-south-1");
-        assert_eq!(config.username, "+201155520811");
+        assert_eq!(config.username, "");
 
         // Verify the file was actually created
         assert!(config_path.exists());
@@ -271,7 +271,7 @@ mod tests {
         assert!(!config.download_csv);
 
         // Default values should be filled in
-        assert_eq!(config.username, "+201155520811");
+        assert_eq!(config.username, "");
         assert!(config.no_verify_ssl);
     }
 

@@ -176,7 +176,7 @@ pub fn generate_csv(params: &CsvAnalysisParams) -> Result<Option<std::path::Path
     let users_bytes = std::fs::read(&users_file_path)
         .with_context(|| format!("Failed to read users file: {}", users_file_path.display()))?;
     let users_content = String::from_utf8_lossy(&users_bytes);
-    let mut users_rdr = crate::utils::build_csv_reader(users_content.as_bytes());
+    let mut users_rdr = crate::utils::build_csv_reader_from_reader(users_content.as_bytes());
 
     let headers = users_rdr.headers()?.clone();
     let mut cognito_idx = None;
@@ -233,7 +233,7 @@ pub fn generate_csv(params: &CsvAnalysisParams) -> Result<Option<std::path::Path
         )
     })?;
     let assignment_content = String::from_utf8_lossy(&assignment_bytes);
-    let mut assign_rdr = crate::utils::build_csv_reader(assignment_content.as_bytes());
+    let mut assign_rdr = crate::utils::build_csv_reader_from_reader(assignment_content.as_bytes());
 
     for result in assign_rdr.deserialize::<AssignmentSettings>() {
         match result {
@@ -353,7 +353,7 @@ pub fn generate_csv(params: &CsvAnalysisParams) -> Result<Option<std::path::Path
         info!("Processing file: {}", file_path.display());
         let file_bytes = std::fs::read(&file_path)?;
         let file_content = String::from_utf8_lossy(&file_bytes);
-        let mut rdr = crate::utils::build_csv_reader(file_content.as_bytes());
+        let mut rdr = crate::utils::build_csv_reader_from_reader(file_content.as_bytes());
 
         let headers = rdr.headers()?.clone();
 
@@ -873,7 +873,7 @@ pub mod tests {
         super::run(&config, false, false).unwrap();
 
         let out_content = std::fs::read_to_string(dataset.output_file.path()).unwrap();
-        let mut rdr = crate::utils::build_csv_reader(out_content.as_bytes());
+        let mut rdr = crate::utils::build_csv_reader_from_reader(out_content.as_bytes());
         let count = rdr.records().count();
         assert!(count > 0, "Should have mapped records");
     }
@@ -922,7 +922,7 @@ pub mod tests {
         super::run(&csv_config, false, false).unwrap();
 
         let out_content = std::fs::read_to_string(dataset.output_file.path()).unwrap();
-        let mut rdr = crate::utils::build_csv_reader(out_content.as_bytes());
+        let mut rdr = crate::utils::build_csv_reader_from_reader(out_content.as_bytes());
         let count = rdr.records().count();
         assert!(count > 0, "Should have created results file");
 
@@ -1062,7 +1062,7 @@ pub mod tests {
         super::run(&csv_config, false, true).unwrap();
 
         let out_content = std::fs::read_to_string(dataset.output_file.path()).unwrap();
-        let mut rdr = crate::utils::build_csv_reader(out_content.as_bytes());
+        let mut rdr = crate::utils::build_csv_reader_from_reader(out_content.as_bytes());
         let count = rdr.records().count();
         assert!(count > 0, "Should have created results file");
 
@@ -1170,7 +1170,7 @@ pub mod tests {
         super::run(&config, false, false).unwrap();
 
         let out_content = std::fs::read_to_string(output_file.path()).unwrap();
-        let mut rdr = crate::utils::build_csv_reader(out_content.as_bytes());
+        let mut rdr = crate::utils::build_csv_reader_from_reader(out_content.as_bytes());
 
         let records: Vec<_> = rdr.records().map(|r| r.unwrap()).collect();
 

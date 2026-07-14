@@ -35,8 +35,8 @@ impl Default for YaswebConfig {
     fn default() -> Self {
         Self {
             url: "https://example.com/".to_string(),
-            username: "username".to_string(),
-            password: Some("password".to_string()),
+            username: "".to_string(),
+            password: None,
             headless: false,
             keep_open: false,
             concurrency: 6,
