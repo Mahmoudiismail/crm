@@ -1,7 +1,7 @@
 use crate::tasker::config::CsvAnalysisConfig;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime};
-use csv::{ReaderBuilder, StringRecord, WriterBuilder};
+use csv::{StringRecord, WriterBuilder};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use tracing::{error, info, warn};
@@ -176,9 +176,7 @@ pub fn generate_csv(params: &CsvAnalysisParams) -> Result<Option<std::path::Path
     let users_bytes = std::fs::read(&users_file_path)
         .with_context(|| format!("Failed to read users file: {}", users_file_path.display()))?;
     let users_content = String::from_utf8_lossy(&users_bytes);
-    let mut users_rdr = ReaderBuilder::new()
-        .has_headers(true)
-        .from_reader(users_content.as_bytes());
+    let mut users_rdr = crate::utils::build_csv_reader(users_content.as_bytes());
 
     let headers = users_rdr.headers()?.clone();
     let mut cognito_idx = None;
@@ -235,9 +233,7 @@ pub fn generate_csv(params: &CsvAnalysisParams) -> Result<Option<std::path::Path
         )
     })?;
     let assignment_content = String::from_utf8_lossy(&assignment_bytes);
-    let mut assign_rdr = ReaderBuilder::new()
-        .has_headers(true)
-        .from_reader(assignment_content.as_bytes());
+    let mut assign_rdr = crate::utils::build_csv_reader(assignment_content.as_bytes());
 
     for result in assign_rdr.deserialize::<AssignmentSettings>() {
         match result {
@@ -357,9 +353,7 @@ pub fn generate_csv(params: &CsvAnalysisParams) -> Result<Option<std::path::Path
         info!("Processing file: {}", file_path.display());
         let file_bytes = std::fs::read(&file_path)?;
         let file_content = String::from_utf8_lossy(&file_bytes);
-        let mut rdr = ReaderBuilder::new()
-            .has_headers(true)
-            .from_reader(file_content.as_bytes());
+        let mut rdr = crate::utils::build_csv_reader(file_content.as_bytes());
 
         let headers = rdr.headers()?.clone();
 
@@ -407,28 +401,11 @@ pub fn generate_csv(params: &CsvAnalysisParams) -> Result<Option<std::path::Path
                 Ok(r) => r,
                 Err(e) => {
                     let line_num = e.position().map(|p| p.line()).unwrap_or(0) as usize;
-                    let end_line = line_num + 10;
-
-                    let mut diagnostic_info = String::new();
-                    for (idx, line) in file_content.lines().enumerate() {
-                        let current_line_num = idx + 1;
-                        if current_line_num <= end_line {
-                            let marker = if current_line_num == line_num {
-                                ">>> "
-                            } else {
-                                "    "
-                            };
-                            diagnostic_info.push_str(&format!(
-                                "{}{:4} | {}\n",
-                                marker, current_line_num, line
-                            ));
-                        } else {
-                            break;
-                        }
-                    }
+                    let diagnostic_info =
+                        crate::utils::generate_csv_diagnostic_context(&file_content, line_num);
 
                     error!(
-                        "CSV parsing error in file {:?} at line {}: {}\nDiagnostic Context (from start to 10 lines after):\n{}",
+                        "CSV parsing error in file {:?} at line {}: {}\nDiagnostic Context (±20 lines):\n{}",
                         file_path, line_num, e, diagnostic_info
                     );
                     anyhow::bail!("Failed to parse ticket report CSV: {}", e);
@@ -896,7 +873,7 @@ pub mod tests {
         super::run(&config, false, false).unwrap();
 
         let out_content = std::fs::read_to_string(dataset.output_file.path()).unwrap();
-        let mut rdr = csv::ReaderBuilder::new().from_reader(out_content.as_bytes());
+        let mut rdr = crate::utils::build_csv_reader(out_content.as_bytes());
         let count = rdr.records().count();
         assert!(count > 0, "Should have mapped records");
     }
@@ -945,7 +922,7 @@ pub mod tests {
         super::run(&csv_config, false, false).unwrap();
 
         let out_content = std::fs::read_to_string(dataset.output_file.path()).unwrap();
-        let mut rdr = csv::ReaderBuilder::new().from_reader(out_content.as_bytes());
+        let mut rdr = crate::utils::build_csv_reader(out_content.as_bytes());
         let count = rdr.records().count();
         assert!(count > 0, "Should have created results file");
 
@@ -1085,7 +1062,7 @@ pub mod tests {
         super::run(&csv_config, false, true).unwrap();
 
         let out_content = std::fs::read_to_string(dataset.output_file.path()).unwrap();
-        let mut rdr = csv::ReaderBuilder::new().from_reader(out_content.as_bytes());
+        let mut rdr = crate::utils::build_csv_reader(out_content.as_bytes());
         let count = rdr.records().count();
         assert!(count > 0, "Should have created results file");
 
@@ -1193,7 +1170,7 @@ pub mod tests {
         super::run(&config, false, false).unwrap();
 
         let out_content = std::fs::read_to_string(output_file.path()).unwrap();
-        let mut rdr = csv::ReaderBuilder::new().from_reader(out_content.as_bytes());
+        let mut rdr = crate::utils::build_csv_reader(out_content.as_bytes());
 
         let records: Vec<_> = rdr.records().map(|r| r.unwrap()).collect();
 

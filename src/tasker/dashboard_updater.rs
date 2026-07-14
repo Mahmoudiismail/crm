@@ -71,9 +71,7 @@ pub fn run(config: &DashboardUpdaterConfig) -> Result<()> {
 
     {
         let file = File::open(&generated_csv_path)?;
-        let mut rdr = csv::ReaderBuilder::new()
-            .has_headers(true)
-            .from_reader(file);
+        let mut rdr = crate::utils::build_csv_reader(file);
         let headers = rdr.headers()?.clone();
 
         let mut is_exception_idx = None;
@@ -387,7 +385,7 @@ mod tests {
         );
 
         let filtered_csv_content = std::fs::read_to_string(&filtered_csv_path).unwrap();
-        let mut rdr = csv::ReaderBuilder::new().from_reader(filtered_csv_content.as_bytes());
+        let mut rdr = crate::utils::build_csv_reader(filtered_csv_content.as_bytes());
         let headers = rdr.headers().unwrap().clone();
 
         let mut is_exception_idx = None;
