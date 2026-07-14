@@ -33,6 +33,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: "crm-rust-shared-cache"
+          cache-on-failure: true
 
       - name: Run format check
         run: cargo fmt -- --check
