@@ -77,7 +77,7 @@ pub fn run(config: &DashboardUpdaterConfig) -> Result<()> {
         let headers = rdr.headers()?.clone();
 
         let mut is_exception_idx = None;
-        let mut position_idx = None;
+        let mut _position_idx = None;
         let mut out_headers = vec![];
         let mut skip_indices = vec![];
 
@@ -87,7 +87,7 @@ pub fn run(config: &DashboardUpdaterConfig) -> Result<()> {
                 is_exception_idx = Some(i);
                 skip_indices.push(i);
             } else if lower == "position" {
-                position_idx = Some(i);
+                _position_idx = Some(i);
                 skip_indices.push(i);
             } else {
                 out_headers.push(h.to_string());
