@@ -1291,7 +1291,10 @@ mod tests {
         // But if it fails, it shouldn't be an OS error 32 (file in use).
         // Let's just assert that it ran or failed for another reason (like Not Found).
         if let Err(e) = result {
-            assert!(!e.to_string().contains("The process cannot access the file"), "File lock error occurred");
+            assert!(
+                !e.to_string().contains("The process cannot access the file"),
+                "File lock error occurred"
+            );
         }
     }
 

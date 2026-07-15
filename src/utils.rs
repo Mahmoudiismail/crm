@@ -79,8 +79,12 @@ pub fn load_or_create_config<T: DeserializeOwned + Serialize>(
         }
     }
 
-    let config: T = serde_json::from_value(current_val.clone())
-        .with_context(|| format!("Failed to deserialize merged config file at {:?}", config_path))?;
+    let config: T = serde_json::from_value(current_val.clone()).with_context(|| {
+        format!(
+            "Failed to deserialize merged config file at {:?}",
+            config_path
+        )
+    })?;
 
     if changed {
         let updated_content = serde_json::to_string_pretty(&current_val)
