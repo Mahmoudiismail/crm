@@ -56,10 +56,12 @@ impl TaskLogger {
 struct TaskLoggerInner {
     file: Option<fs::File>,
     task_id: String,
+    pub execution_id: String,
 }
 
 impl TaskLoggerInner {
     fn new(task_id: &str, task_name: &str) -> Self {
+        let execution_id = uuid::Uuid::new_v4().to_string();
         let now = Utc::now();
         let timestamp = now.format("%Y%m%d_%H%M%S").to_string();
         let safe_task_name = task_name.replace(|c: char| !c.is_alphanumeric(), "_");
@@ -82,6 +84,7 @@ impl TaskLoggerInner {
             return Self {
                 file: None,
                 task_id: task_id.to_string(),
+                execution_id: execution_id.clone(),
             };
         }
 
@@ -91,6 +94,7 @@ impl TaskLoggerInner {
                 let mut logger = Self {
                     file: Some(file),
                     task_id: task_id.to_string(),
+                    execution_id: execution_id.clone(),
                 };
                 logger.log(&format!("Task ID: {}", task_id));
                 logger.log(&format!("Task Name: {}", task_name));
@@ -103,6 +107,7 @@ impl TaskLoggerInner {
                 Self {
                     file: None,
                     task_id: task_id.to_string(),
+                    execution_id: execution_id.clone(),
                 }
             }
         }
@@ -119,14 +124,21 @@ impl TaskLoggerInner {
         debug!("[Task:{}] {}", self.task_id, message);
     }
 
-    fn log_bytes(&mut self, prefix: &str, bytes: &[u8]) {
+    fn log_bytes(&mut self, _prefix: &str, bytes: &[u8]) {
         if bytes.is_empty() {
             return;
         }
-        let text = String::from_utf8_lossy(bytes);
-        for line in text.lines() {
-            self.log(&format!("{}: {}", prefix, line));
+
+        // Write exactly to the task log file, without extra runner prepending timestamps
+        if let Some(ref mut f) = self.file {
+            let _ = f.write_all(bytes);
+            let _ = f.flush();
         }
+
+        // Write exactly to stdout without looping and prepending runner logs
+        use std::io::Write;
+        let _ = std::io::stdout().write_all(bytes);
+        let _ = std::io::stdout().flush();
     }
 }
 
@@ -991,6 +1003,9 @@ async fn run_external_app(
 ) -> Result<()> {
     let resolved_executable = resolve_executable(&app.executable_path);
     let mut command = tokio::process::Command::new(&resolved_executable);
+
+    let execution_id = logger.inner.lock().await.execution_id.clone();
+    command.env("CRM_CORRELATION_ID", execution_id);
 
     if !app.config_path.trim().is_empty() {
         let resolved_config = resolve_relative_to_exe_dir(&app.config_path);

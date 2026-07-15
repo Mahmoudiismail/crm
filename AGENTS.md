@@ -76,5 +76,4 @@ If you modify `src/tasker/csv_task.rs` or any logic related to the `csv_analysis
 - In the yasweb binary, boolean-style CLI arguments like --add-time-to-file and --monthly are defined as bool types in the clap parser to ensure they behave as simple flags (true if present, false if absent).
 - The project supports dynamic date variables (today, yesterday, tomorrow, eomonth) in date-related CLI arguments across yasweb and crm binaries, resolved via src/utils.rs.
 - The tasker CLI uses the --only-call-center flag to explicitly trigger Call Center emails. Exception team emails are triggered dynamically via the --send-exceptions CLI flag or the send_exceptions configuration option.
-
-- When a bug is fixed, a corresponding test case must be added to prevent future regressions. The fix and the test case should be documented together.
+- **Mandatory Test Requirement:** Whenever an issue or bug is found and fixed, you MUST create a test case that reproduces the issue and verifies the fix to ensure regressions are avoided in the future.
