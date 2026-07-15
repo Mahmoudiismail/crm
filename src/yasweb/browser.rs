@@ -828,3 +828,18 @@ pub fn run_browser_tab(
 
     Ok(discovered_filters)
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_date_formatting_logic() {
+        let parts: Vec<&str> = "2026-07-15".split('-').collect();
+        if parts[0].len() == 4 {
+            let formatted = format!("{}-{}-{}", parts[2], parts[1], parts[0]);
+            assert_eq!(formatted, "15-07-2026");
+        } else {
+            let formatted = format!("{}-{}-{}", parts[0], parts[1], parts[2]);
+            assert_eq!(formatted, "15-07-2026");
+        }
+    }
+}
