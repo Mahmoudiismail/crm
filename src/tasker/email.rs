@@ -40,23 +40,15 @@ struct TicketRow {
     original_row: csv::StringRecord,
 }
 
-use std::sync::atomic::{AtomicUsize, Ordering};
-
-static SCRIPT_COUNTER: AtomicUsize = AtomicUsize::new(0);
-
 fn run_powershell(script: &str) -> Result<()> {
-    let tmp_dir = std::env::temp_dir();
-    let count = SCRIPT_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let script_path = tmp_dir.join(format!(
-        "send_email_{}_{}.ps1",
-        Local::now().timestamp_nanos_opt().unwrap_or(0),
-        count
-    ));
+    let mut temp_file = tempfile::Builder::new()
+        .prefix("send_email_")
+        .suffix(".ps1")
+        .tempfile()?;
 
-    let mut file = File::create(&script_path)?;
-    file.write_all(script.as_bytes())?;
-    file.sync_all()?;
-    drop(file);
+    temp_file.write_all(script.as_bytes())?;
+    temp_file.as_file().sync_all()?;
+    let script_path = temp_file.path().to_path_buf();
 
     let status = std::process::Command::new("powershell")
         .arg("-ExecutionPolicy")
@@ -65,7 +57,7 @@ fn run_powershell(script: &str) -> Result<()> {
         .arg(&script_path)
         .status()?;
 
-    let _ = std::fs::remove_file(script_path);
+    drop(temp_file);
 
     if !status.success() {
         anyhow::bail!("PowerShell script exited with status: {}", status);
@@ -1238,6 +1230,11 @@ $Mail.Display()
             if let Err(e2) = run_powershell(&err_script) {
                 error!("Failed to send error notification email: {}", e2);
             }
+            anyhow::bail!(
+                "PowerShell execution failed for email bucket {}: {}",
+                bucket_name,
+                e
+            );
         } else {
             info!("Successfully processed email for {}", bucket_name);
         }

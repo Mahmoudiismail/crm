@@ -29,6 +29,33 @@ pub struct TaskerCliOptions {
     pub legacy_config: Option<String>,
 }
 
+pub fn merge_configs(a: &mut Value, b: &Value, changed: &mut bool) {
+    match (a, b) {
+        (Value::Object(a_obj), Value::Object(b_obj)) => {
+            for (k, v) in b_obj {
+                if let Some(a_val) = a_obj.get_mut(k) {
+                    merge_configs(a_val, v, changed);
+                } else {
+                    a_obj.insert(k.clone(), v.clone());
+                    *changed = true;
+                }
+            }
+        }
+        (Value::Array(a_arr), Value::Array(b_arr)) => {
+            let len = std::cmp::min(a_arr.len(), b_arr.len());
+            for i in 0..len {
+                merge_configs(&mut a_arr[i], &b_arr[i], changed);
+            }
+        }
+        (a_val, b_val) => {
+            if a_val.is_null() && !b_val.is_null() {
+                *a_val = b_val.clone();
+                *changed = true;
+            }
+        }
+    }
+}
+
 pub fn run_app(options: TaskerCliOptions) -> Result<()> {
     info!("Tasker started.");
 
@@ -66,6 +93,7 @@ pub fn run_app(options: TaskerCliOptions) -> Result<()> {
         "ending_cc": "ending@example.com",
         "send_emails": false,
         "default_to_email": "fallback@example.com",
+        "send_per_team_all_branches": [],
         "send_per_team_branches": [
           "Dr. Soliman Fakeeh Hospital"
         ],
@@ -105,43 +133,21 @@ pub fn run_app(options: TaskerCliOptions) -> Result<()> {
     let default_config_val: Value = serde_json::from_str(default_config_content)
         .with_context(|| "Failed to parse default config as JSON")?;
 
-    fn merge(a: &mut Value, b: &Value, changed: &mut bool) {
-        match (a, b) {
-            (Value::Object(a_obj), Value::Object(b_obj)) => {
-                for (k, v) in b_obj {
-                    if let Some(a_val) = a_obj.get_mut(k) {
-                        merge(a_val, v, changed);
-                    } else {
-                        a_obj.insert(k.clone(), v.clone());
-                        *changed = true;
-                    }
-                }
-            }
-            (Value::Array(a_arr), Value::Array(b_arr)) => {
-                // If it's the tasks array, we might want to merge into each task
-                // For simplicity, we just merge into existing elements up to the min length
-                // If the user's config has fewer tasks than default, we don't necessarily append defaults,
-                // but if we did, we'd add it. We'll leave array merging simple.
-                let len = std::cmp::min(a_arr.len(), b_arr.len());
-                for i in 0..len {
-                    merge(&mut a_arr[i], &b_arr[i], changed);
-                }
-            }
-            (a_val, b_val) => {
-                if a_val.is_null() && !b_val.is_null() {
-                    *a_val = b_val.clone();
-                    *changed = true;
-                }
-            }
-        }
-    }
-
     let mut config_changed = false;
-    merge(
+    merge_configs(
         &mut current_config_val,
         &default_config_val,
         &mut config_changed,
     );
+
+    let config: TaskerConfig = serde_json::from_value(current_config_val.clone())
+        .with_context(|| "Failed to parse tasker_config.json into TaskerConfig")?;
+
+    if let Some(filter) = task_filter {
+        if filter == 0 || filter > config.tasks.len() {
+            anyhow::bail!("Task filter index {} is out of bounds. The configuration only contains {} task(s).", filter, config.tasks.len());
+        }
+    }
 
     if config_changed {
         info!("Updated configuration file with missing default fields.");
@@ -154,9 +160,6 @@ pub fn run_app(options: TaskerCliOptions) -> Result<()> {
             )
         })?;
     }
-
-    let config: TaskerConfig = serde_json::from_value(current_config_val)
-        .with_context(|| "Failed to parse tasker_config.json into TaskerConfig")?;
 
     for (i, task) in config.tasks.iter().enumerate() {
         let task_idx = i + 1;
@@ -264,7 +267,6 @@ mod tests {
 
     #[test]
     fn test_tasker_args_parsing() {
-        // Run with mock args and a fake config path
         let tmp = std::env::temp_dir();
         let config_path = tmp.join("mock_tasker_config.json");
         let _ = std::fs::remove_file(&config_path);
@@ -280,5 +282,163 @@ mod tests {
         let options = TaskerCliOptions::parse_from(args);
         let _res = run_app(options);
         let _ = std::fs::remove_file(&config_path);
+    }
+
+    #[test]
+    fn test_task_filtering_logic_valid_index() {
+        // We test run_app's integration directly using a mock file on disk
+        use std::io::Write;
+
+        let tmp = std::env::temp_dir();
+        let config_path = tmp.join("mock_tasker_config_valid.json");
+
+        let mock_config_json = serde_json::json!({
+            "tasks": [
+                {
+                    "type": "csv_analysis",
+                    "download_path": "path1",
+                    "users_file": "u1",
+                    "assignment_settings_file": "a1",
+                    "minutes_ago": 10,
+                    "exclude_branches": [],
+                    "exclude_categories": [],
+                    "output_file": "out1"
+                },
+                {
+                    "type": "csv_analysis",
+                    "download_path": "path2",
+                    "users_file": "u2",
+                    "assignment_settings_file": "a2",
+                    "minutes_ago": 20,
+                    "exclude_branches": [],
+                    "exclude_categories": [],
+                    "output_file": "out2"
+                }
+            ]
+        });
+
+        let mut file = std::fs::File::create(&config_path).unwrap();
+        file.write_all(mock_config_json.to_string().as_bytes())
+            .unwrap();
+        file.sync_all().unwrap();
+
+        // Passing valid task index 2. This won't actually succeed all the way because 'path2' doesn't exist,
+        // but it WILL pass the bounds check and fail further down the execution tree.
+        let args = vec![
+            "tasker".to_string(),
+            "--config".to_string(),
+            config_path.to_string_lossy().to_string(),
+            "--task".to_string(),
+            "2".to_string(),
+        ];
+
+        let options = TaskerCliOptions::parse_from(args);
+
+        // We know it won't bail on BoundsCheck.
+        // It will return Ok(()) but inside `csv_task::run` it logs an error if path2 doesn't exist.
+        // run_app itself returns Ok(()) if internal task errors are caught and logged.
+        let res = run_app(options);
+        assert!(
+            res.is_ok(),
+            "run_app should successfully route the valid task filter"
+        );
+
+        let _ = std::fs::remove_file(&config_path);
+    }
+
+    #[test]
+    fn test_task_filtering_logic_out_of_bounds() {
+        use std::io::Write;
+
+        let tmp = std::env::temp_dir();
+        let config_path = tmp.join("mock_tasker_config_oob.json");
+
+        let mock_config_json = serde_json::json!({
+            "tasks": [
+                {
+                    "type": "csv_analysis",
+                    "download_path": "path1",
+                    "users_file": "u1",
+                    "assignment_settings_file": "a1",
+                    "minutes_ago": 10,
+                    "output_file": "out1"
+                }
+            ]
+        });
+
+        let mut file = std::fs::File::create(&config_path).unwrap();
+        file.write_all(mock_config_json.to_string().as_bytes())
+            .unwrap();
+        file.sync_all().unwrap();
+
+        // Pass task 5, which does not exist.
+        let args = vec![
+            "tasker".to_string(),
+            "--config".to_string(),
+            config_path.to_string_lossy().to_string(),
+            "--task".to_string(),
+            "5".to_string(),
+        ];
+
+        let options = TaskerCliOptions::parse_from(args);
+        let res = run_app(options);
+        assert!(
+            res.is_err(),
+            "run_app MUST bail when the task index is out of bounds"
+        );
+        assert!(
+            res.unwrap_err().to_string().contains("out of bounds"),
+            "Error message should mention bounds"
+        );
+
+        let _ = std::fs::remove_file(&config_path);
+    }
+
+    #[test]
+    fn test_merge_function() {
+        use serde_json::json;
+
+        let default_config = json!({
+            "tasks": [
+                {
+                    "type": "csv_analysis",
+                    "minutes_ago": 15,
+                    "email_config": {
+                        "send_emails": false,
+                        "default_to_email": "fallback@example.com"
+                    }
+                }
+            ]
+        });
+
+        let mut user_config = json!({
+            "tasks": [
+                {
+                    "type": "csv_analysis",
+                    "email_config": {
+                        "send_emails": true
+                    }
+                }
+            ]
+        });
+
+        let mut changed = false;
+        merge_configs(&mut user_config, &default_config, &mut changed);
+
+        assert!(changed, "Merge should mark config as changed");
+
+        let merged_task = &user_config["tasks"][0];
+        assert_eq!(
+            merged_task["minutes_ago"], 15,
+            "Should merge root level fields"
+        );
+        assert_eq!(
+            merged_task["email_config"]["send_emails"], true,
+            "Should NOT overwrite existing user fields"
+        );
+        assert_eq!(
+            merged_task["email_config"]["default_to_email"], "fallback@example.com",
+            "Should merge nested missing fields"
+        );
     }
 }

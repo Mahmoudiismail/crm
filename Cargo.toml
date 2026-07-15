@@ -42,6 +42,7 @@ headless_chrome = "1.0.21"
 rust_xlsxwriter = "0.95.0"
 clap = { version = "4.6.1", features = ["derive"] }
 lazy_static = "1.5.0"
+tempfile = "3.10.1"
 
 
 [profile.release]

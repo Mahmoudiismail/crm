@@ -5,23 +5,15 @@ use std::fs::File;
 use std::io::Write;
 use tracing::{error, info};
 
-use std::sync::atomic::{AtomicUsize, Ordering};
-
-static SCRIPT_COUNTER: AtomicUsize = AtomicUsize::new(0);
-
 fn run_powershell(script: &str) -> Result<()> {
-    let tmp_dir = std::env::temp_dir();
-    let count = SCRIPT_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let script_path = tmp_dir.join(format!(
-        "dashboard_updater_{}_{}.ps1",
-        Local::now().timestamp_nanos_opt().unwrap_or(0),
-        count
-    ));
+    let mut temp_file = tempfile::Builder::new()
+        .prefix("dashboard_updater_")
+        .suffix(".ps1")
+        .tempfile()?;
 
-    let mut file = File::create(&script_path)?;
-    file.write_all(script.as_bytes())?;
-    file.sync_all()?;
-    drop(file);
+    temp_file.write_all(script.as_bytes())?;
+    temp_file.as_file().sync_all()?;
+    let script_path = temp_file.path().to_path_buf();
 
     let status = std::process::Command::new("powershell")
         .arg("-ExecutionPolicy")
@@ -30,7 +22,7 @@ fn run_powershell(script: &str) -> Result<()> {
         .arg(&script_path)
         .status()?;
 
-    let _ = std::fs::remove_file(script_path);
+    drop(temp_file);
 
     if !status.success() {
         anyhow::bail!("PowerShell script exited with status: {}", status);
