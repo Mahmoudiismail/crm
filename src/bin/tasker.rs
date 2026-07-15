@@ -133,8 +133,6 @@ pub fn run_app(options: TaskerCliOptions) -> Result<()> {
     let default_config_val: Value = serde_json::from_str(default_config_content)
         .with_context(|| "Failed to parse default config as JSON")?;
 
-
-
     let mut config_changed = false;
     merge_configs(
         &mut current_config_val,
@@ -267,7 +265,6 @@ mod tests {
     use super::*;
     use clap::Parser;
 
-
     #[test]
     fn test_tasker_args_parsing() {
         let tmp = std::env::temp_dir();
@@ -321,7 +318,8 @@ mod tests {
         });
 
         let mut file = std::fs::File::create(&config_path).unwrap();
-        file.write_all(mock_config_json.to_string().as_bytes()).unwrap();
+        file.write_all(mock_config_json.to_string().as_bytes())
+            .unwrap();
         file.sync_all().unwrap();
 
         // Passing valid task index 2. This won't actually succeed all the way because 'path2' doesn't exist,
@@ -331,7 +329,7 @@ mod tests {
             "--config".to_string(),
             config_path.to_string_lossy().to_string(),
             "--task".to_string(),
-            "2".to_string()
+            "2".to_string(),
         ];
 
         let options = TaskerCliOptions::parse_from(args);
@@ -340,7 +338,10 @@ mod tests {
         // It will return Ok(()) but inside `csv_task::run` it logs an error if path2 doesn't exist.
         // run_app itself returns Ok(()) if internal task errors are caught and logged.
         let res = run_app(options);
-        assert!(res.is_ok(), "run_app should successfully route the valid task filter");
+        assert!(
+            res.is_ok(),
+            "run_app should successfully route the valid task filter"
+        );
 
         let _ = std::fs::remove_file(&config_path);
     }
@@ -366,7 +367,8 @@ mod tests {
         });
 
         let mut file = std::fs::File::create(&config_path).unwrap();
-        file.write_all(mock_config_json.to_string().as_bytes()).unwrap();
+        file.write_all(mock_config_json.to_string().as_bytes())
+            .unwrap();
         file.sync_all().unwrap();
 
         // Pass task 5, which does not exist.
@@ -375,13 +377,19 @@ mod tests {
             "--config".to_string(),
             config_path.to_string_lossy().to_string(),
             "--task".to_string(),
-            "5".to_string()
+            "5".to_string(),
         ];
 
         let options = TaskerCliOptions::parse_from(args);
         let res = run_app(options);
-        assert!(res.is_err(), "run_app MUST bail when the task index is out of bounds");
-        assert!(res.unwrap_err().to_string().contains("out of bounds"), "Error message should mention bounds");
+        assert!(
+            res.is_err(),
+            "run_app MUST bail when the task index is out of bounds"
+        );
+        assert!(
+            res.unwrap_err().to_string().contains("out of bounds"),
+            "Error message should mention bounds"
+        );
 
         let _ = std::fs::remove_file(&config_path);
     }
@@ -420,8 +428,17 @@ mod tests {
         assert!(changed, "Merge should mark config as changed");
 
         let merged_task = &user_config["tasks"][0];
-        assert_eq!(merged_task["minutes_ago"], 15, "Should merge root level fields");
-        assert_eq!(merged_task["email_config"]["send_emails"], true, "Should NOT overwrite existing user fields");
-        assert_eq!(merged_task["email_config"]["default_to_email"], "fallback@example.com", "Should merge nested missing fields");
+        assert_eq!(
+            merged_task["minutes_ago"], 15,
+            "Should merge root level fields"
+        );
+        assert_eq!(
+            merged_task["email_config"]["send_emails"], true,
+            "Should NOT overwrite existing user fields"
+        );
+        assert_eq!(
+            merged_task["email_config"]["default_to_email"], "fallback@example.com",
+            "Should merge nested missing fields"
+        );
     }
 }

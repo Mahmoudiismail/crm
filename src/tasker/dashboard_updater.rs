@@ -5,7 +5,6 @@ use std::fs::File;
 use std::io::Write;
 use tracing::{error, info};
 
-
 fn run_powershell(script: &str) -> Result<()> {
     let mut temp_file = tempfile::Builder::new()
         .prefix("dashboard_updater_")

@@ -40,7 +40,6 @@ struct TicketRow {
     original_row: csv::StringRecord,
 }
 
-
 fn run_powershell(script: &str) -> Result<()> {
     let mut temp_file = tempfile::Builder::new()
         .prefix("send_email_")
@@ -1231,7 +1230,11 @@ $Mail.Display()
             if let Err(e2) = run_powershell(&err_script) {
                 error!("Failed to send error notification email: {}", e2);
             }
-            anyhow::bail!("PowerShell execution failed for email bucket {}: {}", bucket_name, e);
+            anyhow::bail!(
+                "PowerShell execution failed for email bucket {}: {}",
+                bucket_name,
+                e
+            );
         } else {
             info!("Successfully processed email for {}", bucket_name);
         }
