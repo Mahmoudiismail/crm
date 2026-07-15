@@ -536,19 +536,15 @@ pub async fn update_task(path: &str, task_id: &str, mut task: RunnerTask) -> Res
                         next_run_at: old_next,
                         ..
                     },
-                ) => {
-                    if new_dom == *old_dom && new_time == *old_time && new_wh == *old_wh {
-                        if let crate::runner::config::TaskSchedule::Monthly {
-                            next_run_at, ..
-                        } = new_schedule
-                        {
-                            *next_run_at = old_next.clone();
-                        }
-                        true
-                    } else {
-                        false
+                ) if new_dom == *old_dom && new_time == *old_time && new_wh == *old_wh => {
+                    if let crate::runner::config::TaskSchedule::Monthly { next_run_at, .. } =
+                        new_schedule
+                    {
+                        *next_run_at = old_next.clone();
                     }
+                    true
                 }
+                (crate::runner::config::TaskSchedule::Monthly { .. }, _) => false,
                 _ => false, // Different kinds of schedules or Once schedule, just recalculate or leave
             };
             if !matches {

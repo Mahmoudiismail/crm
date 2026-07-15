@@ -1,0 +1,28 @@
+--- src/runner/engine.rs
++++ src/runner/engine.rs
+@@ -537,16 +537,12 @@
+                         ..
+                     },
+-                ) => {
+-                    if new_dom == *old_dom && new_time == *old_time && new_wh == *old_wh {
+-                        if let crate::runner::config::TaskSchedule::Monthly {
+-                            next_run_at, ..
+-                        } = new_schedule
+-                        {
+-                            *next_run_at = old_next.clone();
+-                        }
+-                        true
+-                    } else {
+-                        false
+-                    }
+-                }
++                ) if new_dom == *old_dom && new_time == *old_time && new_wh == *old_wh => {
++                    if let crate::runner::config::TaskSchedule::Monthly {
++                        next_run_at, ..
++                    } = new_schedule
++                    {
++                        *next_run_at = old_next.clone();
++                    }
++                    true
++                }
++                (crate::runner::config::TaskSchedule::Monthly { .. }, _) => false,
