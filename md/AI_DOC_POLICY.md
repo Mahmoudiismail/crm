@@ -58,3 +58,6 @@ If any answer is `no`, update docs before finalizing.
 ## Fixed CSV Parsing Issues
 - Configured  to use  centrally in  via  to prevent varying-length column errors.
 - Replaced raw inline diagnostic logging loop with a shared  function limiting output to ±20 lines around the error line to keep logs compact but useful.
+
+## Rule 6: Test-Driven Bug Fixes
+- When a bug is fixed, a corresponding test case must be added to prevent future regressions. The fix and the test case should be documented together in the relevant `md/*.md` file.

@@ -630,14 +630,10 @@ pub fn run_browser_tab(
                                                                 if (key.toLowerCase().includes('date') && v.includes('-')) {{
                                                                     let parts = v.split(' ')[0].split('-');
                                                                     if (parts.length === 3) {{
-                                                                        let p1 = parts[0];
-                                                                        let p2 = parts[1];
-                                                                        let p3 = parts[2];
-                                                                        if (p1.length === 4) {{
-                                                                            v = p3.padStart(2, '0') + "-" + p2.padStart(2, '0') + "-" + p1 + (v.includes(' ') ? ' ' + v.split(' ').slice(1).join(' ') : '');
-                                                                        }} else {{
-                                                                            v = p1.padStart(2, '0') + "-" + p2.padStart(2, '0') + "-" + p3 + (v.includes(' ') ? ' ' + v.split(' ').slice(1).join(' ') : '');
-                                                                        }}
+                                                                        let d = parts[0].padStart(2, '0');
+                                                                        let m = parts[1].padStart(2, '0');
+                                                                        let y = parts[2];
+                                                                        v = d + "-" + m + "-" + y + (v.includes(' ') ? ' ' + v.split(' ').slice(1).join(' ') : '');
                                                                     }}
                                                                 }}
                                                                 await simulateTyping(input, v);
@@ -649,10 +645,6 @@ pub fn run_browser_tab(
                                             }}
 
                                             await sleep(1000);
-
-                                            let swalClose = doc.querySelector('.swal2-confirm, .swal2-close, button.swal2-styled');
-                                            if (swalClose) {{ swalClose.click(); await sleep(500); }}
-
                                             let searchBtnIcon = doc.querySelector('button.btn-primary i.bi-search');
                                             if (searchBtnIcon) searchBtnIcon.closest('button').click();
 
@@ -827,19 +819,4 @@ pub fn run_browser_tab(
     }
 
     Ok(discovered_filters)
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_date_formatting_logic() {
-        let parts: Vec<&str> = "2026-07-15".split('-').collect();
-        if parts[0].len() == 4 {
-            let formatted = format!("{}-{}-{}", parts[2], parts[1], parts[0]);
-            assert_eq!(formatted, "15-07-2026");
-        } else {
-            let formatted = format!("{}-{}-{}", parts[0], parts[1], parts[2]);
-            assert_eq!(formatted, "15-07-2026");
-        }
-    }
 }

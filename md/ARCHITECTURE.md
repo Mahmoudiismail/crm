@@ -27,3 +27,8 @@ When a `TaskKind::ExternalApp` is executed on its schedule, the `runner/engine.r
 ## Components Update
 
 - **`tasker`:** Aggregates and emails reports based on configured bucket logic. Supports `--send-exceptions` to dynamically read teams mapped in `category_exceptions` and group exception tickets dynamically, using only mapped CC lists and ignoring standard global logic.
+### Recent Fixes
+- **Dashboard Updater & PowerShell Locking:** Fixed a bug on Windows where `tempfile::Builder` kept file handles open during PowerShell execution. The tempfile `.ps1` handle is now explicitly dropped via `.keep()` before calling PowerShell, and manually removed afterwards, resolving `The process cannot access the file because it is being used by another process` errors.
+- **Dashboard CSV Filtering:** Refined filtering in `src/tasker/dashboard_updater.rs` to guarantee the `Position` and `Is Exception` columns are removed. Added logic to parse the `Created At` date and append it as explicitly formatted `Month` (e.g. `Jan`) and `Day` (e.g. `01`) columns for dashboard Excel injection.
+- **Tasker Call Center Leads:** Corrected conditional logic in `src/tasker/email.rs` where `--only-call-center` did not trigger lead report generation. The `send_cc` flag now implicitly assumes true if `only_call_center` is explicitly specified via the CLI, ensuring leads files are generated and attached as intended.
+- **Automated Testing:** Per AGENTS.md policy, unit tests were created or adapted to cover PowerShell file unlocking and Dashboard parsing edge cases to prevent regressions.

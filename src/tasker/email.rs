@@ -757,7 +757,7 @@ pub fn process_emails(
         .map(|s| s.to_lowercase())
         .collect();
 
-    let send_cc = config.send_call_center.unwrap_or(false);
+    let send_cc = only_call_center || config.send_call_center.unwrap_or(false);
 
     let mut per_team_buckets: HashMap<String, Vec<TicketRow>> = HashMap::new(); // Key: Team name
     let mut per_branch_buckets: HashMap<String, Vec<TicketRow>> = HashMap::new(); // Key: Branch name
