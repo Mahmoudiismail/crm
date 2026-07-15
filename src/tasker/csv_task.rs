@@ -1010,8 +1010,8 @@ pub mod tests {
         let leads_attachment = temp_dir.join("Call_Center_Leads.xlsx");
         // We modified the mock leads data to contain a 'new' status so it will be generated correctly.
         assert!(
-           leads_attachment.exists(),
-           "Leads file should be generated for Call Center team"
+            leads_attachment.exists(),
+            "Leads file should be generated for Call Center team"
         );
 
         // Assert we successfully read filtered records
