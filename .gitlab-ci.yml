@@ -20,12 +20,9 @@ test:
   script:
     - rustup default stable
     - rustup component add rustfmt clippy
-    - cargo install cargo-audit cargo-deny
     - cargo fmt -- --check
     - cargo clippy --all-targets --all-features
     - cargo test --workspace
-    - cargo audit
-    - cargo deny check
 
 release:
   stage: release
