@@ -47,3 +47,16 @@ Executables spawned via the runner or manually have their own configurations.
 - **`tasker_config.json`:** Tasker tasks like CSV pivoting, team mappings, Outlook configuration, and leads reporting for the Call Center. Includes `send_exceptions` to dynamically read from `category_exceptions` and skip standard team branch logic for exception tickets.
 
 *(See respective markdown files for detailed schemas of these components).*
+
+### `CrmOpenSohailConfig`
+
+Specific to the `crm_open_sohail` task. Inherits all fields from `DashboardUpdaterConfig` at the root object level, and introduces specific settings for generating enriched emails based on Excel slicers.
+
+| Field | Type | Description |
+|---|---|---|
+| `team_mapping_file` | String | Path to the CSV mapping Team Names to Receiver Names (Owners) and emails. |
+| `body_template_file` | Option<String> | Custom HTML template for the email body. |
+| `subject_template` | Option<String> | The subject of the dispatched email. |
+| `branch_filter` | Option<Vec<String>> | Filter applied to Slicers to restrict the parsed branches. |
+| `month_filter` | Option<Vec<String>> | Filter applied to Slicers to restrict parsed months. |
+| `fallback_oul` | Option<String> | Value mapped in the OUL column when a team is missing from the mapping file. |

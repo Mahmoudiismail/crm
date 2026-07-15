@@ -12,6 +12,8 @@ pub enum TaskConfig {
     CsvAnalysis(CsvAnalysisConfig),
     #[serde(rename = "dashboard_updater")]
     DashboardUpdater(DashboardUpdaterConfig),
+    #[serde(rename = "crm_open_sohail")]
+    CrmOpenSohail(CrmOpenSohailConfig),
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -73,6 +75,19 @@ pub struct DashboardUpdaterConfig {
 
     pub save_email_as_html: Option<bool>,
     pub indentation_spaces: Option<u32>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct CrmOpenSohailConfig {
+    #[serde(flatten)]
+    pub dashboard_config: DashboardUpdaterConfig,
+
+    pub team_mapping_file: String,
+    pub body_template_file: Option<String>,
+    pub subject_template: Option<String>,
+    pub branch_filter: Option<Vec<String>>,
+    pub month_filter: Option<Vec<String>>,
+    pub fallback_oul: Option<String>,
 }
 
 #[cfg(test)]
@@ -140,6 +155,42 @@ mod tests {
                 assert_eq!(dash.email_to.as_deref(), Some("aya@example.com"));
             }
             _ => panic!("Expected DashboardUpdater task"),
+        }
+    }
+
+    #[test]
+    fn test_crm_open_sohail_config_serialization() {
+        let json_data = r#"{
+          "tasks": [
+            {
+              "type": "crm_open_sohail",
+              "download_path": "./downloads",
+              "users_file": "./users.csv",
+              "assignment_settings_file": "./assignments.csv",
+              "minutes_ago": 15,
+              "exclude_branches": [],
+              "exclude_categories": [],
+              "output_file": "./results.csv",
+              "dashboard_file": "./dashboard.xlsx",
+              "dashboard_table_name": "table2",
+              "email_to": "sohail@example.com",
+              "email_cc": "cc@example.com",
+              "team_mapping_file": "./teams.csv",
+              "fallback_oul": "N/A"
+            }
+          ]
+        }"#;
+
+        let config: TaskerConfig = serde_json::from_str(json_data).unwrap();
+        assert_eq!(config.tasks.len(), 1);
+
+        match config.tasks.first().expect("Task list empty") {
+            TaskConfig::CrmOpenSohail(task) => {
+                assert_eq!(task.dashboard_config.dashboard_file, "./dashboard.xlsx");
+                assert_eq!(task.team_mapping_file, "./teams.csv");
+                assert_eq!(task.fallback_oul.as_deref(), Some("N/A"));
+            }
+            _ => panic!("Expected CrmOpenSohail task"),
         }
     }
 }
