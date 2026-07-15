@@ -165,3 +165,35 @@ This task is similar to `csv_analysis`, in that it processes raw ticket CSVs bas
 ## Logging
 
 `tasker` includes detailed logging for auditing and debugging. It leverages the `tracing` framework to output logs both to STDOUT and to a rolling log file `task_csv_analysis.log` situated in the same folder as the executable. Every step (config parsing, file reading, row counting, filtering, pivot creation, and Outlook automation) is rigorously tracked in this file.
+
+## `crm_open_sohail` Task
+
+The `crm_open_sohail` task automates the generation and delivery of Branch & Month dashboard email summaries based on Excel slicer iterations. It acts as an orchestrator around the standard `dashboard_updater`.
+
+### Workflow
+1. Executes the standard `dashboard_updater` task using its nested `dashboard_config`.
+2. Generates and executes a PowerShell COM script to open the target Dashboard Excel workbook.
+3. Automatically maps and iterates over Slicer Items for "Branch" and "Month" slicers.
+4. Extracts tabular data dynamically from `PivotTable1` in the `TKT - Dashboard` worksheet.
+5. Loads data from `team_mapping_file` (a CSV) to associate team names with owners and target email addresses, mapping these to an `OUL` HTML hyperlink (`<a href="mailto:...">@Owner</a>`).
+6. Aggregates data and dispatches an Outlook HTML Email populated with nested summary tables mimicking the required visual identity (Blue headers, Red "Grand Total" row).
+
+### Example Configuration
+```json
+{
+  "type": "crm_open_sohail",
+  "download_path": "./downloads",
+  "users_file": "./users.csv",
+  "assignment_settings_file": "./assignment_settings.csv",
+  "minutes_ago": 15,
+  "output_file": "./results.csv",
+  "exclude_branches": [],
+  "exclude_categories": [],
+  "dashboard_file": "./dashboard.xlsx",
+  "dashboard_table_name": "table2",
+  "team_mapping_file": "./teams.csv",
+  "email_to": "sohail@example.com",
+  "email_cc": "reports@example.com",
+  "fallback_oul": "N/A"
+}
+```

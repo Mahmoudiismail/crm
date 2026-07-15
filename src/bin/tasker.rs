@@ -192,6 +192,14 @@ pub fn run_app(options: TaskerCliOptions) -> Result<()> {
                 }
                 tracing::trace!("DashboardUpdater for task #{} finished.", task_idx);
             }
+            TaskConfig::CrmOpenSohail(sohail_config) => {
+                tracing::trace!("Executing CrmOpenSohail for task #{}.", task_idx);
+                if let Err(e) = crm_tool::tasker::crm_open_sohail::run(sohail_config) {
+                    error!("Error running CrmOpenSohail task #{}: {:?}", task_idx, e);
+                    anyhow::bail!("CrmOpenSohail task {} failed: {}", task_idx, e);
+                }
+                tracing::trace!("CrmOpenSohail for task #{} finished.", task_idx);
+            }
         }
     }
 
