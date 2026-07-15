@@ -371,7 +371,8 @@ mod tests {
 
     #[test]
     fn test_correlation_id_fallback() {
-        let correlation_id = std::env::var("CRM_CORRELATION_ID").unwrap_or_else(|_| "none".to_string());
+        let correlation_id =
+            std::env::var("CRM_CORRELATION_ID").unwrap_or_else(|_| "none".to_string());
         assert_eq!(correlation_id, "none"); // since we did not set it in tests
     }
 }
