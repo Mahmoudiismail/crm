@@ -213,3 +213,46 @@ The JSON file (`tasker_config.json`) acts as an environment/execution driver for
 
 ---
 **END OF REPORT. WAITING FOR APPROVAL TO PROCEED TO PHASE 2.**
+---
+
+## 6. Core Function Deep Dives
+
+### `csv_task::run` & `csv_task::generate_csv`
+* **Purpose:** Acts as the primary data extraction and transformation engine. It aggregates raw CRM CSV reports, filters them based on configuration rules (branches, dates, exception categories), maps agents to teams using lookup files, and generates a unified `results.csv`.
+* **Workflow:**
+    1. **Data Loading (Lookups):** Reads the `users.csv` file to map `cognito_username` to `UserDepartmentName / Team Name`. It parses these fields into an `assignee_map`.
+    2. **Assignment Rules:** Reads `assignments.csv` to map `(Category, Type, Subtype)` combinations to a specific default team, stored in `assignment_map`.
+    3. **File Discovery:** Scans the target `download_path` for files matching `ticket_report*.csv`. It strictly filters these files based on their OS modification time, comparing them against the `minutes_ago` threshold.
+    4. **Parsing & Filtering:** Uses a custom `build_csv_reader_from_reader` (which supports dynamic delimiter detection).
+    5. **Row Iteration:** For every row:
+        * Removes underscores from Type, Subtype, and Category fields.
+        * Deduplicates tickets using a `seen_tickets` HashSet based on `Ticket Id`.
+        * Derives the final team assignment by consulting the `assignee_map` and falling back to `assignment_map` logic if the agent has no explicit team.
+        * Applies branch exclusions.
+        * Applies category exclusions *unless* the category and branch explicitly match a rule in `category_exceptions`. If an exception rule matches, the row is flagged as `Is Exception: Yes` and the team is forcefully overridden.
+        * Filters out rows created before the `start_date` parameter (parsing Excel float dates and ISO dates dynamically).
+    6. **Output:** Writes the enriched rows to `results.csv`, appending four new columns: `Position`, `team`, `Is Exception`, and `Month`.
+    7. **Post-Processing:** If an `email_config` is defined, it immediately invokes `email::process_emails` passing the path to the newly generated `results.csv`.
+
+### `dashboard_updater::run`
+* **Purpose:** Filters the generated `results.csv` to exclude exception tickets and seamlessly injects the clean data into an existing Excel (`.xlsx`) dashboard template using a dynamically generated PowerShell script.
+* **Workflow:**
+    1. Invokes `csv_task::generate_csv` to retrieve or generate the base dataset.
+    2. **Exception Filtering:** Reads the generated `results.csv`. It streams the rows into a new temporary file (`dashboard_filtered_{timestamp}.csv`), explicitly dropping any row where `Is Exception` equals `Yes`, as well as entirely removing the `Position` column.
+    3. **PowerShell Generation:** Crafts a rigid PowerShell script block.
+    4. **COM Object Automation (Excel):** The PowerShell script boots `Excel.Application` (hidden, without alerts), opens the target `dashboard_file` (e.g., `dashboard.xlsx`), and searches all worksheets for a ListObject (Table) matching `dashboard_table_name`.
+    5. **Data Injection:** The script clears the old data body range of the Excel table, opens the temporary filtered CSV via Excel COM, copies its UsedRange, and pastes it into the destination table.
+    6. **Execution & Cleanup:** The script is executed via `std::process::Command`. If successful, the temporary filtered CSV and PowerShell script are deleted.
+
+### `email::process_emails`
+* **Purpose:** Buckets the generated `results.csv` data by Team, Branch, or Call Center logic, generates HTML pivot tables, optionally generates contextual lead reports, and dispatches them via Outlook COM objects using PowerShell.
+* **Workflow:**
+    1. **Mapping Loading:** Parses `teams.csv` to resolve human-readable `Team Name` to `To Email`, `CC`, and `Receiver Name`.
+    2. **Data Bucketing:** Reads `results.csv` into memory as a list of `TicketRow` structs.
+        * If `effective_send_exceptions` is true: Filters purely for `Is Exception == Yes` and buckets by team name.
+        * If `only_call_center` is true: Buckets all Call Center tickets into one list.
+        * Otherwise: Evaluates `send_per_team_all_branches`, `send_per_branch_branches`, and `send_per_team_branches` to bucket rows accordingly.
+    3. **Leads Generation (Call Center only):** If processing a Call Center bucket, it searches the download directory for `lead_report*.csv` files, parses them dynamically (supporting tabs or commas), applies branch exclusions, and writes them to a temporary `Call_Center_Leads.xlsx` using the `rust_xlsxwriter` crate.
+    4. **HTML Generation:** For each bucket, calls `generate_pivot_html` to build an inline HTML table summarizing Open vs Closed ticket statuses across Assignees, Subtypes, and Categories. Assignees whose tickets are *all* closed are omitted from the HTML view.
+    5. **Attachment Generation:** Generates a targeted CSV attachment for the specific bucket, filtering out "Closed" or "Resolved" tickets so the attachment only contains actionable items.
+    6. **Email Dispatch:** Crafts a PowerShell script utilizing the `Outlook.Application` COM object. It merges the HTML body, adds the CCs and To addresses (respecting exception overrides vs global configs), attaches the targeted CSV and Leads XLSX (if applicable), and triggers `.Send()` or `.Display()`. If the Outlook COM operation fails, a fallback error notification script is generated and executed.
