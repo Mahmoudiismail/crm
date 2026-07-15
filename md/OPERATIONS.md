@@ -38,7 +38,7 @@ If you need to bypass the runner, invoke the apps directly:
 
 ## Logs and Debugging
 
-Every application writes highly detailed tracing logs to local files in the same directory as the executables.
+Every application writes highly detailed tracing logs to local files in the same directory as the executables (set to `TRACE` level for file output, and `DEBUG` for `stdout`).
 - `runner.log` (Runner GUI & Engine)
 - `crm.log` (CRM fetch status)
 - `yasweblog` (Yasweb browser & CDP network events)

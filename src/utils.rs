@@ -27,7 +27,7 @@ pub fn setup_logging(app_name: &str) -> Result<tracing_appender::non_blocking::W
         .with_writer(std::io::stdout)
         .with_target(true)
         .with_thread_ids(true)
-        .with_filter(tracing_subscriber::filter::LevelFilter::TRACE);
+        .with_filter(tracing_subscriber::filter::LevelFilter::DEBUG);
 
     let _ = tracing_subscriber::registry()
         .with(file_layer)
