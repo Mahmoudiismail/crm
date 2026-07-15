@@ -26,7 +26,7 @@
     5. A merge function merges any missing default values into the parsed JSON.
     6. If changes were made during the merge, the updated JSON is written back to the file.
     7. The JSON is deserialized into a strongly-typed `TaskerConfig` object.
-    8. Application proceeds to task execution iterating over `tasks` defined in the config.
+    8. Application loops over the `tasks` array. Depending on the `type` tag of the JSON block (`csv_analysis` or `dashboard_updater`), it triggers `csv_task::run(config_block)` or `dashboard_updater::run(config_block)` to drive the entire downstream file processing logic.
 * **Dependencies:** `clap`, `serde_json`, `std::fs`.
 * **Files Affected:** Reads/Writes to the specified configuration file.
 * **Possible Failure Points:**
@@ -83,9 +83,11 @@
     1. CLI flag passed.
     2. Stored as `only_call_center` boolean.
     3. Passed into `csv_task::run(config, only_call_center, send_exceptions)` alongside the hydrated configuration object.
-    4. Propagated to `email::process_emails()`.
-    5. Modifies email dispatch logic: explicit trigger to process and generate "Call Center" specific lead reports and formats.
-* **Dependencies:** `email.rs` processing logic.
+    4. `csv_task::run` passes this flag directly down to `email::process_emails`.
+    5. Inside `email::process_emails`, if this flag is true, all standard team-based grouping logic (`send_per_team_all_branches`, `send_per_branch_branches`) is suppressed.
+    6. Instead, it exclusively funnels tickets belonging to the "Call Center" into a single bucket, formats their HTML table specifically without standard email headers, and triggers `generate_leads_report` to attach a contextual leads `.xlsx` file before dispatching via PowerShell.
+    5. Inside `email::process_emails`, if this flag is true, all standard team-based grouping logic (`send_per_team_all_branches`, `send_per_branch_branches`) is suppressed.
+    6. Instead, it exclusively funnels tickets belonging to the "Call Center" into a single bucket, formats their HTML table specifically without standard email headers, and triggers `generate_leads_report` to attach a contextual leads `.xlsx` file before dispatching via PowerShell.
 * **Files Affected:** Alters the output structure of generated emails and CSV reports if applicable to Call Center logic.
 * **Possible Failure Points:**
     - Conflict with `--send-exceptions` (though current logic processes both conditionally).
@@ -110,9 +112,10 @@
     1. CLI flag passed.
     2. Stored as `send_exceptions` boolean.
     3. Passed into `csv_task::run(config, only_call_center, send_exceptions)` alongside the hydrated configuration object.
-    4. Propagated to `email::process_emails()`.
-    5. In `email.rs`, it merges with `config.send_exceptions` (using `||` logic).
-    6. When active, it suppresses Call Center logic and triggers grouping of tickets explicitly mapped in the `category_exceptions` configuration list.
+    4. `csv_task::run` passes this flag directly down to `email::process_emails`.
+    5. In `email.rs`, the CLI flag is merged with the JSON config field (`send_exceptions || config.send_exceptions`).
+    6. When `effective_send_exceptions` evaluates to true, the standard ticket bucketing loop skips all "normal" tickets and filters exclusively for rows where `Is Exception == Yes`.
+    7. These exception tickets are then dynamically grouped into buckets based solely on the teams defined in the `category_exceptions` JSON array, completely overriding standard routing and completely suppressing Call Center logic.
 * **Dependencies:** Configuration must have valid `category_exceptions` mapped.
 * **Files Affected:** Alters data filtering and assignment rules during email dispatch.
 * **Possible Failure Points:**
