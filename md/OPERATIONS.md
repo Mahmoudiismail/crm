@@ -50,7 +50,9 @@ CSV parsing errors encountered by the `tasker` log a ±20 line diagnostic contex
 
 ## CI/CD Pipeline
 
-The test workflow (`.github/workflows/test.yml`) ensures strict code formatting and linting prior to merging. The CI stages are executed in the following order:
+The test workflow (`.github/workflows/test.yml`) ensures strict code formatting and linting prior to merging. The test workflow caches `target` artifacts across runs using `Swatinem/rust-cache` with `cache-targets: true`.
+
+The CI stages are executed in the following order:
 1. `cargo fmt`
 2. `cargo clippy`
 3. `cargo test`
