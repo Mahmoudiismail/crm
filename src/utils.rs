@@ -1,6 +1,6 @@
 use crate::manifest::AppManifest;
 use anyhow::{Context, Result};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Serialize};
 use std::path::{Path, PathBuf};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
@@ -11,61 +11,9 @@ pub fn executable_dir() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LoggingConfig {
-    #[serde(default = "default_file_level")]
-    pub file_level: String,
-    #[serde(default = "default_console_level")]
-    pub console_level: String,
-}
-
-fn default_file_level() -> String {
-    "TRACE".to_string()
-}
-
-fn default_console_level() -> String {
-    "DEBUG".to_string()
-}
-
-impl Default for LoggingConfig {
-    fn default() -> Self {
-        Self {
-            file_level: default_file_level(),
-            console_level: default_console_level(),
-        }
-    }
-}
-
 pub fn setup_logging(app_name: &str) -> Result<tracing_appender::non_blocking::WorkerGuard> {
     let log_dir = executable_dir();
-
-    let config_path = log_dir.join("logging_config.json");
-    let config = if config_path.exists() {
-        let content = std::fs::read_to_string(&config_path).unwrap_or_default();
-        let loaded = serde_json::from_str::<LoggingConfig>(&content).unwrap_or_default();
-        // Write it back to ensure missing fields are populated
-        if let Ok(content) = serde_json::to_string_pretty(&loaded) {
-            let _ = std::fs::write(&config_path, content);
-        }
-        loaded
-    } else {
-        let default_config = LoggingConfig::default();
-        if let Ok(content) = serde_json::to_string_pretty(&default_config) {
-            let _ = std::fs::write(&config_path, content);
-        }
-        default_config
-    };
-
-    let file_level: tracing_subscriber::filter::LevelFilter = config
-        .file_level
-        .parse()
-        .unwrap_or(tracing_subscriber::filter::LevelFilter::TRACE);
-    let console_level: tracing_subscriber::filter::LevelFilter = config
-        .console_level
-        .parse()
-        .unwrap_or(tracing_subscriber::filter::LevelFilter::DEBUG);
-
-    let file_appender = tracing_appender::rolling::daily(&log_dir, format!("{}.log", app_name));
+    let file_appender = tracing_appender::rolling::never(&log_dir, format!("{}.log", app_name));
     let (non_blocking_file, guard) = tracing_appender::non_blocking(file_appender);
 
     let file_layer = fmt::layer()
@@ -73,43 +21,18 @@ pub fn setup_logging(app_name: &str) -> Result<tracing_appender::non_blocking::W
         .with_ansi(false)
         .with_target(true)
         .with_thread_ids(true)
-        .with_filter(file_level);
+        .with_filter(tracing_subscriber::filter::LevelFilter::TRACE);
 
     let stdout_layer = fmt::layer()
         .with_writer(std::io::stdout)
         .with_target(true)
         .with_thread_ids(true)
-        .with_filter(console_level);
+        .with_filter(tracing_subscriber::filter::LevelFilter::DEBUG);
 
     let _ = tracing_subscriber::registry()
         .with(file_layer)
         .with(stdout_layer)
         .try_init();
-
-    let correlation_id = std::env::var("CRM_CORRELATION_ID").unwrap_or_else(|_| "none".to_string());
-    if correlation_id != "none" {
-        tracing::info!("Execution started with Correlation ID: {}", correlation_id);
-    }
-
-    if let Ok(entries) = std::fs::read_dir(&log_dir) {
-        let now = std::time::SystemTime::now();
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if let Some(ext) = path.extension() {
-                if ext == "log" || path.to_string_lossy().contains(".log.") {
-                    if let Ok(metadata) = entry.metadata() {
-                        if let Ok(modified) = metadata.modified() {
-                            if let Ok(age) = now.duration_since(modified) {
-                                if age.as_secs() > 7 * 24 * 3600 {
-                                    let _ = std::fs::remove_file(path);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
 
     Ok(guard)
 }
@@ -356,23 +279,5 @@ mod tests {
         assert_eq!(ctx_late_lines[0].trim(), "25 | Line 25");
         assert_eq!(ctx_late_lines[20].trim(), ">>>   45 | Line 45");
         assert_eq!(ctx_late_lines[25].trim(), "50 | Line 50");
-    }
-
-    #[test]
-    fn test_logging_config_serialization() {
-        let default_config = LoggingConfig::default();
-        assert_eq!(default_config.file_level, "TRACE");
-        assert_eq!(default_config.console_level, "DEBUG");
-
-        let json = serde_json::to_string(&default_config).unwrap();
-        let parsed: LoggingConfig = serde_json::from_str(&json).unwrap();
-        assert_eq!(parsed.file_level, default_config.file_level);
-    }
-
-    #[test]
-    fn test_correlation_id_fallback() {
-        let correlation_id =
-            std::env::var("CRM_CORRELATION_ID").unwrap_or_else(|_| "none".to_string());
-        assert_eq!(correlation_id, "none"); // since we did not set it in tests
     }
 }
