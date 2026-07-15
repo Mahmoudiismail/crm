@@ -25,6 +25,11 @@ jobs:
             $env:Path += ";$env:USERPROFILE\.cargo\bin"
             rustup component add rustfmt clippy
       - run:
+          name: Install cargo-audit and cargo-deny
+          command: |
+            $env:Path += ";$env:USERPROFILE\.cargo\bin"
+            cargo install cargo-audit cargo-deny
+      - run:
           name: Run format check
           command: |
             $env:Path += ";$env:USERPROFILE\.cargo\bin"
@@ -39,6 +44,16 @@ jobs:
           command: |
             $env:Path += ";$env:USERPROFILE\.cargo\bin"
             cargo test --workspace
+      - run:
+          name: Run cargo audit
+          command: |
+            $env:Path += ";$env:USERPROFILE\.cargo\bin"
+            cargo audit
+      - run:
+          name: Run cargo deny
+          command: |
+            $env:Path += ";$env:USERPROFILE\.cargo\bin"
+            cargo deny check
       - run:
           name: Build all models and binaries
           command: |

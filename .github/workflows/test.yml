@@ -54,5 +54,13 @@ jobs:
           RUSTC_WRAPPER: "sccache"
         run: cargo test --workspace --all-targets --all-features
 
+      - name: Run cargo audit
+        uses: rustsec/audit-check@v1.4.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run cargo deny
+        uses: EmbarkStudios/cargo-deny-action@v1
+
       #- name: Build all models and binaries
         #run: cargo build --all-targets
