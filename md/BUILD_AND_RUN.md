@@ -52,7 +52,7 @@ They will output a JSON representation of their arguments and exit.
 
 The GitHub Actions, GitLab CI, and CircleCI pipelines enforce the following step order:
 1. `cargo fmt -- --check`
-2. `cargo clippy --all-targets --all-features -- -D warnings`
+2. `cargo clippy --workspace --all-targets --all-features -- -D warnings`
 3. `cargo test --workspace`
 4. `cargo build --all-targets`
 
@@ -60,7 +60,7 @@ The GitHub Actions, GitLab CI, and CircleCI pipelines enforce the following step
 
 Standard Rust cargo tests:
 ```bash
-cargo test --workspace
+cargo test --workspace --all-targets --all-features
 ```
 
 ## Cross-Compiling for Windows (from Linux/WSL)

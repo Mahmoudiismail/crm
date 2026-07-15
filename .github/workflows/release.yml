@@ -56,7 +56,7 @@ jobs:
         with:
           shared-key: crm-rust-shared-cache
           cache-on-failure: true
-          cache-targets: false
+          cache-targets: true
 
       - name: Build
         shell: bash
