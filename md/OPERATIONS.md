@@ -17,3 +17,6 @@
 
 ### Expected Errors
 - `500 Internal Server Error: Failed to generate signed url...`: This error occurs when CRM hits the S3 file size limit. The fetcher intelligently catches this error and automatically chunks the download into smaller date ranges, so it is **expected behavior** and does not require manual intervention.
+
+### Testing Rule
+- **Mandatory Test Requirement:** Whenever an issue or bug is found and fixed, a corresponding test case MUST be created to ensure the issue is avoided in the future.
