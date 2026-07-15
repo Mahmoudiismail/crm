@@ -62,8 +62,32 @@ pub fn load_or_create_config<T: DeserializeOwned + Serialize>(
     let content = std::fs::read_to_string(config_path)
         .with_context(|| format!("Failed to read config file at {:?}", config_path))?;
 
-    let config: T = serde_json::from_str(&content)
+    let mut current_val: serde_json::Value = serde_json::from_str(&content)
         .with_context(|| format!("Failed to parse config file at {:?}", config_path))?;
+    let default_val = serde_json::to_value(default_config)
+        .with_context(|| "Failed to serialize default config to Value")?;
+
+    let mut changed = false;
+    if let (serde_json::Value::Object(ref mut curr_map), serde_json::Value::Object(def_map)) =
+        (&mut current_val, &default_val)
+    {
+        for (k, v) in def_map {
+            if !curr_map.contains_key(k) {
+                curr_map.insert(k.clone(), v.clone());
+                changed = true;
+            }
+        }
+    }
+
+    let config: T = serde_json::from_value(current_val.clone())
+        .with_context(|| format!("Failed to deserialize merged config file at {:?}", config_path))?;
+
+    if changed {
+        let updated_content = serde_json::to_string_pretty(&current_val)
+            .context("Failed to serialize updated config")?;
+        std::fs::write(config_path, updated_content)
+            .with_context(|| format!("Failed to save merged config at {:?}", config_path))?;
+    }
 
     Ok(config)
 }

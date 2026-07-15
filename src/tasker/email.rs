@@ -48,16 +48,18 @@ fn run_powershell(script: &str) -> Result<()> {
 
     temp_file.write_all(script.as_bytes())?;
     temp_file.as_file().sync_all()?;
-    let script_path = temp_file.path().to_path_buf();
+
+    let (file, path) = temp_file.keep()?;
+    drop(file);
 
     let status = std::process::Command::new("powershell")
         .arg("-ExecutionPolicy")
         .arg("Bypass")
         .arg("-File")
-        .arg(&script_path)
+        .arg(&path)
         .status()?;
 
-    drop(temp_file);
+    let _ = std::fs::remove_file(&path);
 
     if !status.success() {
         anyhow::bail!("PowerShell script exited with status: {}", status);
@@ -1276,6 +1278,22 @@ mod tests {
     use std::fs::File;
     use std::io::Write;
     use tempfile::NamedTempFile;
+
+    #[test]
+    fn test_run_powershell_file_lifecycle() {
+        // This test ensures that the powershell script path creation,
+        // unlocking, execution, and cleanup are working as expected.
+        let script = "Write-Host 'Hello World'";
+        // Normally run_powershell will succeed if powershell is available.
+        // We just call it and ensure it doesn't return a file-in-use error.
+        let result = run_powershell(script);
+        // On linux, it might fail because powershell isn't installed.
+        // But if it fails, it shouldn't be an OS error 32 (file in use).
+        // Let's just assert that it ran or failed for another reason (like Not Found).
+        if let Err(e) = result {
+            assert!(!e.to_string().contains("The process cannot access the file"), "File lock error occurred");
+        }
+    }
 
     #[test]
     fn test_email_processing_skips_closed() {

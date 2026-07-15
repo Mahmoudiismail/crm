@@ -18,6 +18,8 @@ struct CrmCliOptions {
     start_date: Option<String>,
     #[arg(long)]
     end_date: Option<String>,
+    #[arg(long)]
+    custom_download_folder: Option<String>,
     #[arg(long, hide = true)]
     manifest: bool,
 }
@@ -43,7 +45,14 @@ async fn main() -> Result<()> {
         .end_date
         .map(|e| replace_date_vars(&e, start_date.as_deref()));
 
-    crm::run_once(&config_path, options.report, start_date, end_date).await?;
+    crm::run_once(
+        &config_path,
+        options.report,
+        start_date,
+        end_date,
+        options.custom_download_folder,
+    )
+    .await?;
 
     info!("CRM - One-shot run completed successfully");
     Ok(())
@@ -104,6 +113,15 @@ fn get_manifest() -> AppManifest {
             },
             AppArg {
                 name: "--end-date".to_string(),
+                arg_type: ArgType::String,
+                required: false,
+                default_value: None,
+                options: None,
+                depends_on: None,
+                autofill: None,
+            },
+            AppArg {
+                name: "--custom-download-folder".to_string(),
                 arg_type: ArgType::String,
                 required: false,
                 default_value: None,

@@ -390,9 +390,15 @@ async fn main() -> Result<()> {
             let last_day = next_month.pred_opt().context("Invalid date math")?;
             let chunk_end = if last_day > end_dt { end_dt } else { last_day };
 
+            let format_str = if active_report_type == "Report Manager" {
+                "%d-%b-%Y"
+            } else {
+                "%d-%m-%Y"
+            };
+
             date_ranges.push((
-                current_dt.format("%d-%m-%Y").to_string(),
-                chunk_end.format("%d-%m-%Y").to_string(),
+                current_dt.format(format_str).to_string(),
+                chunk_end.format(format_str).to_string(),
             ));
 
             current_dt = next_month;
