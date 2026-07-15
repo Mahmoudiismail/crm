@@ -183,29 +183,8 @@ pub fn build_csv_reader_builder() -> csv::ReaderBuilder {
     builder
 }
 
-pub fn build_csv_reader<R: std::io::Read>(rdr: R) -> csv::Reader<R> {
+pub fn build_csv_reader_from_reader<R: std::io::Read>(rdr: R) -> csv::Reader<R> {
     build_csv_reader_builder().from_reader(rdr)
-}
-
-pub fn generate_csv_diagnostic_context(file_content: &str, line_num: usize) -> String {
-    let start_line = if line_num > 20 { line_num - 20 } else { 1 };
-    let end_line = line_num + 20;
-
-    let mut diagnostic_info = String::new();
-    for (idx, line) in file_content.lines().enumerate() {
-        let current_line_num = idx + 1;
-        if current_line_num >= start_line && current_line_num <= end_line {
-            let marker = if current_line_num == line_num {
-                ">>>"
-            } else {
-                "   "
-            };
-            diagnostic_info.push_str(&format!("{} {:4} | {}\n", marker, current_line_num, line));
-        } else if current_line_num > end_line {
-            break;
-        }
-    }
-    diagnostic_info
 }
 
 #[cfg(test)]
@@ -263,7 +242,7 @@ mod tests {
     fn test_csv_reader_flexible() {
         // Test variable columns, blank rows, quoted multiline
         let csv_data = "col1,col2,col3\nval1,val2\n\nval3,val4,val5,val6\n\"multi\nline\",escaped\"\"quote,val";
-        let mut rdr = build_csv_reader(csv_data.as_bytes());
+        let mut rdr = build_csv_reader_from_reader(csv_data.as_bytes());
         let records: Vec<_> = rdr.records().map(|r| r.unwrap()).collect();
 
         assert_eq!(records.len(), 3);

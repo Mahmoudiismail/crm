@@ -548,7 +548,7 @@ pub fn process_emails(
         "Failed to open team mapping file: {}",
         team_mapping_path.display()
     ))?;
-    let mut map_rdr = crate::utils::build_csv_reader(mapping_file);
+    let mut map_rdr = crate::utils::build_csv_reader_from_reader(mapping_file);
 
     for result in map_rdr.deserialize::<TeamMapping>() {
         match result {
@@ -565,7 +565,7 @@ pub fn process_emails(
 
     // 2. Read the results.csv file to memory
     let file = File::open(results_file)?;
-    let mut rdr = crate::utils::build_csv_reader(file);
+    let mut rdr = crate::utils::build_csv_reader_from_reader(file);
     let headers = rdr.headers()?.clone();
 
     let mut tkt_id_idx = None;
