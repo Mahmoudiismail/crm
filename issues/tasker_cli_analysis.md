@@ -12,7 +12,6 @@
 ### Argument: `--config` (and hidden legacy positional config)
 
 * **Short option:** N/A
-* **Long option:** `--config`
 * **Required/optional:** Optional
 * **Default value:** `tasker_config.json` relative to the executable directory.
 * **Accepted values:** Path to a valid JSON configuration file.
@@ -55,8 +54,9 @@
 * **Workflow:**
     1. CLI receives `--task <N>`.
     2. Argument parsed into `task_filter`.
-    3. During task iteration in `run_app`, `task_idx` (1-based) is compared to `task_filter`.
+    3. During the `config.tasks` iteration loop in `run_app`, `task_idx` (1-based) is compared to `task_filter`.
     4. If it does not match, the task execution is skipped.
+    5. If it does match, the specific JSON configuration block for that index (e.g., `CsvAnalysisConfig`) is extracted and passed directly into the execution function (like `csv_task::run(config)`). The integer task number itself is never passed into the underlying functions; it acts purely as an array filter in `main`.
 * **Dependencies:** None.
 * **Files Affected:** None directly (controls execution).
 * **Possible Failure Points:**
@@ -82,7 +82,7 @@
 * **Workflow:**
     1. CLI flag passed.
     2. Stored as `only_call_center` boolean.
-    3. Passed into `csv_task::run()`.
+    3. Passed into `csv_task::run(config, only_call_center, send_exceptions)` alongside the hydrated configuration object.
     4. Propagated to `email::process_emails()`.
     5. Modifies email dispatch logic: explicit trigger to process and generate "Call Center" specific lead reports and formats.
 * **Dependencies:** `email.rs` processing logic.
@@ -109,7 +109,7 @@
 * **Workflow:**
     1. CLI flag passed.
     2. Stored as `send_exceptions` boolean.
-    3. Passed into `csv_task::run()`.
+    3. Passed into `csv_task::run(config, only_call_center, send_exceptions)` alongside the hydrated configuration object.
     4. Propagated to `email::process_emails()`.
     5. In `email.rs`, it merges with `config.send_exceptions` (using `||` logic).
     6. When active, it suppresses Call Center logic and triggers grouping of tickets explicitly mapped in the `category_exceptions` configuration list.
@@ -220,29 +220,31 @@ The JSON file (`tasker_config.json`) acts as an environment/execution driver for
 ### `csv_task::run` & `csv_task::generate_csv`
 * **Purpose:** Acts as the primary data extraction and transformation engine. It aggregates raw CRM CSV reports, filters them based on configuration rules (branches, dates, exception categories), maps agents to teams using lookup files, and generates a unified `results.csv`.
 * **Workflow:**
-    1. **Data Loading (Lookups):** Reads the `users.csv` file to map `cognito_username` to `UserDepartmentName / Team Name`. It parses these fields into an `assignee_map`.
-    2. **Assignment Rules:** Reads `assignments.csv` to map `(Category, Type, Subtype)` combinations to a specific default team, stored in `assignment_map`.
-    3. **File Discovery:** Scans the target `download_path` for files matching `ticket_report*.csv`. It strictly filters these files based on their OS modification time, comparing them against the `minutes_ago` threshold.
-    4. **Parsing & Filtering:** Uses a custom `build_csv_reader_from_reader` (which supports dynamic delimiter detection).
-    5. **Row Iteration:** For every row:
+    1. **Initialization:** The function does not receive a task number. Instead, it receives a fully populated `CsvAnalysisConfig` object (extracted from `tasker_config.json` based on the `--task` filter in `main`), along with the `--only-call-center` and `--send-exceptions` boolean flags.
+    2. **Data Loading (Lookups):** Reads the `users.csv` file to map `cognito_username` to `UserDepartmentName / Team Name`. It parses these fields into an `assignee_map`.
+    3. **Assignment Rules:** Reads `assignments.csv` to map `(Category, Type, Subtype)` combinations to a specific default team, stored in `assignment_map`.
+    4. **File Discovery:** Scans the target `download_path` for files matching `ticket_report*.csv`. It strictly filters these files based on their OS modification time, comparing them against the `minutes_ago` threshold.
+    5. **Parsing & Filtering:** Uses a custom `build_csv_reader_from_reader` (which supports dynamic delimiter detection).
+    6. **Row Iteration:** For every row:
         * Removes underscores from Type, Subtype, and Category fields.
-        * Deduplicates tickets using a `seen_tickets` HashSet based on `Ticket Id`.
         * Derives the final team assignment by consulting the `assignee_map` and falling back to `assignment_map` logic if the agent has no explicit team.
+        * Deduplicates tickets using a `seen_tickets` HashSet based on `Ticket Id`.
         * Applies branch exclusions.
         * Applies category exclusions *unless* the category and branch explicitly match a rule in `category_exceptions`. If an exception rule matches, the row is flagged as `Is Exception: Yes` and the team is forcefully overridden.
         * Filters out rows created before the `start_date` parameter (parsing Excel float dates and ISO dates dynamically).
-    6. **Output:** Writes the enriched rows to `results.csv`, appending four new columns: `Position`, `team`, `Is Exception`, and `Month`.
-    7. **Post-Processing:** If an `email_config` is defined, it immediately invokes `email::process_emails` passing the path to the newly generated `results.csv`.
+        7. **Output:** Writes the enriched rows to `results.csv`, appending four new columns: `Position`, `team`, `Is Exception`, and `Month`.
+        8. **Post-Processing:** If an `email_config` is defined, it immediately invokes `email::process_emails` passing the path to the newly generated `results.csv`.
 
 ### `dashboard_updater::run`
 * **Purpose:** Filters the generated `results.csv` to exclude exception tickets and seamlessly injects the clean data into an existing Excel (`.xlsx`) dashboard template using a dynamically generated PowerShell script.
 * **Workflow:**
-    1. Invokes `csv_task::generate_csv` to retrieve or generate the base dataset.
-    2. **Exception Filtering:** Reads the generated `results.csv`. It streams the rows into a new temporary file (`dashboard_filtered_{timestamp}.csv`), explicitly dropping any row where `Is Exception` equals `Yes`, as well as entirely removing the `Position` column.
-    3. **PowerShell Generation:** Crafts a rigid PowerShell script block.
-    4. **COM Object Automation (Excel):** The PowerShell script boots `Excel.Application` (hidden, without alerts), opens the target `dashboard_file` (e.g., `dashboard.xlsx`), and searches all worksheets for a ListObject (Table) matching `dashboard_table_name`.
-    5. **Data Injection:** The script clears the old data body range of the Excel table, opens the temporary filtered CSV via Excel COM, copies its UsedRange, and pastes it into the destination table.
-    6. **Execution & Cleanup:** The script is executed via `std::process::Command`. If successful, the temporary filtered CSV and PowerShell script are deleted.
+    1. **Initialization:** Like `csv_task::run`, this function does not receive a task index. It strictly accepts a hydrated `DashboardUpdaterConfig` object extracted directly from `tasker_config.json` based on the active CLI filter.
+    2. **Data Generation:** Invokes `csv_task::generate_csv` to retrieve or generate the base dataset.
+    3. **Exception Filtering:** Reads the generated `results.csv`. It streams the rows into a new temporary file (`dashboard_filtered_{timestamp}.csv`), explicitly dropping any row where `Is Exception` equals `Yes`, as well as entirely removing the `Position` column.
+    4. **PowerShell Generation:** Crafts a rigid PowerShell script block.
+    5. **COM Object Automation (Excel):** The PowerShell script boots `Excel.Application` (hidden, without alerts), opens the target `dashboard_file` (e.g., `dashboard.xlsx`), and searches all worksheets for a ListObject (Table) matching `dashboard_table_name`.
+    6. **Data Injection:** The script clears the old data body range of the Excel table, opens the temporary filtered CSV via Excel COM, copies its UsedRange, and pastes it into the destination table.
+    7. **Execution & Cleanup:** The script is executed via `std::process::Command`. If successful, the temporary filtered CSV and PowerShell script are deleted.
 
 ### `email::process_emails`
 * **Purpose:** Buckets the generated `results.csv` data by Team, Branch, or Call Center logic, generates HTML pivot tables, optionally generates contextual lead reports, and dispatches them via Outlook COM objects using PowerShell.
