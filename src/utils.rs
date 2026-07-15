@@ -68,7 +68,6 @@ pub fn load_or_create_config<T: DeserializeOwned + Serialize>(
     Ok(config)
 }
 
-
 pub fn parse_flexible_date(val: &str) -> Option<chrono::NaiveDate> {
     use chrono::NaiveDate;
     let val = val.trim();
@@ -153,6 +152,27 @@ pub fn build_csv_reader_builder() -> csv::ReaderBuilder {
 
 pub fn build_csv_reader_from_reader<R: std::io::Read>(rdr: R) -> csv::Reader<R> {
     build_csv_reader_builder().from_reader(rdr)
+}
+
+pub fn generate_csv_diagnostic_context(content: &str, line_num: usize) -> String {
+    let lines: Vec<&str> = content.lines().collect();
+    let mut ctx = String::new();
+
+    let start = if line_num > 20 { line_num - 20 } else { 1 };
+    let end = std::cmp::min(line_num + 20, lines.len());
+
+    for i in start..=end {
+        if i == 0 {
+            continue;
+        }
+        if i == line_num {
+            ctx.push_str(&format!(">>> {:4} | {}\n", i, lines[i - 1]));
+        } else {
+            ctx.push_str(&format!("{:4} | {}\n", i, lines[i - 1]));
+        }
+    }
+
+    ctx
 }
 
 #[cfg(test)]
