@@ -29,20 +29,30 @@ jobs:
           targets: x86_64-pc-windows-msvc
           components: rustfmt, clippy
 
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.6
+
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: "crm-rust-shared-cache"
           cache-on-failure: true
+          cache-targets: false
 
       - name: Run format check
         run: cargo fmt -- --check
 
       - name: Run clippy
+        env:
+          SCCACHE_GHA_ENABLED: "true"
+          RUSTC_WRAPPER: "sccache"
         run: cargo clippy --all-targets --all-features
 
       - name: Run tests
-        run: cargo test --workspace
+        env:
+          SCCACHE_GHA_ENABLED: "true"
+          RUSTC_WRAPPER: "sccache"
+        run: cargo test --workspace --all-targets --all-features
 
       #- name: Build all models and binaries
         #run: cargo build --all-targets
