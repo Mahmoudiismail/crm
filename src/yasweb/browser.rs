@@ -194,7 +194,10 @@ pub fn run_browser_tab(
                     if let Err(e) = login_button.click() {
                         error!("Failed to click login button: {:?}", e);
                         if let Ok(html) = tab.get_content() {
-                            error!("Page HTML after failed login click:\n{}", html);
+                            error!(
+                                "Page HTML after failed login click (length: {} bytes)",
+                                html.len()
+                            );
                         }
 
                         if config.keep_open {
@@ -204,7 +207,10 @@ pub fn run_browser_tab(
                     }
                     info!("Successfully clicked login button.");
                     if let Ok(html) = tab.get_content() {
-                        info!("Page HTML after clicking login:\n{}", html);
+                        tracing::trace!(
+                            "Page HTML after clicking login (length: {} bytes)",
+                            html.len()
+                        );
                     }
                 }
                 Err(e) => {
@@ -227,7 +233,10 @@ pub fn run_browser_tab(
                     let msg = err_alert.get_inner_text().unwrap_or_default();
                     error!("Login failed: {}", msg.trim());
                     if let Ok(html) = tab.get_content() {
-                        error!("Page HTML after failed login:\n{}", html);
+                        error!(
+                            "Page HTML after failed login (length: {} bytes)",
+                            html.len()
+                        );
                     }
 
                     if config.keep_open {

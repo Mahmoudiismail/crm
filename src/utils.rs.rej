@@ -1,0 +1,17 @@
+--- utils.rs
++++ utils.rs
+@@ -62,9 +62,15 @@
+         .with_target(true)
+         .with_thread_ids(true)
+         .with_filter(console_level);
+
++    let correlation_id = std::env::var("CRM_CORRELATION_ID").unwrap_or_else(|_| "none".to_string());
++
+     let _ = tracing_subscriber::registry()
+         .with(file_layer)
+         .with(stdout_layer)
+         .try_init();
++
++    if correlation_id != "none" {
++        tracing::info!("Execution started with Correlation ID: {}", correlation_id);
++    }

@@ -1,0 +1,21 @@
+--- src/utils.rs
++++ src/utils.rs
+@@ -62,7 +62,17 @@
+         .with_target(true)
+         .with_thread_ids(true)
+         .with_filter(console_level);
+
++    let env_filter = tracing_subscriber::filter::EnvFilter::builder()
++        .with_default_directive(tracing_subscriber::filter::LevelFilter::TRACE.into())
++        .from_env_lossy();
++
++    let correlation_id = std::env::var("CRM_CORRELATION_ID").unwrap_or_else(|_| "none".to_string());
++
+     let _ = tracing_subscriber::registry()
+-        .with(file_layer)
+-        .with(stdout_layer)
++        .with(file_layer.with_filter(tracing_subscriber::filter::filter_fn(move |_| true)))
++        .with(stdout_layer.with_filter(tracing_subscriber::filter::filter_fn(move |_| true)))
+         .try_init();
+
+     if let Ok(entries) = std::fs::read_dir(&log_dir) {
