@@ -1008,12 +1008,11 @@ pub mod tests {
         );
 
         let leads_attachment = temp_dir.join("Call_Center_Leads.xlsx");
-        // The mock leads data provided in the test dataset doesn't match the hardcoded status ("new", "follow up")
-        // to pass `generate_leads_report`. We will just check if we can read the ticket records.
-        // assert!(
-        //    leads_attachment.exists(),
-        //    "Leads file should be generated for Call Center team"
-        // );
+        // We modified the mock leads data to contain a 'new' status so it will be generated correctly.
+        assert!(
+           leads_attachment.exists(),
+           "Leads file should be generated for Call Center team"
+        );
 
         // Assert we successfully read filtered records
         let csv_content = std::fs::read_to_string(&csv_attachment).unwrap();

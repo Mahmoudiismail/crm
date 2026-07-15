@@ -13,17 +13,23 @@ fn run_powershell(script: &str) -> Result<()> {
 
     temp_file.write_all(script.as_bytes())?;
     temp_file.as_file().sync_all()?;
-    let script_path = temp_file.path().to_path_buf();
+
+    // Explicitly keep the file on disk but drop the file handle
+    // to avoid locking issues on Windows when PowerShell tries to read it.
+    let (file, path) = temp_file.keep()?;
+    drop(file);
 
     let status = std::process::Command::new("powershell")
         .arg("-ExecutionPolicy")
         .arg("Bypass")
         .arg("-File")
-        .arg(&script_path)
-        .status()?;
+        .arg(&path)
+        .status();
 
-    drop(temp_file);
+    // Always attempt to clean up the script regardless of success
+    let _ = std::fs::remove_file(&path);
 
+    let status = status?;
     if !status.success() {
         anyhow::bail!("PowerShell script exited with status: {}", status);
     }
@@ -68,8 +74,12 @@ pub fn run(config: &DashboardUpdaterConfig) -> Result<()> {
 
         let mut is_exception_idx = None;
         let mut _position_idx = None;
-        let mut out_headers = vec![];
+        let mut created_at_idx = None;
+        let mut month_idx = None;
+        let mut day_idx = None;
+
         let mut skip_indices = vec![];
+        let mut out_headers = vec![];
 
         for (i, h) in headers.iter().enumerate() {
             let lower = h.trim().to_lowercase();
@@ -79,9 +89,30 @@ pub fn run(config: &DashboardUpdaterConfig) -> Result<()> {
             } else if lower == "position" {
                 _position_idx = Some(i);
                 skip_indices.push(i);
+            } else if lower == "created at" || lower == "creation date" {
+                created_at_idx = Some(i);
+                out_headers.push(h.to_string());
+            } else if lower == "month" {
+                month_idx = Some(i);
+                out_headers.push(h.to_string());
+            } else if lower == "day" {
+                day_idx = Some(i);
+                out_headers.push(h.to_string());
             } else {
                 out_headers.push(h.to_string());
             }
+        }
+
+        let mut append_month = false;
+        let mut append_day = false;
+
+        if month_idx.is_none() {
+            out_headers.push("Month".to_string());
+            append_month = true;
+        }
+        if day_idx.is_none() {
+            out_headers.push("Day".to_string());
+            append_day = true;
         }
 
         let mut f = std::fs::File::create(&filtered_csv_path)?;
@@ -103,11 +134,54 @@ pub fn run(config: &DashboardUpdaterConfig) -> Result<()> {
 
             if !is_exception {
                 let mut out_record = vec![];
+                let mut month_str = String::new();
+                let mut day_str = String::new();
+
                 for (i, field) in record.iter().enumerate() {
                     if !skip_indices.contains(&i) {
-                        out_record.push(field);
+                        out_record.push(field.to_string());
+                    }
+
+                    if Some(i) == created_at_idx {
+                        if let Some(dt) = crate::tasker::csv_task::parse_created_at(field) {
+                            month_str = dt.format("%b").to_string(); // e.g. "Jan"
+                            day_str = dt.format("%d").to_string(); // e.g. "01"
+                        }
                     }
                 }
+
+                // If Month/Day columns existed in the source file, we overwrite them if we could parse the date
+                if let Some(idx) = month_idx {
+                    if !month_str.is_empty() {
+                        // calculate adjusted index in out_record
+                        let adjusted_idx = idx
+                            - skip_indices
+                                .iter()
+                                .filter(|&&skip_idx| skip_idx < idx)
+                                .count();
+                        if adjusted_idx < out_record.len() {
+                            out_record[adjusted_idx] = month_str.clone();
+                        }
+                    }
+                } else if append_month {
+                    out_record.push(month_str.clone());
+                }
+
+                if let Some(idx) = day_idx {
+                    if !day_str.is_empty() {
+                        let adjusted_idx = idx
+                            - skip_indices
+                                .iter()
+                                .filter(|&&skip_idx| skip_idx < idx)
+                                .count();
+                        if adjusted_idx < out_record.len() {
+                            out_record[adjusted_idx] = day_str.clone();
+                        }
+                    }
+                } else if append_day {
+                    out_record.push(day_str.clone());
+                }
+
                 wtr.write_record(&out_record)?;
             }
         }
@@ -383,6 +457,9 @@ mod tests {
         let mut is_exception_idx = None;
         let mut created_at_idx = None;
         let mut cat_idx = None;
+        let mut month_idx = None;
+        let mut day_idx = None;
+        let mut position_idx = None;
 
         for (i, h) in headers.iter().enumerate() {
             let lower = h.trim().to_lowercase();
@@ -392,8 +469,22 @@ mod tests {
                 created_at_idx = Some(i);
             } else if lower == "ticket category" {
                 cat_idx = Some(i);
+            } else if lower == "month" {
+                month_idx = Some(i);
+            } else if lower == "day" {
+                day_idx = Some(i);
+            } else if lower == "position" {
+                position_idx = Some(i);
             }
         }
+
+        assert!(position_idx.is_none(), "Position column should be removed");
+        assert!(
+            is_exception_idx.is_none(),
+            "Is Exception column should be removed"
+        );
+        assert!(month_idx.is_some(), "Month column should be added");
+        assert!(day_idx.is_some(), "Day column should be added");
 
         let start_dt = crate::tasker::csv_task::parse_created_at("15-Apr-2026").unwrap();
         let mut count = 0;

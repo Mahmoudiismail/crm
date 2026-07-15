@@ -60,3 +60,15 @@ The CI stages are executed in the following order:
 
 ## Concurrency
 Task execution is concurrent, with an execution manager enforcing collision prevention rules.
+## Troubleshooting: PowerShell Execution & File Locks
+- **Symptom:** `PowerShell script exited with status: exit code: 1` or `The process cannot access the file ... because it is being used by another process`.
+- **Cause:** Historical bug on Windows where `tempfile` generated PowerShell (`.ps1`) scripts were locked by the Rust process.
+- **Resolution:** `tempfile` handles are now properly decoupled via `.keep()` and dropped before PowerShell invocation, and manually removed after execution.
+
+## Dashboard Excel Output
+- The Dashboard updater filters out the `Position` and `Is Exception` columns.
+- Ensure the input CSV has a properly formatted `Created At` or `Creation Date` column, as the system relies on it to dynamically append `Month` and `Day` columns.
+
+## Call Center Execution
+- Running the tasker app via CLI with `--only-call-center` explicitly funnels data to the call center team bucket.
+- This mode automatically triggers the CRM lead generation report export as a secondary attachment alongside the primary ticket list, skipping standard branching logic.
