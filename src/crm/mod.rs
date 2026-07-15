@@ -16,6 +16,7 @@ pub async fn run_once(
     report: ReportType,
     start_date: Option<String>,
     end_date: Option<String>,
+    custom_download_folder_cli: Option<String>,
 ) -> Result<()> {
     let mut config = AppConfig::load(crm_config_path)?;
 
@@ -51,7 +52,11 @@ pub async fn run_once(
         .parent()
         .unwrap_or_else(|| std::path::Path::new("."));
 
-    let download_dir = if let Some(ref custom_path) = config.custom_download_folder {
+    let custom_dl = custom_download_folder_cli
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| config.custom_download_folder.clone());
+
+    let download_dir = if let Some(ref custom_path) = custom_dl {
         let p = std::path::PathBuf::from(custom_path);
         let target = if p.is_absolute() { p } else { exe_dir.join(p) };
         tracing::info!("Using custom download folder: {:?}", target);

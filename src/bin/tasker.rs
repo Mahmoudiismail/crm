@@ -105,6 +105,36 @@ pub fn run_app(options: TaskerCliOptions) -> Result<()> {
         "send_exceptions": false,
         "indentation_spaces": 4
       }
+    },
+    {
+      "type": "dashboard_updater",
+      "download_path": "../crm_windows/Downloads",
+      "users_file": "./task2/users.csv",
+      "assignment_settings_file": "./task2/assignments.csv",
+      "minutes_ago": 15,
+      "exclude_branches": [],
+      "exclude_categories": [],
+      "output_file": "./dashboard_results.csv",
+      "dashboard_file": "./dashboard.xlsx",
+      "dashboard_table_name": "table1",
+      "email_to": "dash@example.com",
+      "email_cc": "cc@example.com",
+      "save_email_as_html": false,
+      "indentation_spaces": 4
+    },
+    {
+      "type": "crm_open_sohail",
+      "download_path": "../crm_windows/Downloads",
+      "users_file": "./task3/users.csv",
+      "assignment_settings_file": "./task3/assignments.csv",
+      "minutes_ago": 15,
+      "exclude_branches": [],
+      "exclude_categories": [],
+      "output_file": "./crm_open_sohail_results.csv",
+      "dashboard_file": "./dashboard_sohail.xlsx",
+      "dashboard_table_name": "table1",
+      "team_mapping_file": "./task3/teams.csv",
+      "fallback_oul": "N/A"
     }
   ]
 }"#;

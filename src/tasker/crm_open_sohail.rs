@@ -35,16 +35,18 @@ fn run_powershell(script: &str) -> Result<()> {
 
     temp_file.write_all(script.as_bytes())?;
     temp_file.as_file().sync_all()?;
-    let script_path = temp_file.path().to_path_buf();
+
+    let (file, path) = temp_file.keep()?;
+    drop(file);
 
     let status = std::process::Command::new("powershell")
         .arg("-ExecutionPolicy")
         .arg("Bypass")
         .arg("-File")
-        .arg(&script_path)
+        .arg(&path)
         .status()?;
 
-    drop(temp_file);
+    let _ = std::fs::remove_file(&path);
 
     if !status.success() {
         anyhow::bail!("PowerShell script exited with status: {}", status);

@@ -56,8 +56,14 @@ Before commit, run a manual checklist:
 If any answer is `no`, update docs before finalizing.
 
 ## Fixed CSV Parsing Issues
-- Configured  to use  centrally in  via  to prevent varying-length column errors.
-- Replaced raw inline diagnostic logging loop with a shared  function limiting output to ±20 lines around the error line to keep logs compact but useful.
+- Configured to use `flexible(true)` centrally in `utils.rs` via `build_csv_reader` to prevent varying-length column errors.
+- Replaced raw inline diagnostic logging loop with a shared function limiting output to ±20 lines around the error line to keep logs compact but useful.
+
+## Recent Fixes
+- Added `--custom-download-folder` to `crm.rs` to override config paths via CLI without persisting the change.
+- Fixed `yasweb.rs` date formatting for `Report Manager` (dd-MMM-yyyy) and `Standard Report` (dd-mm-yyyy).
+- Corrected Windows file lock exceptions when running PowerShell in `tasker/email.rs` and `tasker/crm_open_sohail.rs`.
+- Added missing 3rd default task (`crm_open_sohail`) to `tasker_config.json` default generation.
 
 ## Rule 6: Test-Driven Bug Fixes
 - When a bug is fixed, a corresponding test case must be added to prevent future regressions. The fix and the test case should be documented together in the relevant `md/*.md` file.

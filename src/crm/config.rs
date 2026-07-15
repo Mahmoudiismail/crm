@@ -43,7 +43,7 @@ pub struct AppConfig {
     #[serde(default)]
     pub scheduled_time: String,
 
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub custom_download_folder: Option<String>,
 
     // Token / auth cache
@@ -119,6 +119,7 @@ impl AppConfig {
         let mut file_value: Value = serde_json::from_str(&raw)
             .with_context(|| format!("Failed to parse config file: {}", path))?;
 
+        let mut config_changed = false;
         // Merge defaults into the file value (file takes precedence)
         if let (Value::Object(ref mut file_map), Value::Object(ref default_map)) =
             (&mut file_value, &default_value)
@@ -127,12 +128,21 @@ impl AppConfig {
                 if !file_map.contains_key(k) {
                     debug!("Config key '{}' missing, using default", k);
                     file_map.insert(k.clone(), v.clone());
+                    config_changed = true;
                 }
             }
         }
 
         let cfg: AppConfig =
             serde_json::from_value(file_value).context("Failed to deserialize merged config")?;
+
+        // Rule: always check config and fix it with each run
+        if config_changed {
+            info!("Updated configuration file with missing default fields.");
+            // save it back, we can just call save since we fully deserialized it
+            cfg.save(path)?;
+        }
+
         Ok(cfg)
     }
 
