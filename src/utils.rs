@@ -96,10 +96,80 @@ pub fn load_or_create_config<T: DeserializeOwned + Serialize>(
     Ok(config)
 }
 
-pub fn parse_flexible_date(val: &str) -> Option<chrono::NaiveDate> {
+pub fn resolve_date_var(val: &str, base_date: Option<&str>) -> Result<chrono::NaiveDate> {
+    use chrono::{Datelike, Local, NaiveDate};
+    use tracing::{debug, error, info, trace};
+
+    let val_lower = val.trim().to_lowercase();
+    match val_lower.as_str() {
+        "today" => {
+            info!("Variable detected: {}", val);
+            let dt = Local::now().date_naive();
+            debug!("Resolved value: {} (Original: {})", dt, val);
+            trace!("Variable resolution path: today");
+            Ok(dt)
+        }
+        "yesterday" => {
+            info!("Variable detected: {}", val);
+            let dt = Local::now().date_naive() - chrono::TimeDelta::try_days(1).expect("valid days");
+            debug!("Resolved value: {} (Original: {})", dt, val);
+            trace!("Variable resolution path: yesterday");
+            Ok(dt)
+        }
+        "tomorrow" => {
+            info!("Variable detected: {}", val);
+            let dt = Local::now().date_naive() + chrono::TimeDelta::try_days(1).expect("valid days");
+            debug!("Resolved value: {} (Original: {})", dt, val);
+            trace!("Variable resolution path: tomorrow");
+            Ok(dt)
+        }
+        "eomonth" => {
+            info!("Variable detected: {}", val);
+            let base_dt = if let Some(bd) = base_date {
+                parse_flexible_date_impl(bd, None)
+            } else {
+                None
+            };
+            let dt = base_dt.unwrap_or_else(|| Local::now().date_naive());
+            let next_month = if dt.month() == 12 {
+                NaiveDate::from_ymd_opt(dt.year() + 1, 1, 1).expect("valid next year")
+            } else {
+                NaiveDate::from_ymd_opt(dt.year(), dt.month() + 1, 1).expect("valid next month")
+            };
+            let res = next_month
+                .pred_opt()
+                .expect("valid preceding day");
+
+            trace!("Variable resolution path: eomonth. Base: {}, Result: {}", dt, res);
+            debug!("Resolved value: {} (Original: {})", res, val);
+            Ok(res)
+        }
+        _ => {
+            if val_lower.chars().all(|c| c.is_alphabetic()) && val_lower != "may" {
+                error!("Invalid variable: {} | Resolution failure", val);
+                anyhow::bail!("Invalid date variable: {}", val);
+            }
+            anyhow::bail!("Not a date variable")
+        }
+    }
+}
+
+fn parse_flexible_date_impl(val: &str, base_date: Option<&str>) -> Option<chrono::NaiveDate> {
     use chrono::NaiveDate;
+    use tracing::warn;
+
     let val = val.trim();
     if val.is_empty() {
+        return None;
+    }
+
+    if let Ok(resolved) = resolve_date_var(val, base_date) {
+        return Some(resolved);
+    }
+
+    // Check if it was meant to be a variable but failed validation
+    if val.chars().all(|c| c.is_alphabetic()) && val.to_lowercase() != "may" {
+        warn!("Unsupported alphabetic string passed as date: {}", val);
         return None;
     }
 
@@ -122,51 +192,33 @@ pub fn parse_flexible_date(val: &str) -> Option<chrono::NaiveDate> {
     None
 }
 
-pub fn replace_date_vars(val: &str, base_date: Option<&str>) -> String {
-    use chrono::{Datelike, Local, NaiveDate};
+pub fn parse_flexible_date(val: &str) -> Option<chrono::NaiveDate> {
+    parse_flexible_date_impl(val, None)
+}
 
-    let normalize_to_dmy = |v: &str| -> String {
-        if let Some(dt) = parse_flexible_date(v) {
-            dt.format("%d-%m-%Y").to_string()
-        } else {
-            v.trim().to_string()
-        }
-    };
-
-    let val_lower = val.trim().to_lowercase();
-    match val_lower.as_str() {
-        "today" => Local::now().format("%d-%m-%Y").to_string(),
-        "yesterday" => (Local::now() - chrono::TimeDelta::days(1))
-            .format("%d-%m-%Y")
-            .to_string(),
-        "tomorrow" => (Local::now() + chrono::TimeDelta::days(1))
-            .format("%d-%m-%Y")
-            .to_string(),
-        "eomonth" => {
-            let base_dt = if let Some(bd) = base_date {
-                parse_flexible_date(bd)
-            } else {
-                None
-            };
-            let dt = base_dt.unwrap_or_else(|| Local::now().date_naive());
-            let next_month = if dt.month() == 12 {
-                NaiveDate::from_ymd_opt(dt.year() + 1, 1, 1).expect("valid next year")
-            } else {
-                NaiveDate::from_ymd_opt(dt.year(), dt.month() + 1, 1).expect("valid next month")
-            };
-            next_month
-                .pred_opt()
-                .expect("valid preceding day")
-                .format("%d-%m-%Y")
-                .to_string()
-        }
-        _ => normalize_to_dmy(val),
-    }
+pub fn parse_flexible_date_with_base(val: &str, base_date: Option<&str>) -> Option<chrono::NaiveDate> {
+    parse_flexible_date_impl(val, base_date)
 }
 
 pub fn to_iso_date(val: &str) -> String {
     if let Some(dt) = parse_flexible_date(val) {
         dt.format("%Y-%m-%d").to_string()
+    } else {
+        val.trim().to_string()
+    }
+}
+
+pub fn to_iso_date_with_base(val: &str, base_date: Option<&str>) -> String {
+    if let Some(dt) = parse_flexible_date_with_base(val, base_date) {
+        dt.format("%Y-%m-%d").to_string()
+    } else {
+        val.trim().to_string()
+    }
+}
+
+pub fn replace_date_vars(val: &str, base_date: Option<&str>) -> String {
+    if let Some(dt) = parse_flexible_date_with_base(val, base_date) {
+        dt.format("%d-%m-%Y").to_string()
     } else {
         val.trim().to_string()
     }
@@ -209,34 +261,36 @@ mod tests {
     use chrono::Local;
 
     #[test]
-    fn test_replace_date_vars() {
-        let today = Local::now().format("%d-%m-%Y").to_string();
-        let yesterday = (Local::now() - chrono::Duration::days(1))
-            .format("%d-%m-%Y")
-            .to_string();
-        let tomorrow = (Local::now() + chrono::Duration::days(1))
-            .format("%d-%m-%Y")
-            .to_string();
+    fn test_resolve_date_var() {
+        let today = Local::now().date_naive();
+        let yesterday = today - chrono::TimeDelta::try_days(1).unwrap();
+        let tomorrow = today + chrono::TimeDelta::try_days(1).unwrap();
 
-        assert_eq!(replace_date_vars("today", None), today);
-        assert_eq!(replace_date_vars("yesterday", None), yesterday);
-        assert_eq!(replace_date_vars("tomorrow", None), tomorrow);
+        assert_eq!(resolve_date_var("today", None).unwrap(), today);
+        assert_eq!(resolve_date_var("TODAY", None).unwrap(), today);
+        assert_eq!(resolve_date_var("Today", None).unwrap(), today);
 
-        // Test normalization
-        assert_eq!(replace_date_vars("2026-05-01", None), "01-05-2026");
-        assert_eq!(replace_date_vars("01/05/2026", None), "01-05-2026");
+        assert_eq!(resolve_date_var("yesterday", None).unwrap(), yesterday);
+        assert_eq!(resolve_date_var("tomorrow", None).unwrap(), tomorrow);
 
-        // Test eomonth
-        // May 2026 end is 31-05-2026
-        assert_eq!(
-            replace_date_vars("eomonth", Some("01-05-2026")),
-            "31-05-2026"
-        );
-        // Feb 2024 (leap) is 29-02-2024
-        assert_eq!(
-            replace_date_vars("eomonth", Some("2024-02-01")),
-            "29-02-2024"
-        );
+        // Test eomonth (31-day month)
+        let eomonth_may = chrono::NaiveDate::from_ymd_opt(2026, 5, 31).unwrap();
+        assert_eq!(resolve_date_var("eomonth", Some("2026-05-01")).unwrap(), eomonth_may);
+
+        // Test eomonth (leap year)
+        let eomonth_feb_leap = chrono::NaiveDate::from_ymd_opt(2024, 2, 29).unwrap();
+        assert_eq!(resolve_date_var("eomonth", Some("2024-02-01")).unwrap(), eomonth_feb_leap);
+
+        // Test eomonth (non-leap year)
+        let eomonth_feb_nonleap = chrono::NaiveDate::from_ymd_opt(2023, 2, 28).unwrap();
+        assert_eq!(resolve_date_var("eomonth", Some("2023-02-15")).unwrap(), eomonth_feb_nonleap);
+
+        // Test invalid variables
+        assert!(resolve_date_var("nextmonth", None).is_err());
+        assert!(resolve_date_var("currentmonth", None).is_err());
+        assert!(resolve_date_var("lastmonth", None).is_err());
+        assert!(resolve_date_var("abc", None).is_err());
+        assert!(resolve_date_var("abc123", None).is_err());
     }
 
     #[test]

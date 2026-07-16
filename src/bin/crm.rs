@@ -104,7 +104,7 @@ fn get_manifest() -> AppManifest {
             },
             AppArg {
                 name: "--start-date".to_string(),
-                arg_type: ArgType::String,
+                arg_type: ArgType::DateVar,
                 required: false,
                 default_value: None,
                 options: None,
@@ -113,7 +113,7 @@ fn get_manifest() -> AppManifest {
             },
             AppArg {
                 name: "--end-date".to_string(),
-                arg_type: ArgType::String,
+                arg_type: ArgType::DateVar,
                 required: false,
                 default_value: None,
                 options: None,

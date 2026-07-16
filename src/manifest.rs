@@ -14,6 +14,7 @@ pub enum ArgType {
     Number,
     List,
     Boolean,
+    DateVar,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

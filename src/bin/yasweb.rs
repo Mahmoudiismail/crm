@@ -149,7 +149,7 @@ fn get_manifest(config_path: Option<PathBuf>) -> AppManifest {
         },
         AppArg {
             name: "--start-date".to_string(),
-            arg_type: ArgType::String,
+            arg_type: ArgType::DateVar,
             required: false,
             default_value: None,
             options: None,
@@ -158,7 +158,7 @@ fn get_manifest(config_path: Option<PathBuf>) -> AppManifest {
         },
         AppArg {
             name: "--end-date".to_string(),
-            arg_type: ArgType::String,
+            arg_type: ArgType::DateVar,
             required: false,
             default_value: None,
             options: None,
@@ -284,8 +284,8 @@ async fn main() -> Result<()> {
     }
 
     let is_monthly = options.monthly;
-    let mut start_date_str = options.start_date;
-    let mut end_date_str = options.end_date;
+    let start_date_str = options.start_date;
+    let end_date_str = options.end_date;
     let add_time_to_file = options.add_time_to_file;
 
     if active_report_name.is_empty() {
@@ -295,15 +295,8 @@ async fn main() -> Result<()> {
 
     use crm_tool::utils::replace_date_vars;
 
-    if let Some(ref s) = start_date_str {
-        start_date_str = Some(replace_date_vars(s, None));
-    }
-
-    // For eomonth in end_date, pass the start_date as base
-    if let Some(ref e) = end_date_str {
-        let base = start_date_str.as_deref();
-        end_date_str = Some(replace_date_vars(e, base));
-    }
+    let start_date_str = start_date_str.map(|s| replace_date_vars(&s, None));
+    let end_date_str = end_date_str.map(|e| replace_date_vars(&e, start_date_str.as_deref()));
 
     let mut new_filters = HashMap::new();
     for (k, v) in active_filters.into_iter() {

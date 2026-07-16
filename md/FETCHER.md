@@ -28,8 +28,8 @@ Based on `ReportType`:
 
 Query parameters:
 
-- `from_date` (can be overridden via CLI `--start-date`). Supports dynamic variables: `today`, `yesterday`, `tomorrow`.
-- `to_date` (can be overridden via CLI `--end-date`). Supports dynamic variables: `today`, `yesterday`, `tomorrow`, `eomonth` (end of month for start date).
+- `from_date` (can be overridden via CLI `--start-date`). Supports dynamic variables: `today`, `yesterday`, `tomorrow`, `eomonth`.
+- `to_date` (can be overridden via CLI `--end-date`). Supports dynamic variables: `today`, `yesterday`, `tomorrow`, `eomonth` (end of month based on start date context if available).
 - `email`
 - plus report-specific extras
 
