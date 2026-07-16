@@ -24,7 +24,7 @@ pub struct AppManifest {
     pub arguments: Vec<AppArg>,
 }
 
-pub enum ArgType { String, Number, List, Boolean }
+pub enum ArgType { String, Number, List, Boolean, DateVar }
 
 pub struct AppArg {
     pub name: String,
