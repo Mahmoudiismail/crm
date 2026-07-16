@@ -435,6 +435,12 @@ pub fn run_browser_tab(
                                     }
                                 } else {
                                     info!("Clicked MIS successfully. Waiting for MIS Reports button...");
+                                    if let Ok(html) = tab.get_content() {
+                                        tracing::trace!(
+                                            "Page HTML immediately after clicking MIS module:\n{}",
+                                            html
+                                        );
+                                    }
 
                                     let mut mis_reports_found = false;
                                     let mis_reports_xpath = "//div[contains(@class, 'label') and contains(@class, 'fw-bold') and contains(text(), 'MIS Reports')]";
@@ -467,7 +473,7 @@ pub fn run_browser_tab(
                                     info!("MIS Reports button successfully verified. MIS module click was successful.");
                                     println!("MIS Reports button successfully verified. MIS module click was successful.");
                                     if let Ok(html) = tab.get_content() {
-                                        info!(
+                                        tracing::trace!(
                                             "Page HTML after MIS Reports verification:\n{}",
                                             html
                                         );
