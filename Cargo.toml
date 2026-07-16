@@ -81,8 +81,30 @@ muda = "0.19.2"
 winit = "0.30.13"
 
 [dev-dependencies]
+criterion = "0.8.2"
+regex = "1.13.0"
 reqwest = { version = "0.13.4", features = ["blocking"] }
 tempfile = "3.10.1"
 
 [workspace]
 members = []
+
+[[bench]]
+name = "csv_parsing"
+harness = false
+
+[[bench]]
+name = "manifest_loading"
+harness = false
+
+[[bench]]
+name = "authentication"
+harness = false
+
+[[bench]]
+name = "regex_matching"
+harness = false
+
+[[bench]]
+name = "dashboard_generation"
+harness = false
