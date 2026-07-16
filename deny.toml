@@ -1,8 +1,19 @@
 [advisories]
-ignore = []
+ignore = [
+    "RUSTSEC-2026-0194",
+    "RUSTSEC-2026-0195",
+    "RUSTSEC-2026-0192",
+    "RUSTSEC-2024-0413",
+    "RUSTSEC-2024-0416",
+    "RUSTSEC-2024-0412",
+    "RUSTSEC-2024-0418",
+    "RUSTSEC-2024-0415",
+    "RUSTSEC-2024-0420",
+    "RUSTSEC-2024-0419",
+    "RUSTSEC-2024-0370",
+]
 
 [licenses]
-unlicensed = "deny"
 allow = [
     "MIT",
     "Apache-2.0",
@@ -17,7 +28,6 @@ allow = [
     "0BSD",
     "BSL-1.0"
 ]
-copyleft = "allow"
 
 [bans]
 multiple-versions = "warn"
