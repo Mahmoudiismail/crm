@@ -716,23 +716,53 @@ mod tests {
         let dummy_dataset = crate::tasker::csv_task::tests::setup_test_dataset();
         let config = CrmOpenSohailConfig {
             dashboard_config: DashboardUpdaterConfig {
-                download_path: dummy_dataset.download_dir.path().to_str().unwrap().to_string(),
-                users_file: dummy_dataset.users_file.path().to_str().unwrap().to_string(),
-                assignment_settings_file: dummy_dataset.assignments_file.path().to_str().unwrap().to_string(),
+                download_path: dummy_dataset
+                    .download_dir
+                    .path()
+                    .to_str()
+                    .unwrap()
+                    .to_string(),
+                users_file: dummy_dataset
+                    .users_file
+                    .path()
+                    .to_str()
+                    .unwrap()
+                    .to_string(),
+                assignment_settings_file: dummy_dataset
+                    .assignments_file
+                    .path()
+                    .to_str()
+                    .unwrap()
+                    .to_string(),
                 minutes_ago: 60,
                 start_date: None,
                 exclude_branches: vec![],
                 exclude_categories: vec![],
                 category_exceptions: None,
-                output_file: dummy_dataset.output_file.path().to_str().unwrap().to_string(),
-                dashboard_file: dummy_dataset.output_file.path().to_str().unwrap().to_string(),
+                output_file: dummy_dataset
+                    .output_file
+                    .path()
+                    .to_str()
+                    .unwrap()
+                    .to_string(),
+                dashboard_file: dummy_dataset
+                    .output_file
+                    .path()
+                    .to_str()
+                    .unwrap()
+                    .to_string(),
                 dashboard_table_name: "table2".to_string(),
                 email_to: Some("test@example.com".to_string()),
                 email_cc: None,
                 save_email_as_html: Some(true),
                 indentation_spaces: Some(4),
             },
-            team_mapping_file: dummy_dataset.output_file.path().to_str().unwrap().to_string(),
+            team_mapping_file: dummy_dataset
+                .output_file
+                .path()
+                .to_str()
+                .unwrap()
+                .to_string(),
             body_template_file: None,
             subject_template: Some("Test Subject".to_string()),
             branch_filter: Some(vec!["Dr. Soliman Fakeeh Hospital Jeddah".to_string()]),
