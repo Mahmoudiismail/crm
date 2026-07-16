@@ -111,14 +111,16 @@ pub fn resolve_date_var(val: &str, base_date: Option<&str>) -> Result<chrono::Na
         }
         "yesterday" => {
             info!("Variable detected: {}", val);
-            let dt = Local::now().date_naive() - chrono::TimeDelta::try_days(1).expect("valid days");
+            let dt =
+                Local::now().date_naive() - chrono::TimeDelta::try_days(1).expect("valid days");
             debug!("Resolved value: {} (Original: {})", dt, val);
             trace!("Variable resolution path: yesterday");
             Ok(dt)
         }
         "tomorrow" => {
             info!("Variable detected: {}", val);
-            let dt = Local::now().date_naive() + chrono::TimeDelta::try_days(1).expect("valid days");
+            let dt =
+                Local::now().date_naive() + chrono::TimeDelta::try_days(1).expect("valid days");
             debug!("Resolved value: {} (Original: {})", dt, val);
             trace!("Variable resolution path: tomorrow");
             Ok(dt)
@@ -136,11 +138,13 @@ pub fn resolve_date_var(val: &str, base_date: Option<&str>) -> Result<chrono::Na
             } else {
                 NaiveDate::from_ymd_opt(dt.year(), dt.month() + 1, 1).expect("valid next month")
             };
-            let res = next_month
-                .pred_opt()
-                .expect("valid preceding day");
+            let res = next_month.pred_opt().expect("valid preceding day");
 
-            trace!("Variable resolution path: eomonth. Base: {}, Result: {}", dt, res);
+            trace!(
+                "Variable resolution path: eomonth. Base: {}, Result: {}",
+                dt,
+                res
+            );
             debug!("Resolved value: {} (Original: {})", res, val);
             Ok(res)
         }
@@ -196,7 +200,10 @@ pub fn parse_flexible_date(val: &str) -> Option<chrono::NaiveDate> {
     parse_flexible_date_impl(val, None)
 }
 
-pub fn parse_flexible_date_with_base(val: &str, base_date: Option<&str>) -> Option<chrono::NaiveDate> {
+pub fn parse_flexible_date_with_base(
+    val: &str,
+    base_date: Option<&str>,
+) -> Option<chrono::NaiveDate> {
     parse_flexible_date_impl(val, base_date)
 }
 
@@ -275,15 +282,24 @@ mod tests {
 
         // Test eomonth (31-day month)
         let eomonth_may = chrono::NaiveDate::from_ymd_opt(2026, 5, 31).unwrap();
-        assert_eq!(resolve_date_var("eomonth", Some("2026-05-01")).unwrap(), eomonth_may);
+        assert_eq!(
+            resolve_date_var("eomonth", Some("2026-05-01")).unwrap(),
+            eomonth_may
+        );
 
         // Test eomonth (leap year)
         let eomonth_feb_leap = chrono::NaiveDate::from_ymd_opt(2024, 2, 29).unwrap();
-        assert_eq!(resolve_date_var("eomonth", Some("2024-02-01")).unwrap(), eomonth_feb_leap);
+        assert_eq!(
+            resolve_date_var("eomonth", Some("2024-02-01")).unwrap(),
+            eomonth_feb_leap
+        );
 
         // Test eomonth (non-leap year)
         let eomonth_feb_nonleap = chrono::NaiveDate::from_ymd_opt(2023, 2, 28).unwrap();
-        assert_eq!(resolve_date_var("eomonth", Some("2023-02-15")).unwrap(), eomonth_feb_nonleap);
+        assert_eq!(
+            resolve_date_var("eomonth", Some("2023-02-15")).unwrap(),
+            eomonth_feb_nonleap
+        );
 
         // Test invalid variables
         assert!(resolve_date_var("nextmonth", None).is_err());
