@@ -60,6 +60,7 @@ If any answer is `no`, update docs before finalizing.
 - Removed `flexible(true)` centrally in `utils.rs` via `build_csv_reader` to strictly enforce column counts and throw validation errors when data is malformed.
 
 ## Recent Fixes
+- **OLAP Slicer Support:** Added support for Excel Data Model (OLAP) Slicers in `tasker/crm_open_sohail.rs` PowerShell automation scripts, utilizing `SlicerCacheLevels` and `VisibleSlicerItemsList`.
 - Enhanced date variable processing across all binaries by introducing an integrated `DateVar` argument type in the manifest and updating the Runner GUI to allow easy toggling between variable and calendar inputs.
 - Moved variable resolution into `parse_flexible_date` natively, ensuring `today`, `tomorrow`, `yesterday`, and context-aware `eomonth` work systematically anywhere date parsing is utilized, complete with stringent validation logic.
 - Added `--custom-download-folder` to `crm.rs` to override config paths via CLI without persisting the change.
