@@ -928,7 +928,7 @@ pub mod tests {
 
         let temp_dir = std::env::temp_dir();
 
-        let bucket_name = "PRE_AUTHORIZATION_email.html";
+        let bucket_name = "Pre_authorization_email.html"; // Title Cased
         let html_path = temp_dir.join(bucket_name);
         assert!(
             html_path.exists(),
@@ -949,7 +949,7 @@ pub mod tests {
             html_content
         );
 
-        let csv_attachment = temp_dir.join("PRE_AUTHORIZATION_open_tickets.csv");
+        let csv_attachment = temp_dir.join("Pre_authorization_open_tickets.csv"); // Title Cased
         assert!(
             csv_attachment.exists(),
             "CSV attachment should be generated"

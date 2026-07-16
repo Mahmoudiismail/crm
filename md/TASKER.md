@@ -197,3 +197,7 @@ The `crm_open_sohail` task automates the generation and delivery of Branch & Mon
   "fallback_oul": "N/A"
 }
 ```
+
+## Recent Fixes
+* **CSV Parsing:** Lead report CSV parsing was updated to identify delimiters exclusively from the first line, avoiding errors when data fields contain tabs. `flexible(true)` has been globally removed from `csv::ReaderBuilder` to strictly validate column counts per project guidelines.
+* **Team Grouping:** Teams are grouped case-insensitively using Title Case formatting to ensure consistency (e.g. "support" and "SUPPORT" are correctly merged).

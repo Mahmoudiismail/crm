@@ -78,3 +78,4 @@ If you modify `src/tasker/csv_task.rs` or any logic related to the `csv_analysis
 - The tasker CLI uses the --only-call-center flag to explicitly trigger Call Center emails. Exception team emails are triggered dynamically via the --send-exceptions CLI flag or the send_exceptions configuration option.
 
 - When a bug is fixed, a corresponding test case must be added to prevent future regressions. The fix and the test case should be documented together.
+- When parsing CSV files across this project, strict validation must be enforced. **Do not use `.flexible(true)`**. CSV records must exactly match the length of the headers. If malformed rows are present, they should fail explicitly rather than being silently accepted.
