@@ -251,7 +251,7 @@ async fn main() -> Result<()> {
     let mut config_updated = false;
 
     // Config healing for empty formatting
-    for (_, report) in config.reports.iter_mut() {
+    for report in config.reports.values_mut() {
         let (default_start_fmt, default_end_fmt) = if report.report_type == "Report Manager" {
             ("%d-%b-%Y".to_string(), "%d-%b-%Y".to_string())
         } else {
