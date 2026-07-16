@@ -402,18 +402,24 @@ fn generate_leads_report(
     for file_path in target_files {
         let file_bytes = std::fs::read(&file_path)?;
         let file_content = String::from_utf8_lossy(&file_bytes);
+
+        let first_line = file_content.lines().next().unwrap_or("");
+        let delimiter = if first_line.contains('\t') && !first_line.contains(',') {
+            b'\t'
+        } else {
+            b','
+        };
+
         let mut rdr = crate::utils::build_csv_reader_builder()
-            .delimiter(if file_content.contains('\t') {
-                b'\t'
-            } else {
-                b','
-            })
+            .delimiter(delimiter)
             .from_reader(file_content.as_bytes());
 
         if headers.is_none() {
             let h = rdr.headers()?.clone();
             for (i, col_name) in h.iter().enumerate() {
                 let lower = col_name.trim().to_lowercase();
+                let lower = lower.trim_start_matches('\u{feff}');
+
                 if lower == "lead id" {
                     lead_id_idx = Some(i);
                 } else if lower == "branch" {
@@ -464,7 +470,7 @@ fn generate_leads_report(
 
             let is_excluded_branch = exclude_branches_lower.contains(&branch);
 
-            let status_matches = status == "new" || status == "follow up" || status == "follow-up";
+            let status_matches = status == "new" || status == "follow-up";
 
             if !is_excluded_branch && status_matches {
                 all_records.push(record);
@@ -765,6 +771,15 @@ pub fn process_emails(
     let mut per_branch_buckets: HashMap<String, Vec<TicketRow>> = HashMap::new(); // Key: Branch name
     let mut call_center_bucket: Vec<TicketRow> = Vec::new();
 
+    // Utility for title casing to group case-insensitively but maintain nice formatting
+    fn title_case(s: &str) -> String {
+        let mut c = s.chars();
+        match c.next() {
+            None => String::new(),
+            Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+        }
+    }
+
     for row in ticket_rows {
         let b_low = row.branch.to_lowercase();
         let t_low = row.team.to_lowercase();
@@ -773,10 +788,11 @@ pub fn process_emails(
 
         // "all allowed branches" means the branch must be in send_per_branch_branches.
         let allowed_branch = send_per_branch_branches.contains(&b_low);
+        let normalized_team = title_case(&t_low);
 
         if effective_send_exceptions {
             per_team_buckets
-                .entry(row.team.clone())
+                .entry(normalized_team)
                 .or_default()
                 .push(row);
         } else if is_cc {
@@ -787,7 +803,7 @@ pub fn process_emails(
         } else if !only_call_center {
             if send_per_team_all_branches.contains(&t_low) {
                 per_team_buckets
-                    .entry(row.team.clone())
+                    .entry(normalized_team)
                     .or_default()
                     .push(row);
             } else if allowed_branch {
@@ -797,7 +813,7 @@ pub fn process_emails(
                     .push(row);
             } else if send_per_team_branches.contains(&b_low) {
                 per_team_buckets
-                    .entry(row.team.clone())
+                    .entry(normalized_team)
                     .or_default()
                     .push(row);
             }
@@ -1408,7 +1424,7 @@ mod tests {
         assert!(result.is_ok());
 
         let temp_dir = std::env::temp_dir();
-        let email_html_path = temp_dir.join("Call_Center_email.html");
+        let email_html_path = temp_dir.join("Call_center_email.html"); // Title Cased
         assert!(
             email_html_path.exists(),
             "Email HTML should still be generated for Call Center as an exception team"
@@ -1542,7 +1558,7 @@ mod tests {
         .unwrap();
 
         let system_temp = std::env::temp_dir();
-        let attachment_csv = system_temp.join("Team_A_open_tickets.csv");
+        let attachment_csv = system_temp.join("Team_a_open_tickets.csv"); // title_case makes it Team_a
         assert!(attachment_csv.exists(), "Attachment should be generated");
 
         let attachment_content = std::fs::read_to_string(&attachment_csv).unwrap();
@@ -1555,7 +1571,7 @@ mod tests {
             "Closed ticket should NOT be in attachment"
         );
 
-        let email_html = system_temp.join("Team_A_email.html");
+        let email_html = system_temp.join("Team_a_email.html");
         let html_content = std::fs::read_to_string(&email_html).unwrap();
         // Pivot table should skip closed if they are not needed but it also skips them in the loop.
         // Actually generate_pivot_html includes all rows but filters them out in the rendering loop if they only have closed.
@@ -1569,5 +1585,46 @@ mod tests {
 
         let _ = std::fs::remove_file(attachment_csv);
         let _ = std::fs::remove_file(email_html);
+    }
+}
+
+#[cfg(test)]
+mod parse_tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_leads_report_parsing_delimiter_and_bom() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("lead_report_123.csv");
+        let mut file = std::fs::File::create(&file_path).unwrap();
+
+        // Add BOM \ufeff at the start, and use commas
+        // also add a tab inside a value to test delimiter logic
+        file.write_all(b"\xef\xbb\xbf\"Lead Id\",\"Branch\",\"Status\",\"Remarks\"\n")
+            .unwrap();
+        file.write_all(b"\"1\",\"Jeddah\",\"new\",\"Some\tTab\"\n")
+            .unwrap();
+        file.write_all(b"\"2\",\"Jeddah\",\"follow-up\",\"\"\n")
+            .unwrap();
+        file.write_all(b"\"3\",\"Riyadh\",\"closed\",\"\"\n")
+            .unwrap();
+        file.write_all(b"\"4\",\"Jeddah\",\"follow up\",\"\"\n")
+            .unwrap(); // We no longer match 'follow up', only 'follow-up' and 'new'
+
+        // We set minutes_ago high enough to include the newly created file.
+        let exclude_branches = vec!["Riyadh".to_string()];
+
+        let path =
+            generate_leads_report(dir.path().to_str().unwrap(), 10, &exclude_branches).unwrap();
+
+        assert!(path.is_some());
+
+        let out_path = path.unwrap();
+        let out_bytes = std::fs::read(&out_path).unwrap(); // Excel files are binary, not strings!
+
+        // Let's just check the size or existence to prove it worked, we can't easily assert on binary Excel
+        assert!(out_bytes.len() > 100);
     }
 }

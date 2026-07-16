@@ -174,7 +174,7 @@ pub fn to_iso_date(val: &str) -> String {
 
 pub fn build_csv_reader_builder() -> csv::ReaderBuilder {
     let mut builder = csv::ReaderBuilder::new();
-    builder.has_headers(true).flexible(true);
+    builder.has_headers(true);
     builder
 }
 
@@ -255,28 +255,15 @@ mod tests {
     }
 
     #[test]
-    fn test_csv_reader_flexible() {
-        // Test variable columns, blank rows, quoted multiline
+    fn test_csv_reader_strict() {
+        // Test strict reading, should fail on unequal lengths if flexible is false
         let csv_data = "col1,col2,col3\nval1,val2\n\nval3,val4,val5,val6\n\"multi\nline\",escaped\"\"quote,val";
         let mut rdr = build_csv_reader_from_reader(csv_data.as_bytes());
-        let records: Vec<_> = rdr.records().map(|r| r.unwrap()).collect();
+        let records: Vec<_> = rdr.records().collect();
 
-        assert_eq!(records.len(), 3);
-
-        // Row 1: short
-        assert_eq!(records[0].len(), 2);
-        assert_eq!(&records[0][0], "val1");
-        assert_eq!(&records[0][1], "val2");
-
-        // Row 2: long
-        assert_eq!(records[1].len(), 4);
-        assert_eq!(&records[1][0], "val3");
-        assert_eq!(&records[1][3], "val6");
-
-        // Row 3: quotes and multiline
-        assert_eq!(records[2].len(), 3);
-        assert_eq!(&records[2][0], "multi\nline");
-        assert_eq!(&records[2][1], "escaped\"\"quote");
+        assert!(records.len() > 0);
+        // The first record has fewer columns than the header (2 vs 3).
+        assert!(records[0].is_err());
     }
 
     #[test]

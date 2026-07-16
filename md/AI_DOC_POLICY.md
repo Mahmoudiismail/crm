@@ -56,8 +56,8 @@ Before commit, run a manual checklist:
 If any answer is `no`, update docs before finalizing.
 
 ## Fixed CSV Parsing Issues
-- Configured to use `flexible(true)` centrally in `utils.rs` via `build_csv_reader` to prevent varying-length column errors.
 - Replaced raw inline diagnostic logging loop with a shared function limiting output to ±20 lines around the error line to keep logs compact but useful.
+- Removed `flexible(true)` centrally in `utils.rs` via `build_csv_reader` to strictly enforce column counts and throw validation errors when data is malformed.
 
 ## Recent Fixes
 - Added `--custom-download-folder` to `crm.rs` to override config paths via CLI without persisting the change.
