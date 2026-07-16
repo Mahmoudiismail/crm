@@ -261,7 +261,7 @@ mod tests {
         let mut rdr = build_csv_reader_from_reader(csv_data.as_bytes());
         let records: Vec<_> = rdr.records().collect();
 
-        assert!(records.len() > 0);
+        assert!(!records.is_empty());
         // The first record has fewer columns than the header (2 vs 3).
         assert!(records[0].is_err());
     }
