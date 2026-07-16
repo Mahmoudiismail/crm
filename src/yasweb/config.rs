@@ -1,5 +1,34 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
+
+#[derive(Debug, Serialize, Clone, PartialEq, Default)]
+pub struct DateKeyConfig {
+    pub key: String,
+    pub format: String,
+}
+
+impl<'de> Deserialize<'de> for DateKeyConfig {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum DateKeyConfigOpt {
+            String(String),
+            Struct { key: String, format: String },
+        }
+
+        let opt = DateKeyConfigOpt::deserialize(deserializer)?;
+        match opt {
+            DateKeyConfigOpt::String(s) => Ok(DateKeyConfig {
+                key: s,
+                format: "".to_string(),
+            }),
+            DateKeyConfigOpt::Struct { key, format } => Ok(DateKeyConfig { key, format }),
+        }
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ReportConfig {
@@ -7,9 +36,9 @@ pub struct ReportConfig {
     #[serde(default)]
     pub filters: HashMap<String, String>,
     #[serde(default)]
-    pub start_date_key: Option<String>,
+    pub start_date_key: Option<DateKeyConfig>,
     #[serde(default)]
-    pub end_date_key: Option<String>,
+    pub end_date_key: Option<DateKeyConfig>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

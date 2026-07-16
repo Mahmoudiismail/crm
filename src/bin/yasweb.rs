@@ -59,8 +59,16 @@ fn get_manifest(config_path: Option<PathBuf>) -> AppManifest {
                         type_autofills.insert(name.clone(), report.report_type.clone());
                     }
 
-                    let start_key = report.start_date_key.clone().unwrap_or_default();
-                    let end_key = report.end_date_key.clone().unwrap_or_default();
+                    let start_key = report
+                        .start_date_key
+                        .clone()
+                        .map(|k| k.key)
+                        .unwrap_or_default();
+                    let end_key = report
+                        .end_date_key
+                        .clone()
+                        .map(|k| k.key)
+                        .unwrap_or_default();
 
                     for (filter_key, filter_val) in &report.filters {
                         // Skip generating filter args for standard date keys since we map --start-date/--end-date to them
@@ -242,6 +250,28 @@ async fn main() -> Result<()> {
     )?;
     let mut config_updated = false;
 
+    // Config healing for empty formatting
+    for (_, report) in config.reports.iter_mut() {
+        let (default_start_fmt, default_end_fmt) = if report.report_type == "Report Manager" {
+            ("%d-%b-%Y".to_string(), "%d-%b-%Y".to_string())
+        } else {
+            ("%d-%m-%Y 00:00".to_string(), "%d-%m-%Y 23:59".to_string())
+        };
+
+        if let Some(ref mut sk) = report.start_date_key {
+            if sk.format.is_empty() {
+                sk.format = default_start_fmt.clone();
+                config_updated = true;
+            }
+        }
+        if let Some(ref mut ek) = report.end_date_key {
+            if ek.format.is_empty() {
+                ek.format = default_end_fmt.clone();
+                config_updated = true;
+            }
+        }
+    }
+
     let active_report_name = options.name;
     let mut active_report_type = options.r#type.unwrap_or_default();
 
@@ -351,11 +381,11 @@ async fn main() -> Result<()> {
             || report_conf
                 .start_date_key
                 .as_ref()
-                .is_none_or(|k| k.is_empty())
+                .is_none_or(|k| k.key.is_empty())
             || report_conf
                 .end_date_key
                 .as_ref()
-                .is_none_or(|k| k.is_empty())
+                .is_none_or(|k| k.key.is_empty())
         {
             info!("Report does not have start_date_key/end_date_key configured. Disabling monthly chunking.");
             effective_monthly = false;
@@ -379,6 +409,14 @@ async fn main() -> Result<()> {
         }
 
         let mut current_dt = start_dt;
+
+        // report_conf was fetched earlier inside the `if effective_monthly` check,
+        // but its scope ended. We need to fetch it again or move it outside.
+        let report_conf_monthly = config
+            .reports
+            .get(&active_report_name)
+            .context("Report name not found in config")?;
+
         while current_dt <= end_dt {
             let next_month = if current_dt.month() == 12 {
                 NaiveDate::from_ymd_opt(current_dt.year() + 1, 1, 1).context("Invalid date math")?
@@ -390,15 +428,31 @@ async fn main() -> Result<()> {
             let last_day = next_month.pred_opt().context("Invalid date math")?;
             let chunk_end = if last_day > end_dt { end_dt } else { last_day };
 
-            let format_str = if active_report_type == "Report Manager" {
-                "%d-%b-%Y"
+            let start_format_str = if let Some(ref sk) = report_conf_monthly.start_date_key {
+                sk.format.clone()
+            } else if active_report_type == "Report Manager" {
+                "%d-%b-%Y".to_string()
             } else {
-                "%d-%m-%Y"
+                "%d-%m-%Y 00:00".to_string()
             };
 
+            let end_format_str = if let Some(ref ek) = report_conf_monthly.end_date_key {
+                ek.format.clone()
+            } else if active_report_type == "Report Manager" {
+                "%d-%b-%Y".to_string()
+            } else {
+                "%d-%m-%Y 23:59".to_string()
+            };
+
+            // Using NaiveDate format directly may not apply time, but these are format strings.
+            // If they contain %H:%M, we need to promote NaiveDate to NaiveDateTime using 00:00 and 23:59.
+            // But actually NaiveDate doesn't support %H:%M formatting.
+            let start_dt_time = current_dt.and_hms_opt(0, 0, 0).unwrap();
+            let end_dt_time = chunk_end.and_hms_opt(23, 59, 59).unwrap();
+
             date_ranges.push((
-                current_dt.format(format_str).to_string(),
-                chunk_end.format(format_str).to_string(),
+                start_dt_time.format(&start_format_str).to_string(),
+                end_dt_time.format(&end_format_str).to_string(),
             ));
 
             current_dt = next_month;
@@ -470,23 +524,52 @@ async fn main() -> Result<()> {
             let s_dt = if is_monthly && !start_dt.is_empty() {
                 Some(start_dt.clone())
             } else {
-                start_date_str.clone()
+                // If not monthly, re-format the input start_date_str if applicable
+                if let (Some(st_str), Some(report_conf)) = (&start_date_str, report_conf_opt) {
+                    if let Some(sk) = &report_conf.start_date_key {
+                        if let Some(parsed) = crm_tool::utils::parse_flexible_date(st_str) {
+                            let parsed_dt = parsed.and_hms_opt(0, 0, 0).unwrap();
+                            Some(parsed_dt.format(&sk.format).to_string())
+                        } else {
+                            start_date_str.clone()
+                        }
+                    } else {
+                        start_date_str.clone()
+                    }
+                } else {
+                    start_date_str.clone()
+                }
             };
+
             let e_dt = if is_monthly && !end_dt.is_empty() {
                 Some(end_dt.clone())
             } else {
-                end_date_str.clone()
+                // If not monthly, re-format the input end_date_str if applicable
+                if let (Some(ed_str), Some(report_conf)) = (&end_date_str, report_conf_opt) {
+                    if let Some(ek) = &report_conf.end_date_key {
+                        if let Some(parsed) = crm_tool::utils::parse_flexible_date(ed_str) {
+                            let parsed_dt = parsed.and_hms_opt(23, 59, 59).unwrap();
+                            Some(parsed_dt.format(&ek.format).to_string())
+                        } else {
+                            end_date_str.clone()
+                        }
+                    } else {
+                        end_date_str.clone()
+                    }
+                } else {
+                    end_date_str.clone()
+                }
             };
 
             if let Some(report_conf) = report_conf_opt {
                 if let Some(sk) = &report_conf.start_date_key {
                     if let Some(s) = s_dt.clone() {
-                        run_filters.insert(sk.clone(), s);
+                        run_filters.insert(sk.key.clone(), s);
                     }
                 }
                 if let Some(ek) = &report_conf.end_date_key {
                     if let Some(e) = e_dt.clone() {
-                        run_filters.insert(ek.clone(), e);
+                        run_filters.insert(ek.key.clone(), e);
                     }
                 }
             }

@@ -61,7 +61,8 @@ If any answer is `no`, update docs before finalizing.
 
 ## Recent Fixes
 - Added `--custom-download-folder` to `crm.rs` to override config paths via CLI without persisting the change.
-- Fixed `yasweb.rs` date formatting for `Report Manager` (dd-MMM-yyyy) and `Standard Report` (dd-mm-yyyy).
+- Fixed `yasweb.rs` date formatting for `Report Manager` (dd-MMM-yyyy) and `Standard Report` (dd-mm-yyyy HH:MM). Date formats are now customizable through a `DateKeyConfig` struct in the `yasweb_config.json`.
+- Added TRACE level diagnostic logging for entire page HTML content during specific MIS module navigation steps in `src/yasweb/browser.rs`.
 - Corrected Windows file lock exceptions when running PowerShell in `tasker/email.rs` and `tasker/crm_open_sohail.rs`.
 - Added missing 3rd default task (`crm_open_sohail`) to `tasker_config.json` default generation.
 
