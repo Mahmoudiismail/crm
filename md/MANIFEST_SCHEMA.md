@@ -19,7 +19,7 @@ The manifest defines the application's metadata and the arguments it accepts via
 | Field | Type | Description |
 | :--- | :--- | :--- |
 | `name` | String | The name of the argument as passed to the CLI (e.g., `--config`, `--dry-run`). |
-| `arg_type` | String | The data type of the argument. Allowed values: `"string"`, `"number"`, `"list"`, `"boolean"`. |
+| `arg_type` | String | The data type of the argument. Allowed values: `"string"`, `"number"`, `"list"`, `"boolean"`, `"date_var"`. |
 | `required` | Boolean | Whether the argument must be provided by the user. |
 | `default_value` | String (Optional) | The default value used if the user provides no input. |
 | `options` | Array of String (Optional) | Required if `arg_type` is `"list"`. Specifies the valid choices for the dropdown. |

@@ -95,7 +95,15 @@
     });
   }
 
-  function createScheduleRow(kind, interval, once, daily, weekly, monthly, startTime) {
+  function createScheduleRow(
+    kind,
+    interval,
+    once,
+    daily,
+    weekly,
+    monthly,
+    startTime,
+  ) {
     const row = document.createElement("div");
     row.setAttribute("data-schedule-row", "");
     row.className =
@@ -229,7 +237,9 @@
         const kind = row.querySelector(".schedule-kind").value;
         if (kind === "interval") {
           const interval = row.querySelector(".schedule-interval select").value;
-          const startTime = row.querySelector(".schedule-start-time input").value;
+          const startTime = row.querySelector(
+            ".schedule-start-time input",
+          ).value;
           const whRows = Array.from(row.querySelectorAll("[data-wh-row]"))
             .map((whRow) => {
               const day = whRow.querySelector(".wh-day").value;
@@ -479,11 +489,14 @@
       }
     });
   }
-  
+
   function updateTaskTypeVisibility() {
     const type = taskTypeSelect.value;
     if (shellCommandContainer) {
-      shellCommandContainer.classList.toggle("hidden", type !== "shell_command");
+      shellCommandContainer.classList.toggle(
+        "hidden",
+        type !== "shell_command",
+      );
     }
     if (externalAppContainer) {
       externalAppContainer.classList.toggle("hidden", type !== "external_app");
@@ -616,13 +629,53 @@
             html += `${wrapperStart}<label class="block">${labelSpan}<select id="${argId}" data-arg-name="${arg.name}" data-arg-type="list" class="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm" ${autofillAttr} ${requiredAttr}>${optionsHtml}</select></label>${wrapperEnd}`;
           } else if (arg.arg_type === "number") {
             html += `${wrapperStart}<label class="block">${labelSpan}<input type="number" id="${argId}" data-arg-name="${arg.name}" data-arg-type="number" value="${currentValue || ""}" class="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm" ${autofillAttr} ${requiredAttr}></label>${wrapperEnd}`;
+          } else if (arg.arg_type === "date_var") {
+            const isVar = [
+              "today",
+              "tomorrow",
+              "yesterday",
+              "eomonth",
+            ].includes(currentValue?.toLowerCase());
+            const mode = isVar ? "var" : "calendar";
+
+            const modeSelectId = `${argId}-mode`;
+
+            html += `${wrapperStart}<label class="block">${labelSpan}
+                <div class="flex items-center gap-2 mt-1">
+                    <select id="${modeSelectId}" class="rounded border border-gray-300 px-2 py-2 text-sm" onchange="
+                        const vSel = document.getElementById('${argId}-var');
+                        const cInp = document.getElementById('${argId}-cal');
+                        const mainInp = document.getElementById('${argId}');
+                        if (this.value === 'var') {
+                            vSel.classList.remove('hidden');
+                            cInp.classList.add('hidden');
+                            mainInp.value = vSel.value;
+                        } else {
+                            vSel.classList.add('hidden');
+                            cInp.classList.remove('hidden');
+                            mainInp.value = cInp.value;
+                        }
+                        mainInp.dispatchEvent(new Event('change'));
+                    ">
+                        <option value="calendar" ${mode === "calendar" ? "selected" : ""}>Calendar</option>
+                        <option value="var" ${mode === "var" ? "selected" : ""}>Variable</option>
+                    </select>
+
+                    <select id="${argId}-var" class="w-full rounded border border-gray-300 px-3 py-2 text-sm ${mode === "var" ? "" : "hidden"}" onchange="document.getElementById('${argId}').value = this.value; document.getElementById('${argId}').dispatchEvent(new Event('change'));">
+                        <option value="today" ${currentValue === "today" ? "selected" : ""}>today</option>
+                        <option value="tomorrow" ${currentValue === "tomorrow" ? "selected" : ""}>tomorrow</option>
+                        <option value="yesterday" ${currentValue === "yesterday" ? "selected" : ""}>yesterday</option>
+                        <option value="eomonth" ${currentValue === "eomonth" ? "selected" : ""}>eomonth</option>
+                    </select>
+
+                    <input type="date" id="${argId}-cal" class="w-full rounded border border-gray-300 px-3 py-2 text-sm ${mode === "calendar" ? "" : "hidden"}" value="${!isVar ? currentValue || "" : ""}" onchange="document.getElementById('${argId}').value = this.value; document.getElementById('${argId}').dispatchEvent(new Event('change'));">
+
+                    <input type="hidden" id="${argId}" data-arg-name="${arg.name}" data-arg-type="date_var" value="${currentValue || ""}" ${autofillAttr} ${requiredAttr}>
+                </div>
+            </label>${wrapperEnd}`;
           } else {
             // string
-            if (arg.name === "--start-date" || arg.name === "--end-date") {
-                html += `${wrapperStart}<label class="block">${labelSpan}<input type="date" id="${argId}" data-arg-name="${arg.name}" data-arg-type="string" value="${currentValue || ""}" class="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm" ${autofillAttr} ${requiredAttr}></label>${wrapperEnd}`;
-            } else {
-                html += `${wrapperStart}<label class="block">${labelSpan}<input type="text" id="${argId}" data-arg-name="${arg.name}" data-arg-type="string" value="${currentValue || ""}" class="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm" ${autofillAttr} ${requiredAttr}></label>${wrapperEnd}`;
-            }
+            html += `${wrapperStart}<label class="block">${labelSpan}<input type="text" id="${argId}" data-arg-name="${arg.name}" data-arg-type="string" value="${currentValue || ""}" class="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm" ${autofillAttr} ${requiredAttr}></label>${wrapperEnd}`;
           }
         });
         html += "</div>";
@@ -635,9 +688,11 @@
 
       // Setup dynamic visibility and autofill evaluation
       function evaluateDependencies(event) {
-        const inputs = externalAppDynamicInputs.querySelectorAll("input[data-arg-name], select[data-arg-name]");
+        const inputs = externalAppDynamicInputs.querySelectorAll(
+          "input[data-arg-name], select[data-arg-name]",
+        );
         const currentValues = {};
-        inputs.forEach(input => {
+        inputs.forEach((input) => {
           if (input.type === "checkbox") {
             currentValues[input.getAttribute("data-arg-name")] = input.checked;
           } else {
@@ -645,88 +700,99 @@
           }
         });
 
-        const wrappers = externalAppDynamicInputs.querySelectorAll(".arg-wrapper");
-        wrappers.forEach(wrapper => {
+        const wrappers =
+          externalAppDynamicInputs.querySelectorAll(".arg-wrapper");
+        wrappers.forEach((wrapper) => {
           const dependsStr = wrapper.getAttribute("data-depends-on");
           if (!dependsStr) return;
 
           try {
             const dependsOn = JSON.parse(dependsStr);
             let isVisible = true;
-            for (const [depArgName, allowedValues] of Object.entries(dependsOn)) {
-               const val = currentValues[depArgName];
-               if (val === undefined || !allowedValues.includes(val)) {
-                  isVisible = false;
-                  break;
-               }
+            for (const [depArgName, allowedValues] of Object.entries(
+              dependsOn,
+            )) {
+              const val = currentValues[depArgName];
+              if (val === undefined || !allowedValues.includes(val)) {
+                isVisible = false;
+                break;
+              }
             }
 
             if (isVisible) {
               wrapper.classList.remove("hidden");
               // Re-enable required if it was required before
-              const input = wrapper.querySelector("input[data-arg-name], select[data-arg-name]");
+              const input = wrapper.querySelector(
+                "input[data-arg-name], select[data-arg-name]",
+              );
               if (input && input.hasAttribute("data-was-required")) {
                 input.required = true;
               }
             } else {
               wrapper.classList.add("hidden");
               // Disable required so form can submit
-              const input = wrapper.querySelector("input[data-arg-name], select[data-arg-name]");
+              const input = wrapper.querySelector(
+                "input[data-arg-name], select[data-arg-name]",
+              );
               if (input && input.required) {
-                 input.setAttribute("data-was-required", "true");
-                 input.required = false;
+                input.setAttribute("data-was-required", "true");
+                input.required = false;
               }
             }
-          } catch(e) {
-             console.error("Failed to parse depends_on", e);
+          } catch (e) {
+            console.error("Failed to parse depends_on", e);
           }
         });
 
         // Evaluate autofill only if an event triggered this (not on initial load)
         if (event && event.target) {
-            const changedInputName = event.target.getAttribute("data-arg-name");
-            if (!changedInputName) return;
-            const changedValue = event.target.value;
+          const changedInputName = event.target.getAttribute("data-arg-name");
+          if (!changedInputName) return;
+          const changedValue = event.target.value;
 
-            inputs.forEach(input => {
-                const autofillStr = input.getAttribute("data-autofill");
-                if (!autofillStr) return;
+          inputs.forEach((input) => {
+            const autofillStr = input.getAttribute("data-autofill");
+            if (!autofillStr) return;
 
-                try {
-                    const autofills = JSON.parse(autofillStr);
-                    // autofills is a map of parent_arg -> {parent_val -> fill_val}
-                    if (autofills[changedInputName]) {
-                        const targetValue = autofills[changedInputName][changedValue];
-                        if (targetValue !== undefined) {
-                            if (input.type === "checkbox") {
-                                input.checked = (targetValue === "true" || targetValue === "on" || targetValue === true);
-                            } else {
-                                input.value = targetValue;
-                            }
-                        } else {
-                           // Revert to empty or default if parent value doesn't have a mapping
-                           if (input.type === "checkbox") {
-                               input.checked = false;
-                           } else {
-                               input.value = "";
-                           }
-                        }
-                    }
-                } catch(e) {
-                    console.error("Failed to parse autofill", e);
+            try {
+              const autofills = JSON.parse(autofillStr);
+              // autofills is a map of parent_arg -> {parent_val -> fill_val}
+              if (autofills[changedInputName]) {
+                const targetValue = autofills[changedInputName][changedValue];
+                if (targetValue !== undefined) {
+                  if (input.type === "checkbox") {
+                    input.checked =
+                      targetValue === "true" ||
+                      targetValue === "on" ||
+                      targetValue === true;
+                  } else {
+                    input.value = targetValue;
+                  }
+                } else {
+                  // Revert to empty or default if parent value doesn't have a mapping
+                  if (input.type === "checkbox") {
+                    input.checked = false;
+                  } else {
+                    input.value = "";
+                  }
                 }
-            });
+              }
+            } catch (e) {
+              console.error("Failed to parse autofill", e);
+            }
+          });
         }
       }
 
-      const inputs = externalAppDynamicInputs.querySelectorAll("input[data-arg-name], select[data-arg-name]");
-      inputs.forEach(input => {
-         input.addEventListener("change", evaluateDependencies);
-         input.addEventListener("input", evaluateDependencies);
+      const inputs = externalAppDynamicInputs.querySelectorAll(
+        "input[data-arg-name], select[data-arg-name]",
+      );
+      inputs.forEach((input) => {
+        input.addEventListener("change", evaluateDependencies);
+        input.addEventListener("input", evaluateDependencies);
       });
       // Initial evaluation
       evaluateDependencies();
-
     } catch (e) {
       console.error("Failed to load app manifest", e);
       externalAppDynamicInputs.innerHTML =
@@ -738,7 +804,6 @@
     taskTypeSelect.addEventListener("change", updateTaskTypeVisibility);
     updateTaskTypeVisibility();
   }
-
 
   const form = document.querySelector("form");
   if (form) {
