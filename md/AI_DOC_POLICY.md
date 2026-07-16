@@ -60,6 +60,7 @@ If any answer is `no`, update docs before finalizing.
 - Removed `flexible(true)` centrally in `utils.rs` via `build_csv_reader` to strictly enforce column counts and throw validation errors when data is malformed.
 
 ## Recent Fixes
+- **OLAP Slicer Support:** Added support for Excel Data Model (OLAP) Slicers in `tasker/crm_open_sohail.rs` PowerShell automation scripts, utilizing `SlicerCacheLevels` and `VisibleSlicerItemsList`.
 - Added `--custom-download-folder` to `crm.rs` to override config paths via CLI without persisting the change.
 - Fixed `yasweb.rs` date formatting for `Report Manager` (dd-MMM-yyyy) and `Standard Report` (dd-mm-yyyy HH:MM). Date formats are now customizable through a `DateKeyConfig` struct in the `yasweb_config.json`.
 - Added TRACE level diagnostic logging for entire page HTML content during specific MIS module navigation steps in `src/yasweb/browser.rs`.
