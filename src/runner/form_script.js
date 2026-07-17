@@ -627,6 +627,16 @@
               });
             }
             html += `${wrapperStart}<label class="block">${labelSpan}<select id="${argId}" data-arg-name="${arg.name}" data-arg-type="list" class="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm" ${autofillAttr} ${requiredAttr}>${optionsHtml}</select></label>${wrapperEnd}`;
+          } else if (arg.arg_type === "multi_list") {
+            let optionsHtml = "";
+            const currentValues = currentValue ? currentValue.split(',').map(s => s.trim()) : [];
+            if (arg.options) {
+              arg.options.forEach((opt) => {
+                const sel = currentValues.includes(opt) ? "selected" : "";
+                optionsHtml += `<option value="${opt}" ${sel}>${opt}</option>`;
+              });
+            }
+            html += `${wrapperStart}<label class="block">${labelSpan}<select id="${argId}" data-arg-name="${arg.name}" data-arg-type="multi_list" multiple class="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm" ${autofillAttr} ${requiredAttr}>${optionsHtml}</select></label><p class="text-xs text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple options.</p>${wrapperEnd}`;
           } else if (arg.arg_type === "number") {
             html += `${wrapperStart}<label class="block">${labelSpan}<input type="number" id="${argId}" data-arg-name="${arg.name}" data-arg-type="number" value="${currentValue || ""}" class="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm" ${autofillAttr} ${requiredAttr}></label>${wrapperEnd}`;
           } else if (arg.arg_type === "date_var") {
@@ -834,6 +844,15 @@
           if (argType === "boolean") {
             if (input.checked) {
               argsMap[argName] = "true";
+            }
+          } else if (argType === "multi_list") {
+            if (input.selectedOptions) {
+              const values = Array.from(input.selectedOptions).map(o => o.value);
+              if (values.length > 0) {
+                argsMap[argName] = values.join(",");
+              } else {
+                argsMap[argName] = "";
+              }
             }
           } else if (input.value !== undefined && input.value !== null) {
             argsMap[argName] = input.value;

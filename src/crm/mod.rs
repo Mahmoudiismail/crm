@@ -2,18 +2,15 @@ pub mod auth;
 pub mod config;
 pub mod downloader;
 pub mod fetcher;
-pub mod types;
 
 use anyhow::Result;
-use futures_util::future::join_all;
 use tracing::error;
 
 use config::AppConfig;
-use types::ReportType;
 
 pub async fn run_once(
     crm_config_path: &str,
-    report: ReportType,
+    report: Vec<String>,
     start_date: Option<String>,
     end_date: Option<String>,
     custom_download_folder_cli: Option<String>,
@@ -67,53 +64,16 @@ pub async fn run_once(
         target
     };
 
-    tracing::info!("Fetching reports for type: {:?}", report);
-    let results = fetcher::fetch_reports(&config, &client, &token, report, &download_dir).await?;
-    tracing::trace!("Fetch reports results received.");
-
+    // Ensure download dir exists upfront if needed
     if config.download_csv {
-        // Handle standard Signed URL CSV downloads
-        let urls = fetcher::extract_urls(&results);
-        if !urls.is_empty() {
-            tracing::info!("Extracted {} download URL(s).", urls.len());
-
-            // Validate the folder before downloading
-            if let Err(e) = tokio::fs::create_dir_all(&download_dir).await {
-                error!(
-                    "Failed to create download directory {:?}: {:#}",
-                    download_dir, e
-                );
-            } else {
-                let download_futures = urls.iter().map(|(key, url)| {
-                    let client = client.clone();
-                    let download_dir = download_dir.clone();
-                    async move {
-                        if let Err(e) =
-                            downloader::download_csv(&client, url, key, &download_dir).await
-                        {
-                            error!("Download failed for {}: {:#}", key, e);
-                        }
-                    }
-                });
-                join_all(download_futures).await;
-            }
-        }
-
-        // Handle Base64 direct payload CSV downloads (e.g., Users Report)
-        if let Some(users_val) = results.get("users") {
-            if let Some(base64_val) = users_val.get("base64_data") {
-                if let Some(base64_str) = base64_val.as_str() {
-                    tracing::info!("Extracted Base64 payload for Users Report");
-                    if let Err(e) =
-                        downloader::process_base64_payload(base64_str, "user_report", &download_dir)
-                            .await
-                    {
-                        error!("Failed to process Users Report Base64 payload: {:#}", e);
-                    }
-                }
-            }
+        if let Err(e) = tokio::fs::create_dir_all(&download_dir).await {
+            error!("Failed to create download directory {:?}: {:#}", download_dir, e);
         }
     }
+
+    tracing::info!("Fetching reports for type: {:?}", report);
+    let _results = fetcher::fetch_reports(&config, &client, &token, report, &download_dir).await?;
+    tracing::trace!("Fetch reports results received.");
 
     config.save(crm_config_path)?;
     Ok(())

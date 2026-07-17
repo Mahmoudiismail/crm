@@ -13,6 +13,7 @@ pub enum ArgType {
     String,
     Number,
     List,
+    MultiList,
     Boolean,
     DateVar,
 }

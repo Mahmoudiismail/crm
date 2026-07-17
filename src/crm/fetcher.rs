@@ -10,7 +10,6 @@ use tokio::fs;
 use tracing::{debug, error, info, trace};
 
 use crate::crm::config::AppConfig;
-use crate::crm::types::ReportType;
 
 // ──────────────────────────────────────────────────────────────
 // Fetch Context Context
@@ -69,12 +68,12 @@ pub async fn fetch_reports(
     config: &AppConfig,
     client: &reqwest::Client,
     token: &str,
-    report_type: ReportType,
+    report_type: Vec<String>,
     download_dir: &Path,
 ) -> Result<Value> {
     let mut results = serde_json::Map::new();
 
-    if report_type == ReportType::None {
+    if report_type.is_empty() || report_type.iter().any(|r| r == "none") {
         info!("Report type is 'none', skipping all fetches");
         return Ok(Value::Object(results));
     }
@@ -82,14 +81,7 @@ pub async fn fetch_reports(
     let defs = report_defs();
 
     let should_fetch = |key: &str| -> bool {
-        match report_type {
-            ReportType::All => true,
-            ReportType::Tickets => key == "tickets",
-            ReportType::Calls => key == "calls",
-            ReportType::Leads => key == "leads",
-            ReportType::Users => key == "users",
-            ReportType::None => false,
-        }
+        report_type.iter().any(|r| r == "all" || r == key)
     };
 
     // Build task list
@@ -144,6 +136,8 @@ pub async fn fetch_reports(
             for (batch_from, batch_to) in batches {
                 let client = client.clone();
                 let context = Arc::clone(&context);
+                let download_csv = config.download_csv;
+                let download_dir = download_dir.to_path_buf();
 
                 handles.push(tokio::spawn(async move {
                     let key = format!("calls_{}_{}", batch_from, batch_to);
@@ -162,6 +156,9 @@ pub async fn fetch_reports(
                         &batch_from,
                         &batch_to,
                         &params,
+                        download_csv,
+                        Some(&download_dir),
+                        &key,
                     )
                     .await
                     .unwrap_or_else(|e| {
@@ -177,6 +174,8 @@ pub async fn fetch_reports(
             let client = client.clone();
             let context = Arc::clone(&context);
             let key = def.key.to_string();
+            let download_csv = config.download_csv;
+            let download_dir = download_dir.to_path_buf();
 
             handles.push(tokio::spawn(async move {
                 let params = FetchParams {
@@ -195,6 +194,14 @@ pub async fn fetch_reports(
                         serde_json::json!({"error": format!("{}", e)})
                     });
 
+                if download_csv {
+                    if let Some(base64_val) = v.get("base64_data").and_then(|b| b.as_str()) {
+                        if let Err(e) = crate::crm::downloader::process_base64_payload(base64_val, &key, &download_dir).await {
+                            error!("Failed to process {} Base64 payload: {:#}", key, e);
+                        }
+                    }
+                }
+
                 (key, v)
             }));
         } else {
@@ -205,6 +212,8 @@ pub async fn fetch_reports(
             let from_date = config.from_date.clone();
             let to_date = config.to_date.clone();
             let key = def.key.to_string();
+            let download_csv = config.download_csv;
+            let download_dir = download_dir.to_path_buf();
 
             handles.push(tokio::spawn(async move {
                 let params = FetchParams {
@@ -222,6 +231,9 @@ pub async fn fetch_reports(
                     &from_date,
                     &to_date,
                     &params,
+                    download_csv,
+                    Some(&download_dir),
+                    &key,
                 )
                 .await
                 .unwrap_or_else(|e| {
@@ -322,6 +334,7 @@ struct FetchParams<'a> {
     extra_params: &'a [(&'a str, &'a str)],
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn fetch_with_signed_url_split(
     client: &reqwest::Client,
     token: &str,
@@ -329,16 +342,38 @@ async fn fetch_with_signed_url_split(
     from_date: &str,
     to_date: &str,
     params: &FetchParams<'_>,
+    download_csv: bool,
+    download_dir: Option<&Path>,
+    key_prefix: &str,
 ) -> Result<Value> {
     let mut pending = vec![(from_date.to_string(), to_date.to_string())];
     let mut completed: Vec<(String, String, Value)> = Vec::new();
     let mut split_used = false;
 
+    let mut download_tasks = Vec::new();
+
     while let Some((batch_from, batch_to)) = pending.pop() {
         let result = fetch_single(client, token, endpoint, &batch_from, &batch_to, params).await;
 
         match result {
-            Ok(value) => completed.push((batch_from, batch_to, value)),
+            Ok(value) => {
+                if download_csv {
+                    if let Some(dir) = download_dir {
+                        let mut urls = Vec::new();
+                        extract_urls_for_key(key_prefix, &value, &mut urls);
+                        for (k, url) in urls {
+                            let client_clone = client.clone();
+                            let dir_clone = dir.to_path_buf();
+                            download_tasks.push(tokio::spawn(async move {
+                                if let Err(e) = crate::crm::downloader::download_csv(&client_clone, &url, &k, &dir_clone).await {
+                                    error!("Download failed for {}: {:#}", k, e);
+                                }
+                            }));
+                        }
+                    }
+                }
+                completed.push((batch_from, batch_to, value))
+            }
             Err(err) if is_signed_url_generation_failure(&err) => {
                 if let Some((left, right)) = split_range_in_half(&batch_from, &batch_to)? {
                     split_used = true;
@@ -360,6 +395,8 @@ async fn fetch_with_signed_url_split(
             Err(err) => return Err(err),
         }
     }
+
+    join_all(download_tasks).await;
 
     completed.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
 

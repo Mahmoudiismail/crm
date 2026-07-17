@@ -1,28 +1,20 @@
---- src/runner/engine.rs
-+++ src/runner/engine.rs
-@@ -537,16 +537,12 @@
-                         ..
-                     },
--                ) => {
--                    if new_dom == *old_dom && new_time == *old_time && new_wh == *old_wh {
--                        if let crate::runner::config::TaskSchedule::Monthly {
--                            next_run_at, ..
--                        } = new_schedule
--                        {
--                            *next_run_at = old_next.clone();
--                        }
--                        true
--                    } else {
--                        false
--                    }
--                }
-+                ) if new_dom == *old_dom && new_time == *old_time && new_wh == *old_wh => {
-+                    if let crate::runner::config::TaskSchedule::Monthly {
-+                        next_run_at, ..
-+                    } = new_schedule
-+                    {
-+                        *next_run_at = old_next.clone();
-+                    }
-+                    true
-+                }
-+                (crate::runner::config::TaskSchedule::Monthly { .. }, _) => false,
+--- src/crm/fetcher.rs
++++ src/crm/fetcher.rs
+@@ -334,16 +334,22 @@
+     }
+ }
+
++struct FetchSplitParams<'a> {
++    client: &'a reqwest::Client,
++    token: &'a str,
++    endpoint: &'a str,
++    from_date: &'a str,
++    to_date: &'a str,
++    params: &'a FetchParams<'a>,
++    download_csv: bool,
++    download_dir: Option<&'a Path>,
++    key_prefix: &'a str,
++}
++
++#[allow(clippy::too_many_arguments)]
+ async fn fetch_with_signed_url_split(
