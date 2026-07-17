@@ -405,7 +405,12 @@ $Mail.To = "{}"
 $Mail.CC = "{}"
 $Mail.Subject = "CRM Tickets Dashboard"
 $Mail.HTMLBody = "{}"
-$Mail.Attachments.Add("{}")
+try {{
+    $Mail.Attachments.Add("{}")
+}} catch {{
+    Write-Warning "Attachment too large, sending without attachment."
+    $Mail.HTMLBody += "<br><br><span style='color:red;'><b>Note:</b> The Dashboard file was too large to attach to this email. Please access it from the shared network drive.</span>"
+}}
 $Mail.Send()
 "#,
             email_to.replace("\"", "'"),

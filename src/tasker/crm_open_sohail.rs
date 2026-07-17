@@ -276,7 +276,7 @@ try {{
                 # Exclude Grand Total row from team names if it ends up here, usually its in rowrange
                 if ($teamName -eq "Grand Total") {{ continue }}
 
-                $rowObj = @{{
+                $rowObj = [PSCustomObject]@{{
                     team = $teamName
                     closed = 0
                     open = 0
