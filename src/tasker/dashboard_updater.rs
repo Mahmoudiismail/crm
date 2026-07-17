@@ -433,9 +433,16 @@ mod tests {
     #[test]
     fn test_task2_dashboard_updater_calculation_mode() {
         let src = include_str!("dashboard_updater.rs");
-        let open_idx = src.find("$Workbook = $Excel.Workbooks.Open($dashboardPath)").expect("Should find open workbook");
-        let calc_idx = src.find("$Excel.Calculation = -4135 # xlCalculationManual").expect("Should find calculation");
-        assert!(open_idx < calc_idx, "Calculation mode must be set after opening the workbook to avoid COM exceptions");
+        let open_idx = src
+            .find("$Workbook = $Excel.Workbooks.Open($dashboardPath)")
+            .expect("Should find open workbook");
+        let calc_idx = src
+            .find("$Excel.Calculation = -4135 # xlCalculationManual")
+            .expect("Should find calculation");
+        assert!(
+            open_idx < calc_idx,
+            "Calculation mode must be set after opening the workbook to avoid COM exceptions"
+        );
     }
 
     #[test]
