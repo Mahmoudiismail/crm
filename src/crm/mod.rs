@@ -67,7 +67,10 @@ pub async fn run_once(
     // Ensure download dir exists upfront if needed
     if config.download_csv {
         if let Err(e) = tokio::fs::create_dir_all(&download_dir).await {
-            error!("Failed to create download directory {:?}: {:#}", download_dir, e);
+            error!(
+                "Failed to create download directory {:?}: {:#}",
+                download_dir, e
+            );
         }
     }
 

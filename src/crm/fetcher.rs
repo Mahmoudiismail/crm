@@ -80,9 +80,7 @@ pub async fn fetch_reports(
 
     let defs = report_defs();
 
-    let should_fetch = |key: &str| -> bool {
-        report_type.iter().any(|r| r == "all" || r == key)
-    };
+    let should_fetch = |key: &str| -> bool { report_type.iter().any(|r| r == "all" || r == key) };
 
     // Build task list
     let mut handles: Vec<tokio::task::JoinHandle<(String, Value)>> = Vec::new();
@@ -196,7 +194,13 @@ pub async fn fetch_reports(
 
                 if download_csv {
                     if let Some(base64_val) = v.get("base64_data").and_then(|b| b.as_str()) {
-                        if let Err(e) = crate::crm::downloader::process_base64_payload(base64_val, &key, &download_dir).await {
+                        if let Err(e) = crate::crm::downloader::process_base64_payload(
+                            base64_val,
+                            &key,
+                            &download_dir,
+                        )
+                        .await
+                        {
                             error!("Failed to process {} Base64 payload: {:#}", key, e);
                         }
                     }
@@ -365,7 +369,14 @@ async fn fetch_with_signed_url_split(
                             let client_clone = client.clone();
                             let dir_clone = dir.to_path_buf();
                             download_tasks.push(tokio::spawn(async move {
-                                if let Err(e) = crate::crm::downloader::download_csv(&client_clone, &url, &k, &dir_clone).await {
+                                if let Err(e) = crate::crm::downloader::download_csv(
+                                    &client_clone,
+                                    &url,
+                                    &k,
+                                    &dir_clone,
+                                )
+                                .await
+                                {
                                     error!("Download failed for {}: {:#}", k, e);
                                 }
                             }));

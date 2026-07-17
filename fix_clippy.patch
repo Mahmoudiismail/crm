@@ -1,0 +1,20 @@
+--- src/crm/fetcher.rs
++++ src/crm/fetcher.rs
+@@ -334,16 +334,22 @@
+     }
+ }
+
++struct FetchSplitParams<'a> {
++    client: &'a reqwest::Client,
++    token: &'a str,
++    endpoint: &'a str,
++    from_date: &'a str,
++    to_date: &'a str,
++    params: &'a FetchParams<'a>,
++    download_csv: bool,
++    download_dir: Option<&'a Path>,
++    key_prefix: &'a str,
++}
++
++#[allow(clippy::too_many_arguments)]
+ async fn fetch_with_signed_url_split(
