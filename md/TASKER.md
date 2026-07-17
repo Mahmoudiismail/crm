@@ -201,3 +201,10 @@ The `crm_open_sohail` task automates the generation and delivery of Branch & Mon
 ## Recent Fixes
 * **CSV Parsing:** Lead report CSV parsing was updated to identify delimiters exclusively from the first line, avoiding errors when data fields contain tabs. `flexible(true)` has been globally removed from `csv::ReaderBuilder` to strictly validate column counts per project guidelines.
 * **Team Grouping:** Teams are grouped case-insensitively using Title Case formatting to ensure consistency (e.g. "support" and "SUPPORT" are correctly merged).
+
+
+## Dashboard Update Script Execution
+The `DashboardUpdater` script explicitly optimizes Excel interactions by:
+- Disabling `ScreenUpdating` and `EnableEvents`.
+- Setting `Calculation` mode to Manual before pasting data to avoid 10+ minute refresh locks on large data sets (like 45,000+ rows).
+- Capturing and logging all PowerShell standard and error outputs sequentially through Rust's `tracing` mechanisms to ensure operational transparency.

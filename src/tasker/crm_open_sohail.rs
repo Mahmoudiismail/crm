@@ -39,17 +39,27 @@ fn run_powershell(script: &str) -> Result<()> {
     let (file, path) = temp_file.keep()?;
     drop(file);
 
-    let status = std::process::Command::new("powershell")
+    let output = std::process::Command::new("powershell")
         .arg("-ExecutionPolicy")
         .arg("Bypass")
         .arg("-File")
         .arg(&path)
-        .status()?;
+        .output()?;
 
     let _ = std::fs::remove_file(&path);
 
-    if !status.success() {
-        anyhow::bail!("PowerShell script exited with status: {}", status);
+    let stdout_str = String::from_utf8_lossy(&output.stdout);
+    let stderr_str = String::from_utf8_lossy(&output.stderr);
+
+    if !stdout_str.trim().is_empty() {
+        tracing::info!("PowerShell output:\n{}", stdout_str.trim());
+    }
+    if !stderr_str.trim().is_empty() {
+        tracing::error!("PowerShell error output:\n{}", stderr_str.trim());
+    }
+
+    if !output.status.success() {
+        anyhow::bail!("PowerShell script exited with status: {}", output.status);
     }
 
     Ok(())
@@ -124,7 +134,7 @@ $Excel.Visible = $false
 $Excel.DisplayAlerts = $false
 
 try {{
-    Write-Host "Opening workbook..."
+    Write-Output "Opening workbook..."
     $Workbook = $Excel.Workbooks.Open($dashboardPath, $null, $true) # open read-only
 
     $Sheet = $null
@@ -201,7 +211,7 @@ try {{
         $monthItems += $item
     }}
 
-    Write-Host "Discovered $($branchItems.Count) branches and $($monthItems.Count) months."
+    Write-Output "Discovered $($branchItems.Count) branches and $($monthItems.Count) months."
 
     $AllData = @()
 
@@ -230,7 +240,7 @@ try {{
                 }}
             }}
 
-            Write-Host "Extracting data for Branch: $bCaption, Month: $mCaption"
+            Write-Output "Extracting data for Branch: $bCaption, Month: $mCaption"
 
             # The pivot is updated. Read DataBodyRange.
             $DataBody = $Pivot.DataBodyRange
@@ -238,7 +248,7 @@ try {{
             $ColumnRange = $Pivot.ColumnRange
 
             if ($null -eq $DataBody) {{
-                Write-Host "No data for $b / $m"
+                Write-Output "No data for $b / $m"
                 continue
             }}
 
