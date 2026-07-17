@@ -36,12 +36,18 @@ fn run_powershell(script: &str) -> Result<()> {
     let stderr_str = String::from_utf8_lossy(&output.stderr);
 
     if !stdout_str.trim().is_empty() {
-        info!("PowerShell output:
-{}", stdout_str.trim());
+        info!(
+            "PowerShell output:
+{}",
+            stdout_str.trim()
+        );
     }
     if !stderr_str.trim().is_empty() {
-        error!("PowerShell error output:
-{}", stderr_str.trim());
+        error!(
+            "PowerShell error output:
+{}",
+            stderr_str.trim()
+        );
     }
 
     if !output.status.success() {
