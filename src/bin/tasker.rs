@@ -128,12 +128,22 @@ pub fn run_app(options: TaskerCliOptions) -> Result<()> {
       "users_file": "./task3/users.csv",
       "assignment_settings_file": "./task3/assignments.csv",
       "minutes_ago": 15,
+      "start_date": null,
       "exclude_branches": [],
       "exclude_categories": [],
+      "category_exceptions": null,
       "output_file": "./crm_open_sohail_results.csv",
       "dashboard_file": "./dashboard_sohail.xlsx",
       "dashboard_table_name": "table1",
+      "email_to": "",
+      "email_cc": "",
+      "save_email_as_html": false,
+      "indentation_spaces": 4,
       "team_mapping_file": "./task3/teams.csv",
+      "body_template_file": null,
+      "subject_template": null,
+      "branch_filter": null,
+      "month_filter": null,
       "fallback_oul": "N/A"
     }
   ]
