@@ -73,3 +73,6 @@ If any answer is `no`, update docs before finalizing.
 
 ## Rule 6: Test-Driven Bug Fixes
 - When a bug is fixed, a corresponding test case must be added to prevent future regressions. The fix and the test case should be documented together in the relevant `md/*.md` file.
+- **Task 2 (Dashboard Updater Fixes):** Removed the standalone "Day" column from the CSV filtering, ensuring it is no longer appended or saved. Fixed the month generation format to be exclusively `MMM-yyyy` (e.g., `Jan-2026`). Also addressed performance bottleneck logic and a persistent `0x800A03EC` COM error by safely wrapping `$Excel.Calculation` settings in a `try/catch` block.
+- **Task 3 (CrmOpenSohail Email Fixes):** Fixed Pivot Data extraction by explicitly calling `$Pivot.RefreshTable()` before fetching data to ensure elements match Slicer constraints. Wrapped resulting `$DatasetData` array as `@($DatasetData)` before `.Count` to safely populate `$AllData`. Enhanced the OUL assignment lookup in `crm_open_sohail.rs` to generate only one integrated email containing dynamically built HTML tables.
+- **Task 2 and 3 Logging:** Added standard trace context spanning `Email generation started/completed`, `Dashboard update started/completed`, `Workbook opened` to `crm_open_sohail.rs` and `dashboard_updater.rs`.

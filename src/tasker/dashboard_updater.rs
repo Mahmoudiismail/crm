@@ -96,7 +96,6 @@ pub fn run(config: &DashboardUpdaterConfig) -> Result<()> {
         let mut _position_idx = None;
         let mut created_at_idx = None;
         let mut month_idx = None;
-        let mut day_idx = None;
 
         let mut skip_indices = vec![];
         let mut out_headers = vec![];
@@ -116,23 +115,17 @@ pub fn run(config: &DashboardUpdaterConfig) -> Result<()> {
                 month_idx = Some(i);
                 out_headers.push(h.to_string());
             } else if lower == "day" {
-                day_idx = Some(i);
-                out_headers.push(h.to_string());
+                skip_indices.push(i);
             } else {
                 out_headers.push(h.to_string());
             }
         }
 
         let mut append_month = false;
-        let mut append_day = false;
 
         if month_idx.is_none() {
             out_headers.push("Month".to_string());
             append_month = true;
-        }
-        if day_idx.is_none() {
-            out_headers.push("Day".to_string());
-            append_day = true;
         }
 
         let mut f = std::fs::File::create(&filtered_csv_path)?;
@@ -155,7 +148,6 @@ pub fn run(config: &DashboardUpdaterConfig) -> Result<()> {
             if !is_exception {
                 let mut out_record = vec![];
                 let mut month_str = String::new();
-                let mut day_str = String::new();
 
                 for (i, field) in record.iter().enumerate() {
                     if !skip_indices.contains(&i) {
@@ -164,13 +156,12 @@ pub fn run(config: &DashboardUpdaterConfig) -> Result<()> {
 
                     if Some(i) == created_at_idx {
                         if let Some(dt) = crate::tasker::csv_task::parse_created_at(field) {
-                            month_str = dt.format("%b").to_string(); // e.g. "Jan"
-                            day_str = dt.format("%d").to_string(); // e.g. "01"
+                            month_str = dt.format("%b-%Y").to_string(); // e.g. "Jan-2026"
                         }
                     }
                 }
 
-                // If Month/Day columns existed in the source file, we overwrite them if we could parse the date
+                // If Month column existed in the source file, we overwrite it if we could parse the date
                 if let Some(idx) = month_idx {
                     if !month_str.is_empty() {
                         // calculate adjusted index in out_record
@@ -187,21 +178,6 @@ pub fn run(config: &DashboardUpdaterConfig) -> Result<()> {
                     out_record.push(month_str.clone());
                 }
 
-                if let Some(idx) = day_idx {
-                    if !day_str.is_empty() {
-                        let adjusted_idx = idx
-                            - skip_indices
-                                .iter()
-                                .filter(|&&skip_idx| skip_idx < idx)
-                                .count();
-                        if adjusted_idx < out_record.len() {
-                            out_record[adjusted_idx] = day_str.clone();
-                        }
-                    }
-                } else if append_day {
-                    out_record.push(day_str.clone());
-                }
-
                 wtr.write_record(&out_record)?;
             }
         }
@@ -211,6 +187,7 @@ pub fn run(config: &DashboardUpdaterConfig) -> Result<()> {
     let csv_path_str = filtered_csv_path.to_string_lossy().to_string();
     let dashboard_path_str = dashboard_file_path.to_string_lossy().to_string();
 
+    info!("Dashboard update started.");
     info!(
         "Updating dashboard table '{}' in file '{}' with filtered CSV data from '{}'",
         config.dashboard_table_name, dashboard_path_str, csv_path_str
@@ -238,6 +215,7 @@ $Excel.EnableEvents = $false
 try {{
     Write-Output "Opening dashboard workbook at: $dashboardPath"
     $Workbook = $Excel.Workbooks.Open($dashboardPath)
+    Write-Output "Workbook opened"
 
     $originalCalculation = $Excel.Calculation
     $Excel.Calculation = -4135 # xlCalculationManual
@@ -300,7 +278,11 @@ try {{
 
     # Restore calculation before refreshing connections
     Write-Output "Restoring Excel calculation mode..."
-    $Excel.Calculation = $originalCalculation
+    try {{
+        $Excel.Calculation = $originalCalculation
+    }} catch {{
+        Write-Output "Warning: Could not restore calculation mode."
+    }}
 
     # Refresh Data Model and PivotTables
     Write-Output "Refreshing Data Model..."
@@ -318,6 +300,7 @@ try {{
     Write-Output "Saving workbook..."
     $Workbook.Save()
     $Workbook.Close($true)
+    Write-Output "Dashboard update completed"
     Write-Output "Dashboard update completed successfully."
 
 }} catch {{
@@ -326,7 +309,11 @@ try {{
     if ($CsvWorkbook) {{ $CsvWorkbook.Close($false) }}
     $Excel.ScreenUpdating = $true
     $Excel.EnableEvents = $true
-    if ($originalCalculation) {{ $Excel.Calculation = $originalCalculation }}
+    try {{
+        if ($originalCalculation) {{ $Excel.Calculation = $originalCalculation }}
+    }} catch {{
+        Write-Output "Warning: Could not restore calculation mode on exit."
+    }}
     $Excel.Quit()
     [System.Runtime.InteropServices.Marshal]::ReleaseComObject($Excel) | Out-Null
     [System.Environment]::Exit(1)
@@ -334,7 +321,11 @@ try {{
 
 $Excel.ScreenUpdating = $true
 $Excel.EnableEvents = $true
-$Excel.Calculation = $originalCalculation
+try {{
+    if ($originalCalculation) {{ $Excel.Calculation = $originalCalculation }}
+}} catch {{
+    Write-Output "Warning: Could not restore calculation mode."
+}}
 $Excel.Quit()
 [System.Runtime.InteropServices.Marshal]::ReleaseComObject($Excel) | Out-Null
 
@@ -349,6 +340,7 @@ $Excel.Quit()
         // Do not delete the filtered CSV, it will be used in tests
 
         // Generate and save HTML email body
+        info!("Email generation started");
         let indent_spaces = config.indentation_spaces.unwrap_or(4);
         let indent_width = indent_spaces * 5;
         let body = format!(
@@ -360,6 +352,7 @@ $Excel.Quit()
         let mut f = File::create(&html_path)?;
         f.write_all(body.as_bytes())?;
         f.sync_all()?;
+        info!("Email generation completed");
         info!("Saved dashboard HTML email to {}", html_path.display());
 
         // We still copy the filtered CSV to a known location for testing
@@ -383,10 +376,12 @@ $Excel.Quit()
     }
 
     info!("Successfully updated dashboard '{}'", dashboard_path_str);
+    info!("Dashboard update completed");
 
     if let (Some(email_to), Some(email_cc)) = (&config.email_to, &config.email_cc) {
         info!("Sending dashboard via email to: {}", email_to);
 
+        info!("Email generation started");
         let indent_spaces = config.indentation_spaces.unwrap_or(4);
         let indent_width = indent_spaces * 5;
 
@@ -394,6 +389,7 @@ $Excel.Quit()
             r#"<html><body style='font-family: Arial, sans-serif;'>Dear Aya,<br/><table border='0'><tr><td width='{}'></td><td>Please find the CRM Ticket dashboard attached.</td></tr></table></body></html>"#,
             indent_width
         );
+        info!("Email generation completed");
 
         let ps_email_script = format!(
             r#"
@@ -417,6 +413,7 @@ $Mail.Send()
             // Optionally, try a fallback email or bubble up
         } else {
             info!("Successfully sent dashboard email.");
+            info!("Email sent");
         }
     }
 
@@ -545,12 +542,12 @@ mod tests {
         }
 
         assert!(position_idx.is_none(), "Position column should be removed");
+        assert!(day_idx.is_none(), "Day column should be removed");
         assert!(
             is_exception_idx.is_none(),
             "Is Exception column should be removed"
         );
         assert!(month_idx.is_some(), "Month column should be added");
-        assert!(day_idx.is_some(), "Day column should be added");
 
         let start_dt = crate::tasker::csv_task::parse_created_at("15-Apr-2026").unwrap();
         let mut count = 0;
