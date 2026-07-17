@@ -5,6 +5,9 @@ use std::fs::File;
 use std::io::Write;
 use tracing::{error, info};
 
+use std::io::{BufRead, BufReader};
+use std::process::Stdio;
+
 fn run_powershell(script: &str) -> Result<()> {
     let mut temp_file = tempfile::Builder::new()
         .prefix("dashboard_updater_")
@@ -14,44 +17,47 @@ fn run_powershell(script: &str) -> Result<()> {
     temp_file.write_all(script.as_bytes())?;
     temp_file.as_file().sync_all()?;
 
-    // Explicitly keep the file on disk but drop the file handle
-    // to avoid locking issues on Windows when PowerShell tries to read it.
     let (file, path) = temp_file.keep()?;
     drop(file);
 
-    let status = std::process::Command::new("powershell")
+    let mut child = std::process::Command::new("powershell")
         .arg("-ExecutionPolicy")
         .arg("Bypass")
         .arg("-File")
         .arg(&path)
-        .output();
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
 
-    // Always attempt to clean up the script regardless of success
-    let output_result = status;
+    let stdout = child.stdout.take().unwrap();
+    let stderr = child.stderr.take().unwrap();
+
+    let stdout_thread = std::thread::spawn(move || {
+        let reader = BufReader::new(stdout);
+        for l in reader.lines().map_while(Result::ok) {
+            if !l.trim().is_empty() {
+                info!("PowerShell: {}", l);
+            }
+        }
+    });
+
+    let stderr_thread = std::thread::spawn(move || {
+        let reader = BufReader::new(stderr);
+        for l in reader.lines().map_while(Result::ok) {
+            if !l.trim().is_empty() {
+                error!("PowerShell Error: {}", l);
+            }
+        }
+    });
+
+    let status = child.wait()?;
+    stdout_thread.join().unwrap();
+    stderr_thread.join().unwrap();
+
     let _ = std::fs::remove_file(&path);
 
-    let output = output_result?;
-
-    let stdout_str = String::from_utf8_lossy(&output.stdout);
-    let stderr_str = String::from_utf8_lossy(&output.stderr);
-
-    if !stdout_str.trim().is_empty() {
-        info!(
-            "PowerShell output:
-{}",
-            stdout_str.trim()
-        );
-    }
-    if !stderr_str.trim().is_empty() {
-        error!(
-            "PowerShell error output:
-{}",
-            stderr_str.trim()
-        );
-    }
-
-    if !output.status.success() {
-        anyhow::bail!("PowerShell script exited with status: {}", output.status);
+    if !status.success() {
+        anyhow::bail!("PowerShell script exited with status: {}", status);
     }
 
     Ok(())

@@ -388,11 +388,24 @@ $Excel.Quit()
 
     for (i, h) in headers.iter().enumerate() {
         let h_lower = h.trim().to_lowercase();
-        if h_lower == "team name" || h_lower == "team" {
+        if (h_lower == "team name" || h_lower == "team" || h_lower.contains("team"))
+            && team_idx.is_none()
+        {
             team_idx = Some(i);
-        } else if h_lower == "owner" || h_lower == "receiver name" {
+        } else if (h_lower == "owner"
+            || h_lower == "receiver name"
+            || h_lower == "oul"
+            || h_lower.contains("owner")
+            || h_lower.contains("receiver"))
+            && owner_idx.is_none()
+        {
             owner_idx = Some(i);
-        } else if h_lower == "to emails" || h_lower == "email" {
+        } else if (h_lower == "to emails"
+            || h_lower == "email"
+            || h_lower == "email_to"
+            || h_lower.contains("email"))
+            && email_idx.is_none()
+        {
             email_idx = Some(i);
         }
     }
