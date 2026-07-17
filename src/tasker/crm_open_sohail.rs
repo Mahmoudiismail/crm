@@ -286,11 +286,11 @@ try {{
                     $val = $DataBody.Cells.Item($r, $c).Value2
                     $text = $DataBody.Cells.Item($r, $c).Text
 
-                    if ($header -eq "closed") {{ $rowObj.closed = if ($val) {{ [double]$val }} else {{ 0 }} }}
-                    if ($header -eq "open") {{ $rowObj.open = if ($val) {{ [double]$val }} else {{ 0 }} }}
+                    if ($header -eq "closed") {{ $rowObj.closed = if ($val -as [double]) {{ $val -as [double] }} elseif ([double]::TryParse($val, [ref]$null)) {{ [double]$val }} else {{ 0 }} }}
+                    if ($header -eq "open") {{ $rowObj.open = if ($val -as [double]) {{ $val -as [double] }} elseif ([double]::TryParse($val, [ref]$null)) {{ [double]$val }} else {{ 0 }} }}
                     if ($header -eq "% of closed") {{ $rowObj."% of closed" = if ($text) {{ $text }} else {{ "0%" }} }}
                     if ($header -eq "% of open") {{ $rowObj."% of open" = if ($text) {{ $text }} else {{ "0%" }} }}
-                    if ($header -match "Grand Total") {{ $rowObj."Grand Total" = if ($val) {{ [double]$val }} else {{ 0 }} }}
+                    if ($header -match "Grand Total") {{ $rowObj."Grand Total" = if ($val -as [double]) {{ $val -as [double] }} elseif ([double]::TryParse($val, [ref]$null)) {{ [double]$val }} else {{ 0 }} }}
                 }}
 
                 if ($rowObj."Grand Total" -gt 0) {{
@@ -642,6 +642,15 @@ $Mail.Send()
 mod tests {
     use super::*;
     use crate::tasker::config::DashboardUpdaterConfig;
+
+    #[test]
+    fn test_task3_crm_open_sohail_pivot_safe_cast() {
+        let src = include_str!("crm_open_sohail.rs");
+        assert!(
+            src.contains("if ($val -as [double]) {{ $val -as [double] }} elseif ([double]::TryParse($val, [ref]$null))"),
+            "Script must use safe casting (-as [double]) and TryParse to prevent 'Input string was not in a correct format' errors"
+        );
+    }
 
     #[test]
     fn test_email_html_generation_and_team_mapping() {

@@ -60,6 +60,8 @@ If any answer is `no`, update docs before finalizing.
 - Removed `flexible(true)` centrally in `utils.rs` via `build_csv_reader` to strictly enforce column counts and throw validation errors when data is malformed.
 
 ## Recent Fixes
+- **Dashboard Updater Calculation Issue:** Fixed an issue where Excel threw a `0x800A03EC` COM exception when modifying `$Excel.Calculation = -4135` by ensuring the workbook is opened *before* altering application calculation modes.
+- **CrmOpenSohail Pivot Extraction:** Fixed strict casting errors in PowerShell pivot parsing by migrating from `[double]$val` to safe casting (`-as [double]`) with fallback TryParse logic to handle string anomalies gracefully. Added matching Rust tests to ensure the generated scripts uphold this.
 - **OLAP Slicer Support:** Added support for Excel Data Model (OLAP) Slicers in `tasker/crm_open_sohail.rs` PowerShell automation scripts, utilizing `SlicerCacheLevels` and `VisibleSlicerItemsList`.
 - Enhanced date variable processing across all binaries by introducing an integrated `DateVar` argument type in the manifest and updating the Runner GUI to allow easy toggling between variable and calendar inputs.
 - Moved variable resolution into `parse_flexible_date` natively, ensuring `today`, `tomorrow`, `yesterday`, and context-aware `eomonth` work systematically anywhere date parsing is utilized, complete with stringent validation logic.

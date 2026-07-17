@@ -234,12 +234,13 @@ $Excel.DisplayAlerts = $false
 # Optimize Excel performance during large data operations
 $Excel.ScreenUpdating = $false
 $Excel.EnableEvents = $false
-$originalCalculation = $Excel.Calculation
-$Excel.Calculation = -4135 # xlCalculationManual
 
 try {{
     Write-Output "Opening dashboard workbook at: $dashboardPath"
     $Workbook = $Excel.Workbooks.Open($dashboardPath)
+
+    $originalCalculation = $Excel.Calculation
+    $Excel.Calculation = -4135 # xlCalculationManual
 
     # Find the table by name across all sheets
     Write-Output "Searching for table '$tableName'..."
@@ -428,6 +429,14 @@ mod tests {
     use crate::tasker::config::{CategoryException, DashboardUpdaterConfig};
 
     use tempfile::NamedTempFile;
+
+    #[test]
+    fn test_task2_dashboard_updater_calculation_mode() {
+        let src = include_str!("dashboard_updater.rs");
+        let open_idx = src.find("$Workbook = $Excel.Workbooks.Open($dashboardPath)").expect("Should find open workbook");
+        let calc_idx = src.find("$Excel.Calculation = -4135 # xlCalculationManual").expect("Should find calculation");
+        assert!(open_idx < calc_idx, "Calculation mode must be set after opening the workbook to avoid COM exceptions");
+    }
 
     #[test]
     fn test_task2_dashboard_updater() {
