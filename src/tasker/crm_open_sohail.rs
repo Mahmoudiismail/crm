@@ -117,6 +117,7 @@ pub fn run(config: &CrmOpenSohailConfig) -> Result<()> {
     };
 
     info!("Generating PowerShell script for Slicer automation and Data Extraction.");
+    info!("Slicer processing started");
 
     let ps_script = format!(
         r#"
@@ -136,6 +137,7 @@ $Excel.DisplayAlerts = $false
 try {{
     Write-Output "Opening workbook..."
     $Workbook = $Excel.Workbooks.Open($dashboardPath, $null, $true) # open read-only
+    Write-Output "Workbook opened"
 
     $Sheet = $null
     foreach ($ws in $Workbook.Worksheets) {{
@@ -242,6 +244,8 @@ try {{
 
             Write-Output "Extracting data for Branch: $bCaption, Month: $mCaption"
 
+            $Pivot.RefreshTable()
+
             # The pivot is updated. Read DataBodyRange.
             $DataBody = $Pivot.DataBodyRange
             $RowRange = $Pivot.RowRange
@@ -293,12 +297,12 @@ try {{
                     if ($header -match "Grand Total") {{ $rowObj."Grand Total" = if ($val -as [double]) {{ $val -as [double] }} elseif ([double]::TryParse($val, [ref]$null)) {{ [double]$val }} else {{ 0 }} }}
                 }}
 
-                if ($rowObj."Grand Total" -gt 0) {{
-                    $DatasetData += $rowObj
-                }}
+                $DatasetData += $rowObj
             }}
 
-            if ($DatasetData.Count -gt 0) {{
+            $DatasetDataArray = @($DatasetData)
+
+            if ($DatasetDataArray.Count -gt 0) {{
                 $AllData += @{{
                     branch = $bCaption
                     month = $mCaption
@@ -308,6 +312,7 @@ try {{
         }}
     }}
 
+    Write-Output "Table extraction completed"
     $Workbook.Close($false)
     ConvertTo-Json -InputObject $AllData -Depth 5 | Out-File -FilePath $jsonOutputPath -Encoding UTF8
 
@@ -484,6 +489,7 @@ $Excel.Quit()
     }
 
     // Step 6: Generate HTML Email
+    info!("Email generation started");
     info!(
         "Generating HTML email layout from {} datasets",
         final_datasets.len()
@@ -593,6 +599,8 @@ $Excel.Quit()
 
     let final_html = body_template.replace("{sections}", &sections_html);
 
+    info!("Email generation completed");
+
     let subject = config
         .subject_template
         .clone()
@@ -633,6 +641,7 @@ $Mail.Send()
             anyhow::bail!("Failed to send email");
         }
         info!("Email sent successfully.");
+        info!("Email sent");
     }
 
     Ok(())

@@ -425,7 +425,7 @@ pub fn generate_csv(params: &CsvAnalysisParams) -> Result<Option<std::path::Path
             if let Some(created_idx) = created_at_idx {
                 let created_val = record.get(created_idx).unwrap_or("").trim();
                 if let Some(dt) = parse_created_at(created_val) {
-                    month_val = dt.format("%m-%Y").to_string();
+                    month_val = dt.format("%b-%Y").to_string();
                 }
             }
 
