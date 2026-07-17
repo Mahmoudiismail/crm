@@ -1009,6 +1009,8 @@ async fn run_external_app(
         } else if v.trim().is_empty() {
             // Do not add the flag at all if its value is empty, this prevents passing empty filters like `--filters ""` or empty `--config ""`
         } else {
+            // The UI form_script.js joins arrays with comma for MultiList so this will correctly pass `--arg a,b,c`
+            // Clap handles this when `value_delimiter = ','` is set on the arg.
             command.arg(k).arg(v);
         }
     }

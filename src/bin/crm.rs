@@ -1,7 +1,6 @@
 use anyhow::Result;
 use clap::Parser;
 use crm_tool::crm;
-use crm_tool::crm::types::ReportType;
 use crm_tool::manifest::{AppArg, AppManifest, ArgType};
 use crm_tool::utils::{executable_dir, intercept_manifest, setup_logging};
 
@@ -10,8 +9,8 @@ use tracing::info;
 #[derive(Parser)]
 #[command(name = "crm", about = "CRM One-Shot Fetcher")]
 struct CrmCliOptions {
-    #[arg(long, value_enum, default_value_t = ReportType::All)]
-    report: ReportType,
+    #[arg(long, value_delimiter = ',', default_value = "tickets")]
+    report: Vec<String>,
     #[arg(long)]
     config: Option<String>,
     #[arg(long)]
@@ -79,9 +78,9 @@ fn get_manifest() -> AppManifest {
         arguments: vec![
             AppArg {
                 name: "--report".to_string(),
-                arg_type: ArgType::List,
+                arg_type: ArgType::MultiList,
                 required: false,
-                default_value: Some("all".to_string()),
+                default_value: Some("tickets".to_string()),
                 depends_on: None,
                 autofill: None,
                 options: Some(vec![
