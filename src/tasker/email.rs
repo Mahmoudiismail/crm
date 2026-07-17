@@ -52,17 +52,27 @@ fn run_powershell(script: &str) -> Result<()> {
     let (file, path) = temp_file.keep()?;
     drop(file);
 
-    let status = std::process::Command::new("powershell")
+    let output = std::process::Command::new("powershell")
         .arg("-ExecutionPolicy")
         .arg("Bypass")
         .arg("-File")
         .arg(&path)
-        .status()?;
+        .output()?;
 
     let _ = std::fs::remove_file(&path);
 
-    if !status.success() {
-        anyhow::bail!("PowerShell script exited with status: {}", status);
+    let stdout_str = String::from_utf8_lossy(&output.stdout);
+    let stderr_str = String::from_utf8_lossy(&output.stderr);
+
+    if !stdout_str.trim().is_empty() {
+        tracing::info!("PowerShell output:\n{}", stdout_str.trim());
+    }
+    if !stderr_str.trim().is_empty() {
+        tracing::error!("PowerShell error output:\n{}", stderr_str.trim());
+    }
+
+    if !output.status.success() {
+        anyhow::bail!("PowerShell script exited with status: {}", output.status);
     }
 
     Ok(())
@@ -1299,7 +1309,7 @@ mod tests {
     fn test_run_powershell_file_lifecycle() {
         // This test ensures that the powershell script path creation,
         // unlocking, execution, and cleanup are working as expected.
-        let script = "Write-Host 'Hello World'";
+        let script = "Write-Output 'Hello World'";
         // Normally run_powershell will succeed if powershell is available.
         // We just call it and ensure it doesn't return a file-in-use error.
         let result = run_powershell(script);

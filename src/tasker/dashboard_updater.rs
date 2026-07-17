@@ -24,14 +24,34 @@ fn run_powershell(script: &str) -> Result<()> {
         .arg("Bypass")
         .arg("-File")
         .arg(&path)
-        .status();
+        .output();
 
     // Always attempt to clean up the script regardless of success
+    let output_result = status;
     let _ = std::fs::remove_file(&path);
 
-    let status = status?;
-    if !status.success() {
-        anyhow::bail!("PowerShell script exited with status: {}", status);
+    let output = output_result?;
+
+    let stdout_str = String::from_utf8_lossy(&output.stdout);
+    let stderr_str = String::from_utf8_lossy(&output.stderr);
+
+    if !stdout_str.trim().is_empty() {
+        info!(
+            "PowerShell output:
+{}",
+            stdout_str.trim()
+        );
+    }
+    if !stderr_str.trim().is_empty() {
+        error!(
+            "PowerShell error output:
+{}",
+            stderr_str.trim()
+        );
+    }
+
+    if !output.status.success() {
+        anyhow::bail!("PowerShell script exited with status: {}", output.status);
     }
 
     Ok(())
@@ -198,20 +218,31 @@ pub fn run(config: &DashboardUpdaterConfig) -> Result<()> {
 
     let ps_script = format!(
         r#"
+
 $ErrorActionPreference = "Stop"
 
 $csvPath = '{csv_path}'
 $dashboardPath = '{dashboard_path}'
 $tableName = '{table_name}'
 
+Write-Output "Starting Excel automation to update dashboard..."
+
 $Excel = New-Object -ComObject Excel.Application
 $Excel.Visible = $false
 $Excel.DisplayAlerts = $false
 
+# Optimize Excel performance during large data operations
+$Excel.ScreenUpdating = $false
+$Excel.EnableEvents = $false
+$originalCalculation = $Excel.Calculation
+$Excel.Calculation = -4135 # xlCalculationManual
+
 try {{
+    Write-Output "Opening dashboard workbook at: $dashboardPath"
     $Workbook = $Excel.Workbooks.Open($dashboardPath)
 
     # Find the table by name across all sheets
+    Write-Output "Searching for table '$tableName'..."
     $foundTable = $null
     foreach ($Sheet in $Workbook.Worksheets) {{
         foreach ($ListObject in $Sheet.ListObjects) {{
@@ -226,31 +257,28 @@ try {{
     if (-not $foundTable) {{
         throw "Table '$tableName' not found in any worksheet."
     }}
+    Write-Output "Table '$tableName' found."
 
     # Clear old data if any
     if ($foundTable.DataBodyRange) {{
+        Write-Output "Clearing existing data from table '$tableName'..."
         $foundTable.DataBodyRange.Delete()
     }}
 
-    # We use QueryTables to cleanly dump the CSV, or since COM is slow but CSV is simple,
-    # we can open the CSV in Excel, copy the range, and paste it. That is robust for formatting.
-
+    Write-Output "Opening generated CSV file at: $csvPath"
     $CsvWorkbook = $Excel.Workbooks.Open($csvPath)
     $CsvSheet = $CsvWorkbook.Worksheets.Item(1)
 
-    # We assume CSV has headers, we just want to paste data?
-    # Or replace the whole table.
-    # The requirement: "Replace table content named 'table2'... witou any other changes"
-    # The safest way is to clear data body range, copy data body from CSV, and paste.
-
     $UsedRange = $CsvSheet.UsedRange
+    $RowCount = $UsedRange.Rows.Count
+    Write-Output "CSV file contains $RowCount rows (including headers)."
 
     # If the CSV has data (more than just headers)
-    if ($UsedRange.Rows.Count -gt 1) {{
-        $SourceRange = $CsvSheet.Range($CsvSheet.Cells.Item(2, 1), $CsvSheet.Cells.Item($UsedRange.Rows.Count, $UsedRange.Columns.Count))
+    if ($RowCount -gt 1) {{
+        Write-Output "Copying data from CSV..."
+        $SourceRange = $CsvSheet.Range($CsvSheet.Cells.Item(2, 1), $CsvSheet.Cells.Item($RowCount, $UsedRange.Columns.Count))
 
         # Determine top left cell of destination table's data body range
-        # If DataBodyRange is null (table is empty), we insert at the cell just below header
         if ($foundTable.DataBodyRange) {{
             $DestCell = $foundTable.DataBodyRange.Cells.Item(1, 1)
         }} else {{
@@ -258,35 +286,57 @@ try {{
         }}
 
         $SourceRange.Copy() | Out-Null
+
+        Write-Output "Pasting data into dashboard table..."
         $DestCell.PasteSpecial(-4104) | Out-Null # xlPasteAll
 
-        # Update Table Range to encompass the new data
-        # Excel often auto-expands the table when pasting immediately below the header.
+        Write-Output "Paste operation complete."
+    }} else {{
+        Write-Output "No data rows found in CSV to copy."
     }}
 
     $CsvWorkbook.Close($false)
 
-    # Refresh PivotTables
+    # Restore calculation before refreshing connections
+    Write-Output "Restoring Excel calculation mode..."
+    $Excel.Calculation = $originalCalculation
+
+    # Refresh Data Model and PivotTables
+    Write-Output "Refreshing Data Model..."
+    if ($Workbook.Model) {{
+        $Workbook.Model.Refresh()
+    }}
+
+    Write-Output "Refreshing PivotTables..."
     foreach ($Sheet in $Workbook.Worksheets) {{
         foreach ($PivotTable in $Sheet.PivotTables()) {{
             $PivotTable.RefreshTable()
         }}
     }}
 
+    Write-Output "Saving workbook..."
     $Workbook.Save()
     $Workbook.Close($true)
+    Write-Output "Dashboard update completed successfully."
 
 }} catch {{
     Write-Error "Failed to update Excel file: $_"
     if ($Workbook) {{ $Workbook.Close($false) }}
     if ($CsvWorkbook) {{ $CsvWorkbook.Close($false) }}
+    $Excel.ScreenUpdating = $true
+    $Excel.EnableEvents = $true
+    if ($originalCalculation) {{ $Excel.Calculation = $originalCalculation }}
     $Excel.Quit()
     [System.Runtime.InteropServices.Marshal]::ReleaseComObject($Excel) | Out-Null
-    exit 1
+    [System.Environment]::Exit(1)
 }}
 
+$Excel.ScreenUpdating = $true
+$Excel.EnableEvents = $true
+$Excel.Calculation = $originalCalculation
 $Excel.Quit()
 [System.Runtime.InteropServices.Marshal]::ReleaseComObject($Excel) | Out-Null
+
 "#,
         csv_path = csv_path_str.replace('\'', "''"),
         dashboard_path = dashboard_path_str.replace('\'', "''"),
