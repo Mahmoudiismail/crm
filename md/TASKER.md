@@ -151,7 +151,7 @@ This task is similar to `csv_analysis`, in that it processes raw ticket CSVs bas
 3. **Tickets Join:** Iterates dynamically over dynamically identified ticket reports modified in the last `minutes_ago` interval.
     - Resolves and standardizes names (e.g., replaces underscores with spaces).
     - Removes duplicates based on `Ticket Id` (deduplicates globally across all files processed).
-    - Parses Excel serial timestamps or `dd/mm/yyyy hh:mm:ss` timestamps into proper strings.
+    - Parses various timestamp formats into proper strings. This includes Excel serial timestamps, standard date/time strings (`dd/mm/yyyy hh:mm:ss`, `YYYY-MM-DD HH:MM:SS`), and custom CRM formats (like `DD MMM YY HH:MM AM/PM` and `DD MMM YYYY HH:MM AM/PM`).
     - Joins data to calculate the exact `Position` and `team`.
     - Adds `Day` and `Month` tracking columns.
 4. **Sort and Output:** Sorts numerically by `Ticket Id` and streams everything efficiently to the `output_file`.

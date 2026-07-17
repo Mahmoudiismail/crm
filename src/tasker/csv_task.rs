@@ -73,6 +73,14 @@ pub fn parse_created_at(val: &str) -> Option<NaiveDateTime> {
     if let Ok(dt) = NaiveDateTime::parse_from_str(trimmed, "%Y-%m-%d %H:%M:%S") {
         return Some(dt);
     }
+    // Try DD MMM YY HH:MM AM/PM
+    if let Ok(dt) = NaiveDateTime::parse_from_str(trimmed, "%d %b %y %I:%M %p") {
+        return Some(dt);
+    }
+    // Try DD MMM YYYY HH:MM AM/PM
+    if let Ok(dt) = NaiveDateTime::parse_from_str(trimmed, "%d %b %Y %I:%M %p") {
+        return Some(dt);
+    }
     // Try float
     if let Ok(excel_float) = trimmed.parse::<f64>() {
         let base_date = NaiveDate::from_ymd_opt(1899, 12, 30).unwrap_or_default();
@@ -737,6 +745,24 @@ pub mod tests {
             Some(NaiveDateTime::new(
                 NaiveDate::from_ymd_opt(2022, 1, 1).unwrap(),
                 NaiveTime::from_hms_opt(12, 0, 0).unwrap()
+            ))
+        );
+
+        // DD MMM YY HH:MM AM/PM
+        assert_eq!(
+            parse_created_at("21 Feb 26 11:58 PM"),
+            Some(NaiveDateTime::new(
+                NaiveDate::from_ymd_opt(2026, 2, 21).unwrap(),
+                NaiveTime::from_hms_opt(23, 58, 0).unwrap()
+            ))
+        );
+
+        // DD MMM YYYY HH:MM AM/PM
+        assert_eq!(
+            parse_created_at("01 Jan 2026 12:00 AM"),
+            Some(NaiveDateTime::new(
+                NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+                NaiveTime::from_hms_opt(0, 0, 0).unwrap()
             ))
         );
 
