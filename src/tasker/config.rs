@@ -89,6 +89,7 @@ pub struct CrmOpenSohailConfig {
     pub fallback_oul: Option<String>,
     pub dashboard_sheet_name: Option<String>,
     pub dashboard_pivot_name: Option<String>,
+    pub table_column_widths: Option<Vec<String>>,
 }
 
 #[cfg(test)]

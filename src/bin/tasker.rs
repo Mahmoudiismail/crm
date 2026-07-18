@@ -142,7 +142,10 @@ pub fn run_app(options: TaskerCliOptions) -> Result<()> {
       "subject_template": null,
       "branch_filter": null,
       "month_filter": null,
-      "fallback_oul": "N/A"
+      "fallback_oul": "N/A",
+      "dashboard_sheet_name": "Sheet1",
+      "dashboard_pivot_name": "PivotTable2",
+      "table_column_widths": ["15%", "10%", "10%", "15%", "15%", "15%", "20%"]
     }
   ]
 }"#;
