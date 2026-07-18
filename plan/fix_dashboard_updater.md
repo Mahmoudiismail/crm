@@ -1,31 +1,27 @@
-# Execution Plan: Fix Dashboard Updater & Excel Cleanup
+# Plan: Update CRM Open Sohail Task
 
-## Objective
-Remove the raw data copy-pasting feature from `dashboard_updater`, relying entirely on PowerQuery/Data connections to `results.csv`. Remove `dashboard_table_name` configuration, and ensure background Excel processes are forcefully cleaned up for Tasks 2 and 3.
+## 1. Group Data per Branch
+Instead of rendering one table per month per branch, we need to:
+- Combine all months *except* the current month into a single table for each branch.
+- Generate a second table for each branch that shows only the *current month*.
+- Exception: The "executive clinic" branch should have all of its months (including the current month) combined into a single table.
+- Identify the current month based on `chrono::Local::now().format("%b-%Y")` or just matching the latest month format in the data (like `Jul-2026`).
 
-## Steps
-1. **Remove `dashboard_table_name` configuration**
-   - Remove `dashboard_table_name` from `DashboardUpdaterConfig` and `CrmOpenSohailConfig` in `src/tasker/config.rs`.
-   - Update `src/bin/tasker.rs`, `md/TASKER.md`, `TestingDownloads/tasker_config.json`, `tasker_config.json.example`, `modify_tasker_config.py`, and `issues/tasker_cli_analysis.md` to remove the field.
-   - Update tests in `src/tasker/config.rs`, `src/tasker/dashboard_updater.rs`, and `src/tasker/crm_open_sohail.rs`.
+## 2. Combine rows
+When combining months for a branch, we need to sum up the numerical values for the same team.
+- Sum `closed`, `open`, `grand_total`
+- Recalculate `% of closed` and `% of open` based on the summed `closed`/`grand_total` and `open`/`grand_total`.
 
-2. **Simplify `dashboard_updater.rs` logic**
-   - Remove the generation of `dashboard_filtered_{timestamp}.csv`.
-   - Remove the `$tableName`, `$csvPath`, copy, and paste logic from the PowerShell script.
-   - The script will simply open `$dashboardPath`, switch to manual calculation, call `$Workbook.RefreshAll()`, `$Workbook.Model.Refresh()`, refresh PivotTables, restore calculation mode, save, and exit.
+## 3. Apply Styling Changes
+- The rows should no longer alternate background colors. Instead, all data rows should have no background color (`background-color: transparent` or omit it). The header (blue) and footer (red) must remain unchanged.
+- Update table `padding` to `5px` to reduce spacing (was `padding: 5px 10px;`).
+- Set specific percentage widths to columns or `table-layout: fixed` so that tables have consistent column sizes across the email.
+- Change header "Row Labels" to "Team".
+- Align content to center in both axes: `text-align: center; vertical-align: middle;` on `<td>`s.
+- Order of columns in header and data rows: Team, closed, open, % of closed, % of open, Grand Total, OUL.
 
-3. **Improve Excel background process cleanup (Task 2 & 3)**
-   - Update the PowerShell script in `dashboard_updater.rs` and `crm_open_sohail.rs`.
-   - Use `ReleaseComObject($Excel)`, `[System.GC]::Collect()`, and finally, a process cleanup via `$Excel.ProcessID` or `Get-Process` to forcefully kill Excel if it lingers.
+## 4. Pre-commit
+- Call `pre_commit_instructions` tool to get the required checks and perform them to ensure proper testing, verification, review, and reflection are done.
 
-4. **Update tests to match new behavior**
-   - Modify the `test_task2_dashboard_updater` test to no longer look for the `dashboard_filtered_*.csv` file.
-
-5. **Review and update documentation**
-   - Update `AGENTS.md` and `md/TASKER.md` as required by the AI doc policy.
-
-6. **Pre-commit verification**
-   - Run tests and pre-commit checks.
-
-7. **Submit changes**
-   - Commit and submit.
+## 5. Submit
+- Submit the change once everything passes.

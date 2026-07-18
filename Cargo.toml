@@ -87,7 +87,6 @@ reqwest = { version = "0.13.4", features = ["blocking"] }
 tempfile = "3.10.1"
 
 [workspace]
-members = []
 
 [[bench]]
 name = "csv_parsing"

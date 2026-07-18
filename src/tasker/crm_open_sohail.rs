@@ -125,6 +125,8 @@ pub fn run(config: &CrmOpenSohailConfig) -> Result<()> {
         .as_deref()
         .unwrap_or("PivotTable2");
 
+    let current_month = chrono::Local::now().format("%b-%Y").to_string();
+
     let ps_script = format!(
         r#"
 $ErrorActionPreference = "Stop"
@@ -135,6 +137,7 @@ $targetSheetName = '{target_sheet}'
 $targetPivotName = '{target_pivot}'
 $branchFilter = {branch_filter}
 $monthFilter = {month_filter}
+$currentMonth = '{current_month}'
 
 $Excel = New-Object -ComObject Excel.Application
 $Excel.Visible = $false
@@ -245,90 +248,235 @@ try {{
             }}
         }}
 
-        foreach ($m in $monthItems) {{
-            $mName = $m.Name
-            $mCaption = $m.Caption
+        $isExecutiveClinic = $bCaption.ToLower() -match "executive clinic"
+
+        if ($isExecutiveClinic) {{
+            # Select all months
             if ($monthSlicerCache.Olap) {{
-                $monthSlicerCache.VisibleSlicerItemsList = @($mName)
+                $visibleList = @()
+                foreach ($m in $monthItems) {{
+                    $visibleList += $m.Name
+                }}
+                if ($visibleList.Count -gt 0) {{
+                    $monthSlicerCache.VisibleSlicerItemsList = $visibleList
+                }}
             }} else {{
-                $monthSlicerCache.SlicerItems($mName).Selected = $true
-                foreach ($item in $monthSlicerCache.SlicerItems) {{
-                    if ($item.Name -ne $mName) {{ $item.Selected = $false }}
+                # Select the first item to avoid deselecting all
+                if ($monthItems.Count -gt 0) {{
+                    $firstM = $monthItems[0]
+                    $monthSlicerCache.SlicerItems($firstM.Name).Selected = $true
+                    foreach ($item in $monthSlicerCache.SlicerItems) {{
+                        $shouldSelect = $false
+                        foreach ($m in $monthItems) {{
+                            if ($m.Name -eq $item.Name) {{
+                                $shouldSelect = $true
+                                break
+                            }}
+                        }}
+                        if ($item.Name -ne $firstM.Name) {{
+                            $item.Selected = $shouldSelect
+                        }}
+                    }}
                 }}
             }}
 
-            Write-Output "Extracting data for Branch: $bCaption, Month: $mCaption"
-
+            Write-Output "Extracting data for Branch: $bCaption (All Months Combined)"
             $Pivot.RefreshTable()
-
-            # The pivot is updated. Read DataBodyRange.
             $DataBody = $Pivot.DataBodyRange
             $RowRange = $Pivot.RowRange
             $ColumnRange = $Pivot.ColumnRange
 
-            if ($null -eq $DataBody) {{
-                Write-Output "No data for $b / $m"
-                continue
-            }}
-
-            # Figure out column mappings from ColumnRange
-            $colHeaders = @{{}}
-            $colCount = $DataBody.Columns.Count
-
-            # the last row of ColumnRange usually has the field headers
-            $headerRow = $ColumnRange.Rows.Count
-            for ($c = 1; $c -le $colCount; $c++) {{
-                $h = $ColumnRange.Cells.Item($headerRow, $c).Text
-                $colHeaders[$c] = $h
-            }}
-
-            $rowCount = $DataBody.Rows.Count
-            $DatasetData = @()
-
-            for ($r = 1; $r -le $rowCount; $r++) {{
-                $teamName = $RowRange.Cells.Item($r + ($RowRange.Rows.Count - $rowCount), 1).Text
-
-                # Exclude Grand Total row from team names if it ends up here, usually its in rowrange
-                if ($teamName -eq "Grand Total") {{ continue }}
-
-                $rowObj = [PSCustomObject]@{{
-                    team = $teamName
-                    closed = 0
-                    open = 0
-                    "% of closed" = "0%"
-                    "% of open" = "0%"
-                    "Grand Total" = 0
-                }}
-
+            if ($null -ne $DataBody) {{
+                $colHeaders = @{{}}
+                $colCount = $DataBody.Columns.Count
+                $headerRow = $ColumnRange.Rows.Count
                 for ($c = 1; $c -le $colCount; $c++) {{
-                    $header = $colHeaders[$c]
-                    $val = $DataBody.Cells.Item($r, $c).Value2
-                    $text = $DataBody.Cells.Item($r, $c).Text
-
-                    if ($header -eq "closed") {{ $rowObj.closed = if ($val -as [double]) {{ $val -as [double] }} elseif ([double]::TryParse($val, [ref]$null)) {{ [double]$val }} else {{ 0 }} }}
-                    if ($header -eq "open") {{ $rowObj.open = if ($val -as [double]) {{ $val -as [double] }} elseif ([double]::TryParse($val, [ref]$null)) {{ [double]$val }} else {{ 0 }} }}
-                    if ($header -eq "% of closed") {{ $rowObj."% of closed" = if ($text) {{ $text }} else {{ "0%" }} }}
-                    if ($header -eq "% of open") {{ $rowObj."% of open" = if ($text) {{ $text }} else {{ "0%" }} }}
-                    if ($header -match "Grand Total") {{ $rowObj."Grand Total" = if ($val -as [double]) {{ $val -as [double] }} elseif ([double]::TryParse($val, [ref]$null)) {{ [double]$val }} else {{ 0 }} }}
+                    $h = $ColumnRange.Cells.Item($headerRow, $c).Text
+                    $colHeaders[$c] = $h
                 }}
+                $rowCount = $DataBody.Rows.Count
+                $DatasetData = @()
+                for ($r = 1; $r -le $rowCount; $r++) {{
+                    $teamName = $RowRange.Cells.Item($r + ($RowRange.Rows.Count - $rowCount), 1).Text
+                    if ($teamName -eq "Grand Total") {{ continue }}
+                    $rowObj = [PSCustomObject]@{{
+                        team = $teamName
+                        closed = 0
+                        open = 0
+                        "% of closed" = "0%"
+                        "% of open" = "0%"
+                        "Grand Total" = 0
+                    }}
+                    for ($c = 1; $c -le $colCount; $c++) {{
+                        $header = $colHeaders[$c]
+                        $val = $DataBody.Cells.Item($r, $c).Value2
+                        $text = $DataBody.Cells.Item($r, $c).Text
+                        if ($header -eq "closed") {{ $rowObj.closed = if ($val -as [double]) {{ $val -as [double] }} elseif ([double]::TryParse($val, [ref]$null)) {{ [double]$val }} else {{ 0 }} }}
+                        if ($header -eq "open") {{ $rowObj.open = if ($val -as [double]) {{ $val -as [double] }} elseif ([double]::TryParse($val, [ref]$null)) {{ [double]$val }} else {{ 0 }} }}
+                        if ($header -eq "% of closed") {{ $rowObj."% of closed" = if ($text) {{ $text }} else {{ "0%" }} }}
+                        if ($header -eq "% of open") {{ $rowObj."% of open" = if ($text) {{ $text }} else {{ "0%" }} }}
+                        if ($header -match "Grand Total") {{ $rowObj."Grand Total" = if ($val -as [double]) {{ $val -as [double] }} elseif ([double]::TryParse($val, [ref]$null)) {{ [double]$val }} else {{ 0 }} }}
+                    }}
+                    $DatasetData += $rowObj
+                }}
+                $DatasetDataArray = @($DatasetData)
+                if ($DatasetDataArray.Count -gt 0) {{
+                    $AllData += [PSCustomObject]@{{
+                        branch = $bCaption
+                        month = "All Months"
+                        data = $DatasetDataArray
+                    }}
+                }}
+            }}
+        }} else {{
+            # Other branches: Combine all months EXCEPT current month
+            # And also current month separate
+            $otherMonths = @()
+            $currentMonthItem = $null
 
-                $DatasetData += $rowObj
+            foreach ($m in $monthItems) {{
+                if ($m.Caption -eq $currentMonth) {{
+                    $currentMonthItem = $m
+                }} else {{
+                    $otherMonths += $m
+                }}
             }}
 
-            $DatasetDataArray = @($DatasetData)
-
-            Write-Output "Extracted $($DatasetDataArray.Count) rows for Branch: $bCaption, Month: $mCaption"
-
-            if ($DatasetDataArray.Count -gt 0) {{
-                Write-Output "Before appending to AllData, count is $($AllData.Count)"
-                $AllData += [PSCustomObject]@{{
-                    branch = $bCaption
-                    month = $mCaption
-                    data = $DatasetDataArray
+            if ($otherMonths.Count -gt 0) {{
+                if ($monthSlicerCache.Olap) {{
+                    $visibleList = @()
+                    foreach ($m in $otherMonths) {{
+                        $visibleList += $m.Name
+                    }}
+                    if ($visibleList.Count -gt 0) {{
+                        $monthSlicerCache.VisibleSlicerItemsList = $visibleList
+                    }}
+                }} else {{
+                    $firstM = $otherMonths[0]
+                    $monthSlicerCache.SlicerItems($firstM.Name).Selected = $true
+                    foreach ($item in $monthSlicerCache.SlicerItems) {{
+                        $shouldSelect = $false
+                        foreach ($m in $otherMonths) {{
+                            if ($m.Name -eq $item.Name) {{
+                                $shouldSelect = $true
+                                break
+                            }}
+                        }}
+                        if ($item.Name -ne $firstM.Name) {{
+                            $item.Selected = $shouldSelect
+                        }}
+                    }}
                 }}
-                Write-Output "After appending, AllData count is $($AllData.Count)"
-            }} else {{
-                Write-Output "No rows extracted to append."
+
+                Write-Output "Extracting data for Branch: $bCaption (All Months Except Current)"
+                $Pivot.RefreshTable()
+                $DataBody = $Pivot.DataBodyRange
+                $RowRange = $Pivot.RowRange
+                $ColumnRange = $Pivot.ColumnRange
+
+                if ($null -ne $DataBody) {{
+                    $colHeaders = @{{}}
+                    $colCount = $DataBody.Columns.Count
+                    $headerRow = $ColumnRange.Rows.Count
+                    for ($c = 1; $c -le $colCount; $c++) {{
+                        $h = $ColumnRange.Cells.Item($headerRow, $c).Text
+                        $colHeaders[$c] = $h
+                    }}
+                    $rowCount = $DataBody.Rows.Count
+                    $DatasetData = @()
+                    for ($r = 1; $r -le $rowCount; $r++) {{
+                        $teamName = $RowRange.Cells.Item($r + ($RowRange.Rows.Count - $rowCount), 1).Text
+                        if ($teamName -eq "Grand Total") {{ continue }}
+                        $rowObj = [PSCustomObject]@{{
+                            team = $teamName
+                            closed = 0
+                            open = 0
+                            "% of closed" = "0%"
+                            "% of open" = "0%"
+                            "Grand Total" = 0
+                        }}
+                        for ($c = 1; $c -le $colCount; $c++) {{
+                            $header = $colHeaders[$c]
+                            $val = $DataBody.Cells.Item($r, $c).Value2
+                            $text = $DataBody.Cells.Item($r, $c).Text
+                            if ($header -eq "closed") {{ $rowObj.closed = if ($val -as [double]) {{ $val -as [double] }} elseif ([double]::TryParse($val, [ref]$null)) {{ [double]$val }} else {{ 0 }} }}
+                            if ($header -eq "open") {{ $rowObj.open = if ($val -as [double]) {{ $val -as [double] }} elseif ([double]::TryParse($val, [ref]$null)) {{ [double]$val }} else {{ 0 }} }}
+                            if ($header -eq "% of closed") {{ $rowObj."% of closed" = if ($text) {{ $text }} else {{ "0%" }} }}
+                            if ($header -eq "% of open") {{ $rowObj."% of open" = if ($text) {{ $text }} else {{ "0%" }} }}
+                            if ($header -match "Grand Total") {{ $rowObj."Grand Total" = if ($val -as [double]) {{ $val -as [double] }} elseif ([double]::TryParse($val, [ref]$null)) {{ [double]$val }} else {{ 0 }} }}
+                        }}
+                        $DatasetData += $rowObj
+                    }}
+                    $DatasetDataArray = @($DatasetData)
+                    if ($DatasetDataArray.Count -gt 0) {{
+                        $AllData += [PSCustomObject]@{{
+                            branch = $bCaption
+                            month = "All Months (Except Current)"
+                            data = $DatasetDataArray
+                        }}
+                    }}
+                }}
+            }}
+
+            if ($null -ne $currentMonthItem) {{
+                if ($monthSlicerCache.Olap) {{
+                    $monthSlicerCache.VisibleSlicerItemsList = @($currentMonthItem.Name)
+                }} else {{
+                    $mName = $currentMonthItem.Name
+                    $monthSlicerCache.SlicerItems($mName).Selected = $true
+                    foreach ($item in $monthSlicerCache.SlicerItems) {{
+                        if ($item.Name -ne $mName) {{ $item.Selected = $false }}
+                    }}
+                }}
+
+                Write-Output "Extracting data for Branch: $bCaption (Current Month)"
+                $Pivot.RefreshTable()
+                $DataBody = $Pivot.DataBodyRange
+                $RowRange = $Pivot.RowRange
+                $ColumnRange = $Pivot.ColumnRange
+
+                if ($null -ne $DataBody) {{
+                    $colHeaders = @{{}}
+                    $colCount = $DataBody.Columns.Count
+                    $headerRow = $ColumnRange.Rows.Count
+                    for ($c = 1; $c -le $colCount; $c++) {{
+                        $h = $ColumnRange.Cells.Item($headerRow, $c).Text
+                        $colHeaders[$c] = $h
+                    }}
+                    $rowCount = $DataBody.Rows.Count
+                    $DatasetData = @()
+                    for ($r = 1; $r -le $rowCount; $r++) {{
+                        $teamName = $RowRange.Cells.Item($r + ($RowRange.Rows.Count - $rowCount), 1).Text
+                        if ($teamName -eq "Grand Total") {{ continue }}
+                        $rowObj = [PSCustomObject]@{{
+                            team = $teamName
+                            closed = 0
+                            open = 0
+                            "% of closed" = "0%"
+                            "% of open" = "0%"
+                            "Grand Total" = 0
+                        }}
+                        for ($c = 1; $c -le $colCount; $c++) {{
+                            $header = $colHeaders[$c]
+                            $val = $DataBody.Cells.Item($r, $c).Value2
+                            $text = $DataBody.Cells.Item($r, $c).Text
+                            if ($header -eq "closed") {{ $rowObj.closed = if ($val -as [double]) {{ $val -as [double] }} elseif ([double]::TryParse($val, [ref]$null)) {{ [double]$val }} else {{ 0 }} }}
+                            if ($header -eq "open") {{ $rowObj.open = if ($val -as [double]) {{ $val -as [double] }} elseif ([double]::TryParse($val, [ref]$null)) {{ [double]$val }} else {{ 0 }} }}
+                            if ($header -eq "% of closed") {{ $rowObj."% of closed" = if ($text) {{ $text }} else {{ "0%" }} }}
+                            if ($header -eq "% of open") {{ $rowObj."% of open" = if ($text) {{ $text }} else {{ "0%" }} }}
+                            if ($header -match "Grand Total") {{ $rowObj."Grand Total" = if ($val -as [double]) {{ $val -as [double] }} elseif ([double]::TryParse($val, [ref]$null)) {{ [double]$val }} else {{ 0 }} }}
+                        }}
+                        $DatasetData += $rowObj
+                    }}
+                    $DatasetDataArray = @($DatasetData)
+                    if ($DatasetDataArray.Count -gt 0) {{
+                        $AllData += [PSCustomObject]@{{
+                            branch = $bCaption
+                            month = $currentMonth
+                            data = $DatasetDataArray
+                        }}
+                    }}
+                }}
             }}
         }}
     }}
@@ -338,52 +486,27 @@ try {{
 
     Write-Output "Converting AllData to JSON..."
     # Wrap $AllData explicitly in an array to avoid formatting quirks on single-item outputs
-    # Use -Compress so there are no newlines, and maximum depth 100
-    $finalJson = @($AllData) | ConvertTo-Json -Depth 100 -Compress
-
-    Write-Output "JSON Conversion completed. Length: $($finalJson.Length) characters"
-
-    # Write to file without line wrapping (Out-File wraps at 80 cols by default non-interactively)
-    $utf8NoBom = New-Object System.Text.UTF8Encoding $False
-    [System.IO.File]::WriteAllText($jsonOutputPath, $finalJson, $utf8NoBom)
-
+    [System.IO.File]::WriteAllText($jsonOutputPath, (ConvertTo-Json -InputObject @($AllData) -Depth 100 -Compress), (New-Object System.Text.UTF8Encoding $False))
+    Write-Output "JSON saved to $jsonOutputPath"
 }} catch {{
-    Write-Error "Failed to extract Pivot Data: $_"
-    if ($Workbook) {{ try {{ $Workbook.Close($false) }} catch {{}} }}
-    [System.Environment]::ExitCode = 1
+    Write-Error $_.Exception.Message
+    if ($Workbook) {{ $Workbook.Close($false) }}
+    throw $_
 }} finally {{
-    Write-Output "Cleaning up Excel COM object..."
-    try {{
-        if ($Excel) {{
-            $Excel.Quit()
-            [System.Runtime.InteropServices.Marshal]::ReleaseComObject($Excel) | Out-Null
-        }}
-    }} catch {{
-        Write-Output "Warning: Failed to cleanly quit Excel."
-    }}
-
-    [System.GC]::Collect()
-    [System.GC]::WaitForPendingFinalizers()
-
+    $Excel.Quit()
+    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($Excel) | Out-Null
     if ($processId) {{
-        try {{
-            $proc = Get-Process -Id $processId -ErrorAction SilentlyContinue
-            if ($proc) {{
-                Write-Output "Force killing Excel process ID $processId"
-                $proc.Kill()
-            }}
-        }} catch {{
-            Write-Output "Warning: Failed to forcefully kill Excel process."
-        }}
+        Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
     }}
 }}
 "#,
-        dashboard_path = dashboard_path_str.replace("'", "''"),
-        json_path = json_path_str.replace("'", "''"),
+        dashboard_path = dashboard_path_str,
+        json_path = json_path_str,
         target_sheet = target_sheet_name.replace("'", "''"),
         target_pivot = target_pivot_name.replace("'", "''"),
         branch_filter = branch_filter_ps,
-        month_filter = month_filter_ps
+        month_filter = month_filter_ps,
+        current_month = current_month
     );
 
     // Run powershell but check if we should skip due to test mode
@@ -454,7 +577,8 @@ try {{
             && team_idx.is_none()
         {
             team_idx = Some(i);
-        } else if (h_lower == "owner"
+        } else if (h_lower == "owner_name"
+            || h_lower == "owner"
             || h_lower == "receiver name"
             || h_lower == "oul"
             || h_lower.contains("owner")
@@ -462,7 +586,8 @@ try {{
             && owner_idx.is_none()
         {
             owner_idx = Some(i);
-        } else if (h_lower == "to emails"
+        } else if (h_lower == "owner_email"
+            || h_lower == "to emails"
             || h_lower == "email"
             || h_lower == "email_to"
             || h_lower.contains("email"))
@@ -580,49 +705,70 @@ try {{
         ));
 
         // Start Table
-        sections_html.push_str("<table style=\"border-collapse: collapse; font-family: Calibri, sans-serif; font-size: 14px; border: 1px solid #8EA9DB; margin-bottom: 20px;\">");
+        sections_html.push_str("<table style=\"table-layout: fixed; width: 100%; border-collapse: collapse; font-family: Calibri, sans-serif; font-size: 14px; border: 1px solid #8EA9DB; margin-bottom: 20px;\">");
+
+        // Header widths from config
+        let widths = config.table_column_widths.clone().unwrap_or_else(|| {
+            vec![
+                "auto".to_string(),
+                "auto".to_string(),
+                "auto".to_string(),
+                "auto".to_string(),
+                "auto".to_string(),
+                "auto".to_string(),
+                "auto".to_string(),
+            ]
+        });
+
+        let mut safe_widths = widths.clone();
+        while safe_widths.len() < 7 {
+            safe_widths.push("auto".to_string());
+        }
 
         // Header Row (Blue)
-        sections_html.push_str(
-            "<tr style=\"background-color: #4472C4; color: white; font-weight: bold; text-align: center;\">
-                <th style=\"border: 1px solid #8EA9DB; padding: 5px 10px;\">Row Labels</th>
-                <th style=\"border: 1px solid #8EA9DB; padding: 5px 10px;\">OUL</th>
-                <th style=\"border: 1px solid #8EA9DB; padding: 5px 10px;\">closed</th>
-                <th style=\"border: 1px solid #8EA9DB; padding: 5px 10px;\">open</th>
-                <th style=\"border: 1px solid #8EA9DB; padding: 5px 10px;\">% of closed</th>
-                <th style=\"border: 1px solid #8EA9DB; padding: 5px 10px;\">% of open</th>
-                <th style=\"border: 1px solid #8EA9DB; padding: 5px 10px;\">Grand Total</th>
-            </tr>"
-        );
+        sections_html.push_str(&format!(
+            "<tr style=\"background-color: #4472C4; color: white; font-weight: bold; text-align: center; vertical-align: middle;\">
+                <th width=\"{w0}\" style=\"border: 1px solid #8EA9DB; padding: 5px;\">Team</th>
+                <th width=\"{w1}\" style=\"border: 1px solid #8EA9DB; padding: 5px;\">closed</th>
+                <th width=\"{w2}\" style=\"border: 1px solid #8EA9DB; padding: 5px;\">open</th>
+                <th width=\"{w3}\" style=\"border: 1px solid #8EA9DB; padding: 5px;\">% of closed</th>
+                <th width=\"{w4}\" style=\"border: 1px solid #8EA9DB; padding: 5px;\">% of open</th>
+                <th width=\"{w5}\" style=\"border: 1px solid #8EA9DB; padding: 5px;\">Grand Total</th>
+                <th width=\"{w6}\" style=\"border: 1px solid #8EA9DB; padding: 5px;\">OUL</th>
+            </tr>",
+            w0 = safe_widths[0],
+            w1 = safe_widths[1],
+            w2 = safe_widths[2],
+            w3 = safe_widths[3],
+            w4 = safe_widths[4],
+            w5 = safe_widths[5],
+            w6 = safe_widths[6],
+        ));
 
         let mut ds_closed_total = 0.0;
         let mut ds_open_total = 0.0;
         let mut ds_grand_total = 0.0;
 
-        for (idx, row) in dataset.data.iter().enumerate() {
+        for row in dataset.data.iter() {
             ds_closed_total += row.closed;
             ds_open_total += row.open;
             ds_grand_total += row.grand_total;
 
-            let bg_color = if idx % 2 == 0 { "#D9E1F2" } else { "white" };
-
             sections_html.push_str(&format!(
-                "<tr style=\"background-color: {}; color: black;\">
-                    <td style=\"border: 1px solid #8EA9DB; padding: 5px 10px;\">{}</td>
-                    <td style=\"border: 1px solid #8EA9DB; padding: 5px 10px;\">{}</td>
-                    <td style=\"border: 1px solid #8EA9DB; padding: 5px 10px; text-align: right;\">{}</td>
-                    <td style=\"border: 1px solid #8EA9DB; padding: 5px 10px; text-align: right;\">{}</td>
-                    <td style=\"border: 1px solid #8EA9DB; padding: 5px 10px; text-align: right;\">{}</td>
-                    <td style=\"border: 1px solid #8EA9DB; padding: 5px 10px; text-align: right;\">{}</td>
-                    <td style=\"border: 1px solid #8EA9DB; padding: 5px 10px; text-align: right;\">{}</td>
+                "<tr style=\"color: black;\">
+                    <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
+                    <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
+                    <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
+                    <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
+                    <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
+                    <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
+                    <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
                 </tr>",
-                bg_color,
-                row.team, row.oul, row.closed, row.open, row.perc_closed, row.perc_open, row.grand_total
+                row.team, row.closed, row.open, row.perc_closed, row.perc_open, row.grand_total, row.oul
             ));
         }
 
         // Grand Total row (Red) for each table
-        // We recalculate the grand total % to ensure accuracy if needed, but standard is just blank for percentages or recalculated
         let perc_closed_total = if ds_grand_total > 0.0 {
             format!("{:.2}%", (ds_closed_total / ds_grand_total) * 100.0)
         } else {
@@ -636,13 +782,13 @@ try {{
 
         sections_html.push_str(&format!(
             "<tr style=\"background-color: #C00000; color: white; font-weight: bold;\">
-                <td style=\"border: 1px solid #8EA9DB; padding: 5px 10px;\">Grand Total</td>
-                <td style=\"border: 1px solid #8EA9DB; padding: 5px 10px;\"></td>
-                <td style=\"border: 1px solid #8EA9DB; padding: 5px 10px; text-align: right;\">{}</td>
-                <td style=\"border: 1px solid #8EA9DB; padding: 5px 10px; text-align: right;\">{}</td>
-                <td style=\"border: 1px solid #8EA9DB; padding: 5px 10px; text-align: right;\">{}</td>
-                <td style=\"border: 1px solid #8EA9DB; padding: 5px 10px; text-align: right;\">{}</td>
-                <td style=\"border: 1px solid #8EA9DB; padding: 5px 10px; text-align: right;\">{}</td>
+                <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">Grand Total</td>
+                <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
+                <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
+                <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
+                <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
+                <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
+                <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\"></td>
             </tr>",
             ds_closed_total, ds_open_total, perc_closed_total, perc_open_total, ds_grand_total
         ));
@@ -679,7 +825,7 @@ try {{
     let subject = config
         .subject_template
         .clone()
-        .unwrap_or_else(|| "CRM Updated open TKTs".to_string());
+        .unwrap_or("CRM Updated open TKTs".to_string());
 
     let email_to = config.dashboard_config.email_to.clone().unwrap_or_default();
     let email_cc = config.dashboard_config.email_cc.clone().unwrap_or_default();
@@ -794,6 +940,7 @@ mod tests {
             fallback_oul: Some("N/A".to_string()),
             dashboard_sheet_name: None,
             dashboard_pivot_name: None,
+            table_column_widths: None,
         };
 
         // We run the task. Since save_email_as_html is true, PowerShell COM is skipped,
@@ -892,6 +1039,7 @@ mod tests {
             fallback_oul: Some("N/A".to_string()),
             dashboard_sheet_name: None,
             dashboard_pivot_name: None,
+            table_column_widths: None,
         };
 
         let result = run(&config);

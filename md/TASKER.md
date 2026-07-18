@@ -191,13 +191,17 @@ The `crm_open_sohail` task automates the generation and delivery of Branch & Mon
   "team_mapping_file": "./teams.csv",
   "email_to": "sohail@example.com",
   "email_cc": "reports@example.com",
-  "fallback_oul": "N/A"
+  "fallback_oul": "N/A",
+  "dashboard_sheet_name": "Sheet1",
+  "dashboard_pivot_name": "PivotTable2",
+  "table_column_widths": ["15%", "10%", "10%", "15%", "15%", "15%", "20%"]
 }
 ```
 
 ## Recent Fixes
 * **CSV Parsing:** Lead report CSV parsing was updated to identify delimiters exclusively from the first line, avoiding errors when data fields contain tabs. `flexible(true)` has been globally removed from `csv::ReaderBuilder` to strictly validate column counts per project guidelines.
 * **Team Grouping:** Teams are grouped case-insensitively using Title Case formatting to ensure consistency (e.g. "support" and "SUPPORT" are correctly merged).
+* **CRM Open Sohail Grouping & Styling:** Modified Slicer extraction logic to query "All Months Except Current" and "Current Month" directly from PowerShell. Executive Clinic extracts all months combined. The HTML styling uses a fixed layout with configurable column widths, 5px padding, center alignment, and no background color for data rows.
 
 
 ## Dashboard Update Script Execution
