@@ -70,7 +70,10 @@ pub fn run(config: &CrmOpenSohailConfig) -> Result<()> {
 
     // Step 1: Run dashboard updater
     tracing::info!("Executing DashboardUpdater logic as part of CrmOpenSohail task.");
-    crate::tasker::dashboard_updater::run(&config.dashboard_config)?;
+    let mut dash_config = config.dashboard_config.clone();
+    dash_config.email_to = None;
+    dash_config.email_cc = None;
+    crate::tasker::dashboard_updater::run(&dash_config)?;
     tracing::info!("DashboardUpdater logic completed successfully.");
 
     // Step 2-4: Extract Pivot Data via Slicers
@@ -343,6 +346,23 @@ try {{
             }}
 
             if ($otherMonths.Count -gt 0) {{
+                $otherMonthsTitle = "All Months (Except Current)"
+                if ($otherMonths.Count -ge 2) {{
+                    # Extract string format like "Jan" or "Jan-2026"
+                    $firstMName = $otherMonths[0].Caption
+                    $lastMName = $otherMonths[$otherMonths.Count - 1].Caption
+
+                    # Ensure year is present or use string manipulation
+                    if ($firstMName -match "-") {{
+                        $firstPart = $firstMName.Split("-")[0]
+                    }} else {{
+                        $firstPart = $firstMName
+                    }}
+                    $otherMonthsTitle = "from ($firstPart to $lastMName)"
+                }} elseif ($otherMonths.Count -eq 1) {{
+                    $otherMonthsTitle = $otherMonths[0].Caption
+                }}
+
                 if ($monthSlicerCache.Olap) {{
                     $visibleList = @()
                     foreach ($m in $otherMonths) {{
@@ -411,7 +431,7 @@ try {{
                     if ($DatasetDataArray.Count -gt 0) {{
                         $AllData += [PSCustomObject]@{{
                             branch = $bCaption
-                            month = "All Months (Except Current)"
+                            month = $otherMonthsTitle
                             data = $DatasetDataArray
                         }}
                     }}
@@ -563,13 +583,14 @@ try {{
     let mut rdr = crate::utils::build_csv_reader_from_reader(file);
 
     // We expect columns like "Team Name", "Owner" (or Receiver Name), "To Emails"
-    // Wait, the instructions say "owner" column, but the schema has "Receiver Name" and "To Emails".
-    // I will read headers manually to handle the mapping robustly.
+    // We strictly prefer "owner_name" and "owner_email" over legacy "receiver_name" and "to_emails".
 
     let headers = rdr.headers()?.clone();
     let mut team_idx = None;
-    let mut owner_idx = None;
-    let mut email_idx = None;
+    let mut owner_name_idx = None;
+    let mut receiver_name_idx = None;
+    let mut owner_email_idx = None;
+    let mut to_emails_idx = None;
 
     for (i, h) in headers.iter().enumerate() {
         let h_lower = h.trim().to_lowercase();
@@ -577,23 +598,22 @@ try {{
             && team_idx.is_none()
         {
             team_idx = Some(i);
-        } else if (h_lower == "owner_name"
-            || h_lower == "owner"
-            || h_lower == "receiver name"
-            || h_lower == "oul"
-            || h_lower.contains("owner")
-            || h_lower.contains("receiver"))
-            && owner_idx.is_none()
+        } else if h_lower == "owner_name" || h_lower == "owner" || h_lower == "oul" {
+            owner_name_idx = Some(i);
+        } else if h_lower == "receiver name"
+            || h_lower == "receiver_name"
+            || h_lower.contains("receiver")
         {
-            owner_idx = Some(i);
-        } else if (h_lower == "owner_email"
-            || h_lower == "to emails"
+            receiver_name_idx = Some(i);
+        } else if h_lower == "owner_email" || h_lower == "email_to" || h_lower == "owner email" {
+            owner_email_idx = Some(i);
+        } else if (h_lower == "to emails"
+            || h_lower == "to_emails"
             || h_lower == "email"
-            || h_lower == "email_to"
             || h_lower.contains("email"))
-            && email_idx.is_none()
+            && owner_email_idx.is_none()
         {
-            email_idx = Some(i);
+            to_emails_idx = Some(i);
         }
     }
 
@@ -604,13 +624,18 @@ try {{
                 continue;
             }
 
-            let owner = owner_idx
+            let owner = owner_name_idx
                 .and_then(|idx| record.get(idx))
+                .filter(|s| !s.trim().is_empty())
+                .or_else(|| receiver_name_idx.and_then(|idx| record.get(idx)))
                 .unwrap_or("")
                 .trim()
                 .to_string();
-            let email = email_idx
+
+            let email = owner_email_idx
                 .and_then(|idx| record.get(idx))
+                .filter(|s| !s.trim().is_empty())
+                .or_else(|| to_emails_idx.and_then(|idx| record.get(idx)))
                 .unwrap_or("")
                 .trim()
                 .to_string();
@@ -700,12 +725,12 @@ try {{
     for dataset in &final_datasets {
         // Table Title
         sections_html.push_str(&format!(
-            "<div style=\"font-family: Calibri, sans-serif; font-size: 14px; font-weight: bold; margin-bottom: 5px; color: #44546A;\">{} ({})</div>",
+            "<div style=\"font-family: Calibri, sans-serif; font-size: 14px; font-weight: bold; color: #44546A;\">{} ({})</div>",
             dataset.branch, dataset.month
         ));
 
         // Start Table
-        sections_html.push_str("<table style=\"table-layout: fixed; border-collapse: collapse; font-family: Calibri, sans-serif; font-size: 14px; border: 1px solid #8EA9DB; margin-bottom: 20px;\">");
+        sections_html.push_str("<table style=\"table-layout: fixed; border-collapse: collapse; font-family: Calibri, sans-serif; font-size: 14px; border: 1px solid #8EA9DB;\">");
 
         // Header widths from config
         let widths = config.table_column_widths.clone().unwrap_or_else(|| {
@@ -793,19 +818,25 @@ try {{
             ds_closed_total, ds_open_total, perc_closed_total, perc_open_total, ds_grand_total
         ));
 
-        sections_html.push_str("</table>");
+        sections_html.push_str("</table><br/>");
     }
 
-    let default_template = r#"
-<html>
+    let indent_spaces = config.dashboard_config.indentation_spaces.unwrap_or(4);
+    let indent_width = indent_spaces * 5;
+
+    let default_template = format!(
+        r#"<html>
 <body style="font-family: Calibri, Arial, sans-serif;">
-    <p>Dear All,</p>
-    <p>Hope everyone is doing well!</p>
-    <p>Kindly check CRM Updated open TKTs.</p>
-    <br/>
-    {sections}
+    Dear All,<br/>
+    <table border='0'><tr><td width='{indent}'></td><td>
+    Hope everyone is doing well!<br/>
+    Kindly check CRM Updated open TKTs.<br/><br/>
+    {{sections}}
+    </td></tr></table>
 </body>
-</html>"#;
+</html>"#,
+        indent = indent_width
+    );
 
     let body_template = if let Some(template_file) = &config.body_template_file {
         let tp = crate::tasker::csv_task::resolve_relative_to_exe_dir(template_file);
