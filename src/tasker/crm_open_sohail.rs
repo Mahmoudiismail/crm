@@ -401,14 +401,16 @@ try {{
 
     // Read the output
     let json_content = std::fs::read_to_string(&json_output_path)?;
-    let extracted_data: Vec<ExtractedSlicerDataset> =
-        match serde_json::from_str(&json_content) {
-            Ok(data) => data,
-            Err(e) => {
-                error!("Failed to parse extracted JSON data: {}. JSON content snippet: {:.200}", e, json_content);
-                Vec::new()
-            }
-        };
+    let extracted_data: Vec<ExtractedSlicerDataset> = match serde_json::from_str(&json_content) {
+        Ok(data) => data,
+        Err(e) => {
+            error!(
+                "Failed to parse extracted JSON data: {}. JSON content snippet: {:.200}",
+                e, json_content
+            );
+            Vec::new()
+        }
+    };
 
     debug!(
         "Extracted {} combinations of branch/month.",
