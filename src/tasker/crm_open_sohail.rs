@@ -317,21 +317,34 @@ try {{
 
             $DatasetDataArray = @($DatasetData)
 
+            Write-Output "Extracted $($DatasetDataArray.Count) rows for Branch: $bCaption, Month: $mCaption"
+
             if ($DatasetDataArray.Count -gt 0) {{
+                Write-Output "Before appending to AllData, count is $($AllData.Count)"
                 $AllData += [PSCustomObject]@{{
                     branch = $bCaption
                     month = $mCaption
                     data = $DatasetDataArray
                 }}
+                Write-Output "After appending, AllData count is $($AllData.Count)"
+            }} else {{
+                Write-Output "No rows extracted to append."
             }}
         }}
     }}
 
-    Write-Output "Table extraction completed"
+    Write-Output "Table extraction completed. Total combinations extracted: $($AllData.Count)"
     $Workbook.Close($false)
 
+    Write-Output "Converting AllData to JSON..."
     # Wrap $AllData explicitly in an array to avoid formatting quirks on single-item outputs
-    @($AllData) | ConvertTo-Json -Depth 5 | Out-File -FilePath $jsonOutputPath -Encoding UTF8
+    # Use -Compress so there are no newlines, and maximum depth 100
+    $finalJson = @($AllData) | ConvertTo-Json -Depth 100 -Compress
+
+    Write-Output "JSON Conversion completed. Length: $($finalJson.Length) characters"
+
+    # Write to file without line wrapping (Out-File wraps at 80 cols by default non-interactively)
+    [System.IO.File]::WriteAllText($jsonOutputPath, $finalJson, [System.Text.Encoding]::UTF8)
 
 }} catch {{
     Write-Error "Failed to extract Pivot Data: $_"
@@ -388,8 +401,16 @@ try {{
 
     // Read the output
     let json_content = std::fs::read_to_string(&json_output_path)?;
-    let extracted_data: Vec<ExtractedSlicerDataset> =
-        serde_json::from_str(&json_content).unwrap_or_default();
+    let extracted_data: Vec<ExtractedSlicerDataset> = match serde_json::from_str(&json_content) {
+        Ok(data) => data,
+        Err(e) => {
+            error!(
+                "Failed to parse extracted JSON data: {}. JSON content snippet: {:.200}",
+                e, json_content
+            );
+            Vec::new()
+        }
+    };
 
     debug!(
         "Extracted {} combinations of branch/month.",
