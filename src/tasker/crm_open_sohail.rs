@@ -826,7 +826,8 @@ mod tests {
         assert!(parsed.is_ok(), "Failed to parse JSON with BOM removed");
 
         let clean_json_no_bom = valid_json.trim_start_matches('\u{FEFF}');
-        let parsed_no_bom: Result<Vec<ExtractedSlicerDataset>, _> = serde_json::from_str(clean_json_no_bom);
+        let parsed_no_bom: Result<Vec<ExtractedSlicerDataset>, _> =
+            serde_json::from_str(clean_json_no_bom);
         assert!(parsed_no_bom.is_ok(), "Failed to parse JSON without BOM");
     }
 
