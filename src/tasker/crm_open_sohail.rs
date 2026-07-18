@@ -140,7 +140,16 @@ $Excel = New-Object -ComObject Excel.Application
 $Excel.Visible = $false
 $Excel.DisplayAlerts = $false
 
+$processId = $null
+
 try {{
+    try {{
+        [int]$handle = $Excel.Hwnd
+        $processId = (Get-Process | Where-Object {{ $_.MainWindowHandle -eq $handle }}).Id
+    }} catch {{
+        $processId = (Get-Process -Name EXCEL | Sort-Object StartTime -Descending | Select-Object -First 1).Id
+    }}
+
     Write-Output "Opening workbook..."
     $Workbook = $Excel.Workbooks.Open($dashboardPath, $null, $true) # open read-only
     Write-Output "Workbook opened"
@@ -309,10 +318,10 @@ try {{
             $DatasetDataArray = @($DatasetData)
 
             if ($DatasetDataArray.Count -gt 0) {{
-                $AllData += @{{
+                $AllData += [PSCustomObject]@{{
                     branch = $bCaption
                     month = $mCaption
-                    data = $DatasetData
+                    data = $DatasetDataArray
                 }}
             }}
         }}
@@ -320,18 +329,40 @@ try {{
 
     Write-Output "Table extraction completed"
     $Workbook.Close($false)
-    ConvertTo-Json -InputObject $AllData -Depth 5 | Out-File -FilePath $jsonOutputPath -Encoding UTF8
+
+    # Wrap $AllData explicitly in an array to avoid formatting quirks on single-item outputs
+    @($AllData) | ConvertTo-Json -Depth 5 | Out-File -FilePath $jsonOutputPath -Encoding UTF8
 
 }} catch {{
     Write-Error "Failed to extract Pivot Data: $_"
-    if ($Workbook) {{ $Workbook.Close($false) }}
-    $Excel.Quit()
-    [System.Runtime.InteropServices.Marshal]::ReleaseComObject($Excel) | Out-Null
-    exit 1
-}}
+    if ($Workbook) {{ try {{ $Workbook.Close($false) }} catch {{}} }}
+    [System.Environment]::ExitCode = 1
+}} finally {{
+    Write-Output "Cleaning up Excel COM object..."
+    try {{
+        if ($Excel) {{
+            $Excel.Quit()
+            [System.Runtime.InteropServices.Marshal]::ReleaseComObject($Excel) | Out-Null
+        }}
+    }} catch {{
+        Write-Output "Warning: Failed to cleanly quit Excel."
+    }}
 
-$Excel.Quit()
-[System.Runtime.InteropServices.Marshal]::ReleaseComObject($Excel) | Out-Null
+    [System.GC]::Collect()
+    [System.GC]::WaitForPendingFinalizers()
+
+    if ($processId) {{
+        try {{
+            $proc = Get-Process -Id $processId -ErrorAction SilentlyContinue
+            if ($proc) {{
+                Write-Output "Force killing Excel process ID $processId"
+                $proc.Kill()
+            }}
+        }} catch {{
+            Write-Output "Warning: Failed to forcefully kill Excel process."
+        }}
+    }}
+}}
 "#,
         dashboard_path = dashboard_path_str.replace("'", "''"),
         json_path = json_path_str.replace("'", "''"),
@@ -727,7 +758,6 @@ mod tests {
                     .unwrap()
                     .to_string(),
                 dashboard_file: temp_mapping.path().to_str().unwrap().to_string(), // use mapping as dummy file so it exists
-                dashboard_table_name: Some("table2".to_string()),
                 email_to: Some("test@example.com".to_string()),
                 email_cc: None,
                 save_email_as_html: Some(true),
@@ -802,7 +832,6 @@ mod tests {
                     .to_str()
                     .unwrap()
                     .to_string(),
-                dashboard_table_name: Some("table2".to_string()),
                 email_to: Some("test@example.com".to_string()),
                 email_cc: None,
                 save_email_as_html: Some(true),

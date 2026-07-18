@@ -113,7 +113,7 @@ This task is designed to process multiple ticket report CSV files and augment th
 
 ### `dashboard_updater` Task
 
-This task is similar to `csv_analysis`, in that it processes raw ticket CSVs based on configuration mapping, but instead of emailing multiple pivot reports, it surgically injects the resulting CSV data into a specified Microsoft Excel file's Table (ListObject), refreshes the document's Pivot Tables, and emails the updated dashboard to specified stakeholders via Outlook.
+This task is similar to `csv_analysis`, in that it processes raw ticket CSVs to generate an `output_file` (`results.csv`), but instead of emailing multiple pivot reports, it relies on Data Model connections inside an existing Microsoft Excel dashboard file. It uses COM automation to open the Excel file, refresh its PowerQuery data connections and Pivot Tables, save the workbook, and email the updated dashboard to specified stakeholders via Outlook.
 
 #### Example Configuration
 ```json
@@ -130,7 +130,6 @@ This task is similar to `csv_analysis`, in that it processes raw ticket CSVs bas
       "exclude_categories": [],
       "output_file": "./results.csv",
       "dashboard_file": "./dashboard.xlsx",
-      "dashboard_table_name": "table2",
       "email_to": "stakeholder@example.com",
       "email_cc": "cc@example.com"
     }
@@ -140,8 +139,7 @@ This task is similar to `csv_analysis`, in that it processes raw ticket CSVs bas
 
 #### Fields Description
 - Shares all core CSV generation fields with `csv_analysis` (`download_path`, `users_file`, `minutes_ago`, `start_date`, `exclude_branches`, etc.).
-- `dashboard_file`: Path to the existing `.xlsx` dashboard file you want to update.
-- `dashboard_table_name`: The name of the Excel Table (ListObject) inside the workbook that should be cleared and filled with the new CSV data (e.g., `"table2"`).
+- `dashboard_file`: Path to the existing `.xlsx` dashboard file you want to update (this file should be configured with a PowerQuery connection to your `results.csv` output file).
 - `email_to`: (Optional) Email address to send the final updated dashboard to.
 - `email_cc`: (Optional) CC email address for the final report.
 
@@ -190,7 +188,6 @@ The `crm_open_sohail` task automates the generation and delivery of Branch & Mon
   "exclude_branches": [],
   "exclude_categories": [],
   "dashboard_file": "./dashboard.xlsx",
-  "dashboard_table_name": "table2",
   "team_mapping_file": "./teams.csv",
   "email_to": "sohail@example.com",
   "email_cc": "reports@example.com",

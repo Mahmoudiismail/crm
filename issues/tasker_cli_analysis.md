@@ -245,7 +245,6 @@ The JSON file (`tasker_config.json`) acts as an environment/execution driver for
     2. **Data Generation:** Invokes `csv_task::generate_csv` to retrieve or generate the base dataset.
     3. **Exception Filtering:** Reads the generated `results.csv`. It streams the rows into a new temporary file (`dashboard_filtered_{timestamp}.csv`), explicitly dropping any row where `Is Exception` equals `Yes`, as well as entirely removing the `Position` column.
     4. **PowerShell Generation:** Crafts a rigid PowerShell script block.
-    5. **COM Object Automation (Excel):** The PowerShell script boots `Excel.Application` (hidden, without alerts), opens the target `dashboard_file` (e.g., `dashboard.xlsx`), and searches all worksheets for a ListObject (Table) matching `dashboard_table_name`.
     6. **Data Injection:** The script clears the old data body range of the Excel table, opens the temporary filtered CSV via Excel COM, copies its UsedRange, and pastes it into the destination table.
     7. **Execution & Cleanup:** The script is executed via `std::process::Command`. If successful, the temporary filtered CSV and PowerShell script are deleted.
 

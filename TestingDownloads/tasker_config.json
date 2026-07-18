@@ -48,7 +48,6 @@
     {
       "assignment_settings_file": "./task1/assignments.csv",
       "dashboard_file": "C:/Users/Rayacorp21/Downloads/0.xlsx",
-      "dashboard_table_name": "ticket_report",
       "download_path": "../crm_windows/Downloads",
       "email_cc": "cc@example.com",
       "email_to": "stakeholder@example.com",

@@ -69,7 +69,6 @@ pub struct DashboardUpdaterConfig {
 
     // Dashboard specific config
     pub dashboard_file: String,
-    pub dashboard_table_name: Option<String>,
     pub email_to: Option<String>,
     pub email_cc: Option<String>,
 
@@ -140,7 +139,6 @@ mod tests {
               "exclude_categories": [],
               "output_file": "./results.csv",
               "dashboard_file": "./dashboard.xlsx",
-              "dashboard_table_name": "table2",
               "email_to": "aya@example.com",
               "email_cc": "cc@example.com"
             }
@@ -153,7 +151,6 @@ mod tests {
         match config.tasks.first().expect("Task list empty") {
             TaskConfig::DashboardUpdater(dash) => {
                 assert_eq!(dash.dashboard_file, "./dashboard.xlsx");
-                assert_eq!(dash.dashboard_table_name.as_deref(), Some("table2"));
                 assert_eq!(dash.email_to.as_deref(), Some("aya@example.com"));
             }
             _ => panic!("Expected DashboardUpdater task"),
@@ -174,7 +171,6 @@ mod tests {
               "exclude_categories": [],
               "output_file": "./results.csv",
               "dashboard_file": "./dashboard.xlsx",
-              "dashboard_table_name": "table2",
               "email_to": "sohail@example.com",
               "email_cc": "cc@example.com",
               "team_mapping_file": "./teams.csv",

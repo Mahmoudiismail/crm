@@ -12,7 +12,6 @@ old_crm_task = """    {
       "exclude_categories": [],
       "output_file": "./crm_open_sohail_results.csv",
       "dashboard_file": "./dashboard_sohail.xlsx",
-      "dashboard_table_name": "table1",
       "team_mapping_file": "./task3/teams.csv",
       "fallback_oul": "N/A"
     }"""
@@ -29,7 +28,6 @@ new_crm_task = """    {
       "category_exceptions": null,
       "output_file": "./crm_open_sohail_results.csv",
       "dashboard_file": "./dashboard_sohail.xlsx",
-      "dashboard_table_name": "table1",
       "email_to": "",
       "email_cc": "",
       "save_email_as_html": false,
