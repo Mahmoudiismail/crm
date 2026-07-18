@@ -131,7 +131,7 @@ pub fn run_app(options: TaskerCliOptions) -> Result<()> {
       "exclude_branches": [],
       "exclude_categories": [],
       "category_exceptions": null,
-      "output_file": "./crm_open_sohail_results.csv",
+      "output_file": "./results.csv",
       "dashboard_file": "./dashboard_sohail.xlsx",
       "email_to": "",
       "email_cc": "",
