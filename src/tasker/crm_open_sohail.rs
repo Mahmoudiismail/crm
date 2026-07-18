@@ -318,10 +318,10 @@ try {{
             $DatasetDataArray = @($DatasetData)
 
             if ($DatasetDataArray.Count -gt 0) {{
-                $AllData += @{{
+                $AllData += [PSCustomObject]@{{
                     branch = $bCaption
                     month = $mCaption
-                    data = $DatasetData
+                    data = $DatasetDataArray
                 }}
             }}
         }}
@@ -329,7 +329,9 @@ try {{
 
     Write-Output "Table extraction completed"
     $Workbook.Close($false)
-    ConvertTo-Json -InputObject $AllData -Depth 5 | Out-File -FilePath $jsonOutputPath -Encoding UTF8
+
+    # Wrap $AllData explicitly in an array to avoid formatting quirks on single-item outputs
+    @($AllData) | ConvertTo-Json -Depth 5 | Out-File -FilePath $jsonOutputPath -Encoding UTF8
 
 }} catch {{
     Write-Error "Failed to extract Pivot Data: $_"
