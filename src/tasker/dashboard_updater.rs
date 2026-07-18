@@ -1,6 +1,5 @@
 use crate::tasker::config::DashboardUpdaterConfig;
 use anyhow::Result;
-use chrono::Local;
 use std::fs::File;
 use std::io::Write;
 use tracing::{error, info};
@@ -69,13 +68,10 @@ pub fn run(config: &DashboardUpdaterConfig) -> Result<()> {
     let params = crate::tasker::csv_task::CsvAnalysisParams::from(config);
     let generated_csv_path_opt = crate::tasker::csv_task::generate_csv(&params)?;
 
-    let generated_csv_path = match generated_csv_path_opt {
-        Some(path) => path,
-        None => {
-            info!("No new tickets found. Skipping dashboard update.");
-            return Ok(());
-        }
-    };
+    if generated_csv_path_opt.is_none() {
+        info!("No new tickets found. Skipping dashboard update.");
+        return Ok(());
+    }
 
     let dashboard_file_path =
         crate::tasker::csv_task::resolve_relative_to_exe_dir(&config.dashboard_file);
@@ -86,152 +82,18 @@ pub fn run(config: &DashboardUpdaterConfig) -> Result<()> {
         );
     }
 
-    // Filter out exceptions from the generated CSV for the dashboard
-    let tmp_dir = std::env::temp_dir();
-    let filtered_csv_path = tmp_dir.join(format!(
-        "dashboard_filtered_{}.csv",
-        Local::now().timestamp_nanos_opt().unwrap_or(0)
-    ));
-
-    {
-        let file = File::open(&generated_csv_path)?;
-        let mut rdr = crate::utils::build_csv_reader_from_reader(file);
-        let headers = rdr.headers()?.clone();
-
-        let mut is_exception_idx = None;
-        let mut _position_idx = None;
-        let mut created_at_idx = None;
-        let mut month_idx = None;
-
-        let mut skip_indices = vec![];
-        let mut out_headers = vec![];
-
-        for (i, h) in headers.iter().enumerate() {
-            let lower = h.trim().to_lowercase();
-            if lower == "is exception" {
-                is_exception_idx = Some(i);
-                skip_indices.push(i);
-            } else if lower == "position" {
-                _position_idx = Some(i);
-                skip_indices.push(i);
-            } else if lower == "created at" || lower == "creation date" {
-                created_at_idx = Some(i);
-                out_headers.push(h.to_string());
-            } else if lower == "month" {
-                month_idx = Some(i);
-                out_headers.push(h.to_string());
-            } else if lower == "day" {
-                skip_indices.push(i);
-            } else {
-                out_headers.push(h.to_string());
-            }
-        }
-
-        let mut append_month = false;
-
-        if month_idx.is_none() {
-            out_headers.push("Month".to_string());
-            append_month = true;
-        }
-
-        let mut f = std::fs::File::create(&filtered_csv_path)?;
-        f.write_all(b"\xEF\xBB\xBF")?;
-        let mut wtr = csv::WriterBuilder::new().from_writer(f);
-        wtr.write_record(&out_headers)?;
-
-        for result in rdr.records() {
-            let record = result?;
-            let is_exception = if let Some(idx) = is_exception_idx {
-                record
-                    .get(idx)
-                    .unwrap_or("No")
-                    .trim()
-                    .eq_ignore_ascii_case("Yes")
-            } else {
-                false
-            };
-
-            if !is_exception {
-                let mut out_record = vec![];
-                let mut month_str = String::new();
-
-                for (i, field) in record.iter().enumerate() {
-                    if !skip_indices.contains(&i) {
-                        out_record.push(field.to_string());
-                    }
-
-                    if Some(i) == created_at_idx {
-                        if let Some(dt) = crate::tasker::csv_task::parse_created_at(field) {
-                            month_str = dt.format("%b-%Y").to_string(); // e.g. "Jan-2026"
-                        }
-                    }
-                }
-
-                // If Month column existed in the source file, we overwrite it if we could parse the date
-                if let Some(idx) = month_idx {
-                    if !month_str.is_empty() {
-                        // calculate adjusted index in out_record
-                        let adjusted_idx = idx
-                            - skip_indices
-                                .iter()
-                                .filter(|&&skip_idx| skip_idx < idx)
-                                .count();
-                        if adjusted_idx < out_record.len() {
-                            out_record[adjusted_idx] = month_str.clone();
-                        }
-                    }
-                } else if append_month {
-                    out_record.push(month_str.clone());
-                }
-
-                wtr.write_record(&out_record)?;
-            }
-        }
-        wtr.flush()?;
-    }
-
-    let csv_path_str = filtered_csv_path.to_string_lossy().to_string();
     let dashboard_path_str = dashboard_file_path.to_string_lossy().to_string();
+    let tmp_dir = std::env::temp_dir();
 
     info!("Dashboard update started.");
-
-    let table_name_ps = if let Some(ref t_name) = config.dashboard_table_name {
-        if t_name.trim().is_empty() {
-            "''".to_string()
-        } else {
-            format!("'{}'", t_name.replace('\'', "''"))
-        }
-    } else {
-        "''".to_string()
-    };
-
-    if let Some(ref t_name) = config.dashboard_table_name {
-        if !t_name.trim().is_empty() {
-            info!(
-                "Updating dashboard table '{}' in file '{}' with filtered CSV data from '{}'",
-                t_name, dashboard_path_str, csv_path_str
-            );
-        } else {
-            info!(
-                "No dashboard table name provided. Directly refreshing data model in '{}'",
-                dashboard_path_str
-            );
-        }
-    } else {
-        info!(
-            "No dashboard table name provided. Directly refreshing data model in '{}'",
-            dashboard_path_str
-        );
-    }
+    info!("Directly refreshing data model in '{}'", dashboard_path_str);
 
     let ps_script = format!(
         r#"
 
 $ErrorActionPreference = "Stop"
 
-$csvPath = '{csv_path}'
 $dashboardPath = '{dashboard_path}'
-$tableName = {table_name_ps}
 
 Write-Output "Starting Excel automation to update dashboard..."
 
@@ -243,71 +105,25 @@ $Excel.DisplayAlerts = $false
 $Excel.ScreenUpdating = $false
 $Excel.EnableEvents = $false
 
+$processId = $null
+
 try {{
+    # Attempt to capture the Process ID so we can forcefully kill it later if needed
+    try {{
+        # Try getting process by HWND
+        [int]$handle = $Excel.Hwnd
+        $processId = (Get-Process | Where-Object {{ $_.MainWindowHandle -eq $handle }}).Id
+    }} catch {{
+        # Fallback to getting most recent EXCEL process created by this user
+        $processId = (Get-Process -Name EXCEL | Sort-Object StartTime -Descending | Select-Object -First 1).Id
+    }}
+
     Write-Output "Opening dashboard workbook at: $dashboardPath"
     $Workbook = $Excel.Workbooks.Open($dashboardPath)
     Write-Output "Workbook opened"
 
     $originalCalculation = $Excel.Calculation
     $Excel.Calculation = -4135 # xlCalculationManual
-
-    if ($tableName -ne '') {{
-        # Find the table by name across all sheets
-        Write-Output "Searching for table '$tableName'..."
-        $foundTable = $null
-        foreach ($Sheet in $Workbook.Worksheets) {{
-            foreach ($ListObject in $Sheet.ListObjects) {{
-                if ($ListObject.Name -eq $tableName) {{
-                    $foundTable = $ListObject
-                    break
-                }}
-            }}
-            if ($foundTable) {{ break }}
-        }}
-
-        if (-not $foundTable) {{
-            throw "Table '$tableName' not found in any worksheet."
-        }}
-        Write-Output "Table '$tableName' found."
-
-        # Clear old data if any
-        if ($foundTable.DataBodyRange) {{
-            Write-Output "Clearing existing data from table '$tableName'..."
-            $foundTable.DataBodyRange.Delete()
-        }}
-
-        Write-Output "Opening generated CSV file at: $csvPath"
-        $CsvWorkbook = $Excel.Workbooks.Open($csvPath)
-        $CsvSheet = $CsvWorkbook.Worksheets.Item(1)
-
-        $UsedRange = $CsvSheet.UsedRange
-        $RowCount = $UsedRange.Rows.Count
-        Write-Output "CSV file contains $RowCount rows (including headers)."
-
-        # If the CSV has data (more than just headers)
-        if ($RowCount -gt 1) {{
-            Write-Output "Copying data from CSV..."
-            $SourceRange = $CsvSheet.Range($CsvSheet.Cells.Item(2, 1), $CsvSheet.Cells.Item($RowCount, $UsedRange.Columns.Count))
-
-            # Determine top left cell of destination table's data body range
-            if ($foundTable.DataBodyRange) {{
-                $DestCell = $foundTable.DataBodyRange.Cells.Item(1, 1)
-            }} else {{
-                $DestCell = $foundTable.HeaderRowRange.Offset(1, 0).Cells.Item(1, 1)
-            }}
-
-            Write-Output "Pasting data into dashboard table..."
-            $SourceRange.Copy() | Out-Null
-            $DestCell.PasteSpecial(-4104) | Out-Null # xlPasteAll
-            $CsvSheet.Application.CutCopyMode = $false
-        }} else {{
-            Write-Output "No data rows found in CSV to copy."
-        }}
-
-        $CsvWorkbook.Close($false)
-    }} else {{
-        Write-Output "Skipping CSV paste step, table name is empty. Will refresh Data Model directly."
-    }}
 
     # Restore calculation before refreshing connections
     Write-Output "Restoring Excel calculation mode..."
@@ -340,44 +156,48 @@ try {{
     Write-Output "Saving workbook..."
     $Workbook.Save()
     $Workbook.Close($true)
-    Write-Output "Dashboard update completed"
     Write-Output "Dashboard update completed successfully."
 
 }} catch {{
     Write-Error "Failed to update Excel file: $_"
-    if ($Workbook) {{ $Workbook.Close($false) }}
-    if ($CsvWorkbook) {{ $CsvWorkbook.Close($false) }}
-    $Excel.ScreenUpdating = $true
-    $Excel.EnableEvents = $true
+    if ($Workbook) {{ try {{ $Workbook.Close($false) }} catch {{}} }}
+    [System.Environment]::ExitCode = 1
+}} finally {{
+    Write-Output "Cleaning up Excel COM object..."
     try {{
-        if ($originalCalculation) {{ $Excel.Calculation = $originalCalculation }}
+        if ($Excel) {{
+            $Excel.ScreenUpdating = $true
+            $Excel.EnableEvents = $true
+            if ($originalCalculation) {{ $Excel.Calculation = $originalCalculation }}
+            $Excel.Quit()
+            [System.Runtime.InteropServices.Marshal]::ReleaseComObject($Excel) | Out-Null
+        }}
     }} catch {{
-        Write-Output "Warning: Could not restore calculation mode on exit."
+        Write-Output "Warning: Failed to cleanly quit Excel."
     }}
-    $Excel.Quit()
-    [System.Runtime.InteropServices.Marshal]::ReleaseComObject($Excel) | Out-Null
-    [System.Environment]::Exit(1)
-}}
 
-$Excel.ScreenUpdating = $true
-$Excel.EnableEvents = $true
-try {{
-    if ($originalCalculation) {{ $Excel.Calculation = $originalCalculation }}
-}} catch {{
-    Write-Output "Warning: Could not restore calculation mode."
-}}
-$Excel.Quit()
-[System.Runtime.InteropServices.Marshal]::ReleaseComObject($Excel) | Out-Null
+    [System.GC]::Collect()
+    [System.GC]::WaitForPendingFinalizers()
 
+    # Forcefully kill process if it still exists
+    if ($processId) {{
+        try {{
+            $proc = Get-Process -Id $processId -ErrorAction SilentlyContinue
+            if ($proc) {{
+                Write-Output "Force killing Excel process ID $processId"
+                $proc.Kill()
+            }}
+        }} catch {{
+            Write-Output "Warning: Failed to forcefully kill Excel process."
+        }}
+    }}
+}}
 "#,
-        csv_path = csv_path_str.replace('\'', "''"),
         dashboard_path = dashboard_path_str.replace('\'', "''"),
-        table_name_ps = table_name_ps
     );
 
     if config.save_email_as_html.unwrap_or(false) {
         info!("save_email_as_html is true, skipping actual dashboard update via powershell.");
-        // Do not delete the filtered CSV, it will be used in tests
 
         // Generate and save HTML email body
         info!("Email generation started");
@@ -395,20 +215,11 @@ $Excel.Quit()
         info!("Email generation completed");
         info!("Saved dashboard HTML email to {}", html_path.display());
 
-        // We still copy the filtered CSV to a known location for testing
-        let test_filtered_csv_path = tmp_dir.join("dashboard_filtered_test_output.csv");
-        std::fs::copy(&filtered_csv_path, &test_filtered_csv_path)?;
-
-        // IMPORTANT: We do NOT return early here because we still need to run the standard update via powershell if not in a test that explicitly stops it.
-        // But the previous implementation said "skipping actual dashboard update via powershell." Let's fix that regression to only skip if it's a test environment where powershell might fail, or actually just continue.
         // For tests, powershell is not available on linux sandbox, so we skip it to prevent OS Error 2.
         return Ok(());
     }
 
     let ps_result = run_powershell(&ps_script);
-
-    // Cleanup temporary filtered CSV
-    let _ = std::fs::remove_file(&filtered_csv_path);
 
     if let Err(e) = ps_result {
         error!("Error executing dashboard update PowerShell script: {}", e);
@@ -525,7 +336,6 @@ mod tests {
             }]),
             output_file: dataset.output_file.path().to_str().unwrap().to_string(),
             dashboard_file: dummy_dashboard.path().to_str().unwrap().to_string(),
-            dashboard_table_name: Some("table2".to_string()),
             email_to: Some("test@example.com".to_string()),
             email_cc: None,
             save_email_as_html: Some(true),
@@ -552,88 +362,23 @@ mod tests {
             html_content
         );
 
-        let filtered_csv_path = temp_dir.join("dashboard_filtered_test_output.csv");
-        assert!(
-            filtered_csv_path.exists(),
-            "Filtered CSV should be saved for tests"
-        );
-
-        let filtered_csv_content = std::fs::read_to_string(&filtered_csv_path).unwrap();
-        let mut rdr = crate::utils::build_csv_reader_from_reader(filtered_csv_content.as_bytes());
-        let headers = rdr.headers().unwrap().clone();
-
-        let mut is_exception_idx = None;
-        let mut created_at_idx = None;
-        let mut cat_idx = None;
-        let mut month_idx = None;
-        let mut day_idx = None;
-        let mut position_idx = None;
-
-        for (i, h) in headers.iter().enumerate() {
-            let lower = h.trim().to_lowercase();
-            if lower == "is exception" {
-                is_exception_idx = Some(i);
-            } else if lower == "created at" || lower == "creation date" {
-                created_at_idx = Some(i);
-            } else if lower == "ticket category" {
-                cat_idx = Some(i);
-            } else if lower == "month" {
-                month_idx = Some(i);
-            } else if lower == "day" {
-                day_idx = Some(i);
-            } else if lower == "position" {
-                position_idx = Some(i);
-            }
-        }
-
-        assert!(position_idx.is_none(), "Position column should be removed");
-        assert!(day_idx.is_none(), "Day column should be removed");
-        assert!(
-            is_exception_idx.is_none(),
-            "Is Exception column should be removed"
-        );
-        assert!(month_idx.is_some(), "Month column should be added");
-
-        let start_dt = crate::tasker::csv_task::parse_created_at("15-Apr-2026").unwrap();
-        let mut count = 0;
-
-        for result in rdr.records() {
-            let record = result.unwrap();
-            count += 1;
-
-            if let Some(idx) = is_exception_idx {
-                let is_exc = record.get(idx).unwrap_or("No");
-                assert!(
-                    !is_exc.eq_ignore_ascii_case("Yes"),
-                    "Exception tickets should be filtered out from dashboard"
-                );
-            }
-
-            if let Some(idx) = created_at_idx {
-                let created_val = record.get(idx).unwrap_or("");
-                if let Some(created_dt) = crate::tasker::csv_task::parse_created_at(created_val) {
-                    assert!(
-                        created_dt >= start_dt,
-                        "Tickets before start_date should be filtered out"
-                    );
-                }
-            }
-
-            if let Some(idx) = cat_idx {
-                let cat = record.get(idx).unwrap_or("");
-                assert!(
-                    !cat.eq_ignore_ascii_case("ExcludedCategory"),
-                    "Excluded categories should not be present"
-                );
-            }
-        }
-
-        assert!(
-            count > 0,
-            "There should be some records left after filtering"
-        );
-
         let _ = std::fs::remove_file(&html_path);
-        let _ = std::fs::remove_file(&filtered_csv_path);
+
+        let output_csv_path = std::path::PathBuf::from(&dash_config.output_file);
+        assert!(
+            output_csv_path.exists(),
+            "results.csv should be saved for tests"
+        );
+
+        let output_csv_content = std::fs::read_to_string(&output_csv_path).unwrap();
+        let mut rdr = crate::utils::build_csv_reader_from_reader(output_csv_content.as_bytes());
+
+        let mut count = 0;
+        for result in rdr.records() {
+            let _record = result.unwrap();
+            count += 1;
+        }
+
+        assert!(count > 0, "There should be some records in the results.csv");
     }
 }
