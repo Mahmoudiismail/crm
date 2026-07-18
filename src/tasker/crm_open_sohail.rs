@@ -344,7 +344,8 @@ try {{
     Write-Output "JSON Conversion completed. Length: $($finalJson.Length) characters"
 
     # Write to file without line wrapping (Out-File wraps at 80 cols by default non-interactively)
-    [System.IO.File]::WriteAllText($jsonOutputPath, $finalJson, [System.Text.Encoding]::UTF8)
+    $utf8NoBom = New-Object System.Text.UTF8Encoding $False
+    [System.IO.File]::WriteAllText($jsonOutputPath, $finalJson, $utf8NoBom)
 
 }} catch {{
     Write-Error "Failed to extract Pivot Data: $_"
@@ -401,12 +402,13 @@ try {{
 
     // Read the output
     let json_content = std::fs::read_to_string(&json_output_path)?;
-    let extracted_data: Vec<ExtractedSlicerDataset> = match serde_json::from_str(&json_content) {
+    let clean_json = json_content.trim_start_matches('\u{FEFF}');
+    let extracted_data: Vec<ExtractedSlicerDataset> = match serde_json::from_str(clean_json) {
         Ok(data) => data,
         Err(e) => {
             error!(
                 "Failed to parse extracted JSON data: {}. JSON content snippet: {:.200}",
-                e, json_content
+                e, clean_json
             );
             Vec::new()
         }
@@ -808,6 +810,24 @@ mod tests {
 
         let content = std::fs::read_to_string(&html_path).unwrap();
         assert!(content.contains("Dear All,"));
+    }
+
+    #[test]
+    fn test_json_parsing_with_and_without_bom() {
+        // Create a fake JSON file with a BOM and see if our trim logic handles it
+        // Rather than run the full task which mocks it to `[]` anyway, we just test the specific lines
+        // using the real `serde_json::from_str`.
+
+        let valid_json = r#"[{"branch": "Test", "month": "Jan", "data": []}]"#;
+        let json_with_bom = format!("\u{FEFF}{}", valid_json);
+
+        let clean_json = json_with_bom.trim_start_matches('\u{FEFF}');
+        let parsed: Result<Vec<ExtractedSlicerDataset>, _> = serde_json::from_str(clean_json);
+        assert!(parsed.is_ok(), "Failed to parse JSON with BOM removed");
+
+        let clean_json_no_bom = valid_json.trim_start_matches('\u{FEFF}');
+        let parsed_no_bom: Result<Vec<ExtractedSlicerDataset>, _> = serde_json::from_str(clean_json_no_bom);
+        assert!(parsed_no_bom.is_ok(), "Failed to parse JSON without BOM");
     }
 
     #[test]
