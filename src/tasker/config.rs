@@ -69,7 +69,7 @@ pub struct DashboardUpdaterConfig {
 
     // Dashboard specific config
     pub dashboard_file: String,
-    pub dashboard_table_name: String,
+    pub dashboard_table_name: Option<String>,
     pub email_to: Option<String>,
     pub email_cc: Option<String>,
 
@@ -88,6 +88,8 @@ pub struct CrmOpenSohailConfig {
     pub branch_filter: Option<Vec<String>>,
     pub month_filter: Option<Vec<String>>,
     pub fallback_oul: Option<String>,
+    pub dashboard_sheet_name: Option<String>,
+    pub dashboard_pivot_name: Option<String>,
 }
 
 #[cfg(test)]
@@ -151,7 +153,7 @@ mod tests {
         match config.tasks.first().expect("Task list empty") {
             TaskConfig::DashboardUpdater(dash) => {
                 assert_eq!(dash.dashboard_file, "./dashboard.xlsx");
-                assert_eq!(dash.dashboard_table_name, "table2");
+                assert_eq!(dash.dashboard_table_name.as_deref(), Some("table2"));
                 assert_eq!(dash.email_to.as_deref(), Some("aya@example.com"));
             }
             _ => panic!("Expected DashboardUpdater task"),

@@ -194,10 +194,35 @@ pub fn run(config: &DashboardUpdaterConfig) -> Result<()> {
     let dashboard_path_str = dashboard_file_path.to_string_lossy().to_string();
 
     info!("Dashboard update started.");
-    info!(
-        "Updating dashboard table '{}' in file '{}' with filtered CSV data from '{}'",
-        config.dashboard_table_name, dashboard_path_str, csv_path_str
-    );
+
+    let table_name_ps = if let Some(ref t_name) = config.dashboard_table_name {
+        if t_name.trim().is_empty() {
+            "''".to_string()
+        } else {
+            format!("'{}'", t_name.replace('\'', "''"))
+        }
+    } else {
+        "''".to_string()
+    };
+
+    if let Some(ref t_name) = config.dashboard_table_name {
+        if !t_name.trim().is_empty() {
+            info!(
+                "Updating dashboard table '{}' in file '{}' with filtered CSV data from '{}'",
+                t_name, dashboard_path_str, csv_path_str
+            );
+        } else {
+            info!(
+                "No dashboard table name provided. Directly refreshing data model in '{}'",
+                dashboard_path_str
+            );
+        }
+    } else {
+        info!(
+            "No dashboard table name provided. Directly refreshing data model in '{}'",
+            dashboard_path_str
+        );
+    }
 
     let ps_script = format!(
         r#"
@@ -206,7 +231,7 @@ $ErrorActionPreference = "Stop"
 
 $csvPath = '{csv_path}'
 $dashboardPath = '{dashboard_path}'
-$tableName = '{table_name}'
+$tableName = {table_name_ps}
 
 Write-Output "Starting Excel automation to update dashboard..."
 
@@ -226,61 +251,63 @@ try {{
     $originalCalculation = $Excel.Calculation
     $Excel.Calculation = -4135 # xlCalculationManual
 
-    # Find the table by name across all sheets
-    Write-Output "Searching for table '$tableName'..."
-    $foundTable = $null
-    foreach ($Sheet in $Workbook.Worksheets) {{
-        foreach ($ListObject in $Sheet.ListObjects) {{
-            if ($ListObject.Name -eq $tableName) {{
-                $foundTable = $ListObject
-                break
+    if ($tableName -ne '') {{
+        # Find the table by name across all sheets
+        Write-Output "Searching for table '$tableName'..."
+        $foundTable = $null
+        foreach ($Sheet in $Workbook.Worksheets) {{
+            foreach ($ListObject in $Sheet.ListObjects) {{
+                if ($ListObject.Name -eq $tableName) {{
+                    $foundTable = $ListObject
+                    break
+                }}
             }}
+            if ($foundTable) {{ break }}
         }}
-        if ($foundTable) {{ break }}
-    }}
 
-    if (-not $foundTable) {{
-        throw "Table '$tableName' not found in any worksheet."
-    }}
-    Write-Output "Table '$tableName' found."
+        if (-not $foundTable) {{
+            throw "Table '$tableName' not found in any worksheet."
+        }}
+        Write-Output "Table '$tableName' found."
 
-    # Clear old data if any
-    if ($foundTable.DataBodyRange) {{
-        Write-Output "Clearing existing data from table '$tableName'..."
-        $foundTable.DataBodyRange.Delete()
-    }}
-
-    Write-Output "Opening generated CSV file at: $csvPath"
-    $CsvWorkbook = $Excel.Workbooks.Open($csvPath)
-    $CsvSheet = $CsvWorkbook.Worksheets.Item(1)
-
-    $UsedRange = $CsvSheet.UsedRange
-    $RowCount = $UsedRange.Rows.Count
-    Write-Output "CSV file contains $RowCount rows (including headers)."
-
-    # If the CSV has data (more than just headers)
-    if ($RowCount -gt 1) {{
-        Write-Output "Copying data from CSV..."
-        $SourceRange = $CsvSheet.Range($CsvSheet.Cells.Item(2, 1), $CsvSheet.Cells.Item($RowCount, $UsedRange.Columns.Count))
-
-        # Determine top left cell of destination table's data body range
+        # Clear old data if any
         if ($foundTable.DataBodyRange) {{
-            $DestCell = $foundTable.DataBodyRange.Cells.Item(1, 1)
-        }} else {{
-            $DestCell = $foundTable.HeaderRowRange.Offset(1, 0).Cells.Item(1, 1)
+            Write-Output "Clearing existing data from table '$tableName'..."
+            $foundTable.DataBodyRange.Delete()
         }}
 
-        $SourceRange.Copy() | Out-Null
+        Write-Output "Opening generated CSV file at: $csvPath"
+        $CsvWorkbook = $Excel.Workbooks.Open($csvPath)
+        $CsvSheet = $CsvWorkbook.Worksheets.Item(1)
 
-        Write-Output "Pasting data into dashboard table..."
-        $DestCell.PasteSpecial(-4104) | Out-Null # xlPasteAll
+        $UsedRange = $CsvSheet.UsedRange
+        $RowCount = $UsedRange.Rows.Count
+        Write-Output "CSV file contains $RowCount rows (including headers)."
 
-        Write-Output "Paste operation complete."
+        # If the CSV has data (more than just headers)
+        if ($RowCount -gt 1) {{
+            Write-Output "Copying data from CSV..."
+            $SourceRange = $CsvSheet.Range($CsvSheet.Cells.Item(2, 1), $CsvSheet.Cells.Item($RowCount, $UsedRange.Columns.Count))
+
+            # Determine top left cell of destination table's data body range
+            if ($foundTable.DataBodyRange) {{
+                $DestCell = $foundTable.DataBodyRange.Cells.Item(1, 1)
+            }} else {{
+                $DestCell = $foundTable.HeaderRowRange.Offset(1, 0).Cells.Item(1, 1)
+            }}
+
+            Write-Output "Pasting data into dashboard table..."
+            $SourceRange.Copy() | Out-Null
+            $DestCell.PasteSpecial(-4104) | Out-Null # xlPasteAll
+            $CsvSheet.Application.CutCopyMode = $false
+        }} else {{
+            Write-Output "No data rows found in CSV to copy."
+        }}
+
+        $CsvWorkbook.Close($false)
     }} else {{
-        Write-Output "No data rows found in CSV to copy."
+        Write-Output "Skipping CSV paste step, table name is empty. Will refresh Data Model directly."
     }}
-
-    $CsvWorkbook.Close($false)
 
     # Restore calculation before refreshing connections
     Write-Output "Restoring Excel calculation mode..."
@@ -288,6 +315,13 @@ try {{
         $Excel.Calculation = $originalCalculation
     }} catch {{
         Write-Output "Warning: Could not restore calculation mode."
+    }}
+
+    Write-Output "Refreshing Workbook connections/Model..."
+    try {{
+        $Workbook.RefreshAll()
+    }} catch {{
+        Write-Output "Warning: Could not RefreshAll."
     }}
 
     # Refresh Data Model and PivotTables
@@ -338,7 +372,7 @@ $Excel.Quit()
 "#,
         csv_path = csv_path_str.replace('\'', "''"),
         dashboard_path = dashboard_path_str.replace('\'', "''"),
-        table_name = config.dashboard_table_name.replace('\'', "''")
+        table_name_ps = table_name_ps
     );
 
     if config.save_email_as_html.unwrap_or(false) {
@@ -491,7 +525,7 @@ mod tests {
             }]),
             output_file: dataset.output_file.path().to_str().unwrap().to_string(),
             dashboard_file: dummy_dashboard.path().to_str().unwrap().to_string(),
-            dashboard_table_name: "table2".to_string(),
+            dashboard_table_name: Some("table2".to_string()),
             email_to: Some("test@example.com".to_string()),
             email_cc: None,
             save_email_as_html: Some(true),

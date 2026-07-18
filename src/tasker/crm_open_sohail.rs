@@ -119,14 +119,20 @@ pub fn run(config: &CrmOpenSohailConfig) -> Result<()> {
     info!("Generating PowerShell script for Slicer automation and Data Extraction.");
     info!("Slicer processing started");
 
+    let target_sheet_name = config.dashboard_sheet_name.as_deref().unwrap_or("Sheet1");
+    let target_pivot_name = config
+        .dashboard_pivot_name
+        .as_deref()
+        .unwrap_or("PivotTable2");
+
     let ps_script = format!(
         r#"
 $ErrorActionPreference = "Stop"
 
 $dashboardPath = '{dashboard_path}'
 $jsonOutputPath = '{json_path}'
-$targetSheetName = 'TKT - Dashboard'
-$targetPivotName = 'PivotTable1'
+$targetSheetName = '{target_sheet}'
+$targetPivotName = '{target_pivot}'
 $branchFilter = {branch_filter}
 $monthFilter = {month_filter}
 
@@ -329,6 +335,8 @@ $Excel.Quit()
 "#,
         dashboard_path = dashboard_path_str.replace("'", "''"),
         json_path = json_path_str.replace("'", "''"),
+        target_sheet = target_sheet_name.replace("'", "''"),
+        target_pivot = target_pivot_name.replace("'", "''"),
         branch_filter = branch_filter_ps,
         month_filter = month_filter_ps
     );
@@ -719,7 +727,7 @@ mod tests {
                     .unwrap()
                     .to_string(),
                 dashboard_file: temp_mapping.path().to_str().unwrap().to_string(), // use mapping as dummy file so it exists
-                dashboard_table_name: "table2".to_string(),
+                dashboard_table_name: Some("table2".to_string()),
                 email_to: Some("test@example.com".to_string()),
                 email_cc: None,
                 save_email_as_html: Some(true),
@@ -731,6 +739,8 @@ mod tests {
             branch_filter: None,
             month_filter: None,
             fallback_oul: Some("N/A".to_string()),
+            dashboard_sheet_name: None,
+            dashboard_pivot_name: None,
         };
 
         // We run the task. Since save_email_as_html is true, PowerShell COM is skipped,
@@ -792,7 +802,7 @@ mod tests {
                     .to_str()
                     .unwrap()
                     .to_string(),
-                dashboard_table_name: "table2".to_string(),
+                dashboard_table_name: Some("table2".to_string()),
                 email_to: Some("test@example.com".to_string()),
                 email_cc: None,
                 save_email_as_html: Some(true),
@@ -809,6 +819,8 @@ mod tests {
             branch_filter: Some(vec!["Dr. Soliman Fakeeh Hospital Jeddah".to_string()]),
             month_filter: None,
             fallback_oul: Some("N/A".to_string()),
+            dashboard_sheet_name: None,
+            dashboard_pivot_name: None,
         };
 
         let result = run(&config);
