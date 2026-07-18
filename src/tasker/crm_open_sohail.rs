@@ -705,7 +705,7 @@ try {{
         ));
 
         // Start Table
-        sections_html.push_str("<table style=\"table-layout: fixed; width: 100%; border-collapse: collapse; font-family: Calibri, sans-serif; font-size: 14px; border: 1px solid #8EA9DB; margin-bottom: 20px;\">");
+        sections_html.push_str("<table style=\"table-layout: fixed; border-collapse: collapse; font-family: Calibri, sans-serif; font-size: 14px; border: 1px solid #8EA9DB; margin-bottom: 20px;\">");
 
         // Header widths from config
         let widths = config.table_column_widths.clone().unwrap_or_else(|| {
