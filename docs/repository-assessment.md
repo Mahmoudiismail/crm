@@ -180,37 +180,174 @@ Based on the repository's heavy reliance on Windows-specific COM integrations (E
 
 ## 7. Recommended PR Roadmap
 
-1. **PR 1 - Characterization and failure-path tests**
-   - **Objective**: Establish a baseline by adding unit and integration tests targeting failure paths (e.g., invalid configurations, missing files, timeout conditions in runner).
-   - **Evidence**: Testing is mostly happy-path (e.g., `engine.rs` tests).
-2. **PR 2 - Remove confirmed user/config/infrastructure-triggerable panic paths**
-   - **Objective**: Improve binary resilience.
-   - **Evidence**: `unwrap()` in `src/bin/tasker.rs:369`, `src/runner/gui.rs:203`.
-   - **Scope**: Replace with `anyhow::Result` context propagation.
-3. **PR 3 - Introduce a tested subprocess execution boundary**
-   - **Objective**: Centralize PowerShell process spawning.
-   - **Evidence**: `src/tasker/dashboard_updater.rs`, `src/tasker/email.rs`.
-   - **Scope**: Implement `src/utils/powershell.rs` with consistent timeout, execution policy, and temporary file management.
+### PR 1 - Characterization and failure-path tests
+- **Objective**: Establish a robust baseline by adding unit and integration tests that specifically target failure paths.
+- **Evidence**: Currently, tests primarily exercise happy-path configurations (e.g., `engine.rs` tests missing timeouts and edge cases).
+- **Exact affected modules**: `src/runner/engine.rs`, `src/tasker/email.rs`, `src/yasweb/browser.rs`, `tests/*`
+- **Preconditions**: CI runner can execute cargo tests natively.
+- **Detailed scope**: Add invalid configuration tests, filesystem permission failure tests, and async task timeout mocks.
+- **Out-of-scope items**: No refactoring of business logic or abstractions.
+- **Behavior-protection tests**: Ensure no regression on valid JSON configuration loading.
+- **Failure-path tests**: Create mock scenarios for disk-full, invalid JSON, and execution timeout events.
+- **Acceptance criteria**: Overall workspace test coverage increases by measurable percent in failure paths.
+- **Risk**: Low. Purely test additions.
+- **Estimated size**: Medium.
+- **Dependencies**: None.
+- **Rollback approach**: Git revert.
+
+### PR 2 - Remove user-triggerable production panic paths
+- **Objective**: Ensure the system does not crash abruptly due to configuration or environment errors.
+- **Evidence**: `unwrap()` exists in `src/bin/tasker.rs:369` and `src/runner/gui.rs:203`.
+- **Exact affected modules**: `src/bin/tasker.rs`, `src/runner/gui.rs`
+- **Preconditions**: PR 1 (tests covering failure paths) should be in place.
+- **Detailed scope**: Replace `.unwrap()` and `.expect()` calls in production initialization with `anyhow::Result` propagation or safe fallback defaults.
+- **Out-of-scope items**: Fixing panics inside purely test-only modules.
+- **Behavior-protection tests**: Verify successful startup with valid configurations.
+- **Failure-path tests**: Pass invalid configuration files and verify graceful exit with error log (no panic).
+- **Acceptance criteria**: Process exits with standard error code rather than panic when encountering missing files.
+- **Risk**: Low. Safe error propagation.
+- **Estimated size**: Small.
+- **Dependencies**: PR 1.
+- **Rollback approach**: Git revert.
+
+### PR 3 - Introduce a tested subprocess execution boundary
+- **Objective**: Centralize PowerShell process spawning to eliminate boilerplate and secure dynamic executions.
+- **Evidence**: Repetitive `Command::new("powershell")` blocks found in `src/tasker/dashboard_updater.rs`, `src/tasker/email.rs`, `src/tasker/crm_open_sohail.rs`.
+- **Exact affected modules**: `src/utils/powershell.rs` (new), `src/tasker/dashboard_updater.rs`, `src/tasker/email.rs`, `src/tasker/crm_open_sohail.rs`
+- **Preconditions**: Existing PowerShell features are covered by tests.
+- **Detailed scope**: Create a `utils::powershell` module holding a single secure `run_script` method handling temporary file lifecycle, timeout, and execution policy. Refactor consumers to use it.
+- **Out-of-scope items**: Moving dynamic values to structured data (handled in PR 4).
+- **Behavior-protection tests**: Verify existing automated tasks successfully trigger PowerShell.
+- **Failure-path tests**: Test subprocess timeout handling and temp file cleanup under failure.
+- **Acceptance criteria**: All 3 PowerShell consumers utilize the new centralized utility without altering behavior.
+- **Risk**: Medium. Modifies how core scripts are launched.
+- **Estimated size**: Medium.
+- **Dependencies**: PR 1, PR 2.
+- **Rollback approach**: Git revert.
+
+### PR 4 - Move PowerShell dynamic input to structured data
+- **Objective**: Eliminate string interpolation for PowerShell scripts, securing against potential syntax breakages.
+- **Evidence**: `email.rs:1196` uses `format!()` to build PowerShell syntax dynamically.
+- **Exact affected modules**: `src/tasker/email.rs`, `src/tasker/dashboard_updater.rs`, `src/tasker/crm_open_sohail.rs`
+- **Preconditions**: Centralized subprocess execution (PR 3) is implemented.
+- **Detailed scope**: Refactor `run_script` to accept JSON payload files or environment variables instead of raw string interpolation for dynamic inputs like `email_to`.
+- **Out-of-scope items**: Refactoring email HTML generation logic.
+- **Behavior-protection tests**: Verify COM integration still functions exactly the same.
+- **Failure-path tests**: Pass strings with malicious quotes/syntax and verify robust execution.
+- **Acceptance criteria**: No `format!()` calls used to inject configuration strings directly into PowerShell code strings.
+- **Risk**: Medium. Requires verifying Windows COM parameter passing.
+- **Estimated size**: Medium.
+- **Dependencies**: PR 3.
+- **Rollback approach**: Git revert.
+
+### PR 5 - Improve Runner lifecycle, lock scope, cancellation, and shutdown
+- **Objective**: Prevent latency and thread stalls in execution manager state transitions.
+- **Evidence**: `spawn_blocking` config writes in `engine.rs`.
+- **Exact affected modules**: `src/runner/engine.rs`
+- **Preconditions**: PR 1 failure tests in place.
+- **Detailed scope**: Break out operational state saving into a debounced asynchronous loop rather than inline blocking writes on every minor queue transition.
+- **Out-of-scope items**: Changing the actual queue `mpsc` types.
+- **Behavior-protection tests**: Schedule tests validating state transitions correctly serialize eventually.
+- **Failure-path tests**: Shutdown the runner abruptly and verify graceful persistence.
+- **Acceptance criteria**: Configuration writes no longer bottleneck high-frequency task lifecycle events.
+- **Risk**: High. Modifies core scheduling persistence logic.
+- **Estimated size**: Large.
+- **Dependencies**: PR 1.
+- **Rollback approach**: Git revert or feature toggle.
+
+### PR 6 - Split engine.rs by established responsibility boundaries
+- **Objective**: Reduce the 1800-line `engine.rs` god object to maintainable single-responsibility modules.
+- **Evidence**: `src/runner/engine.rs` handles config parsing, queue polling, sub-process launching, logging, and cron evaluation.
+- **Exact affected modules**: `src/runner/engine.rs` -> split into `state.rs`, `scheduler.rs`, `executor.rs`
+- **Preconditions**: PR 5 completed.
+- **Detailed scope**: Extract cron parsing to a scheduler module. Extract process execution to an executor module. Keep engine as the orchestrator.
+- **Out-of-scope items**: Behavioral changes to the runner.
+- **Behavior-protection tests**: Ensure no loss in existing unit test coverage.
+- **Failure-path tests**: N/A (Refactor only).
+- **Acceptance criteria**: `engine.rs` size reduced by at least 60%, logic is modularized.
+- **Risk**: Medium.
+- **Estimated size**: Large.
+- **Dependencies**: PR 5.
+- **Rollback approach**: Git revert.
+
+### PR 7 - Split email generation from delivery and PowerShell infrastructure
+- **Objective**: Reduce the 1600-line `email.rs` god object by decoupling HTML view generation from COM delivery.
+- **Evidence**: `src/tasker/email.rs` tightly couples HTML generation and PowerShell process building.
+- **Exact affected modules**: `src/tasker/email.rs`, `src/tasker/templates.rs`
+- **Preconditions**: PR 4 completed.
+- **Detailed scope**: Extract HTML generation logic into separate functions or use `tinytemplate`.
+- **Out-of-scope items**: Switching email protocols (must remain Outlook COM).
+- **Behavior-protection tests**: HTML diffing tests to ensure templates remain pixel-perfect.
+- **Failure-path tests**: N/A.
+- **Acceptance criteria**: Email logic separated from powershell delivery logic.
+- **Risk**: Medium.
+- **Estimated size**: Large.
+- **Dependencies**: PR 4.
+- **Rollback approach**: Git revert.
+
+### PR 8 - Separate GUI routing, application operations, and rendering
+- **Objective**: Fix Single Responsibility Principle violations in the GUI.
+- **Evidence**: `src/runner/gui.rs` mixes HTML string literals, state modifications, and HTTP routes.
+- **Exact affected modules**: `src/runner/gui.rs`, `src/runner/views.rs` (new)
+- **Preconditions**: PR 6 completed.
+- **Detailed scope**: Move HTML strings to `views.rs`.
+- **Out-of-scope items**: Redesigning the GUI.
+- **Behavior-protection tests**: Verify routes return valid 200 responses.
+- **Failure-path tests**: Verify invalid HTTP requests return 400.
+- **Acceptance criteria**: GUI routes are clean and delegate rendering to views.
+- **Risk**: Low.
+- **Estimated size**: Medium.
+- **Dependencies**: PR 6.
+- **Rollback approach**: Git revert.
+
+### PR 9 - Add CI security, platform, and coverage gates
+- **Objective**: Enforce quality automatically across all PRs.
+- **Evidence**: Missing coverage tracking and `cargo deny` execution.
+- **Exact affected modules**: `.github/workflows/test.yml`, `.github/workflows/security.yml`
+- **Preconditions**: GitHub Actions is the active CI platform.
+- **Detailed scope**: Add `cargo-llvm-cov` to actions, integrate `cargo deny` for dependency validation.
+- **Out-of-scope items**: Fixing pre-existing dependency warnings (they will be suppressed or documented initially).
+- **Behavior-protection tests**: Trigger CI and verify jobs pass.
+- **Failure-path tests**: N/A.
+- **Acceptance criteria**: CI rejects vulnerable dependencies and tracks coverage.
+- **Risk**: Low.
+- **Estimated size**: Small.
+- **Dependencies**: None.
+- **Rollback approach**: Git revert workflow files.
+
+### PR 10 - Documentation and developer-experience improvements
+- **Objective**: Ensure the repository is approachable for new developers.
+- **Evidence**: The system relies on specific environment dependencies (PowerShell, Windows).
+- **Exact affected modules**: `README.md`, `docs/*`
+- **Preconditions**: All structural changes above complete.
+- **Detailed scope**: Update architecture diagrams, update setup scripts, detail Windows dependencies.
+- **Out-of-scope items**: Code changes.
+- **Behavior-protection tests**: N/A.
+- **Failure-path tests**: N/A.
+- **Acceptance criteria**: Documentation accurately reflects the refactored state.
+- **Risk**: Lowest.
+- **Estimated size**: Small.
+- **Dependencies**: All preceding PRs.
+- **Rollback approach**: Git revert.
 
 
 ## Appendix A - Production Panic Inventory
 
-| File | Line | Usage | Trigger Classification | Final Classification |
-|---|---|---|---|---|
-| `src/bin/tasker.rs` | 369, 418 | `File::create(...).unwrap()` | Infrastructure-triggerable (Disk permissions/space) | Requires Remediation (PR 2) |
-| `src/runner/gui.rs` | 203 | `Icon::from_rgba(...).unwrap_or_else(panic)` | Startup-only | Proven internal invariant (static asset) |
-| `src/tasker/config.rs`| 119 | `.expect("No tasks")` | Test-only | Test-only |
-| `src/tasker/csv_task.rs`| 914 | `panic!("Expected CsvAnalysis")` | Test-only | Test-only |
-
-*(Note: The majority of `unwrap` and `panic` statements are correctly isolated to the test suites.)*
+| File & Line Range | Function / Module | Macro/Method | Trigger Classification | Reachability | Expected Invariant | Potential Impact | Recommended Action | Required Test | Final Classification |
+|---|---|---|---|---|---|---|---|---|---|
+| `src/bin/tasker.rs:369` | `main` | `unwrap()` | Infrastructure-triggerable | Production Entry Point | Config file is writable by process | Startup process death | Replace with `?` & `Context` | Read-only config directory | Requires Remediation |
+| `src/bin/tasker.rs:418` | `main` | `unwrap()` | Infrastructure-triggerable | Production Entry Point | Config file is writable by process | Startup process death | Replace with `?` & `Context` | Read-only config directory | Requires Remediation |
+| `src/runner/gui.rs:203` | `get_icon` | `unwrap_or_else(panic)` | Startup-only | Production Initialization | Icon byte parsing succeeds | GUI thread crash | None | N/A | Proven internal invariant |
+| `src/tasker/config.rs:119`| `tests::...` | `expect()` | Test-only | Test Only | Task exists in mock data | Test failure | None | N/A | Test-only |
+| `src/tasker/csv_task.rs:914`| `tests::...` | `panic!()` | Test-only | Test Only | Struct matches enum variant | Test failure | None | N/A | Test-only |
 
 
 ## Appendix B - Subprocess and Temporary-File Inventory
 
-| Module | Process Spawned | Temp File Purpose | Cleanup Mechanism |
-|---|---|---|---|
-| `tasker::dashboard_updater` | `powershell.exe` | Dynamic Excel COM Script (`.ps1`) | `.keep()` -> `std::fs::remove_file` after wait |
-| `tasker::email` | `powershell.exe` | Dynamic Outlook COM Script (`.ps1`) | `.keep()` -> `std::fs::remove_file` after output |
-| `tasker::crm_open_sohail` | `powershell.exe` | Dynamic Excel Script (`.ps1`) | `.keep()` -> `std::fs::remove_file` after output |
-| `runner::engine` | `powershell/cmd/sh` | Executes user-defined Shell Commands | Handled by user shell |
-| `crm::config` | None | Atomic Config Write | Handled via atomic rename logic |
+| Module | Process Spawned | Temp File Purpose | Temp Lifecycle & Cleanup Mechanism | Persist/Keep Used | Credentials or PII |
+|---|---|---|---|---|---|
+| `tasker::dashboard_updater` | `powershell.exe` | Dynamic Excel COM Script (`.ps1`) | `.keep()` used. File explicitly dropped. `std::fs::remove_file` called after process exit. | Yes (`.keep()`) | Local file paths, no raw credentials |
+| `tasker::email` | `powershell.exe` | Dynamic Outlook COM Script (`.ps1`) | `.keep()` used. File explicitly dropped. `std::fs::remove_file` called after process output capture. | Yes (`.keep()`) | Email addresses and generated HTML logic |
+| `tasker::crm_open_sohail` | `powershell.exe` | Dynamic Excel Script (`.ps1`) | `.keep()` used. File explicitly dropped. `std::fs::remove_file` called after process output capture. | Yes (`.keep()`) | File paths, filtering strings |
+| `runner::engine` | `powershell/cmd/sh` | Executes user-defined Shell Commands | Subprocess delegates directly to OS shell. | No | Dependent on user command definition |
+| `crm::config` | None | Atomic Config Write | `NamedTempFile` used to write, then atomically renamed/persisted over original file. | Yes (`.persist()`) | Holds authentication tokens & passwords |
