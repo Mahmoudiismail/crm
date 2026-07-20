@@ -1,4 +1,6 @@
-# Repository Assessment
+import re
+
+doc = """# Repository Assessment
 
 This document provides a technical assessment of the repository, highlighting code-quality issues, testing gaps, and architectural considerations. It has been validated through a rigorous evidence-based review.
 
@@ -214,3 +216,10 @@ Based on the repository's heavy reliance on Windows-specific COM integrations (E
 | `tasker::crm_open_sohail` | `powershell.exe` | Dynamic Excel Script (`.ps1`) | `.keep()` -> `std::fs::remove_file` after output |
 | `runner::engine` | `powershell/cmd/sh` | Executes user-defined Shell Commands | Handled by user shell |
 | `crm::config` | None | Atomic Config Write | Handled via atomic rename logic |
+
+"""
+
+with open("docs/repository-assessment.md", "w", encoding="utf-8") as f:
+    f.write(doc)
+
+print("docs/repository-assessment.md has been rewritten successfully.")
