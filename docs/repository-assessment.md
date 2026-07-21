@@ -351,3 +351,12 @@ Based on the repository's heavy reliance on Windows-specific COM integrations (E
 | `tasker::crm_open_sohail` | `powershell.exe` | Dynamic Excel Script (`.ps1`) | `.keep()` used. File explicitly dropped. `std::fs::remove_file` called after process output capture. | Yes (`.keep()`) | File paths, filtering strings |
 | `runner::engine` | `powershell/cmd/sh` | Executes user-defined Shell Commands | Subprocess delegates directly to OS shell. | No | Dependent on user command definition |
 | `crm::config` | None | Atomic Config Write | `NamedTempFile` used to write, then atomically renamed/persisted over original file. | Yes (`.persist()`) | Holds authentication tokens & passwords |
+
+## Appendix C - Behavior Characterization (PR 1 Tests)
+
+As part of PR 1, several existing behaviors were characterized with tests:
+- **Tasker failure behavior**: When an empty tasks array is passed, `run_app` successfully processes 0 tasks (panics occur in test-only `config::tests` which were documented but not reachable in production `run_app`).
+- **Runner process behavior**: The application enforces a bounded capacity of 64 on the `RunnerCommand` queue and 128 on the `ExecutionManagerCommand` queue.
+- **PowerShell generation**: PowerShell scripts for email escaping correctly swap double quotes for single quotes in subjects, and escape single quotes within HTML body structures.
+- **Temporary-file lifecycle**: In `run_powershell`, temporary files are correctly cleaned up after script execution, regardless of if the script throws an error, *unless* the process completely fails to spawn (e.g., missing binary on UNIX), in which case the early return leaks the temporary file.
+- **Yasweb download finalization**: Yasweb correctly renames downloads, gracefully skips missing sources, correctly fallback-copies on failure, replaces extensions if necessary, and handles paths with Unicode and spaces correctly.
