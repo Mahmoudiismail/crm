@@ -1808,3 +1808,40 @@ mod tests {
         // Rules logic covered successfully
     }
 }
+
+#[cfg(test)]
+mod tests_queue {
+    use super::*;
+    use tokio::sync::mpsc;
+
+    #[tokio::test]
+    async fn test_runner_queue_capacity() {
+        // Characterize 64-capacity RunnerCommand queue
+        let (tx, _rx) = mpsc::channel::<RunnerCommand>(64);
+
+        for i in 0..64 {
+            let res = tx.try_send(RunnerCommand::RunTaskNow(format!("task_{}", i)));
+            assert!(res.is_ok(), "Should send up to capacity");
+        }
+
+        let res = tx.try_send(RunnerCommand::RunAllNow);
+        assert!(res.is_err(), "Should fail when capacity reached");
+
+        // Characterize 128-capacity ExecutionManagerCommand queue
+        let (exec_tx, _exec_rx) = mpsc::channel::<ExecutionManagerCommand>(128);
+        for i in 0..128 {
+            let res = exec_tx.try_send(ExecutionManagerCommand::TaskFinished {
+                task_id: format!("task_{}", i),
+                last_status: "success".into(),
+                last_error: None,
+            });
+            assert!(res.is_ok(), "Should send up to capacity");
+        }
+        let res = exec_tx.try_send(ExecutionManagerCommand::TaskFinished {
+            task_id: "overflow".into(),
+            last_status: "success".into(),
+            last_error: None,
+        });
+        assert!(res.is_err(), "Should fail when capacity reached");
+    }
+}
