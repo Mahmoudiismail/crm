@@ -1656,7 +1656,13 @@ mod tests_powershell_char {
         let clean_subject = subject.replace("\"", "'");
         let clean_body = body.replace("'", "''");
 
-        assert_eq!(clean_subject, "Test 'Quotes' and 'Single' and `Backticks` and $Dollars");
-        assert_eq!(clean_body, "<p>Html with ''single'' quotes and \"double\" quotes</p>");
+        assert_eq!(
+            clean_subject,
+            "Test 'Quotes' and 'Single' and `Backticks` and $Dollars"
+        );
+        assert_eq!(
+            clean_body,
+            "<p>Html with ''single'' quotes and \"double\" quotes</p>"
+        );
     }
 }

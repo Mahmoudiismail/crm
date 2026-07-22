@@ -208,7 +208,6 @@ fn get_manifest(config_path: Option<PathBuf>) -> AppManifest {
     }
 }
 
-
 pub fn finalize_download(
     temp_dl_dir: &std::path::Path,
     final_out_dir: &std::path::Path,
@@ -771,10 +770,16 @@ mod tests_yasweb_finalization {
         std::fs::create_dir_all(&dst_dir).unwrap();
 
         let src_file = src_dir.join("temp.xlsx");
-        File::create(&src_file).unwrap().write_all(b"new data").unwrap();
+        File::create(&src_file)
+            .unwrap()
+            .write_all(b"new data")
+            .unwrap();
 
         let dst_file = dst_dir.join("final.xlsx");
-        File::create(&dst_file).unwrap().write_all(b"old data").unwrap();
+        File::create(&dst_file)
+            .unwrap()
+            .write_all(b"old data")
+            .unwrap();
 
         finalize_download(&src_dir, &dst_dir, "final.xlsx").unwrap();
 

@@ -355,8 +355,8 @@ Based on the repository's heavy reliance on Windows-specific COM integrations (E
 ## Appendix C - Behavior Characterization (PR 1 Tests)
 
 As part of PR 1, several existing behaviors were characterized with tests:
-- **Tasker failure behavior**: When an empty tasks array is passed, `run_app` successfully processes 0 tasks (panics occur in test-only `config::tests` which were documented but not reachable in production `run_app`).
-- **Runner process behavior**: The application enforces a bounded capacity of 64 on the `RunnerCommand` queue and 128 on the `ExecutionManagerCommand` queue.
+- **Tasker failure behavior**: When an empty tasks array is passed, `run_app` successfully processes 0 tasks (panics occur in test-only `config::tests` which were documented but not reachable in production `run_app`). We also proved that missing input files or inaccessible output paths return explicit `Err` results instead of panicking.
+- **Runner process behavior**: The application enforces a bounded capacity of 64 on the `RunnerCommand` queue and 128 on the `ExecutionManagerCommand` queue. We also established that `run_shell_command` and `run_external_app` correctly translate non-zero exit codes into errors and properly bubble up timeout errors when commands exceed their allotted time.
 - **PowerShell generation**: PowerShell scripts for email escaping correctly swap double quotes for single quotes in subjects, and escape single quotes within HTML body structures.
 - **Temporary-file lifecycle**: In `run_powershell`, temporary files are correctly cleaned up after script execution, regardless of if the script throws an error, *unless* the process completely fails to spawn (e.g., missing binary on UNIX), in which case the early return leaks the temporary file.
 - **Yasweb download finalization**: Yasweb correctly renames downloads, gracefully skips missing sources, correctly fallback-copies on failure, replaces extensions if necessary, and handles paths with Unicode and spaces correctly.
