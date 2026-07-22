@@ -22,6 +22,18 @@ pub struct RunnerConfig {
     pub tasks: Vec<RunnerTask>,
     #[serde(default)]
     pub registered_apps: Vec<RegisteredApp>,
+    #[serde(default = "default_stdout_log_level")]
+    pub log_stdout_level: String,
+    #[serde(default = "default_file_log_level")]
+    pub log_file_level: String,
+}
+
+fn default_stdout_log_level() -> String {
+    "DEBUG".to_string()
+}
+
+fn default_file_log_level() -> String {
+    "TRACE".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -56,6 +68,10 @@ pub struct RunnerTask {
     pub last_status: String,
     #[serde(default)]
     pub post_run_script: String,
+    #[serde(default)]
+    pub post_run_app_id: String,
+    #[serde(default)]
+    pub post_run_app_args: std::collections::HashMap<String, String>,
     #[serde(default)]
     pub timeout_seconds: u64,
 }
@@ -185,6 +201,8 @@ impl Default for RunnerConfig {
             min_task_interval_seconds: default_min_task_interval(),
             registered_apps: Vec::new(),
             tasks: Vec::new(),
+            log_stdout_level: "DEBUG".to_string(),
+            log_file_level: "TRACE".to_string(),
         }
     }
 }
@@ -199,8 +217,33 @@ impl RunnerConfig {
 
         let raw = std::fs::read_to_string(path)
             .with_context(|| format!("Failed to read runner config: {}", path))?;
-        let cfg: Self = serde_json::from_str(&raw)
+
+        let mut file_value: serde_json::Value = serde_json::from_str(&raw)
             .with_context(|| format!("Failed to parse runner config: {}", path))?;
+
+        let default_value = serde_json::to_value(Self::default())?;
+
+        let mut config_changed = false;
+        if let (
+            serde_json::Value::Object(ref mut file_map),
+            serde_json::Value::Object(ref default_map),
+        ) = (&mut file_value, &default_value)
+        {
+            for (k, v) in default_map {
+                if !file_map.contains_key(k) {
+                    file_map.insert(k.clone(), v.clone());
+                    config_changed = true;
+                }
+            }
+        }
+
+        let cfg: Self =
+            serde_json::from_value(file_value).context("Failed to deserialize merged config")?;
+
+        if config_changed {
+            cfg.save(path)?;
+        }
+
         Ok(cfg)
     }
 
@@ -920,6 +963,8 @@ mod tests {
             last_run_at: String::new(),
             last_status: String::new(),
             post_run_script: String::new(),
+            post_run_app_id: String::new(),
+            post_run_app_args: std::collections::HashMap::new(),
             timeout_seconds: 0,
         };
 
@@ -989,6 +1034,8 @@ mod tests {
             last_run_at: String::new(),
             last_status: String::new(),
             post_run_script: String::new(),
+            post_run_app_id: String::new(),
+            post_run_app_args: std::collections::HashMap::new(),
             timeout_seconds: 0,
         };
 
@@ -1055,6 +1102,8 @@ mod tests {
                 last_run_at: String::new(),
                 last_status: String::new(),
                 post_run_script: String::new(),
+                post_run_app_id: String::new(),
+                post_run_app_args: std::collections::HashMap::new(),
                 timeout_seconds: 0,
             },
             RunnerTask {
@@ -1078,6 +1127,8 @@ mod tests {
                 last_run_at: String::new(),
                 last_status: String::new(),
                 post_run_script: String::new(),
+                post_run_app_id: String::new(),
+                post_run_app_args: std::collections::HashMap::new(),
                 timeout_seconds: 0,
             },
         ];

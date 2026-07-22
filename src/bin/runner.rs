@@ -7,7 +7,9 @@ use crm_tool::manifest::AppManifest;
 use crm_tool::runner::engine::RunnerHandle;
 use crm_tool::runner::engine::{start_scheduler, RunnerCommand};
 use crm_tool::runner::gui::start_gui_server;
-use crm_tool::utils::{executable_dir, intercept_manifest, setup_logging};
+use crm_tool::utils::{
+    executable_dir, intercept_manifest, parse_log_level, setup_logging_with_levels,
+};
 #[cfg(target_os = "windows")]
 use muda::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem};
 #[cfg(target_os = "windows")]
@@ -53,7 +55,26 @@ async fn main() -> Result<()> {
         }
     };
 
-    let _log_guard = match setup_logging("runner") {
+    let config_path = executable_dir().join("runner_config.json");
+    let (stdout_lvl, file_lvl) = if config_path.exists() {
+        if let Ok(raw) = std::fs::read_to_string(&config_path) {
+            if let Ok(cfg) = serde_json::from_str::<crm_tool::runner::config::RunnerConfig>(&raw) {
+                (cfg.log_stdout_level, cfg.log_file_level)
+            } else {
+                ("DEBUG".to_string(), "TRACE".to_string())
+            }
+        } else {
+            ("DEBUG".to_string(), "TRACE".to_string())
+        }
+    } else {
+        ("DEBUG".to_string(), "TRACE".to_string())
+    };
+
+    let _log_guard = match setup_logging_with_levels(
+        "runner",
+        parse_log_level(&stdout_lvl),
+        parse_log_level(&file_lvl),
+    ) {
         Ok(guard) => guard,
         Err(e) => {
             eprintln!("Failed to set up logging: {}", e);

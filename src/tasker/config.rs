@@ -3,6 +3,18 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TaskerConfig {
     pub tasks: Vec<TaskConfig>,
+    #[serde(default = "default_stdout_log_level")]
+    pub log_stdout_level: String,
+    #[serde(default = "default_file_log_level")]
+    pub log_file_level: String,
+}
+
+fn default_stdout_log_level() -> String {
+    "DEBUG".to_string()
+}
+
+fn default_file_log_level() -> String {
+    "TRACE".to_string()
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

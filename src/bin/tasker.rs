@@ -3,7 +3,9 @@ use clap::Parser;
 use crm_tool::manifest::{AppArg, AppManifest, ArgType};
 use crm_tool::tasker::config::{TaskConfig, TaskerConfig};
 use crm_tool::tasker::{csv_task, dashboard_updater};
-use crm_tool::utils::{executable_dir, intercept_manifest, setup_logging};
+use crm_tool::utils::{
+    executable_dir, intercept_manifest, parse_log_level, setup_logging_with_levels,
+};
 use serde_json::Value;
 
 use std::fs;
@@ -298,9 +300,29 @@ fn get_manifest() -> AppManifest {
 fn main() -> Result<()> {
     intercept_manifest(get_manifest());
 
-    let _guard = setup_logging("task_csv_analysis")?;
-
     let options = TaskerCliOptions::parse();
+
+    // Attempt early config load for logging levels
+    let config_path = executable_dir().join("tasker_config.json");
+    let (stdout_lvl, file_lvl) = if config_path.exists() {
+        if let Ok(raw) = std::fs::read_to_string(&config_path) {
+            if let Ok(cfg) = serde_json::from_str::<crm_tool::tasker::config::TaskerConfig>(&raw) {
+                (cfg.log_stdout_level, cfg.log_file_level)
+            } else {
+                ("DEBUG".to_string(), "TRACE".to_string())
+            }
+        } else {
+            ("DEBUG".to_string(), "TRACE".to_string())
+        }
+    } else {
+        ("DEBUG".to_string(), "TRACE".to_string())
+    };
+
+    let _guard = setup_logging_with_levels(
+        "task_csv_analysis",
+        parse_log_level(&stdout_lvl),
+        parse_log_level(&file_lvl),
+    )?;
 
     if let Err(e) = run_app(options) {
         error!("Fatal application error: {:#}", e);

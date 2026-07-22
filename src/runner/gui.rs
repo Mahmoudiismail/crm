@@ -653,6 +653,19 @@ fn render_task_form(
     let name = task.map(|t| t.name.as_str()).unwrap_or_default();
     let enabled = task.map(|t| t.enabled).unwrap_or(true);
     let post_run_script = task.map(|t| t.post_run_script.as_str()).unwrap_or_default();
+    let post_run_app_id = task.map(|t| t.post_run_app_id.as_str()).unwrap_or_default();
+    let post_run_app_args = task
+        .map(|t| serde_json::to_string(&t.post_run_app_args).unwrap_or_else(|_| "{}".to_string()))
+        .unwrap_or_else(|| "{}".to_string());
+
+    let post_run_action = if !post_run_app_id.is_empty() {
+        "external_app"
+    } else if !post_run_script.is_empty() {
+        "script"
+    } else {
+        "none"
+    };
+
     let timeout_seconds = task.map(|t| t.timeout_seconds).unwrap_or(0);
     let timeout_seconds_str = if timeout_seconds > 0 {
         timeout_seconds.to_string()
@@ -696,16 +709,34 @@ fn render_task_form(
                 </div>\
                 <div class='grid md:grid-cols-2 gap-4'>\
                     <label class='block mb-4'>\
-                        <span class='text-sm font-semibold text-gray-700'>Post Run Script (Optional)</span>\
-                        <input class='mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm' type='text' name='post_run_script' value='{post_run_val}' placeholder='C:\\Scripts\\after_fetch.vbs'>\
-                        <p class='text-xs text-gray-500 mt-1'>Runs a script after a task successfully completes.</p>\
-                    </label>\
-                    <label class='block mb-4'>\
                         <span class='text-sm font-semibold text-gray-700'>Timeout (Seconds)</span>\
                         <input class='mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm' type='number' name='timeout_seconds' value='{timeout_val}' placeholder='0 (Global default)'>\
                         <p class='text-xs text-gray-500 mt-1'>Overrides the global timeout.</p>\
                     </label>\
                 </div>\
+                <div class='mb-4 p-4 border border-gray-200 bg-gray-50 rounded'>
+                    <h3 class='text-lg font-semibold text-gray-800 mb-2'>Post Run Action</h3>
+                    <select id='post_run_action_select' name='post_run_action' class='mb-4 block w-full rounded border border-gray-300 px-3 py-2 text-sm'>
+                        <option value='none' {post_run_none_selected}>None</option>
+                        <option value='script' {post_run_script_selected}>Script</option>
+                        <option value='external_app' {post_run_app_selected}>External Application</option>
+                    </select>
+
+                    <div id='post_run_script_container' class='{post_run_script_class}'>
+                        <label class='block mb-2'>
+                            <span class='text-sm font-semibold text-gray-700'>Post Run Script</span>
+                            <input class='mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm' type='text' id='post_run_script_input' name='post_run_script' value='{post_run_val}' placeholder='C:\\Scripts\\after_fetch.vbs'>
+                            <p class='text-xs text-gray-500 mt-1'>Runs a script after a task successfully completes.</p>
+                        </label>
+                    </div>
+
+                    <div id='post_run_app_container' class='{post_run_app_class} space-y-4'>
+                        <div id='post-run-external-app-select-container' class='mb-4'></div>
+                        <div id='post-run-external-app-dynamic-inputs' class='space-y-3'></div>
+                        <input type='hidden' id='post_run_app_args' name='post_run_app_args' value='{post_run_args_val}'>
+                        <input type='hidden' id='post_run_app_id' name='post_run_app_id' value='{post_run_id_val}'>
+                    </div>
+                </div>
                 {schedule_editor}\
                 {command_editor}\
                 <div id='external-app-container' class='hidden space-y-4 p-4 border border-purple-200 bg-purple-50 rounded'>\
@@ -726,6 +757,13 @@ fn render_task_form(
         checked_attr = if enabled { "checked" } else { "" },
         type_select = select_task_type(task_type),
         post_run_val = escape_html(post_run_script),
+        post_run_args_val = post_run_app_args.replace("'", "&#39;"),
+        post_run_id_val = escape_html(post_run_app_id),
+        post_run_none_selected = if post_run_action == "none" { "selected" } else { "" },
+        post_run_script_selected = if post_run_action == "script" { "selected" } else { "" },
+        post_run_app_selected = if post_run_action == "external_app" { "selected" } else { "" },
+        post_run_script_class = if post_run_action == "script" { "block" } else { "hidden" },
+        post_run_app_class = if post_run_action == "external_app" { "block" } else { "hidden" },
         timeout_val = escape_html(&timeout_seconds_str),
         schedule_editor = schedule_editor_html(task),
         command_editor = shell_command_editor_html(task),
@@ -1280,10 +1318,33 @@ fn build_task_from_values(
         .map(|v| v.trim().to_string())
         .unwrap_or_default();
 
-    let post_run_script = values
-        .get("post_run_script")
+    let post_run_action = values
+        .get("post_run_action")
         .map(|v| v.trim().to_string())
         .unwrap_or_default();
+
+    let mut post_run_script = String::new();
+    let mut post_run_app_id = String::new();
+    let mut post_run_app_args = std::collections::HashMap::new();
+
+    if post_run_action == "script" {
+        post_run_script = values
+            .get("post_run_script")
+            .map(|v| v.trim().to_string())
+            .unwrap_or_default();
+    } else if post_run_action == "external_app" {
+        post_run_app_id = values
+            .get("post_run_app_id")
+            .map(|v| v.trim().to_string())
+            .unwrap_or_default();
+        let args_json = values
+            .get("post_run_app_args")
+            .map(|s| s.as_str())
+            .unwrap_or("{}");
+        if let Ok(parsed_args) = serde_json::from_str(args_json) {
+            post_run_app_args = parsed_args;
+        }
+    }
 
     let timeout_seconds = values
         .get("timeout_seconds")
@@ -1351,6 +1412,8 @@ fn build_task_from_values(
         last_run_at: String::new(),
         last_status: String::new(),
         post_run_script,
+        post_run_app_id,
+        post_run_app_args,
         timeout_seconds,
     })
 }
