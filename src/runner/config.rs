@@ -224,8 +224,10 @@ impl RunnerConfig {
         let default_value = serde_json::to_value(Self::default())?;
 
         let mut config_changed = false;
-        if let (serde_json::Value::Object(ref mut file_map), serde_json::Value::Object(ref default_map)) =
-            (&mut file_value, &default_value)
+        if let (
+            serde_json::Value::Object(ref mut file_map),
+            serde_json::Value::Object(ref default_map),
+        ) = (&mut file_value, &default_value)
         {
             for (k, v) in default_map {
                 if !file_map.contains_key(k) {
@@ -235,8 +237,8 @@ impl RunnerConfig {
             }
         }
 
-        let cfg: Self = serde_json::from_value(file_value)
-            .context("Failed to deserialize merged config")?;
+        let cfg: Self =
+            serde_json::from_value(file_value).context("Failed to deserialize merged config")?;
 
         if config_changed {
             cfg.save(path)?;
