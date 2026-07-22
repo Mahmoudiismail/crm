@@ -217,8 +217,31 @@ impl RunnerConfig {
 
         let raw = std::fs::read_to_string(path)
             .with_context(|| format!("Failed to read runner config: {}", path))?;
-        let cfg: Self = serde_json::from_str(&raw)
+
+        let mut file_value: serde_json::Value = serde_json::from_str(&raw)
             .with_context(|| format!("Failed to parse runner config: {}", path))?;
+
+        let default_value = serde_json::to_value(Self::default())?;
+
+        let mut config_changed = false;
+        if let (serde_json::Value::Object(ref mut file_map), serde_json::Value::Object(ref default_map)) =
+            (&mut file_value, &default_value)
+        {
+            for (k, v) in default_map {
+                if !file_map.contains_key(k) {
+                    file_map.insert(k.clone(), v.clone());
+                    config_changed = true;
+                }
+            }
+        }
+
+        let cfg: Self = serde_json::from_value(file_value)
+            .context("Failed to deserialize merged config")?;
+
+        if config_changed {
+            cfg.save(path)?;
+        }
+
         Ok(cfg)
     }
 
