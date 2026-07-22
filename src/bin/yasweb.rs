@@ -208,6 +208,45 @@ fn get_manifest(config_path: Option<PathBuf>) -> AppManifest {
     }
 }
 
+pub fn finalize_download(
+    temp_dl_dir: &std::path::Path,
+    final_out_dir: &std::path::Path,
+    final_filename: &str,
+) -> anyhow::Result<()> {
+    // Move and rename the file
+    if let Ok(entries) = std::fs::read_dir(temp_dl_dir) {
+        let _ = std::fs::create_dir_all(final_out_dir);
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if let Some(ext) = path.extension() {
+                if ext == "xlsx" || ext == "xls" || ext == "csv" {
+                    let mut out_file = final_out_dir.to_path_buf();
+                    // If the original file was not xlsx, adapt the extension, but we requested XLSX
+                    let ext_str = ext.to_string_lossy().to_string();
+                    let mut final_name = final_filename.to_string();
+                    if ext_str != "xlsx" {
+                        final_name = final_name.replace(".xlsx", &format!(".{}", ext_str));
+                    }
+                    out_file.push(final_name);
+
+                    tracing::info!("Moving downloaded file from {:?} to {:?}", path, out_file);
+                    if let Err(e) = std::fs::rename(&path, &out_file) {
+                        tracing::error!("Failed to rename/move file: {}", e);
+                        // Fallback to copy+delete across mount points
+                        if std::fs::copy(&path, &out_file).is_ok() {
+                            let _ = std::fs::remove_file(&path);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Cleanup temp dir
+    let _ = std::fs::remove_dir_all(temp_dl_dir);
+    Ok(())
+}
 #[tokio::main]
 async fn main() -> Result<()> {
     // Pre-parse args to look for --manifest and try to parse --config manually first
@@ -638,40 +677,9 @@ async fn main() -> Result<()> {
         let results = futures_util::future::join_all(tasks).await;
 
         for (discovered_filters, temp_dl_dir, final_filename) in results.into_iter().flatten() {
-            // Move and rename the file
-            if let Ok(entries) = std::fs::read_dir(&temp_dl_dir) {
-                let mut final_out_dir = executable_dir();
-                final_out_dir.push("downloads");
-                let _ = std::fs::create_dir_all(&final_out_dir);
-
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    if let Some(ext) = path.extension() {
-                        if ext == "xlsx" || ext == "xls" || ext == "csv" {
-                            let mut out_file = final_out_dir.clone();
-                            // If the original file was not xlsx, adapt the extension, but we requested XLSX
-                            let ext_str = ext.to_string_lossy().to_string();
-                            let mut final_name = final_filename.clone();
-                            if ext_str != "xlsx" {
-                                final_name = final_name.replace(".xlsx", &format!(".{}", ext_str));
-                            }
-                            out_file.push(final_name);
-
-                            info!("Moving downloaded file from {:?} to {:?}", path, out_file);
-                            if let Err(e) = std::fs::rename(&path, &out_file) {
-                                error!("Failed to rename/move file: {}", e);
-                                // Fallback to copy+delete across mount points
-                                if std::fs::copy(&path, &out_file).is_ok() {
-                                    let _ = std::fs::remove_file(&path);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Cleanup temp dir
-            let _ = std::fs::remove_dir_all(&temp_dl_dir);
+            let mut final_out_dir = executable_dir();
+            final_out_dir.push("downloads");
+            let _ = finalize_download(&temp_dl_dir, &final_out_dir, &final_filename);
 
             if !discovered_filters.is_empty() {
                 if let Some(report) = config_clone.reports.get_mut(&active_report_name_clone) {
@@ -697,4 +705,87 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests_yasweb_finalization {
+    use super::*;
+    use std::fs::File;
+    use std::io::Write;
+
+    #[test]
+    fn test_finalize_download_rename_success() {
+        let tmp = std::env::temp_dir();
+        let src_dir = tmp.join("yasweb_test_src_1");
+        let dst_dir = tmp.join("yasweb_test_dst_1");
+        std::fs::create_dir_all(&src_dir).unwrap();
+
+        let src_file = src_dir.join("temp.xlsx");
+        let mut f = File::create(&src_file).unwrap();
+        f.write_all(b"test data").unwrap();
+
+        finalize_download(&src_dir, &dst_dir, "final_report.xlsx").unwrap();
+
+        assert!(dst_dir.join("final_report.xlsx").exists());
+        assert!(!src_dir.exists()); // src dir is removed
+        std::fs::remove_dir_all(&dst_dir).unwrap();
+    }
+
+    #[test]
+    fn test_finalize_download_missing_source() {
+        let tmp = std::env::temp_dir();
+        let src_dir = tmp.join("yasweb_test_src_missing");
+        let dst_dir = tmp.join("yasweb_test_dst_missing");
+        // We do not create src_dir to simulate missing source
+
+        // Should not error, just does nothing cleanly
+        finalize_download(&src_dir, &dst_dir, "final_report.xlsx").unwrap();
+        assert!(!dst_dir.join("final_report.xlsx").exists());
+    }
+
+    #[test]
+    fn test_finalize_download_unicode_spaces() {
+        let tmp = std::env::temp_dir();
+        let src_dir = tmp.join("yasweb_test_src_uni");
+        let dst_dir = tmp.join("yasweb test 🚀 dst");
+        std::fs::create_dir_all(&src_dir).unwrap();
+
+        let src_file = src_dir.join("data.csv"); // tests extension swap
+        let mut f = File::create(&src_file).unwrap();
+        f.write_all(b"test").unwrap();
+
+        finalize_download(&src_dir, &dst_dir, "report 🚀 data.xlsx").unwrap();
+
+        // because the source is csv, it replaces .xlsx with .csv in the final name
+        assert!(dst_dir.join("report 🚀 data.csv").exists());
+        std::fs::remove_dir_all(&dst_dir).unwrap();
+    }
+
+    #[test]
+    fn test_finalize_download_overwrite_existing() {
+        let tmp = std::env::temp_dir();
+        let src_dir = tmp.join("yasweb_test_src_ow");
+        let dst_dir = tmp.join("yasweb_test_dst_ow");
+        std::fs::create_dir_all(&src_dir).unwrap();
+        std::fs::create_dir_all(&dst_dir).unwrap();
+
+        let src_file = src_dir.join("temp.xlsx");
+        File::create(&src_file)
+            .unwrap()
+            .write_all(b"new data")
+            .unwrap();
+
+        let dst_file = dst_dir.join("final.xlsx");
+        File::create(&dst_file)
+            .unwrap()
+            .write_all(b"old data")
+            .unwrap();
+
+        finalize_download(&src_dir, &dst_dir, "final.xlsx").unwrap();
+
+        let content = std::fs::read_to_string(dst_file).unwrap();
+        // Since rename on windows doesn't overwrite, but the fallback copy+delete will overwrite
+        assert_eq!(content, "new data");
+        std::fs::remove_dir_all(&dst_dir).unwrap();
+    }
 }

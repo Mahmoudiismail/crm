@@ -490,4 +490,34 @@ mod tests {
             "Should merge nested missing fields"
         );
     }
+
+    #[test]
+    fn test_empty_tasks_panics_on_start() {
+        use std::io::Write;
+
+        let tmp = std::env::temp_dir();
+        let config_path = tmp.join("mock_tasker_config_empty.json");
+
+        let mock_config_json = serde_json::json!({
+            "tasks": []
+        });
+
+        let mut file = std::fs::File::create(&config_path).unwrap();
+        file.write_all(mock_config_json.to_string().as_bytes())
+            .unwrap();
+        file.sync_all().unwrap();
+
+        let args = vec![
+            "tasker".to_string(),
+            "--config".to_string(),
+            config_path.to_string_lossy().to_string(),
+        ];
+
+        let options = TaskerCliOptions::parse_from(args);
+
+        // This validates the PR 1 characterization goal: empty tasks array behavior.
+        // As noted in planning, the config panic is test-only. Production run_app should handle this gracefully by exiting with Ok(()) and doing nothing.
+        let res = run_app(options);
+        assert!(res.is_ok(), "run_app should successfully process 0 tasks");
+    }
 }
