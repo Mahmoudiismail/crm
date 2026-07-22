@@ -911,7 +911,57 @@ async fn run_task_inner(
 
     match result {
         Ok(_) => {
-            if !task.post_run_script.trim().is_empty() {
+            if !task.post_run_app_id.trim().is_empty() {
+                if let Some(app) = policy
+                    .registered_apps
+                    .iter()
+                    .find(|a| a.id == task.post_run_app_id)
+                {
+                    match run_external_app(
+                        &logger,
+                        app,
+                        &task.post_run_app_args,
+                        effective_post_run_timeout,
+                    )
+                    .await
+                    {
+                        Ok(_) => task.last_status = "ok".to_string(),
+                        Err(e) => {
+                            task.last_status = format!("post-run app error: {}", e);
+                            let mut st = status.lock().await;
+                            st.last_error = format!("post-run app error: {}", e);
+
+                            let task_id = &task.id;
+                            let err_msg = format!("post-run app error: {}", e);
+                            let schedules_json =
+                                serde_json::to_string(&task.schedules).unwrap_or_default();
+                            let next_run = task.next_run_at.clone();
+                            error!(
+                                task_id = %task_id,
+                                error_type = "PostRunError",
+                                error_message = %err_msg,
+                                schedules = %schedules_json,
+                                next_run = %next_run,
+                                "Task Execution Failed in Post Run App"
+                            );
+                        }
+                    }
+                } else {
+                    let err_msg = format!(
+                        "Registered app with ID '{}' not found in config for post run",
+                        task.post_run_app_id
+                    );
+                    task.last_status = format!("post-run error: {}", err_msg);
+                    let mut st = status.lock().await;
+                    st.last_error = err_msg.clone();
+                    error!(
+                        task_id = %task.id,
+                        error_type = "PostRunError",
+                        error_message = %err_msg,
+                        "Task Execution Failed in Post Run App"
+                    );
+                }
+            } else if !task.post_run_script.trim().is_empty() {
                 match run_post_run_script(
                     &logger,
                     &task.post_run_script,
@@ -1693,6 +1743,8 @@ mod tests {
             last_run_at: String::new(),
             last_status: String::new(),
             post_run_script: String::new(),
+            post_run_app_id: String::new(),
+            post_run_app_args: std::collections::HashMap::new(),
             timeout_seconds: 0,
         };
 

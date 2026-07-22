@@ -11,7 +11,11 @@ pub fn executable_dir() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
 }
 
-pub fn setup_logging(app_name: &str) -> Result<tracing_appender::non_blocking::WorkerGuard> {
+pub fn setup_logging_with_levels(
+    app_name: &str,
+    stdout_level: tracing_subscriber::filter::LevelFilter,
+    file_level: tracing_subscriber::filter::LevelFilter,
+) -> Result<tracing_appender::non_blocking::WorkerGuard> {
     let log_dir = executable_dir();
     let file_appender = tracing_appender::rolling::never(&log_dir, format!("{}.log", app_name));
     let (non_blocking_file, guard) = tracing_appender::non_blocking(file_appender);
@@ -21,13 +25,13 @@ pub fn setup_logging(app_name: &str) -> Result<tracing_appender::non_blocking::W
         .with_ansi(false)
         .with_target(true)
         .with_thread_ids(true)
-        .with_filter(tracing_subscriber::filter::LevelFilter::TRACE);
+        .with_filter(file_level);
 
     let stdout_layer = fmt::layer()
         .with_writer(std::io::stdout)
         .with_target(true)
         .with_thread_ids(true)
-        .with_filter(tracing_subscriber::filter::LevelFilter::DEBUG);
+        .with_filter(stdout_level);
 
     let _ = tracing_subscriber::registry()
         .with(file_layer)
@@ -35,6 +39,26 @@ pub fn setup_logging(app_name: &str) -> Result<tracing_appender::non_blocking::W
         .try_init();
 
     Ok(guard)
+}
+
+pub fn setup_logging(app_name: &str) -> Result<tracing_appender::non_blocking::WorkerGuard> {
+    setup_logging_with_levels(
+        app_name,
+        tracing_subscriber::filter::LevelFilter::DEBUG,
+        tracing_subscriber::filter::LevelFilter::TRACE,
+    )
+}
+
+pub fn parse_log_level(level: &str) -> tracing_subscriber::filter::LevelFilter {
+    match level.to_lowercase().as_str() {
+        "trace" => tracing_subscriber::filter::LevelFilter::TRACE,
+        "debug" => tracing_subscriber::filter::LevelFilter::DEBUG,
+        "info" => tracing_subscriber::filter::LevelFilter::INFO,
+        "warn" => tracing_subscriber::filter::LevelFilter::WARN,
+        "error" => tracing_subscriber::filter::LevelFilter::ERROR,
+        "off" => tracing_subscriber::filter::LevelFilter::OFF,
+        _ => tracing_subscriber::filter::LevelFilter::INFO, // Default fallback
+    }
 }
 
 pub fn intercept_manifest(manifest: AppManifest) {

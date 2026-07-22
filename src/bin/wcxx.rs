@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use crm_tool::manifest::{AppArg, AppManifest, ArgType};
-use crm_tool::utils::{intercept_manifest, load_or_create_config, setup_logging};
+use crm_tool::utils::{intercept_manifest, load_or_create_config, parse_log_level, setup_logging_with_levels};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -35,6 +35,18 @@ struct Config {
     #[serde(default)]
     #[allow(dead_code)]
     refresh_token: Option<String>,
+    #[serde(default = "default_stdout_log_level")]
+    log_stdout_level: String,
+    #[serde(default = "default_file_log_level")]
+    log_file_level: String,
+}
+
+fn default_stdout_log_level() -> String {
+    "DEBUG".to_string()
+}
+
+fn default_file_log_level() -> String {
+    "TRACE".to_string()
 }
 
 fn default_base_url() -> String {
@@ -71,6 +83,8 @@ async fn main() -> Result<()> {
         client_id: Some("".to_string()),
         client_secret: Some("".to_string()),
         refresh_token: Some("".to_string()),
+        log_stdout_level: "DEBUG".to_string(),
+        log_file_level: "TRACE".to_string(),
     };
 
     if !config_path.exists() {
@@ -88,7 +102,11 @@ async fn main() -> Result<()> {
         anyhow::bail!("Please update {:?} with a valid token.", config_path);
     }
 
-    let _guard = setup_logging("wcxx")?;
+    let _guard = setup_logging_with_levels(
+        "wcxx",
+        parse_log_level(&config.log_stdout_level),
+        parse_log_level(&config.log_file_level)
+    )?;
 
     info!("Starting wcxx tool");
 

@@ -22,6 +22,18 @@ pub struct RunnerConfig {
     pub tasks: Vec<RunnerTask>,
     #[serde(default)]
     pub registered_apps: Vec<RegisteredApp>,
+    #[serde(default = "default_stdout_log_level")]
+    pub log_stdout_level: String,
+    #[serde(default = "default_file_log_level")]
+    pub log_file_level: String,
+}
+
+fn default_stdout_log_level() -> String {
+    "DEBUG".to_string()
+}
+
+fn default_file_log_level() -> String {
+    "TRACE".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -56,6 +68,10 @@ pub struct RunnerTask {
     pub last_status: String,
     #[serde(default)]
     pub post_run_script: String,
+    #[serde(default)]
+    pub post_run_app_id: String,
+    #[serde(default)]
+    pub post_run_app_args: std::collections::HashMap<String, String>,
     #[serde(default)]
     pub timeout_seconds: u64,
 }
@@ -185,6 +201,8 @@ impl Default for RunnerConfig {
             min_task_interval_seconds: default_min_task_interval(),
             registered_apps: Vec::new(),
             tasks: Vec::new(),
+            log_stdout_level: "DEBUG".to_string(),
+            log_file_level: "TRACE".to_string(),
         }
     }
 }
@@ -920,6 +938,8 @@ mod tests {
             last_run_at: String::new(),
             last_status: String::new(),
             post_run_script: String::new(),
+            post_run_app_id: String::new(),
+            post_run_app_args: std::collections::HashMap::new(),
             timeout_seconds: 0,
         };
 
@@ -989,6 +1009,8 @@ mod tests {
             last_run_at: String::new(),
             last_status: String::new(),
             post_run_script: String::new(),
+            post_run_app_id: String::new(),
+            post_run_app_args: std::collections::HashMap::new(),
             timeout_seconds: 0,
         };
 
@@ -1055,6 +1077,8 @@ mod tests {
                 last_run_at: String::new(),
                 last_status: String::new(),
                 post_run_script: String::new(),
+                post_run_app_id: String::new(),
+                post_run_app_args: std::collections::HashMap::new(),
                 timeout_seconds: 0,
             },
             RunnerTask {
@@ -1078,6 +1102,8 @@ mod tests {
                 last_run_at: String::new(),
                 last_status: String::new(),
                 post_run_script: String::new(),
+                post_run_app_id: String::new(),
+                post_run_app_args: std::collections::HashMap::new(),
                 timeout_seconds: 0,
             },
         ];

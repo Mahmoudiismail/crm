@@ -54,6 +54,18 @@ pub struct YaswebConfig {
     pub concurrency: usize,
     #[serde(default)]
     pub reports: HashMap<String, ReportConfig>,
+    #[serde(default = "default_stdout_log_level")]
+    pub log_stdout_level: String,
+    #[serde(default = "default_file_log_level")]
+    pub log_file_level: String,
+}
+
+fn default_stdout_log_level() -> String {
+    "DEBUG".to_string()
+}
+
+fn default_file_log_level() -> String {
+    "TRACE".to_string()
 }
 
 fn default_concurrency() -> usize {
@@ -70,6 +82,8 @@ impl Default for YaswebConfig {
             keep_open: false,
             concurrency: 6,
             reports: HashMap::new(),
+            log_stdout_level: "DEBUG".to_string(),
+            log_file_level: "TRACE".to_string(),
         }
     }
 }

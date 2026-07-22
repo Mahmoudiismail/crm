@@ -62,6 +62,19 @@ pub struct AppConfig {
     pub dynamic_to_date: bool,
     #[serde(skip)]
     pub dynamic_calls_from_date: bool,
+
+    #[serde(default = "default_stdout_log_level")]
+    pub log_stdout_level: String,
+    #[serde(default = "default_file_log_level")]
+    pub log_file_level: String,
+}
+
+fn default_stdout_log_level() -> String {
+    "DEBUG".to_string()
+}
+
+fn default_file_log_level() -> String {
+    "TRACE".to_string()
 }
 
 fn default_true() -> bool {
@@ -96,6 +109,8 @@ impl Default for AppConfig {
             token_timestamp: String::new(),
             dynamic_to_date: false,
             dynamic_calls_from_date: false,
+            log_stdout_level: "DEBUG".to_string(),
+            log_file_level: "TRACE".to_string(),
         }
     }
 }
