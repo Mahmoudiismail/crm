@@ -2,7 +2,9 @@ use anyhow::Result;
 use clap::Parser;
 use crm_tool::crm;
 use crm_tool::manifest::{AppArg, AppManifest, ArgType};
-use crm_tool::utils::{executable_dir, intercept_manifest, parse_log_level, setup_logging_with_levels};
+use crm_tool::utils::{
+    executable_dir, intercept_manifest, parse_log_level, setup_logging_with_levels,
+};
 
 use tracing::info;
 
@@ -32,14 +34,12 @@ async fn main() -> Result<()> {
     let config_path = resolve_config_path(options.config.as_deref(), &exe_dir);
 
     // Load config to grab logging levels early
-    let early_config = crm_tool::crm::config::AppConfig::load(
-        &config_path
-    )?;
+    let early_config = crm_tool::crm::config::AppConfig::load(&config_path)?;
 
     let _log_guard = setup_logging_with_levels(
         "crm",
         parse_log_level(&early_config.log_stdout_level),
-        parse_log_level(&early_config.log_file_level)
+        parse_log_level(&early_config.log_file_level),
     )?;
 
     info!("==================================================");

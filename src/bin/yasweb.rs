@@ -9,7 +9,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use clap::Parser;
-use crm_tool::utils::{executable_dir, intercept_manifest, parse_log_level, setup_logging_with_levels};
+use crm_tool::utils::{
+    executable_dir, intercept_manifest, parse_log_level, setup_logging_with_levels,
+};
 use crm_tool::yasweb::browser::run_browser_tab;
 use crm_tool::yasweb::config::{ReportConfig, YaswebConfig};
 use tokio::fs;
@@ -274,15 +276,13 @@ async fn main() -> Result<()> {
         executable_dir().join(p)
     };
 
-    let mut config: YaswebConfig = crm_tool::utils::load_or_create_config(
-        &config_path,
-        &YaswebConfig::default(),
-    )?;
+    let mut config: YaswebConfig =
+        crm_tool::utils::load_or_create_config(&config_path, &YaswebConfig::default())?;
 
     let _guard = setup_logging_with_levels(
         "yasweb",
         parse_log_level(&config.log_stdout_level),
-        parse_log_level(&config.log_file_level)
+        parse_log_level(&config.log_file_level),
     )?;
     let mut config_updated = false;
 

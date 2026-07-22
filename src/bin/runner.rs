@@ -7,7 +7,9 @@ use crm_tool::manifest::AppManifest;
 use crm_tool::runner::engine::RunnerHandle;
 use crm_tool::runner::engine::{start_scheduler, RunnerCommand};
 use crm_tool::runner::gui::start_gui_server;
-use crm_tool::utils::{executable_dir, intercept_manifest, parse_log_level, setup_logging_with_levels};
+use crm_tool::utils::{
+    executable_dir, intercept_manifest, parse_log_level, setup_logging_with_levels,
+};
 #[cfg(target_os = "windows")]
 use muda::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem};
 #[cfg(target_os = "windows")]
@@ -71,7 +73,7 @@ async fn main() -> Result<()> {
     let _log_guard = match setup_logging_with_levels(
         "runner",
         parse_log_level(&stdout_lvl),
-        parse_log_level(&file_lvl)
+        parse_log_level(&file_lvl),
     ) {
         Ok(guard) => guard,
         Err(e) => {

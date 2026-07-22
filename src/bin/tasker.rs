@@ -3,7 +3,9 @@ use clap::Parser;
 use crm_tool::manifest::{AppArg, AppManifest, ArgType};
 use crm_tool::tasker::config::{TaskConfig, TaskerConfig};
 use crm_tool::tasker::{csv_task, dashboard_updater};
-use crm_tool::utils::{executable_dir, intercept_manifest, parse_log_level, setup_logging_with_levels};
+use crm_tool::utils::{
+    executable_dir, intercept_manifest, parse_log_level, setup_logging_with_levels,
+};
 use serde_json::Value;
 
 use std::fs;
@@ -319,7 +321,7 @@ fn main() -> Result<()> {
     let _guard = setup_logging_with_levels(
         "task_csv_analysis",
         parse_log_level(&stdout_lvl),
-        parse_log_level(&file_lvl)
+        parse_log_level(&file_lvl),
     )?;
 
     if let Err(e) = run_app(options) {
