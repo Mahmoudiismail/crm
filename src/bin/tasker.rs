@@ -296,6 +296,7 @@ mod tests {
         file.write_all(mock_config_json.to_string().as_bytes())
             .unwrap();
         file.sync_all().unwrap();
+        drop(file);
 
         // Passing valid task index 2. This won't actually succeed all the way because 'path2' doesn't exist,
         // but it WILL pass the bounds check and fail further down the execution tree.
@@ -343,6 +344,7 @@ mod tests {
         file.write_all(mock_config_json.to_string().as_bytes())
             .unwrap();
         file.sync_all().unwrap();
+        drop(file);
 
         // Pass task 5, which does not exist.
         let args = vec![
@@ -435,6 +437,7 @@ mod tests {
         file.write_all(mock_config_json.to_string().as_bytes())
             .unwrap();
         file.sync_all().unwrap();
+        drop(file);
 
         let args = vec![
             "tasker".to_string(),
