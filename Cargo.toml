@@ -92,19 +92,3 @@ members = []
 [[bench]]
 name = "csv_parsing"
 harness = false
-
-[[bench]]
-name = "manifest_loading"
-harness = false
-
-[[bench]]
-name = "authentication"
-harness = false
-
-[[bench]]
-name = "regex_matching"
-harness = false
-
-[[bench]]
-name = "dashboard_generation"
-harness = false
