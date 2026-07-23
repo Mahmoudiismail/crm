@@ -4,19 +4,19 @@ pub mod downloader;
 pub mod fetcher;
 
 use anyhow::Result;
-use tracing::error;
 
 use config::AppConfig;
 
+use anyhow::Context;
+
 pub async fn run_once(
-    crm_config_path: &str,
-    report: Vec<String>,
+    config: &mut AppConfig,
+    crm_config_path: &std::path::Path,
+    report: &[String],
     start_date: Option<String>,
     end_date: Option<String>,
     custom_download_folder_cli: Option<String>,
 ) -> Result<()> {
-    let mut config = AppConfig::load(crm_config_path)?;
-
     use crate::utils::to_iso_date;
 
     if let Some(sd) = start_date {
@@ -37,14 +37,19 @@ pub async fn run_once(
         config.to_date
     );
 
-    let client = build_client(&config)?;
+    let client = build_client(config).context("Failed to build HTTP client")?;
 
     tracing::info!("Ensuring authentication...");
-    let token = auth::ensure_authenticated(&mut config, &client, false).await?;
+    let token = auth::ensure_authenticated(config, &client, false)
+        .await
+        .context("Failed during authentication process")?;
     tracing::trace!("Authentication successful.");
-    config.save(crm_config_path)?;
+    let path_str = crm_config_path.to_string_lossy();
+    config
+        .save(&path_str)
+        .context("Failed to save configuration after authentication")?;
 
-    let exe_path = std::env::current_exe()?;
+    let exe_path = std::env::current_exe().context("Failed to get current executable path")?;
     let exe_dir = exe_path
         .parent()
         .unwrap_or_else(|| std::path::Path::new("."));
@@ -66,19 +71,20 @@ pub async fn run_once(
 
     // Ensure download dir exists upfront if needed
     if config.download_csv {
-        if let Err(e) = tokio::fs::create_dir_all(&download_dir).await {
-            error!(
-                "Failed to create download directory {:?}: {:#}",
-                download_dir, e
-            );
-        }
+        tokio::fs::create_dir_all(&download_dir)
+            .await
+            .with_context(|| format!("Failed to create download directory {:?}", download_dir))?;
     }
 
     tracing::info!("Fetching reports for type: {:?}", report);
-    let _results = fetcher::fetch_reports(&config, &client, &token, report, &download_dir).await?;
+    let _results = fetcher::fetch_reports(config, &client, &token, report.to_vec(), &download_dir)
+        .await
+        .context("Failed to fetch CRM reports")?;
     tracing::trace!("Fetch reports results received.");
 
-    config.save(crm_config_path)?;
+    config
+        .save(&path_str)
+        .context("Failed to save configuration after fetching reports")?;
     Ok(())
 }
 
