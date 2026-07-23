@@ -28,8 +28,8 @@ fn run_powershell(script: &str) -> Result<()> {
         .stderr(Stdio::piped())
         .spawn()?;
 
-    let stdout = child.stdout.take().unwrap();
-    let stderr = child.stderr.take().unwrap();
+    let stdout = child.stdout.take().expect("Failed to open stdout");
+    let stderr = child.stderr.take().expect("Failed to open stderr");
 
     let stdout_thread = std::thread::spawn(move || {
         let reader = BufReader::new(stdout);
@@ -50,8 +50,8 @@ fn run_powershell(script: &str) -> Result<()> {
     });
 
     let status = child.wait()?;
-    stdout_thread.join().unwrap();
-    stderr_thread.join().unwrap();
+    let _ = stdout_thread.join();
+    let _ = stderr_thread.join();
 
     let _ = std::fs::remove_file(&path);
 

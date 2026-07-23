@@ -452,8 +452,8 @@ async fn main() -> Result<()> {
                         "%d-%m-%Y 23:59".to_string()
                     };
 
-                    let start_dt_time = current_dt.and_hms_opt(0, 0, 0).unwrap();
-                    let end_dt_time = chunk_end.and_hms_opt(23, 59, 59).unwrap();
+                    let start_dt_time = current_dt.and_hms_opt(0, 0, 0).context("Invalid start time")?;
+                    let end_dt_time = chunk_end.and_hms_opt(23, 59, 59).context("Invalid end time")?;
 
                     date_ranges.push((
                         start_dt_time.format(&start_format_str).to_string(),
@@ -532,7 +532,7 @@ async fn main() -> Result<()> {
                         if let (Some(st_str), Some(report_conf)) = (&start_date_str, report_conf_opt) {
                             if let Some(sk) = &report_conf.start_date_key {
                                 if let Some(parsed) = crm_tool::utils::parse_flexible_date(st_str) {
-                                    let parsed_dt = parsed.and_hms_opt(0, 0, 0).unwrap();
+                                    let parsed_dt = parsed.and_hms_opt(0, 0, 0).expect("midnight is valid");
                                     Some(parsed_dt.format(&sk.format).to_string())
                                 } else {
                                     start_date_str.clone()
@@ -552,7 +552,7 @@ async fn main() -> Result<()> {
                         if let (Some(ed_str), Some(report_conf)) = (&end_date_str, report_conf_opt) {
                             if let Some(ek) = &report_conf.end_date_key {
                                 if let Some(parsed) = crm_tool::utils::parse_flexible_date(ed_str) {
-                                    let parsed_dt = parsed.and_hms_opt(23, 59, 59).unwrap();
+                                    let parsed_dt = parsed.and_hms_opt(23, 59, 59).expect("23:59:59 is valid");
                                     Some(parsed_dt.format(&ek.format).to_string())
                                 } else {
                                     end_date_str.clone()

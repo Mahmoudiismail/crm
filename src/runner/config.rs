@@ -780,7 +780,7 @@ pub fn next_weekly_run_after(
     let now_weekday = today.weekday();
 
     let time = if at_time.is_empty() {
-        NaiveTime::from_hms_opt(0, 0, 0).unwrap()
+        NaiveTime::from_hms_opt(0, 0, 0).expect("midnight is mathematically valid")
     } else {
         NaiveTime::parse_from_str(at_time.trim(), "%H:%M")
             .with_context(|| format!("Invalid weekly time '{}'. Use HH:MM", at_time))?
@@ -831,7 +831,7 @@ pub fn next_monthly_run_after(
     let current_month = today.month();
 
     let time = if at_time.is_empty() {
-        NaiveTime::from_hms_opt(0, 0, 0).unwrap()
+        NaiveTime::from_hms_opt(0, 0, 0).expect("midnight is mathematically valid")
     } else {
         NaiveTime::parse_from_str(at_time.trim(), "%H:%M")
             .with_context(|| format!("Invalid monthly time '{}'. Use HH:MM", at_time))?

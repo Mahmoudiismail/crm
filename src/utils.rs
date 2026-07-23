@@ -123,7 +123,9 @@ fn merge_json(current: &mut serde_json::Value, default: &serde_json::Value) -> b
                 curr_map.insert(k.clone(), v.clone());
                 changed = true;
             } else {
-                changed |= merge_json(curr_map.get_mut(k).unwrap(), v);
+                if let Some(mut_val) = curr_map.get_mut(k) {
+                    changed |= merge_json(mut_val, v);
+                }
             }
         }
     }
@@ -184,7 +186,7 @@ pub(crate) fn resolve_date_var(val: &str, base_date: Option<&str>) -> Result<chr
         "yesterday" => {
             info!("Variable detected: {}", val);
             let dt =
-                Local::now().date_naive() - chrono::TimeDelta::try_days(1).expect("valid days");
+                Local::now().date_naive() - chrono::TimeDelta::try_days(1).context("valid days")?;
             debug!("Resolved value: {} (Original: {})", dt, val);
             trace!("Variable resolution path: yesterday");
             Ok(dt)
@@ -192,7 +194,7 @@ pub(crate) fn resolve_date_var(val: &str, base_date: Option<&str>) -> Result<chr
         "tomorrow" => {
             info!("Variable detected: {}", val);
             let dt =
-                Local::now().date_naive() + chrono::TimeDelta::try_days(1).expect("valid days");
+                Local::now().date_naive() + chrono::TimeDelta::try_days(1).context("valid days")?;
             debug!("Resolved value: {} (Original: {})", dt, val);
             trace!("Variable resolution path: tomorrow");
             Ok(dt)
@@ -206,11 +208,11 @@ pub(crate) fn resolve_date_var(val: &str, base_date: Option<&str>) -> Result<chr
             };
             let dt = base_dt.unwrap_or_else(|| Local::now().date_naive());
             let next_month = if dt.month() == 12 {
-                NaiveDate::from_ymd_opt(dt.year() + 1, 1, 1).expect("valid next year")
+                NaiveDate::from_ymd_opt(dt.year() + 1, 1, 1).context("valid next year")?
             } else {
-                NaiveDate::from_ymd_opt(dt.year(), dt.month() + 1, 1).expect("valid next month")
+                NaiveDate::from_ymd_opt(dt.year(), dt.month() + 1, 1).context("valid next month")?
             };
-            let res = next_month.pred_opt().expect("valid preceding day");
+            let res = next_month.pred_opt().context("valid preceding day")?;
 
             trace!(
                 "Variable resolution path: eomonth. Base: {}, Result: {}",
