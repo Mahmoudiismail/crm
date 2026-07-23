@@ -134,19 +134,8 @@ impl AppConfig {
         let mut file_value: Value = serde_json::from_str(&raw)
             .with_context(|| format!("Failed to parse config file: {}", path))?;
 
-        let mut config_changed = false;
-        // Merge defaults into the file value (file takes precedence)
-        if let (Value::Object(ref mut file_map), Value::Object(ref default_map)) =
-            (&mut file_value, &default_value)
-        {
-            for (k, v) in default_map {
-                if !file_map.contains_key(k) {
-                    debug!("Config key '{}' missing, using default", k);
-                    file_map.insert(k.clone(), v.clone());
-                    config_changed = true;
-                }
-            }
-        }
+        // Merge defaults into the file value (file takes precedence) using shared deep merge function
+        let config_changed = crate::utils::merge_json(&mut file_value, &default_value);
 
         let cfg: AppConfig =
             serde_json::from_value(file_value).context("Failed to deserialize merged config")?;
@@ -222,7 +211,7 @@ impl AppConfig {
         strip_nulls(&mut value);
 
         let pretty = serde_json::to_string_pretty(&value)?;
-        std::fs::write(path, pretty)
+        crate::utils::atomic_write(std::path::Path::new(path), &pretty)
             .with_context(|| format!("Failed to write config to {}", path))?;
         info!("Config saved to {}", path);
         Ok(())

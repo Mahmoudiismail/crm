@@ -31,25 +31,37 @@ pub enum TaskConfig {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct EmailConfig {
     pub team_mapping_file: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub body_template_file: Option<String>,
     pub initial_cc: String,
     pub ending_cc: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub send_emails: Option<bool>,
     pub default_to_email: String,
+    #[serde(default)]
     pub send_per_team_all_branches: Vec<String>,
+    #[serde(default)]
     pub send_per_branch_branches: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub send_per_team_branches: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub send_call_center: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub send_exceptions: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub indentation_spaces: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub save_attachment_as_csv: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub save_email_as_html: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CategoryException {
     pub category: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub branch: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub team: Option<String>,
 }
 
@@ -59,11 +71,16 @@ pub struct CsvAnalysisConfig {
     pub users_file: String,
     pub assignment_settings_file: String,
     pub minutes_ago: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub start_date: Option<String>,
+    #[serde(default)]
     pub exclude_branches: Vec<String>,
+    #[serde(default)]
     pub exclude_categories: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub category_exceptions: Option<Vec<CategoryException>>,
     pub output_file: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub email_config: Option<EmailConfig>,
 }
 
@@ -73,9 +90,13 @@ pub struct DashboardUpdaterConfig {
     pub users_file: String,
     pub assignment_settings_file: String,
     pub minutes_ago: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub start_date: Option<String>,
+    #[serde(default)]
     pub exclude_branches: Vec<String>,
+    #[serde(default)]
     pub exclude_categories: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub category_exceptions: Option<Vec<CategoryException>>,
     pub output_file: String,
 
@@ -94,13 +115,21 @@ pub struct CrmOpenSohailConfig {
     pub dashboard_config: DashboardUpdaterConfig,
 
     pub team_mapping_file: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub body_template_file: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub subject_template: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub branch_filter: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub month_filter: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub fallback_oul: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub dashboard_sheet_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub dashboard_pivot_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub table_column_widths: Option<Vec<String>>,
 }
 

@@ -27,15 +27,15 @@ struct Config {
     #[serde(default = "default_base_url")]
     base_url: String,
     token: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     org_id: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     #[allow(dead_code)]
     client_id: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     #[allow(dead_code)]
     client_secret: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     #[allow(dead_code)]
     refresh_token: Option<String>,
     #[serde(default = "default_stdout_log_level")]

@@ -328,9 +328,13 @@ async fn main() -> Result<()> {
         info!("Updating yasweb_config.json with CLI report parameters...");
         let content = serde_json::to_string_pretty(&config)
             .context("Failed to serialize updated yasweb config")?;
-        fs::write(&config_path, content)
-            .await
-            .context("Failed to write updated yasweb_config.json")?;
+        tokio::task::spawn_blocking({
+            let path = config_path.clone();
+            move || crm_tool::utils::atomic_write(&path, &content)
+        })
+        .await
+        .context("Failed to join blocking task")?
+        .context("Failed to write updated yasweb_config.json")?;
         info!("yasweb_config.json updated successfully.");
     }
 
@@ -678,7 +682,10 @@ async fn main() -> Result<()> {
                                     Err(_) => continue,
                                 };
                                 // Best effort write
-                                let _ = fs::write(&config_path_clone, content).await;
+                                let _ = tokio::task::spawn_blocking({
+                                    let path = config_path_clone.clone();
+                                    move || crm_tool::utils::atomic_write(&path, &content)
+                                }).await;
                             }
                         }
                     }
