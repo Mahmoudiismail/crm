@@ -232,34 +232,17 @@ async fn main() -> Result<()> {
     let mut config: YaswebConfig =
         crm_tool::utils::load_or_create_config(&config_path, &YaswebConfig::default())?;
 
+    config
+        .validate()
+        .context("Configuration validation failed")?;
+
     let _guard = setup_logging_with_levels(
         "yasweb",
         parse_log_level(&config.log_stdout_level)?,
         parse_log_level(&config.log_file_level)?,
     )?;
-    let mut config_updated = false;
 
-    // Config healing for empty formatting
-    for report in config.reports.values_mut() {
-        let (default_start_fmt, default_end_fmt) = if report.report_type == "Report Manager" {
-            ("%d-%b-%Y".to_string(), "%d-%b-%Y".to_string())
-        } else {
-            ("%d-%m-%Y 00:00".to_string(), "%d-%m-%Y 23:59".to_string())
-        };
-
-        if let Some(ref mut sk) = report.start_date_key {
-            if sk.format.is_empty() {
-                sk.format = default_start_fmt.clone();
-                config_updated = true;
-            }
-        }
-        if let Some(ref mut ek) = report.end_date_key {
-            if ek.format.is_empty() {
-                ek.format = default_end_fmt.clone();
-                config_updated = true;
-            }
-        }
-    }
+    let config_updated = config.finalize_runtime_fields();
 
     let active_report_names = options.name;
     let active_report_type_global = options.r#type.unwrap_or_default();

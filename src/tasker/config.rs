@@ -9,6 +9,12 @@ pub struct TaskerConfig {
     pub log_file_level: String,
 }
 
+impl TaskerConfig {
+    pub fn validate(&self) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
 fn default_stdout_log_level() -> String {
     "DEBUG".to_string()
 }

@@ -44,6 +44,15 @@ struct Config {
     log_file_level: String,
 }
 
+impl Config {
+    pub fn validate(&self, config_path: &PathBuf) -> Result<()> {
+        if self.token == "YOUR_BEARER_TOKEN_HERE" || self.token.trim().is_empty() {
+            anyhow::bail!("Please update {:?} with a valid token.", config_path);
+        }
+        Ok(())
+    }
+}
+
 fn default_stdout_log_level() -> String {
     "DEBUG".to_string()
 }
@@ -95,9 +104,7 @@ async fn main() -> Result<()> {
 
     let config: Config = load_or_create_config(&config_path, &default_config)?;
 
-    if config.token == "YOUR_BEARER_TOKEN_HERE" || config.token.trim().is_empty() {
-        anyhow::bail!("Please update {:?} with a valid token.", config_path);
-    }
+    config.validate(&config_path)?;
 
     let _guard = setup_logging_with_levels(
         "wcxx",

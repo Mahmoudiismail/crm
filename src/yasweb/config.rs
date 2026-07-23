@@ -30,6 +30,47 @@ impl<'de> Deserialize<'de> for DateKeyConfig {
     }
 }
 
+impl YaswebConfig {
+    /// Finalize runtime-derived fields, such as healing empty date formats.
+    /// Returns true if the configuration was modified.
+    pub fn finalize_runtime_fields(&mut self) -> bool {
+        let mut config_updated = false;
+
+        for report in self.reports.values_mut() {
+            let (default_start_fmt, default_end_fmt) = if report.report_type == "Report Manager" {
+                ("%d-%b-%Y".to_string(), "%d-%b-%Y".to_string())
+            } else {
+                ("%d-%m-%Y 00:00".to_string(), "%d-%m-%Y 23:59".to_string())
+            };
+
+            if let Some(ref mut sk) = report.start_date_key {
+                if sk.format.is_empty() {
+                    sk.format = default_start_fmt.clone();
+                    config_updated = true;
+                }
+            }
+            if let Some(ref mut ek) = report.end_date_key {
+                if ek.format.is_empty() {
+                    ek.format = default_end_fmt.clone();
+                    config_updated = true;
+                }
+            }
+        }
+
+        config_updated
+    }
+
+    pub fn validate(&self) -> anyhow::Result<()> {
+        if self.url.trim().is_empty() {
+            anyhow::bail!("url cannot be empty");
+        }
+        if self.concurrency == 0 {
+            anyhow::bail!("concurrency must be greater than 0");
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ReportConfig {
     pub report_type: String,

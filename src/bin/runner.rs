@@ -109,8 +109,13 @@ async fn main() -> Result<()> {
     #[cfg(target_os = "windows")]
     let event_loop = EventLoop::new()?;
     #[cfg(target_os = "windows")]
-    let runner_cfg =
-        crm_tool::runner::config::RunnerConfig::load(&runner_config_path_str).unwrap_or_default();
+    let runner_cfg = {
+        let cfg = crm_tool::runner::config::RunnerConfig::load(&runner_config_path_str)
+            .unwrap_or_default();
+        cfg.validate()
+            .context("Runner configuration validation failed")?;
+        cfg
+    };
 
     #[cfg(target_os = "windows")]
     let mut app = App {

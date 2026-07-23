@@ -209,30 +209,19 @@ impl Default for RunnerConfig {
 
 impl RunnerConfig {
     pub fn load(path: &str) -> Result<Self> {
-        if !std::path::Path::new(path).exists() {
-            let default = Self::default();
-            default.save(path)?;
-            return Ok(default);
+        let config_path = std::path::Path::new(path);
+        let config: Self = crate::utils::load_or_create_config(config_path, &Self::default())?;
+        Ok(config)
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        if self.gui_port == 0 {
+            anyhow::bail!("gui_port cannot be 0");
         }
-
-        let raw = std::fs::read_to_string(path)
-            .with_context(|| format!("Failed to read runner config: {}", path))?;
-
-        let mut file_value: serde_json::Value = serde_json::from_str(&raw)
-            .with_context(|| format!("Failed to parse runner config: {}", path))?;
-
-        let default_value = serde_json::to_value(Self::default())?;
-
-        let config_changed = crate::utils::merge_json(&mut file_value, &default_value);
-
-        let cfg: Self =
-            serde_json::from_value(file_value).context("Failed to deserialize merged config")?;
-
-        if config_changed {
-            cfg.save(path)?;
+        if self.poll_interval_seconds == 0 {
+            anyhow::bail!("poll_interval_seconds cannot be 0");
         }
-
-        Ok(cfg)
+        Ok(())
     }
 
     pub fn save(&self, path: &str) -> Result<()> {
