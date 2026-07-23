@@ -35,6 +35,10 @@ impl std::error::Error for ValidationError {}
 
 /// The top-level definition of an external application plugin/manifest.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Represents the expected CLI arguments and settings for a runnable child application.
+///
+/// The runner application intercepts this payload at startup to dynamically render UI fields
+/// without hardcoding child app definitions in the GUI logic.
 pub struct AppManifest {
     pub name: String,
     pub description: String,
@@ -101,6 +105,7 @@ pub struct AppArg {
 
 impl AppArg {
     /// Creates a new `AppArg` with the specified name and type, with `required` defaulting to `false` and all optional fields set to `None`.
+    /// Creates a new argument definition with the given name and type.
     pub fn new(name: impl Into<String>, arg_type: ArgType) -> Self {
         Self {
             name: name.into(),

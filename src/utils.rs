@@ -12,6 +12,17 @@ pub fn executable_dir() -> Result<PathBuf> {
     Ok(parent.to_path_buf())
 }
 
+/// Initializes the global tracing subscriber with independent levels for stdout and file.
+///
+/// The file logger rolls dynamically and defaults to being placed in the executable directory.
+///
+/// # Parameters
+/// - `app_name`: Used to construct the log file name (e.g., `<app_name>.log`).
+/// - `stdout_level`: The minimum log level to display in the terminal.
+/// - `file_level`: The minimum log level to persist to disk.
+///
+/// # Returns
+/// A `WorkerGuard` that ensures logs are flushed when dropped. This must be held for the duration of the program.
 pub fn setup_logging_with_levels(
     app_name: &str,
     stdout_level: tracing_subscriber::filter::LevelFilter,
@@ -127,10 +138,22 @@ fn merge_json(current: &mut serde_json::Value, default: &serde_json::Value) -> b
             }
         }
     }
-    // Arrays and scalars are preserved as they are without merging
+
     changed
 }
 
+/// Loads a JSON configuration from disk or creates it with defaults if missing.
+///
+/// This function intelligently merges the default configuration with any existing user configuration.
+/// Arrays are strictly preserved, while objects are merged recursively. The finalized configuration
+/// is saved back to disk automatically via an atomic write.
+///
+/// # Parameters
+/// - `config_path`: The filesystem path where the configuration is expected.
+/// - `default_config`: The fallback structure to inject missing keys.
+///
+/// # Returns
+/// The fully initialized and merged configuration of type `T`.
 pub fn load_or_create_config<T: DeserializeOwned + Serialize>(
     config_path: &Path,
     default_config: &T,
@@ -157,7 +180,6 @@ pub fn load_or_create_config<T: DeserializeOwned + Serialize>(
         atomic_write(config_path, &updated_content)?;
     }
 
-    // We consume `current_val` here, avoiding a clone.
     let config: T = serde_json::from_value(current_val).with_context(|| {
         format!(
             "Failed to deserialize merged config file at {:?}",
@@ -168,6 +190,14 @@ pub fn load_or_create_config<T: DeserializeOwned + Serialize>(
     Ok(config)
 }
 
+/// Resolves dynamic date variables (e.g., `today`, `yesterday`, `tomorrow`, `eomonth`)
+/// into concrete `NaiveDate` values.
+///
+/// - `eomonth`: Computes the end of the month based on `base_date` or the current date if none provided.
+///
+/// # Parameters
+/// - `val`: The date variable string to resolve.
+/// - `base_date`: An optional reference date (useful for relative calculations like `eomonth`).
 pub(crate) fn resolve_date_var(val: &str, base_date: Option<&str>) -> Result<chrono::NaiveDate> {
     use chrono::{Datelike, Local, NaiveDate};
     use tracing::{debug, error, info, trace};

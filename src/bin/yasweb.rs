@@ -583,7 +583,7 @@ async fn main() -> Result<()> {
 
                     // Setup download dir for this tab
                     let date_suffix = if is_monthly && !start_dt.is_empty() {
-                        // e.g. "01-01-2026", get MM-YYYY
+
                         let parts: Vec<&str> = start_dt.split('-').collect();
                         if parts.len() == 3 {
                             format!("{}-{}", parts[1], parts[2])
