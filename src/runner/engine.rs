@@ -396,10 +396,11 @@ pub async fn create_task(path: &str, mut task: RunnerTask) -> Result<()> {
 
     let task_id = task.id.clone();
     let task_name = task.name.clone();
-    let schedules_json = serde_json::to_string(&task.schedules).unwrap_or_default();
+
     let enabled = task.enabled;
     let created_time = Utc::now().to_rfc3339();
 
+    let schedules = task.schedules.clone();
     cfg.tasks.push(task);
     let path_str = path.to_string();
     tokio::task::spawn_blocking(move || cfg.save(&path_str))
@@ -409,7 +410,7 @@ pub async fn create_task(path: &str, mut task: RunnerTask) -> Result<()> {
     info!(
         task_id = %task_id,
         task_name = %task_name,
-        schedules = %schedules_json,
+        schedules = ?schedules,
         enabled = %enabled,
         created_time = %created_time,
         "Task Created"
@@ -565,13 +566,12 @@ pub async fn update_task(path: &str, task_id: &str, mut task: RunnerTask) -> Res
         task.last_status = cfg.tasks[existing_idx].last_status.clone();
     }
 
-    let old_schedules_json =
-        serde_json::to_string(&cfg.tasks[existing_idx].schedules).unwrap_or_default();
+    let old_schedules = cfg.tasks[existing_idx].schedules.clone();
     let old_next_run = cfg.tasks[existing_idx].next_run_at.clone();
 
-    let new_schedules_json = serde_json::to_string(&task.schedules).unwrap_or_default();
     let new_next_run = task.next_run_at.clone();
 
+    let new_schedules = task.schedules.clone();
     cfg.tasks[existing_idx] = task;
     let path_str = path.to_string();
     tokio::task::spawn_blocking(move || cfg.save(&path_str))
@@ -580,8 +580,8 @@ pub async fn update_task(path: &str, task_id: &str, mut task: RunnerTask) -> Res
 
     info!(
         task_id = %task_id,
-        old_schedules = %old_schedules_json,
-        new_schedules = %new_schedules_json,
+        old_schedules = ?old_schedules,
+        new_schedules = ?new_schedules,
         old_next_run = %old_next_run,
         new_next_run = %new_next_run,
         "Task Updated"
@@ -610,13 +610,13 @@ pub async fn delete_task(path: &str, task_id: &str) -> Result<()> {
 
     if let Some(deleted_task) = task_to_delete {
         let deleted_name = deleted_task.name.clone();
-        let deleted_schedules = serde_json::to_string(&deleted_task.schedules).unwrap_or_default();
+
         let deletion_timestamp = Utc::now().to_rfc3339();
 
         info!(
             task_id = %task_id,
             task_name = %deleted_name,
-            schedules = %deleted_schedules,
+            schedules = ?deleted_task.schedules,
             deletion_timestamp = %deletion_timestamp,
             "Task Deleted"
         );
@@ -936,14 +936,13 @@ async fn run_task_inner(
 
                             let task_id = &task.id;
                             let err_msg = format!("post-run app error: {}", e);
-                            let schedules_json =
-                                serde_json::to_string(&task.schedules).unwrap_or_default();
+
                             let next_run = task.next_run_at.clone();
                             error!(
                                 task_id = %task_id,
                                 error_type = "PostRunError",
                                 error_message = %err_msg,
-                                schedules = %schedules_json,
+                                schedules = ?task.schedules,
                                 next_run = %next_run,
                                 "Task Execution Failed in Post Run App"
                             );
@@ -980,14 +979,13 @@ async fn run_task_inner(
 
                         let task_id = &task.id;
                         let err_msg = format!("post-run script error: {}", e);
-                        let schedules_json =
-                            serde_json::to_string(&task.schedules).unwrap_or_default();
+
                         let next_run = task.next_run_at.clone();
                         error!(
                             task_id = %task_id,
                             error_type = "PostRunError",
                             error_message = %err_msg,
-                            schedules = %schedules_json,
+                            schedules = ?task.schedules,
                             next_run = %next_run,
                             "Task Execution Failed in Post Run"
                         );
@@ -1006,13 +1004,13 @@ async fn run_task_inner(
 
             let task_id = &task.id;
             let err_msg = format!("{}", e);
-            let schedules_json = serde_json::to_string(&task.schedules).unwrap_or_default();
+
             let next_run = task.next_run_at.clone();
             error!(
                 task_id = %task_id,
                 error_type = "ExecutionError",
                 error_message = %err_msg,
-                schedules = %schedules_json,
+                schedules = ?task.schedules,
                 next_run = %next_run,
                 "Task Execution Failed"
             );

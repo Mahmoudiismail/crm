@@ -360,9 +360,8 @@ pub fn generate_csv(params: &CsvAnalysisParams<'_>) -> Result<Option<std::path::
 
     for file_path in target_files {
         info!("Processing file: {}", file_path.display());
-        let file_bytes = std::fs::read(&file_path)?;
-        let file_content = String::from_utf8_lossy(&file_bytes);
-        let mut rdr = crate::utils::build_csv_reader_from_reader(file_content.as_bytes());
+        let f = std::fs::File::open(&file_path)?;
+        let mut rdr = crate::utils::build_csv_reader_from_reader(std::io::BufReader::new(f));
 
         let headers = rdr.headers()?.clone();
 
@@ -405,11 +404,13 @@ pub fn generate_csv(params: &CsvAnalysisParams<'_>) -> Result<Option<std::path::
             wrote_headers = true;
         }
 
+        let mut new_record = StringRecord::new();
         for result in rdr.records() {
             let mut record = match result {
                 Ok(r) => r,
                 Err(e) => {
                     let line_num = e.position().map(|p| p.line()).unwrap_or(0) as usize;
+                    let file_content = std::fs::read_to_string(&file_path).unwrap_or_default();
                     let diagnostic_info =
                         crate::utils::generate_csv_diagnostic_context(&file_content, line_num);
 
@@ -444,13 +445,14 @@ pub fn generate_csv(params: &CsvAnalysisParams<'_>) -> Result<Option<std::path::
             }
 
             // Clean
-            // Optimize: Collect fields directly into an array or iterator and push_record
-            let mut new_record = StringRecord::with_capacity(record.len() * 16, record.len());
+            // We clear and reuse new_record to minimize allocations
+            new_record.clear();
             for (i, field) in record.iter().enumerate() {
                 if Some(i) == assignee_idx {
                     new_record.push_field(field.trim());
                 } else if Some(i) == type_idx || Some(i) == subtype_idx || Some(i) == cat_idx {
                     if field.contains('_') {
+                        // replace allocates, but only if '_' is present
                         new_record.push_field(&field.replace('_', " "));
                     } else {
                         new_record.push_field(field);
@@ -459,7 +461,9 @@ pub fn generate_csv(params: &CsvAnalysisParams<'_>) -> Result<Option<std::path::
                     new_record.push_field(field);
                 }
             }
-            record = new_record;
+
+            // Swap record with new_record to avoid clone, then we can re-use the memory next iteration
+            std::mem::swap(&mut record, &mut new_record);
 
             // Deduplicate
             let ticket_id_val = ticket_id_idx.and_then(|idx| record.get(idx)).unwrap_or("");
