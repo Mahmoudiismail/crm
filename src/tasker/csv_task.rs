@@ -123,6 +123,7 @@ pub fn resolve_relative_to_exe_dir(path: &str) -> std::path::PathBuf {
     resolve_relative_to_base_dir(path, exe_dir.as_deref())
 }
 
+#[derive(Debug)]
 pub struct CsvAnalysisParams<'a> {
     pub users_file: &'a str,
     pub assignment_settings_file: &'a str,
@@ -167,7 +168,7 @@ impl<'a> From<&'a crate::tasker::config::DashboardUpdaterConfig> for CsvAnalysis
     }
 }
 
-pub fn generate_csv(params: &CsvAnalysisParams) -> Result<Option<std::path::PathBuf>> {
+pub fn generate_csv(params: &CsvAnalysisParams<'_>) -> Result<Option<std::path::PathBuf>> {
     info!(
         "Starting CSV Generation (minutes_ago: {})",
         params.minutes_ago

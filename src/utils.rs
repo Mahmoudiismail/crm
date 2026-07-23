@@ -4,11 +4,12 @@ use serde::{de::DeserializeOwned, Serialize};
 use std::path::{Path, PathBuf};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
-pub fn executable_dir() -> PathBuf {
-    std::env::current_exe()
-        .ok()
-        .and_then(|path| path.parent().map(|p| p.to_path_buf()))
-        .unwrap_or_else(|| PathBuf::from("."))
+pub fn executable_dir() -> Result<PathBuf> {
+    let exe_path = std::env::current_exe().context("Failed to get current executable path")?;
+    let parent = exe_path
+        .parent()
+        .context("Executable path has no parent directory")?;
+    Ok(parent.to_path_buf())
 }
 
 pub fn setup_logging_with_levels(
@@ -16,7 +17,7 @@ pub fn setup_logging_with_levels(
     stdout_level: tracing_subscriber::filter::LevelFilter,
     file_level: tracing_subscriber::filter::LevelFilter,
 ) -> Result<tracing_appender::non_blocking::WorkerGuard> {
-    let log_dir = executable_dir();
+    let log_dir = executable_dir().context("Could not determine executable directory for logging")?;
     let file_appender = tracing_appender::rolling::never(&log_dir, format!("{}.log", app_name));
     let (non_blocking_file, guard) = tracing_appender::non_blocking(file_appender);
 
@@ -33,43 +34,92 @@ pub fn setup_logging_with_levels(
         .with_thread_ids(true)
         .with_filter(stdout_level);
 
-    let _ = tracing_subscriber::registry()
+    if let Err(e) = tracing_subscriber::registry()
         .with(file_layer)
         .with(stdout_layer)
-        .try_init();
+        .try_init()
+    {
+        eprintln!("Warning: Failed to initialize logging for {}: {}", app_name, e);
+    }
 
     Ok(guard)
 }
 
-pub fn setup_logging(app_name: &str) -> Result<tracing_appender::non_blocking::WorkerGuard> {
+#[allow(dead_code)]
+pub(crate) fn setup_logging(app_name: &str) -> Result<tracing_appender::non_blocking::WorkerGuard> {
     setup_logging_with_levels(
         app_name,
-        tracing_subscriber::filter::LevelFilter::DEBUG,
-        tracing_subscriber::filter::LevelFilter::TRACE,
+        tracing_subscriber::filter::LevelFilter::INFO,
+        tracing_subscriber::filter::LevelFilter::INFO,
     )
 }
 
-pub fn parse_log_level(level: &str) -> tracing_subscriber::filter::LevelFilter {
+pub fn parse_log_level(level: &str) -> Result<tracing_subscriber::filter::LevelFilter> {
     match level.to_lowercase().as_str() {
-        "trace" => tracing_subscriber::filter::LevelFilter::TRACE,
-        "debug" => tracing_subscriber::filter::LevelFilter::DEBUG,
-        "info" => tracing_subscriber::filter::LevelFilter::INFO,
-        "warn" => tracing_subscriber::filter::LevelFilter::WARN,
-        "error" => tracing_subscriber::filter::LevelFilter::ERROR,
-        "off" => tracing_subscriber::filter::LevelFilter::OFF,
-        _ => tracing_subscriber::filter::LevelFilter::INFO, // Default fallback
+        "trace" => Ok(tracing_subscriber::filter::LevelFilter::TRACE),
+        "debug" => Ok(tracing_subscriber::filter::LevelFilter::DEBUG),
+        "info" => Ok(tracing_subscriber::filter::LevelFilter::INFO),
+        "warn" => Ok(tracing_subscriber::filter::LevelFilter::WARN),
+        "error" => Ok(tracing_subscriber::filter::LevelFilter::ERROR),
+        "off" => Ok(tracing_subscriber::filter::LevelFilter::OFF),
+        _ => anyhow::bail!(
+            "Invalid log level \"{}\". Valid values are: trace, debug, info, warn, error, off.",
+            level
+        ),
     }
 }
 
-pub fn intercept_manifest(manifest: AppManifest) {
+#[derive(Debug)]
+pub enum InterceptResult {
+    Continue,
+    ExitSuccessfully,
+}
+
+pub fn intercept_manifest(manifest: AppManifest) -> InterceptResult {
     for arg in std::env::args().skip(1) {
         if arg == "--manifest" {
             if let Ok(json) = serde_json::to_string(&manifest) {
                 println!("{}", json);
             }
-            std::process::exit(0);
+            return InterceptResult::ExitSuccessfully;
         }
     }
+    InterceptResult::Continue
+}
+
+pub(crate) fn atomic_write(path: &Path, contents: &str) -> Result<()> {
+    use std::io::Write;
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let mut temp_file = tempfile::NamedTempFile::new_in(parent)
+        .with_context(|| format!("Failed to create temp file in {:?}", parent))?;
+    temp_file
+        .write_all(contents.as_bytes())
+        .with_context(|| "Failed to write to temp file")?;
+    temp_file.flush().with_context(|| "Failed to flush temp file")?;
+    // Sync to disk to ensure data is written before rename
+    temp_file.as_file().sync_all().with_context(|| "Failed to sync temp file")?;
+    temp_file
+        .persist(path)
+        .with_context(|| format!("Failed to atomically replace {:?}", path))?;
+    Ok(())
+}
+
+fn merge_json(current: &mut serde_json::Value, default: &serde_json::Value) -> bool {
+    let mut changed = false;
+    if let (serde_json::Value::Object(curr_map), serde_json::Value::Object(def_map)) =
+        (current, default)
+    {
+        for (k, v) in def_map {
+            if !curr_map.contains_key(k) {
+                curr_map.insert(k.clone(), v.clone());
+                changed = true;
+            } else {
+                changed |= merge_json(curr_map.get_mut(k).unwrap(), v);
+            }
+        }
+    }
+    // Arrays and scalars are preserved as they are without merging
+    changed
 }
 
 pub fn load_or_create_config<T: DeserializeOwned + Serialize>(
@@ -79,8 +129,7 @@ pub fn load_or_create_config<T: DeserializeOwned + Serialize>(
     if !config_path.exists() {
         let content = serde_json::to_string_pretty(default_config)
             .context("Failed to serialize default config")?;
-        std::fs::write(config_path, content)
-            .with_context(|| format!("Failed to write default config at {:?}", config_path))?;
+        atomic_write(config_path, &content)?;
     }
 
     let content = std::fs::read_to_string(config_path)
@@ -91,36 +140,26 @@ pub fn load_or_create_config<T: DeserializeOwned + Serialize>(
     let default_val = serde_json::to_value(default_config)
         .with_context(|| "Failed to serialize default config to Value")?;
 
-    let mut changed = false;
-    if let (serde_json::Value::Object(ref mut curr_map), serde_json::Value::Object(def_map)) =
-        (&mut current_val, &default_val)
-    {
-        for (k, v) in def_map {
-            if !curr_map.contains_key(k) {
-                curr_map.insert(k.clone(), v.clone());
-                changed = true;
-            }
-        }
+    let changed = merge_json(&mut current_val, &default_val);
+
+    if changed {
+        let updated_content = serde_json::to_string_pretty(&current_val)
+            .context("Failed to serialize updated config")?;
+        atomic_write(config_path, &updated_content)?;
     }
 
-    let config: T = serde_json::from_value(current_val.clone()).with_context(|| {
+    // We consume `current_val` here, avoiding a clone.
+    let config: T = serde_json::from_value(current_val).with_context(|| {
         format!(
             "Failed to deserialize merged config file at {:?}",
             config_path
         )
     })?;
 
-    if changed {
-        let updated_content = serde_json::to_string_pretty(&current_val)
-            .context("Failed to serialize updated config")?;
-        std::fs::write(config_path, updated_content)
-            .with_context(|| format!("Failed to save merged config at {:?}", config_path))?;
-    }
-
     Ok(config)
 }
 
-pub fn resolve_date_var(val: &str, base_date: Option<&str>) -> Result<chrono::NaiveDate> {
+pub(crate) fn resolve_date_var(val: &str, base_date: Option<&str>) -> Result<chrono::NaiveDate> {
     use chrono::{Datelike, Local, NaiveDate};
     use tracing::{debug, error, info, trace};
 
@@ -224,7 +263,7 @@ pub fn parse_flexible_date(val: &str) -> Option<chrono::NaiveDate> {
     parse_flexible_date_impl(val, None)
 }
 
-pub fn parse_flexible_date_with_base(
+pub(crate) fn parse_flexible_date_with_base(
     val: &str,
     base_date: Option<&str>,
 ) -> Option<chrono::NaiveDate> {
@@ -239,7 +278,8 @@ pub fn to_iso_date(val: &str) -> String {
     }
 }
 
-pub fn to_iso_date_with_base(val: &str, base_date: Option<&str>) -> String {
+#[allow(dead_code)]
+pub(crate) fn to_iso_date_with_base(val: &str, base_date: Option<&str>) -> String {
     if let Some(dt) = parse_flexible_date_with_base(val, base_date) {
         dt.format("%Y-%m-%d").to_string()
     } else {
@@ -255,7 +295,7 @@ pub fn replace_date_vars(val: &str, base_date: Option<&str>) -> String {
     }
 }
 
-pub fn build_csv_reader_builder() -> csv::ReaderBuilder {
+pub(crate) fn build_csv_reader_builder() -> csv::ReaderBuilder {
     let mut builder = csv::ReaderBuilder::new();
     builder.has_headers(true);
     builder
@@ -265,7 +305,7 @@ pub fn build_csv_reader_from_reader<R: std::io::Read>(rdr: R) -> csv::Reader<R> 
     build_csv_reader_builder().from_reader(rdr)
 }
 
-pub fn generate_csv_diagnostic_context(content: &str, line_num: usize) -> String {
+pub(crate) fn generate_csv_diagnostic_context(content: &str, line_num: usize) -> String {
     let lines: Vec<&str> = content.lines().collect();
     let mut ctx = String::new();
 

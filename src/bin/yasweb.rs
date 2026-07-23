@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use clap::Parser;
 use crm_tool::utils::{
-    executable_dir, intercept_manifest, parse_log_level, setup_logging_with_levels,
+    executable_dir, intercept_manifest, parse_log_level, setup_logging_with_levels, InterceptResult,
 };
 use crm_tool::yasweb::browser::run_browser_tab;
 use crm_tool::yasweb::config::{ReportConfig, YaswebConfig};
@@ -214,18 +214,22 @@ async fn main() -> Result<()> {
             }
         }
 
+        let exe_dir = executable_dir()?;
         let config_path =
-            config_path_opt.unwrap_or_else(|| executable_dir().join("yasweb_config.json"));
-        intercept_manifest(get_manifest(Some(config_path)));
+            config_path_opt.unwrap_or_else(|| exe_dir.join("yasweb_config.json"));
+        if let InterceptResult::ExitSuccessfully = intercept_manifest(get_manifest(Some(config_path))) {
+            return Ok(());
+        }
     }
 
     let options = YaswebCliOptions::parse();
 
     let p = PathBuf::from(options.config);
+    let exe_dir = executable_dir()?;
     let config_path = if p.is_absolute() {
         p
     } else {
-        executable_dir().join(p)
+        exe_dir.join(p)
     };
 
     let mut config: YaswebConfig =
@@ -233,8 +237,8 @@ async fn main() -> Result<()> {
 
     let _guard = setup_logging_with_levels(
         "yasweb",
-        parse_log_level(&config.log_stdout_level),
-        parse_log_level(&config.log_file_level),
+        parse_log_level(&config.log_stdout_level)?,
+        parse_log_level(&config.log_file_level)?,
     )?;
     let mut config_updated = false;
 
@@ -476,7 +480,7 @@ async fn main() -> Result<()> {
             let active_report_name_clone = active_report_name.clone();
 
             // Launch browser once
-            let mut user_data_dir = executable_dir();
+            let mut user_data_dir = executable_dir()?;
             user_data_dir.push("yasweb_chrome_data");
             // Use unique data dir per report to allow simultaneous runs
             let safe_name = active_report_name.replace(|c: char| !c.is_alphanumeric(), "_");
@@ -596,7 +600,7 @@ async fn main() -> Result<()> {
                     };
 
                     let temp_dl_dir = {
-                        let mut dir = executable_dir();
+                        let mut dir = executable_dir()?;
                         dir.push(format!(
                             "yasweb_downloads_tmp_{}_{}_{}",
                             active_report_name, date_suffix, i
@@ -648,7 +652,7 @@ async fn main() -> Result<()> {
                 let results = futures_util::future::join_all(tasks).await;
 
                 for (discovered_filters, temp_dl_dir, final_filename) in results.into_iter().flatten() {
-                    let mut final_out_dir = executable_dir();
+                    let mut final_out_dir = executable_dir()?;
                     final_out_dir.push("downloads");
                     let _ = finalize_download(&temp_dl_dir, &final_out_dir, &final_filename);
 
