@@ -23,17 +23,17 @@ If you need to bypass the runner, invoke the apps directly:
 
 **CRM One-Shot:**
 ```bash
-./crm --report tickets --config custom_config.json --start-date eomonth --end-date tomorrow --custom-download-folder "C:\temp\downloads"
+cargo run --bin crm -- --report tickets --config custom_config.json --start-date eomonth --end-date tomorrow --custom-download-folder "C:\temp\downloads"
 ```
 
 **Tasker Worker:**
 ```bash
-./tasker --task 1 --only-call-center --send-exceptions
+cargo run --bin tasker -- --task 1 --only-call-center --send-exceptions
 ```
 
 **Webex Fetch:**
 ```bash
-./wcxx --config wcxx_config.json
+cargo run --bin wcxx -- --config wcxx_config.json
 ```
 
 ## Logs and Debugging

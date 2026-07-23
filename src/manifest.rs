@@ -33,12 +33,15 @@ impl std::fmt::Display for ValidationError {
 
 impl std::error::Error for ValidationError {}
 
-/// The top-level definition of an external application plugin/manifest.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 /// Represents the expected CLI arguments and settings for a runnable child application.
 ///
 /// The runner application intercepts this payload at startup to dynamically render UI fields
 /// without hardcoding child app definitions in the GUI logic.
+///
+/// Invariants:
+/// - `name` must not be empty.
+/// - Argument names within `arguments` must be unique and non-empty.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppManifest {
     pub name: String,
     pub description: String,

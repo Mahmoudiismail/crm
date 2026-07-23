@@ -4,6 +4,13 @@ use serde::{de::DeserializeOwned, Serialize};
 use std::path::{Path, PathBuf};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
+/// Resolves the absolute path to the directory containing the currently running executable.
+///
+/// Provides a robust anchor for resolving relative paths for configs, logs, and downloads
+/// regardless of the current working directory from which the app was launched.
+///
+/// # Errors
+/// Returns an error if the executable path cannot be determined or if it lacks a parent directory.
 pub fn executable_dir() -> Result<PathBuf> {
     let exe_path = std::env::current_exe().context("Failed to get current executable path")?;
     let parent = exe_path
@@ -69,6 +76,13 @@ pub(crate) fn setup_logging(app_name: &str) -> Result<tracing_appender::non_bloc
     )
 }
 
+/// Parses a string representation of a log level into a `tracing` LevelFilter.
+///
+/// Converts values safely (ignoring case), returning an explicit error if the level
+/// string is unrecognized. Fails fast instead of silently defaulting.
+///
+/// # Errors
+/// Returns an error if the string is not a valid log level (e.g. "TRACE", "DEBUG", "INFO", "WARN", "ERROR").
 pub fn parse_log_level(level: &str) -> Result<tracing_subscriber::filter::LevelFilter> {
     match level.to_lowercase().as_str() {
         "trace" => Ok(tracing_subscriber::filter::LevelFilter::TRACE),
@@ -85,11 +99,22 @@ pub fn parse_log_level(level: &str) -> Result<tracing_subscriber::filter::LevelF
 }
 
 #[derive(Debug)]
+/// Result type for the `--manifest` CLI interception process.
 pub enum InterceptResult {
+    /// Indicates the application should proceed with normal execution.
     Continue,
+    /// Indicates the manifest was successfully output and the application should exit natively without error.
     ExitSuccessfully,
 }
 
+/// Checks if the application was executed with the `--manifest` flag.
+///
+/// If present, outputs the provided `AppManifest` as JSON to standard output,
+/// signaling the caller to exit successfully without running domain logic.
+///
+/// # Invariants
+/// Library code must return `InterceptResult` rather than terminating the process directly (e.g., via `std::process::exit`),
+/// passing control back to the binary's entry point for safe termination.
 pub fn intercept_manifest(manifest: AppManifest) -> InterceptResult {
     for arg in std::env::args().skip(1) {
         if arg == "--manifest" {
