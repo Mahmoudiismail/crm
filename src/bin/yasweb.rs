@@ -94,88 +94,43 @@ fn get_manifest(config_path: Option<PathBuf>) -> AppManifest {
         }
     }
 
+    let arg_name = AppArg::new(
+        "--name",
+        if report_names.is_empty() {
+            ArgType::String
+        } else {
+            ArgType::MultiList
+        },
+    )
+    .required(true);
+    let arg_name = if report_names.is_empty() {
+        arg_name
+    } else {
+        arg_name.options(report_names)
+    };
+
+    let mut type_map = std::collections::HashMap::new();
+    if !type_autofills.is_empty() {
+        type_map.insert("--name".to_string(), type_autofills);
+    }
+
+    let mut arg_type = AppArg::new("--type", ArgType::List).options(vec![
+        "".to_string(),
+        "Standard Report".to_string(),
+        "Report Manager".to_string(),
+    ]);
+    if !type_map.is_empty() {
+        arg_type = arg_type.autofill(type_map);
+    }
+
     let mut arguments = vec![
-        AppArg {
-            name: "--config".to_string(),
-            arg_type: ArgType::String,
-            required: false,
-            default_value: None,
-            options: None,
-            depends_on: None,
-            autofill: None,
-        },
-        AppArg {
-            name: "--name".to_string(),
-            arg_type: if report_names.is_empty() {
-                ArgType::String
-            } else {
-                ArgType::MultiList
-            },
-            required: true,
-            default_value: None,
-            options: if report_names.is_empty() {
-                None
-            } else {
-                Some(report_names)
-            },
-            depends_on: None,
-            autofill: None,
-        },
-        AppArg {
-            name: "--type".to_string(),
-            arg_type: ArgType::List,
-            required: false,
-            default_value: None,
-            options: Some(vec![
-                "".to_string(),
-                "Standard Report".to_string(),
-                "Report Manager".to_string(),
-            ]),
-            depends_on: None,
-            autofill: if type_autofills.is_empty() {
-                None
-            } else {
-                let mut map = std::collections::HashMap::new();
-                map.insert("--name".to_string(), type_autofills);
-                Some(map)
-            },
-        },
-        AppArg {
-            name: "--monthly".to_string(),
-            arg_type: ArgType::Boolean,
-            required: false,
-            default_value: None,
-            options: None,
-            depends_on: None,
-            autofill: None,
-        },
-        AppArg {
-            name: "--start-date".to_string(),
-            arg_type: ArgType::DateVar,
-            required: false,
-            default_value: None,
-            options: None,
-            depends_on: None,
-            autofill: None,
-        },
-        AppArg {
-            name: "--end-date".to_string(),
-            arg_type: ArgType::DateVar,
-            required: false,
-            default_value: None,
-            options: None,
-            depends_on: None,
-            autofill: None,
-        },
-        AppArg {
-            name: "--add-time-to-file".to_string(),
-            arg_type: ArgType::Boolean,
-            required: false,
-            default_value: None,
-            options: None,
-            depends_on: None,
-            autofill: None,
-        },
+        AppArg::new("--config", ArgType::String),
+        arg_name,
+        arg_type,
+        AppArg::new("--monthly", ArgType::Boolean),
+        AppArg::new("--start-date", ArgType::DateVar),
+        AppArg::new("--end-date", ArgType::DateVar),
+        AppArg::new("--add-time-to-file", ArgType::Boolean),
     ];
 
     let mut sorted_filters: Vec<_> = filter_dependencies.into_iter().collect();
@@ -192,15 +147,12 @@ fn get_manifest(config_path: Option<PathBuf>) -> AppManifest {
             None
         };
 
-        arguments.push(AppArg {
-            name: format!("--filter-{}", f_name),
-            arg_type: ArgType::String,
-            required: false,
-            default_value: None,
-            options: None,
-            depends_on: Some(depends_map),
-            autofill: autofill_opt,
-        });
+        let mut arg =
+            AppArg::new(format!("--filter-{}", f_name), ArgType::String).depends_on(depends_map);
+        if let Some(auto) = autofill_opt {
+            arg = arg.autofill(auto);
+        }
+        arguments.push(arg);
     }
 
     AppManifest {

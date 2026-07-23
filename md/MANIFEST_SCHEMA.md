@@ -19,12 +19,19 @@ The manifest defines the application's metadata and the arguments it accepts via
 | Field | Type | Description |
 | :--- | :--- | :--- |
 | `name` | String | The name of the argument as passed to the CLI (e.g., `--config`, `--dry-run`). |
-| `arg_type` | String | The data type of the argument. Allowed values: `"string"`, `"number"`, `"list"`, `"boolean"`, `"date_var"`. |
+| `arg_type` | String | The data type of the argument. Allowed values: `"string"`, `"number"`, `"list"`, `"multi_list"`, `"boolean"`, `"date_var"`. |
 | `required` | Boolean | Whether the argument must be provided by the user. |
 | `default_value` | String (Optional) | The default value used if the user provides no input. |
-| `options` | Array of String (Optional) | Required if `arg_type` is `"list"`. Specifies the valid choices for the dropdown. |
+| `options` | Array of String (Optional) | Required if `arg_type` is `"list"` or `"multi_list"`. Specifies the valid choices for the dropdown. |
 | `depends_on` | Object (Optional) | A map where keys are parent argument names and values are arrays of strings (acceptable values). The argument will only be visible in the GUI if the parent argument currently matches one of the specified values. |
 | `autofill` | Object (Optional) | A map where keys are parent argument names and values are nested maps linking parent argument values to the desired autofill value. Useful for automatically populating inputs when a related dropdown changes. |
+
+### Validation
+
+Manifests enforce lightweight validation to guarantee structural integrity:
+- `name` cannot be empty.
+- Every `AppArg` must have a non-empty `name`.
+- `AppArg` names must be unique within an `AppManifest`.
 
 ## Example JSON Representation
 
