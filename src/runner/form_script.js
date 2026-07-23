@@ -231,8 +231,7 @@
   }
 
   function buildSchedules() {
-    if (!scheduleRows) return "";
-    return Array.from(scheduleRows.querySelectorAll("[data-schedule-row]"))
+    return Array.from(document.querySelectorAll("[data-schedule-row]"))
       .map(function (row) {
         const kind = row.querySelector(".schedule-kind").value;
         if (kind === "interval") {
@@ -302,8 +301,7 @@
   }
 
   function buildCommands() {
-    if (!commandRows) return "";
-    return Array.from(commandRows.querySelectorAll("[data-command-row]"))
+    return Array.from(document.querySelectorAll("[data-command-row]"))
       .map(function (row) {
         const command = row.querySelector(".command-text").value.trim();
         const mode = row.querySelector(".command-mode").value;
