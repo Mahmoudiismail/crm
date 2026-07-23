@@ -1,62 +1,105 @@
 # CRM Tool
 
-A comprehensive Rust-based CRM (Customer Relationship Management) system with task runner, scheduler, and web automation capabilities.
+A comprehensive Rust-based CRM (Customer Relationship Management) system with a task runner, scheduler, headless web automation capabilities, and automated data processing.
 
 ## 📋 Overview
 
-This project consists of three main binaries:
-- **runner**: Orchestrates and executes configured tasks
-- **crm**: One-shot CRM execution with CLI argument support
-- **yasweb**: Web automation and headless Chrome integration
-- **tasker**: Stateless task runner for configured background workflows
+This project provides automated management, downloading, and reporting for CRM systems. It operates through multiple specialized binaries rather than a single monolithic executable.
+
+### Architecture Overview
+
+The system consists of five main binaries:
+- **`runner`**: Orchestrates and executes configured tasks, featuring a system tray GUI and interval-based scheduling.
+- **`crm`**: Handles CRM data fetching, downloading, and reporting via authenticated APIs.
+- **`yasweb`**: Automates headless Chrome interactions for legacy web systems (MIS modules).
+- **`tasker`**: Stateless worker for background processes like CSV processing, Excel automation (via PowerShell COM), and dispatching formatted emails.
+- **`wcxx`**: Dedicated fetcher for Webex Contact Center metadata and metrics.
+
+For a detailed architectural breakdown, see [`md/ARCHITECTURE.md`](./md/ARCHITECTURE.md).
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Rust 1.70+ (edition 2021)
-- Windows (primary target: `x86_64-pc-windows-msvc`)
-- Cargo
 
-### Build
+- Rust 1.70+ (edition 2021)
+- Windows OS (primary target: `x86_64-pc-windows-msvc`)
+- Cargo
+- (Optional) Docker for containerized builds
+
+### Installation & Build
+
+You can build the project using standard Cargo commands. The release profile is heavily optimized (`lto=fat`, `opt-level=3`, symbols stripped).
 
 ```bash
 # Build all binaries in release mode
 cargo build --release
 
-# Build specific binary
+# Build specific binaries
 cargo build --release --bin crm
 cargo build --release --bin runner
 cargo build --release --bin yasweb
 cargo build --release --bin tasker
+cargo build --release --bin wcxx
 ```
 
-### Run
+### Running
+
+Execute the built binaries directly from the `target/release/` directory.
 
 ```bash
-# Run CRM tool
+# Run CRM tool (one-shot execution)
 ./target/release/crm.exe [OPTIONS]
 
-# Run Runner
+# Run Runner (starts the background orchestrator and GUI)
 ./target/release/runner.exe
 
-# Run Yasweb
+# Run Yasweb (headless web automation)
 ./target/release/yasweb.exe
 
-# Run Tasker
+# Run Tasker (background reporting tasks)
 ./target/release/tasker.exe
 ```
 
-### CLI Arguments
+## 🔧 Developer Workflow
 
-The `crm` binary supports:
-- `--report`: Generate a report
-- `--config <path>`: Specify configuration file
+This project standardizes on pure Cargo commands for daily development.
+
+### Testing
+
+Run the test suite across the workspace.
+
+```bash
+cargo test --workspace --all-targets --all-features
+```
+
+### Linting & Formatting
+
+Ensure your code meets the project's strict styling and safety guidelines before submitting changes.
+
+```bash
+cargo fmt
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+```
+
+### Benchmarks
+
+We use `criterion` for benchmarking performance-critical paths (like CSV parsing and manifest loading).
+
+```bash
+cargo bench
+```
+
+## 📦 Releases & Deployment
+
+Releases are fully automated via GitHub Actions.
+
+When code is merged to the main branch or tagged, individual workflows (`release-crm.yml`, `release-runner.yml`, `release-yasweb.yml`, `release-tasker.yml`) build optimized Windows binaries, zip them, and publish them directly to GitHub Releases.
 
 ## 📚 Documentation
 
-For detailed information, see the documentation in the `md/` folder:
+Detailed documentation is stored in the `md/` directory.
 
-1. [`AGENTS.md`](./AGENTS.md) - AI agent guidelines
+1. [`AGENTS.md`](./AGENTS.md) - **Mandatory reading for AI agents**
 2. [`APPLICATION_SUMMARY.md`](./md/APPLICATION_SUMMARY.md) - Application overview
 3. [`ARCHITECTURE.md`](./md/ARCHITECTURE.md) - System architecture
 4. [`BUILD_AND_RUN.md`](./md/BUILD_AND_RUN.md) - Build and deployment guide
@@ -69,95 +112,17 @@ For detailed information, see the documentation in the `md/` folder:
 11. [`OPERATIONS.md`](./md/OPERATIONS.md) - Operations guide
 12. [`AI_DOC_POLICY.md`](./md/AI_DOC_POLICY.md) - Documentation policy
 13. [`TASKER.md`](./md/TASKER.md) - Tasker application
-14. [`REBUILD_GUIDE.md`](./md/REBUILD_GUIDE.md) - AI Rebuild/Regeneration guide
 
-## 🏗️ Project Structure
+## 🛠 Troubleshooting
 
-```
-.
-├── src/
-│   ├── bin/
-│   │   ├── tasker.rs      # Configured tasks execution entry point
-│   │   ├── runner.rs      # Runner orchestration entry point
-│   │   ├── crm.rs         # CRM one-shot execution entry point
-│   │   └── yasweb.rs      # Web automation entry point
-│   ├── runner/            # Runner modules
-│   ├── crm/               # CRM domain logic
-│   └── lib.rs             # Shared module exports
-├── md/                    # Comprehensive documentation
-├── runner_config.json     # Task configuration
-├── Cargo.toml             # Project manifest
-└── .devcontainer/         # Dev container setup
-```
-
-## 🔧 Configuration
-
-Tasks are configured in `runner_config.json`. Example structure:
-
-```json
-{
-  "tasks": [
-    {
-      "name": "task_name",
-      "command": "crm",
-      "args": ["--report", "--config", "config.json"]
-    }
-  ]
-}
-```
-
-## 🔐 Authentication
-
-The system uses AWS Cognito for authentication. See [`AUTH_FLOW.md`](./md/AUTH_FLOW.md) for details.
-
-## 📦 Dependencies
-
-Key dependencies:
-- **tokio**: Async runtime with selective features
-- **reqwest**: HTTP client with rustls and streaming
-- **serde/serde_json**: Serialization framework
-- **tracing/tracing-subscriber**: Logging
-- **chrono**: Date/time handling
-- **headless_chrome**: Web automation
-- **tray-icon/muda/winit**: Windows system tray (Windows-only)
-
-See `Cargo.toml` for the complete dependency list.
-
-## 🏗️ Build Optimization
-
-The release profile is optimized for performance:
-- Link-Time Optimization (LTO): fat
-- Optimization level: 3
-- Codegen units: 1
-- Symbols stripped from release binaries
-- No overflow checks in release
-
-## 🚀 Release & Deployment
-
-Releases are automatically built and published via GitHub Actions:
-- **release-crm.yml**: Builds and publishes the CRM binary
-- **release-runner.yml**: Builds and publishes the Runner binary
-- **release-yasweb.yml**: Builds and publishes the Yasweb binary
-- **release-tasker.yml**: Builds and publishes the Tasker binary
-
-All binaries use the same version from `Cargo.toml`.
+- **Missing Configurations**: All binaries auto-generate default configurations (e.g., `runner_config.json`, `tasker_config.json`) in their execution directory if missing. Check the logs if a binary exits unexpectedly.
+- **Log Files**: Logs are written with `TRACE` verbosity to `.log` files in the binary's directory and `DEBUG` verbosity to `stdout`.
+- **COM Exceptions (0x800A03EC)**: If `tasker` fails when interacting with Excel, ensure background Excel processes aren't hung. Tasker attempts to forcefully clean up orphaned Excel processes automatically.
 
 ## 📝 Contributing
 
-Before making changes:
-1. Read [`AGENTS.md`](./AGENTS.md)
-2. Update relevant documentation in `md/` in the same commit as code changes
-3. Follow the [AI Documentation Policy](./md/AI_DOC_POLICY.md)
+We welcome contributions! Please read our [Contributing Guide](CONTRIBUTING.md) to get started. It covers repository structure, coding standards, pull request workflow, and mandatory documentation policies.
 
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.
-
-## 💬 Support
-
-For issues, feature requests, or questions, please refer to the project documentation or contact the maintainers.
-
----
-
-**Last Updated**: May 2026
-**Version**: 1.1.0
