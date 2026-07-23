@@ -268,15 +268,16 @@ mod tests {
 
     #[test]
     fn test_load_merges_partial_config() {
-        let mut temp_file = NamedTempFile::new().unwrap();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let config_path = temp_dir.path().join("config.json");
+        let path_str = config_path.to_str().unwrap();
 
         // Write a partial config with only a few fields
         let partial_json = r#"{
             "region": "us-east-1",
             "download_csv": false
         }"#;
-        temp_file.write_all(partial_json.as_bytes()).unwrap();
-        let path_str = temp_file.path().to_str().unwrap();
+        std::fs::write(&config_path, partial_json).unwrap();
 
         let config = AppConfig::load(path_str).expect("Failed to load partial config");
 

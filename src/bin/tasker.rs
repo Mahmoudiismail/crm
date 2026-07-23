@@ -264,8 +264,8 @@ mod tests {
         // We test run_app's integration directly using a mock file on disk
         use std::io::Write;
 
-        let tmp = std::env::temp_dir();
-        let config_path = tmp.join("mock_tasker_config_valid.json");
+        let tmp = tempfile::tempdir().unwrap();
+        let config_path = tmp.path().join("mock_tasker_config_valid.json");
 
         let mock_config_json = serde_json::json!({
             "tasks": [
@@ -296,6 +296,7 @@ mod tests {
         file.write_all(mock_config_json.to_string().as_bytes())
             .unwrap();
         file.sync_all().unwrap();
+        drop(file);
 
         // Passing valid task index 2. This won't actually succeed all the way because 'path2' doesn't exist,
         // but it WILL pass the bounds check and fail further down the execution tree.
@@ -317,16 +318,14 @@ mod tests {
             res.is_ok(),
             "run_app should successfully route the valid task filter"
         );
-
-        let _ = std::fs::remove_file(&config_path);
     }
 
     #[test]
     fn test_task_filtering_logic_out_of_bounds() {
         use std::io::Write;
 
-        let tmp = std::env::temp_dir();
-        let config_path = tmp.join("mock_tasker_config_oob.json");
+        let tmp = tempfile::tempdir().unwrap();
+        let config_path = tmp.path().join("mock_tasker_config_oob.json");
 
         let mock_config_json = serde_json::json!({
             "tasks": [
@@ -345,6 +344,7 @@ mod tests {
         file.write_all(mock_config_json.to_string().as_bytes())
             .unwrap();
         file.sync_all().unwrap();
+        drop(file);
 
         // Pass task 5, which does not exist.
         let args = vec![
@@ -426,8 +426,8 @@ mod tests {
     fn test_empty_tasks_panics_on_start() {
         use std::io::Write;
 
-        let tmp = std::env::temp_dir();
-        let config_path = tmp.join("mock_tasker_config_empty.json");
+        let tmp = tempfile::tempdir().unwrap();
+        let config_path = tmp.path().join("mock_tasker_config_empty.json");
 
         let mock_config_json = serde_json::json!({
             "tasks": []
@@ -437,6 +437,7 @@ mod tests {
         file.write_all(mock_config_json.to_string().as_bytes())
             .unwrap();
         file.sync_all().unwrap();
+        drop(file);
 
         let args = vec![
             "tasker".to_string(),
