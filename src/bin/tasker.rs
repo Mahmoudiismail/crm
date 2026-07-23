@@ -6,9 +6,7 @@ use crm_tool::tasker::{csv_task, dashboard_updater};
 use crm_tool::utils::{
     executable_dir, intercept_manifest, parse_log_level, setup_logging_with_levels, InterceptResult,
 };
-use serde_json::Value;
 
-use std::fs;
 use std::path::PathBuf;
 use tracing::{error, info};
 
@@ -31,33 +29,6 @@ pub struct TaskerCliOptions {
     pub legacy_config: Option<String>,
 }
 
-pub fn merge_configs(a: &mut Value, b: &Value, changed: &mut bool) {
-    match (a, b) {
-        (Value::Object(a_obj), Value::Object(b_obj)) => {
-            for (k, v) in b_obj {
-                if let Some(a_val) = a_obj.get_mut(k) {
-                    merge_configs(a_val, v, changed);
-                } else {
-                    a_obj.insert(k.clone(), v.clone());
-                    *changed = true;
-                }
-            }
-        }
-        (Value::Array(a_arr), Value::Array(b_arr)) => {
-            let len = std::cmp::min(a_arr.len(), b_arr.len());
-            for i in 0..len {
-                merge_configs(&mut a_arr[i], &b_arr[i], changed);
-            }
-        }
-        (a_val, b_val) => {
-            if a_val.is_null() && !b_val.is_null() {
-                *a_val = b_val.clone();
-                *changed = true;
-            }
-        }
-    }
-}
-
 pub fn run_app(options: TaskerCliOptions) -> Result<()> {
     info!("Tasker started.");
 
@@ -70,7 +41,6 @@ pub fn run_app(options: TaskerCliOptions) -> Result<()> {
     let config_path = config_path_arg.unwrap_or(default_config_path);
 
     let default_config_content = r#"{
-
   "tasks": [
     {
       "type": "csv_analysis",
@@ -152,56 +122,20 @@ pub fn run_app(options: TaskerCliOptions) -> Result<()> {
   ]
 }"#;
 
-    if !config_path.exists() {
-        info!(
-            "Configuration file not found at {}. Generating default configuration.",
-            config_path.display()
-        );
-
-        fs::write(&config_path, default_config_content).with_context(|| {
+    let default_config: TaskerConfig =
+        serde_json::from_str(default_config_content).with_context(|| {
             format!(
-                "Failed to write default tasker config at {}",
-                config_path.display()
+                "Failed to parse default config string as JSON. content: {}",
+                default_config_content
             )
         })?;
-    }
 
-    info!("Loading configuration from: {}", config_path.display());
-    let config_content = fs::read_to_string(&config_path)
-        .with_context(|| format!("Failed to read tasker config at {}", config_path.display()))?;
-
-    let mut current_config_val: Value = serde_json::from_str(&config_content)
-        .with_context(|| "Failed to parse tasker_config.json as JSON")?;
-
-    let default_config_val: Value = serde_json::from_str(default_config_content)
-        .with_context(|| "Failed to parse default config as JSON")?;
-
-    let mut config_changed = false;
-    merge_configs(
-        &mut current_config_val,
-        &default_config_val,
-        &mut config_changed,
-    );
-
-    let config: TaskerConfig = serde_json::from_value(current_config_val.clone())
-        .with_context(|| "Failed to parse tasker_config.json into TaskerConfig")?;
+    let config = crm_tool::utils::load_or_create_config(&config_path, &default_config)?;
 
     if let Some(filter) = task_filter {
         if filter == 0 || filter > config.tasks.len() {
             anyhow::bail!("Task filter index {} is out of bounds. The configuration only contains {} task(s).", filter, config.tasks.len());
         }
-    }
-
-    if config_changed {
-        info!("Updated configuration file with missing default fields.");
-        let updated_content = serde_json::to_string_pretty(&current_config_val)
-            .with_context(|| "Failed to serialize updated config")?;
-        fs::write(&config_path, updated_content).with_context(|| {
-            format!(
-                "Failed to write updated tasker config at {}",
-                config_path.display()
-            )
-        })?;
     }
 
     for (i, task) in config.tasks.iter().enumerate() {
@@ -449,7 +383,8 @@ mod tests {
                         "default_to_email": "fallback@example.com"
                     }
                 }
-            ]
+            ],
+            "new_field": "default_value"
         });
 
         let mut user_config = json!({
@@ -463,24 +398,28 @@ mod tests {
             ]
         });
 
-        let mut changed = false;
-        merge_configs(&mut user_config, &default_config, &mut changed);
+        // Test the shared crate merge_json which we now use via load_or_create_config
+        let changed = crm_tool::utils::merge_json(&mut user_config, &default_config);
 
-        assert!(changed, "Merge should mark config as changed");
+        assert!(
+            changed,
+            "Merge should mark config as changed because of new_field"
+        );
 
+        // Note: arrays are treated as atomic with merge_json.
+        // Thus, if "tasks" already exists in user_config, it is preserved exactly as is!
+        // It does not merge array elements recursively anymore.
         let merged_task = &user_config["tasks"][0];
         assert_eq!(
-            merged_task["minutes_ago"], 15,
-            "Should merge root level fields"
+            merged_task["minutes_ago"],
+            serde_json::Value::Null,
+            "Because arrays are atomic, the existing array is preserved without merging elements"
         );
         assert_eq!(
             merged_task["email_config"]["send_emails"], true,
-            "Should NOT overwrite existing user fields"
+            "Original array content preserved"
         );
-        assert_eq!(
-            merged_task["email_config"]["default_to_email"], "fallback@example.com",
-            "Should merge nested missing fields"
-        );
+        assert_eq!(user_config["new_field"], "default_value");
     }
 
     #[test]

@@ -102,7 +102,7 @@ pub fn intercept_manifest(manifest: AppManifest) -> InterceptResult {
     InterceptResult::Continue
 }
 
-pub(crate) fn atomic_write(path: &Path, contents: &str) -> Result<()> {
+pub fn atomic_write(path: &Path, contents: &str) -> Result<()> {
     use std::io::Write;
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
     let mut temp_file = tempfile::NamedTempFile::new_in(parent)
@@ -124,7 +124,7 @@ pub(crate) fn atomic_write(path: &Path, contents: &str) -> Result<()> {
     Ok(())
 }
 
-fn merge_json(current: &mut serde_json::Value, default: &serde_json::Value) -> bool {
+pub fn merge_json(current: &mut serde_json::Value, default: &serde_json::Value) -> bool {
     let mut changed = false;
     if let (serde_json::Value::Object(curr_map), serde_json::Value::Object(def_map)) =
         (current, default)
@@ -439,6 +439,39 @@ mod tests {
         assert!(!records.is_empty());
         // The first record has fewer columns than the header (2 vs 3).
         assert!(records[0].is_err());
+    }
+
+    #[test]
+    fn test_merge_json() {
+        let mut current = serde_json::json!({
+            "a": 1,
+            "arr": [1, 2],
+            "obj": {
+                "b": 2
+            }
+        });
+        let default = serde_json::json!({
+            "a": 2, // Should not overwrite
+            "c": 3, // Should insert
+            "arr": [3, 4], // Should not overwrite (arrays treated as atomic)
+            "obj": {
+                "b": 3, // Should not overwrite
+                "d": 4  // Should insert
+            },
+            "new_arr": [5, 6] // Should insert
+        });
+
+        let changed = super::merge_json(&mut current, &default);
+        assert!(changed);
+
+        assert_eq!(current["a"], 1);
+        assert_eq!(current["c"], 3);
+        assert_eq!(current["arr"][0], 1); // Preserves existing array entirely
+        assert_eq!(current["arr"][1], 2);
+        assert_eq!(current["arr"].as_array().unwrap().len(), 2);
+        assert_eq!(current["obj"]["b"], 2);
+        assert_eq!(current["obj"]["d"], 4);
+        assert_eq!(current["new_arr"][0], 5); // Adds missing array entirely
     }
 
     #[test]

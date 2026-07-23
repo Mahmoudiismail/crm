@@ -35,9 +35,9 @@ pub struct ReportConfig {
     pub report_type: String,
     #[serde(default)]
     pub filters: HashMap<String, String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub start_date_key: Option<DateKeyConfig>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub end_date_key: Option<DateKeyConfig>,
 }
 
@@ -45,6 +45,7 @@ pub struct ReportConfig {
 pub struct YaswebConfig {
     pub url: String,
     pub username: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub password: Option<String>,
     #[serde(default)]
     pub headless: bool,
