@@ -59,15 +59,7 @@ fn get_manifest() -> AppManifest {
     AppManifest {
         name: "Webex Contact Center Fetcher".to_string(),
         description: "Fetches data from the Webex Contact Center API.".to_string(),
-        arguments: vec![AppArg {
-            name: "--config".to_string(),
-            arg_type: ArgType::String,
-            required: false,
-            default_value: None,
-            options: None,
-            depends_on: None,
-            autofill: None,
-        }],
+        arguments: vec![AppArg::new("--config", ArgType::String)],
     }
 }
 

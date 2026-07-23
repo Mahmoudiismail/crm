@@ -257,42 +257,10 @@ fn get_manifest() -> AppManifest {
             "Executes configured background workflows such as CSV analysis and email dispatching."
                 .to_string(),
         arguments: vec![
-            AppArg {
-                name: "--config".to_string(),
-                arg_type: ArgType::String,
-                required: false,
-                default_value: None,
-                options: None,
-                depends_on: None,
-                autofill: None,
-            },
-            AppArg {
-                name: "--task".to_string(),
-                arg_type: ArgType::Number,
-                required: false,
-                default_value: None,
-                options: None,
-                depends_on: None,
-                autofill: None,
-            },
-            AppArg {
-                name: "--only-call-center".to_string(),
-                arg_type: ArgType::Boolean,
-                required: false,
-                default_value: Some("false".to_string()),
-                options: None,
-                depends_on: None,
-                autofill: None,
-            },
-            AppArg {
-                name: "--send-exceptions".to_string(),
-                arg_type: ArgType::Boolean,
-                required: false,
-                default_value: Some("false".to_string()),
-                options: None,
-                depends_on: None,
-                autofill: None,
-            },
+            AppArg::new("--config", ArgType::String),
+            AppArg::new("--task", ArgType::Number),
+            AppArg::new("--only-call-center", ArgType::Boolean),
+            AppArg::new("--send-exceptions", ArgType::Boolean),
         ],
     }
 }
