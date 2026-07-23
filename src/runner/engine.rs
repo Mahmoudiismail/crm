@@ -216,7 +216,9 @@ pub fn spawn_execution_manager(
                 }
 
                 if can_run {
-                    let (task_to_run_box, policy) = queued_tasks.remove(i).unwrap();
+                    // Safe because `i` is checked in the loop condition `i < queued_tasks.len()`.
+                    let (task_to_run_box, policy) =
+                        queued_tasks.remove(i).expect("Queue index out of bounds");
                     let mut task_to_run = *task_to_run_box;
                     running_tasks.push(task_to_run.clone());
 

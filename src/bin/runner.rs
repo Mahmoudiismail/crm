@@ -170,7 +170,11 @@ impl ApplicationHandler for App {
         match TrayIconBuilder::new()
             .with_menu(Box::new(menu))
             .with_tooltip("CRM Runner")
-            .with_icon(load_icon())
+            .with_icon(load_icon().unwrap_or_else(|e| {
+                error!("Using fallback icon due to error: {}", e);
+                // Return a dummy transparent/black icon rather than crashing the whole UI.
+                Icon::from_rgba(vec![0; 4], 1, 1).unwrap()
+            }))
             .build()
         {
             Ok(icon) => {
@@ -222,9 +226,10 @@ impl ApplicationHandler for App {
 }
 
 #[cfg(target_os = "windows")]
-fn load_icon() -> Icon {
+fn load_icon() -> anyhow::Result<Icon> {
     let width = 32;
     let height = 32;
     let rgba = [0, 255, 0, 255].repeat((width * height) as usize);
-    Icon::from_rgba(rgba, width, height).unwrap_or_else(|_| panic!("Failed to create icon"))
+    Icon::from_rgba(rgba, width, height)
+        .map_err(|e| anyhow::anyhow!("Failed to create icon: {:?}", e))
 }
