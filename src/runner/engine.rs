@@ -130,6 +130,7 @@ impl TaskLoggerInner {
     }
 }
 
+#[derive(Debug)]
 pub enum ExecutionManagerCommand {
     QueueTask {
         task: Box<RunnerTask>,
@@ -262,7 +263,7 @@ pub fn spawn_execution_manager(
     tx
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ExecutionPolicy {
     allow_shell_tasks: bool,
     shell_timeout_seconds: u64,
@@ -271,7 +272,7 @@ pub struct ExecutionPolicy {
     registered_apps: Vec<crate::runner::config::RegisteredApp>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RunnerHandle {
     pub command_tx: mpsc::Sender<RunnerCommand>,
     pub exec_tx: mpsc::Sender<ExecutionManagerCommand>,

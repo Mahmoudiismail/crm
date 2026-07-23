@@ -1,4 +1,10 @@
 #![forbid(unsafe_code)]
+#![warn(
+    future_incompatible,
+    rust_2018_idioms,
+    missing_debug_implementations,
+    clippy::all
+)]
 
 pub mod crm;
 pub mod manifest;

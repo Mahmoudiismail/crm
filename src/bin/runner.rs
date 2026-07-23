@@ -1,5 +1,6 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
+use anyhow::Context;
 use anyhow::Result;
 use clap::Parser;
 use crm_tool::manifest::AppManifest;
@@ -8,7 +9,7 @@ use crm_tool::runner::engine::RunnerHandle;
 use crm_tool::runner::engine::{start_scheduler, RunnerCommand};
 use crm_tool::runner::gui::start_gui_server;
 use crm_tool::utils::{
-    executable_dir, intercept_manifest, parse_log_level, setup_logging_with_levels,
+    executable_dir, intercept_manifest, parse_log_level, setup_logging_with_levels, InterceptResult,
 };
 #[cfg(target_os = "windows")]
 use muda::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem};
@@ -45,7 +46,9 @@ fn get_manifest() -> AppManifest {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    intercept_manifest(get_manifest());
+    if let InterceptResult::ExitSuccessfully = intercept_manifest(get_manifest()) {
+        return Ok(());
+    }
     let _options = RunnerCliOptions::parse();
     let _instance_lock = match std::net::TcpListener::bind("127.0.0.1:14592") {
         Ok(listener) => listener,
@@ -55,7 +58,7 @@ async fn main() -> Result<()> {
         }
     };
 
-    let config_path = executable_dir().join("runner_config.json");
+    let config_path = executable_dir()?.join("runner_config.json");
     let (stdout_lvl, file_lvl) = if config_path.exists() {
         if let Ok(raw) = std::fs::read_to_string(&config_path) {
             if let Ok(cfg) = serde_json::from_str::<crm_tool::runner::config::RunnerConfig>(&raw) {
@@ -72,8 +75,8 @@ async fn main() -> Result<()> {
 
     let _log_guard = match setup_logging_with_levels(
         "runner",
-        parse_log_level(&stdout_lvl),
-        parse_log_level(&file_lvl),
+        parse_log_level(&stdout_lvl)?,
+        parse_log_level(&file_lvl)?,
     ) {
         Ok(guard) => guard,
         Err(e) => {
@@ -86,7 +89,9 @@ async fn main() -> Result<()> {
     info!("RUNNER - Starting tray scheduler mode");
     info!("==================================================");
 
-    let runner_config_path = executable_dir().join("runner_config.json");
+    let runner_config_path =
+        executable_dir().context("Failed to determine executable directory")?;
+    let runner_config_path = runner_config_path.join("runner_config.json");
     let runner_config_path_str = runner_config_path.to_string_lossy().to_string();
 
     let config_exists = runner_config_path.exists();

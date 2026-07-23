@@ -3,7 +3,7 @@ use clap::Parser;
 use crm_tool::crm;
 use crm_tool::manifest::{AppArg, AppManifest, ArgType};
 use crm_tool::utils::{
-    executable_dir, intercept_manifest, parse_log_level, setup_logging_with_levels,
+    executable_dir, intercept_manifest, parse_log_level, setup_logging_with_levels, InterceptResult,
 };
 
 use tracing::info;
@@ -29,13 +29,15 @@ use anyhow::Context;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    intercept_manifest(get_manifest());
+    if let InterceptResult::ExitSuccessfully = intercept_manifest(get_manifest()) {
+        return Ok(());
+    }
     let options = CrmCliOptions::parse();
     run_crm_startup(options).await
 }
 
 async fn run_crm_startup(options: CrmCliOptions) -> Result<()> {
-    let exe_dir = executable_dir();
+    let exe_dir = executable_dir()?;
     let config_path = resolve_config_path(options.config.as_deref(), &exe_dir);
 
     // Load config to grab logging levels early
@@ -45,8 +47,8 @@ async fn run_crm_startup(options: CrmCliOptions) -> Result<()> {
 
     let _log_guard = setup_logging_with_levels(
         "crm",
-        parse_log_level(&config.log_stdout_level),
-        parse_log_level(&config.log_file_level),
+        parse_log_level(&config.log_stdout_level)?,
+        parse_log_level(&config.log_file_level)?,
     )
     .context("Failed to initialize logging")?;
 
@@ -116,16 +118,19 @@ mod tests {
 
     #[test]
     fn test_resolve_config_path_none() {
-        let expected = executable_dir().join("config.json");
-        assert_eq!(resolve_config_path(None, &executable_dir()), expected);
+        let expected = executable_dir().unwrap().join("config.json");
+        assert_eq!(
+            resolve_config_path(None, &executable_dir().unwrap()),
+            expected
+        );
     }
 
     #[test]
     fn test_resolve_config_path_some_relative() {
         let relative_path = "custom_config.json";
-        let expected = executable_dir().join(relative_path);
+        let expected = executable_dir().unwrap().join(relative_path);
         assert_eq!(
-            resolve_config_path(Some(relative_path), &executable_dir()),
+            resolve_config_path(Some(relative_path), &executable_dir().unwrap()),
             expected
         );
     }
@@ -141,7 +146,7 @@ mod tests {
 
         let expected = PathBuf::from(absolute_path);
         assert_eq!(
-            resolve_config_path(Some(absolute_path), &executable_dir()),
+            resolve_config_path(Some(absolute_path), &executable_dir().unwrap()),
             expected
         );
     }

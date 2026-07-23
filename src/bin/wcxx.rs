@@ -3,6 +3,7 @@ use clap::Parser;
 use crm_tool::manifest::{AppArg, AppManifest, ArgType};
 use crm_tool::utils::{
     intercept_manifest, load_or_create_config, parse_log_level, setup_logging_with_levels,
+    InterceptResult,
 };
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -65,7 +66,9 @@ fn get_manifest() -> AppManifest {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    intercept_manifest(get_manifest());
+    if let InterceptResult::ExitSuccessfully = intercept_manifest(get_manifest()) {
+        return Ok(());
+    }
 
     let options = WcxxCliOptions::parse();
     let config_path = PathBuf::from(options.config);
@@ -98,8 +101,8 @@ async fn main() -> Result<()> {
 
     let _guard = setup_logging_with_levels(
         "wcxx",
-        parse_log_level(&config.log_stdout_level),
-        parse_log_level(&config.log_file_level),
+        parse_log_level(&config.log_stdout_level)?,
+        parse_log_level(&config.log_file_level)?,
     )?;
 
     info!("Starting wcxx tool");
