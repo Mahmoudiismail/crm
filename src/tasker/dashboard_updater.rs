@@ -28,8 +28,14 @@ fn run_powershell(script: &str) -> Result<()> {
         .stderr(Stdio::piped())
         .spawn()?;
 
-    let stdout = child.stdout.take().expect("Failed to open stdout");
-    let stderr = child.stderr.take().expect("Failed to open stderr");
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| anyhow::anyhow!("Failed to open stdout"))?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| anyhow::anyhow!("Failed to open stderr"))?;
 
     let stdout_thread = std::thread::spawn(move || {
         let reader = BufReader::new(stdout);
