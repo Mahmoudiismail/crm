@@ -144,7 +144,7 @@ pub async fn process_base64_payload(
     {
         let mut rdr = csv::ReaderBuilder::new()
             .has_headers(true) // assume at least headers exist
-            .flexible(true)
+            .flexible(false)
             .from_reader(utf8_content.as_bytes());
 
         if let Ok(headers) = rdr.headers() {
@@ -152,12 +152,14 @@ pub async fn process_base64_payload(
         }
 
         for result in rdr.records() {
-            if result.is_err() {
+            if let Err(e) = result {
                 error!(
-                    "[{}] CSV Validation error at row {}",
+                    "[{}] CSV Validation error at row {}: {}",
                     report_key,
-                    row_count + 1
+                    row_count + 1,
+                    e
                 );
+                anyhow::bail!("[{}] Invalid CSV payload: {}", report_key, e);
             }
             row_count += 1;
         }
@@ -310,5 +312,22 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("Failed to decode Base64"));
+    }
+
+    #[tokio::test]
+    async fn test_process_base64_payload_strict_csv_validation() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let target_dir = temp_dir.path();
+
+        // Malformed CSV data: varying column lengths
+        // Row 1: 3 columns
+        // Row 2: 2 columns -> this should trigger a validation error with .flexible(false)
+        let malformed_csv = "col1,col2,col3\nval1,val2\n";
+        let base64_payload = Base64Standard.encode(malformed_csv.as_bytes());
+
+        let result = process_base64_payload(&base64_payload, "strict_csv_rep", target_dir).await;
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("Invalid CSV payload"));
     }
 }
