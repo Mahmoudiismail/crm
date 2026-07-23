@@ -1822,8 +1822,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_start_gui_server_routing() {
-        let temp_file = tempfile::NamedTempFile::new().unwrap();
-        let config_path = temp_file.path().to_str().unwrap().to_string();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let config_file = temp_dir.path().join("config.json");
+        let config_path = config_file.to_str().unwrap().to_string();
 
         let port = std::net::TcpListener::bind("127.0.0.1:0")
             .unwrap()
