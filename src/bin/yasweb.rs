@@ -215,9 +215,10 @@ async fn main() -> Result<()> {
         }
 
         let exe_dir = executable_dir()?;
-        let config_path =
-            config_path_opt.unwrap_or_else(|| exe_dir.join("yasweb_config.json"));
-        if let InterceptResult::ExitSuccessfully = intercept_manifest(get_manifest(Some(config_path))) {
+        let config_path = config_path_opt.unwrap_or_else(|| exe_dir.join("yasweb_config.json"));
+        if let InterceptResult::ExitSuccessfully =
+            intercept_manifest(get_manifest(Some(config_path)))
+        {
             return Ok(());
         }
     }
@@ -226,11 +227,7 @@ async fn main() -> Result<()> {
 
     let p = PathBuf::from(options.config);
     let exe_dir = executable_dir()?;
-    let config_path = if p.is_absolute() {
-        p
-    } else {
-        exe_dir.join(p)
-    };
+    let config_path = if p.is_absolute() { p } else { exe_dir.join(p) };
 
     let mut config: YaswebConfig =
         crm_tool::utils::load_or_create_config(&config_path, &YaswebConfig::default())?;

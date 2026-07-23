@@ -119,7 +119,10 @@ mod tests {
     #[test]
     fn test_resolve_config_path_none() {
         let expected = executable_dir().unwrap().join("config.json");
-        assert_eq!(resolve_config_path(None, &executable_dir().unwrap()), expected);
+        assert_eq!(
+            resolve_config_path(None, &executable_dir().unwrap()),
+            expected
+        );
     }
 
     #[test]

@@ -2,7 +2,8 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use crm_tool::manifest::{AppArg, AppManifest, ArgType};
 use crm_tool::utils::{
-    intercept_manifest, load_or_create_config, parse_log_level, setup_logging_with_levels, InterceptResult,
+    intercept_manifest, load_or_create_config, parse_log_level, setup_logging_with_levels,
+    InterceptResult,
 };
 use reqwest::Client;
 use serde::{Deserialize, Serialize};

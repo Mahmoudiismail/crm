@@ -1,5 +1,6 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
+use anyhow::Context;
 use anyhow::Result;
 use clap::Parser;
 use crm_tool::manifest::AppManifest;
@@ -7,7 +8,6 @@ use crm_tool::manifest::AppManifest;
 use crm_tool::runner::engine::RunnerHandle;
 use crm_tool::runner::engine::{start_scheduler, RunnerCommand};
 use crm_tool::runner::gui::start_gui_server;
-use anyhow::Context;
 use crm_tool::utils::{
     executable_dir, intercept_manifest, parse_log_level, setup_logging_with_levels, InterceptResult,
 };
@@ -89,7 +89,8 @@ async fn main() -> Result<()> {
     info!("RUNNER - Starting tray scheduler mode");
     info!("==================================================");
 
-    let runner_config_path = executable_dir().context("Failed to determine executable directory")?;
+    let runner_config_path =
+        executable_dir().context("Failed to determine executable directory")?;
     let runner_config_path = runner_config_path.join("runner_config.json");
     let runner_config_path_str = runner_config_path.to_string_lossy().to_string();
 

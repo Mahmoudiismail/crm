@@ -17,7 +17,8 @@ pub fn setup_logging_with_levels(
     stdout_level: tracing_subscriber::filter::LevelFilter,
     file_level: tracing_subscriber::filter::LevelFilter,
 ) -> Result<tracing_appender::non_blocking::WorkerGuard> {
-    let log_dir = executable_dir().context("Could not determine executable directory for logging")?;
+    let log_dir =
+        executable_dir().context("Could not determine executable directory for logging")?;
     let file_appender = tracing_appender::rolling::never(&log_dir, format!("{}.log", app_name));
     let (non_blocking_file, guard) = tracing_appender::non_blocking(file_appender);
 
@@ -39,7 +40,10 @@ pub fn setup_logging_with_levels(
         .with(stdout_layer)
         .try_init()
     {
-        eprintln!("Warning: Failed to initialize logging for {}: {}", app_name, e);
+        eprintln!(
+            "Warning: Failed to initialize logging for {}: {}",
+            app_name, e
+        );
     }
 
     Ok(guard)
@@ -95,9 +99,14 @@ pub(crate) fn atomic_write(path: &Path, contents: &str) -> Result<()> {
     temp_file
         .write_all(contents.as_bytes())
         .with_context(|| "Failed to write to temp file")?;
-    temp_file.flush().with_context(|| "Failed to flush temp file")?;
+    temp_file
+        .flush()
+        .with_context(|| "Failed to flush temp file")?;
     // Sync to disk to ensure data is written before rename
-    temp_file.as_file().sync_all().with_context(|| "Failed to sync temp file")?;
+    temp_file
+        .as_file()
+        .sync_all()
+        .with_context(|| "Failed to sync temp file")?;
     temp_file
         .persist(path)
         .with_context(|| format!("Failed to atomically replace {:?}", path))?;
