@@ -881,7 +881,8 @@ pub fn process_emails(
         }
         let from_date_str = min_date
             .map(|d| {
-                let limit_date = NaiveDate::from_ymd_opt(2026, 5, 1).unwrap();
+                let limit_date = NaiveDate::from_ymd_opt(2026, 5, 1)
+                    .unwrap_or_else(|| NaiveDate::from_ymd_opt(2026, 1, 1).unwrap());
                 let use_date = if d < limit_date { d } else { limit_date };
                 if use_date.year() == chrono::Local::now().year() {
                     use_date.format("%d %b").to_string()
