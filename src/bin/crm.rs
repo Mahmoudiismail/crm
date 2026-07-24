@@ -45,6 +45,10 @@ async fn run_crm_startup(options: CrmCliOptions) -> Result<()> {
     let mut config = crm_tool::crm::config::AppConfig::load(&config_path_str)
         .context("Failed to load application configuration")?;
 
+    config
+        .validate()
+        .context("Configuration validation failed")?;
+
     let _log_guard = setup_logging_with_levels(
         "crm",
         parse_log_level(&config.log_stdout_level)?,

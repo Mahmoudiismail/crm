@@ -467,36 +467,80 @@ mod tests {
     }
 
     #[test]
-    fn test_merge_json() {
-        let mut current = serde_json::json!({
-            "a": 1,
-            "arr": [1, 2],
-            "obj": {
-                "b": 2
-            }
-        });
-        let default = serde_json::json!({
-            "a": 2, // Should not overwrite
-            "c": 3, // Should insert
-            "arr": [3, 4], // Should not overwrite (arrays treated as atomic)
-            "obj": {
-                "b": 3, // Should not overwrite
-                "d": 4  // Should insert
-            },
-            "new_arr": [5, 6] // Should insert
-        });
+    fn test_merge_json_scalar_override() {
+        let mut current = serde_json::json!({ "a": 1, "b": "user_value" });
+        let default = serde_json::json!({ "a": 2, "b": "default_value" });
+        let changed = super::merge_json(&mut current, &default);
+        assert!(!changed); // No changes, user values preserved
+        assert_eq!(current["a"], 1);
+        assert_eq!(current["b"], "user_value");
+    }
 
+    #[test]
+    fn test_merge_json_scalar_default() {
+        let mut current = serde_json::json!({ "a": 1 });
+        let default = serde_json::json!({ "a": 2, "b": "default_value" });
         let changed = super::merge_json(&mut current, &default);
         assert!(changed);
-
         assert_eq!(current["a"], 1);
-        assert_eq!(current["c"], 3);
-        assert_eq!(current["arr"][0], 1); // Preserves existing array entirely
-        assert_eq!(current["arr"][1], 2);
+        assert_eq!(current["b"], "default_value");
+    }
+
+    #[test]
+    fn test_merge_json_array_atomicity() {
+        let mut current = serde_json::json!({ "arr": [1, 2] });
+        let default = serde_json::json!({ "arr": [3, 4, 5], "new_arr": [6] });
+        let changed = super::merge_json(&mut current, &default);
+        assert!(changed);
         assert_eq!(current["arr"].as_array().unwrap().len(), 2);
+        assert_eq!(current["arr"][0], 1);
+        assert_eq!(current["arr"][1], 2);
+        assert_eq!(current["new_arr"].as_array().unwrap().len(), 1);
+        assert_eq!(current["new_arr"][0], 6);
+    }
+
+    #[test]
+    fn test_merge_json_nested_object() {
+        let mut current = serde_json::json!({
+            "obj": { "b": 2 }
+        });
+        let default = serde_json::json!({
+            "obj": { "b": 3, "d": 4 }
+        });
+        let changed = super::merge_json(&mut current, &default);
+        assert!(changed);
         assert_eq!(current["obj"]["b"], 2);
         assert_eq!(current["obj"]["d"], 4);
-        assert_eq!(current["new_arr"][0], 5); // Adds missing array entirely
+    }
+
+    #[test]
+    fn test_merge_json_empty_object() {
+        let mut current = serde_json::json!({});
+        let default = serde_json::json!({ "a": 1, "obj": {} });
+        let changed = super::merge_json(&mut current, &default);
+        assert!(changed);
+        assert_eq!(current["a"], 1);
+        assert!(current["obj"].as_object().unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_merge_json_missing_fields() {
+        let mut current = serde_json::json!({ "x": 10 });
+        let default = serde_json::json!({ "y": 20, "z": { "nested": true } });
+        let changed = super::merge_json(&mut current, &default);
+        assert!(changed);
+        assert_eq!(current["x"], 10);
+        assert_eq!(current["y"], 20);
+        assert_eq!(current["z"]["nested"], true);
+    }
+
+    #[test]
+    fn test_merge_json_idempotent() {
+        let mut current = serde_json::json!({ "a": 1, "obj": { "b": 2 } });
+        let default = serde_json::json!({ "a": 1, "obj": { "b": 2 } });
+        let changed = super::merge_json(&mut current, &default);
+        assert!(!changed);
+        assert_eq!(current, default);
     }
 
     #[test]

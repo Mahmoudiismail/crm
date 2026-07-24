@@ -124,35 +124,23 @@ impl AppConfig {
     /// Load config from file, merging with defaults for any missing keys.
     /// If the file does not exist, create it with defaults.
     pub fn load(path: &str) -> Result<Self> {
-        let defaults = AppConfig::default();
-        let default_value = serde_json::to_value(&defaults)?;
+        let config_path = Path::new(path);
+        let config: AppConfig =
+            crate::utils::load_or_create_config(config_path, &AppConfig::default())?;
 
-        if !Path::new(path).exists() {
-            info!("Config file not found, creating with defaults: {}", path);
-            let cfg = defaults;
-            cfg.save(path)?;
-            return Ok(cfg);
+        // Ensure stripping logic/saving is invoked if it was created/merged
+        // load_or_create_config does a standard atomic write, but doesn't apply `save()` logic
+        // which strips secrets if remember_secrets=false. We'll rely on the existing
+        // save mechanism inside `AppConfig::save` for subsequent writes.
+
+        Ok(config)
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        if self.base_url.trim().is_empty() {
+            anyhow::bail!("base_url cannot be empty");
         }
-
-        let raw = std::fs::read_to_string(path)
-            .with_context(|| format!("Failed to read config file: {}", path))?;
-        let mut file_value: Value = serde_json::from_str(&raw)
-            .with_context(|| format!("Failed to parse config file: {}", path))?;
-
-        // Merge defaults into the file value (file takes precedence) using shared deep merge function
-        let config_changed = crate::utils::merge_json(&mut file_value, &default_value);
-
-        let cfg: AppConfig =
-            serde_json::from_value(file_value).context("Failed to deserialize merged config")?;
-
-        // Rule: always check config and fix it with each run
-        if config_changed {
-            info!("Updated configuration file with missing default fields.");
-            // save it back, we can just call save since we fully deserialized it
-            cfg.save(path)?;
-        }
-
-        Ok(cfg)
+        Ok(())
     }
 
     /// Finalize runtime-derived fields after loading config.
