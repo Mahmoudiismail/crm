@@ -339,4 +339,26 @@ mod tests {
             panic!("Expected JSON object");
         }
     }
+
+    #[test]
+    fn test_finalize_runtime_fields() {
+        let mut config = AppConfig {
+            from_date: "01-May-2026".to_string(),
+            to_date: "".to_string(),
+            calls_from_date: "".to_string(),
+            ..AppConfig::default()
+        };
+
+        config.finalize_runtime_fields();
+
+        assert_eq!(config.from_date, "2026-05-01");
+        // to_date should default to today
+        let today = Local::now().format("%Y-%m-%d").to_string();
+        assert_eq!(config.to_date, today);
+        assert!(config.dynamic_to_date);
+
+        // calls_from_date should fall back to from_date
+        assert_eq!(config.calls_from_date, "2026-05-01");
+        assert!(config.dynamic_calls_from_date);
+    }
 }

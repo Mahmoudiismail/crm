@@ -261,4 +261,70 @@ mod tests {
 
         assert_eq!(json_value, expected);
     }
+
+    #[test]
+    fn test_deserialization_format() {
+        let json_str = r#"{
+            "name": "Test App 2",
+            "description": "Another test app",
+            "arguments": [
+                {
+                    "name": "--flag",
+                    "arg_type": "boolean",
+                    "required": true
+                },
+                {
+                    "name": "--date",
+                    "arg_type": "date_var",
+                    "required": false
+                }
+            ]
+        }"#;
+
+        let manifest: AppManifest = serde_json::from_str(json_str).unwrap();
+        assert_eq!(manifest.name, "Test App 2");
+        assert_eq!(manifest.description, "Another test app");
+        assert_eq!(manifest.arguments.len(), 2);
+
+        let arg1 = &manifest.arguments[0];
+        assert_eq!(arg1.name, "--flag");
+        assert_eq!(arg1.arg_type, ArgType::Boolean);
+        assert!(arg1.required);
+
+        let arg2 = &manifest.arguments[1];
+        assert_eq!(arg2.name, "--date");
+        assert_eq!(arg2.arg_type, ArgType::DateVar);
+        assert!(!arg2.required);
+    }
+
+    #[test]
+    fn test_builder_methods_on_app_arg() {
+        let mut depends = HashMap::new();
+        depends.insert("other_arg".to_string(), vec!["val1".to_string()]);
+
+        let mut autofill_map = HashMap::new();
+        let mut autofill_inner = HashMap::new();
+        autofill_inner.insert("sub_key".to_string(), "sub_val".to_string());
+        autofill_map.insert("key1".to_string(), autofill_inner);
+
+        let arg = AppArg::new("--test", ArgType::String)
+            .required(true)
+            .default_value("default")
+            .options(vec!["opt1", "opt2"])
+            .depends_on(depends)
+            .autofill(autofill_map);
+
+        assert_eq!(arg.name, "--test");
+        assert_eq!(arg.arg_type, ArgType::String);
+        assert!(arg.required);
+        assert_eq!(arg.default_value.unwrap(), "default");
+        assert_eq!(
+            arg.options.unwrap(),
+            vec!["opt1".to_string(), "opt2".to_string()]
+        );
+        assert!(arg.depends_on.is_some());
+        assert!(arg.depends_on.unwrap().contains_key("other_arg"));
+        assert!(arg.autofill.is_some());
+        assert!(arg.autofill.unwrap().contains_key("key1"));
+    }
 }

@@ -92,3 +92,7 @@ members = []
 [[bench]]
 name = "csv_parsing"
 harness = false
+
+[[bench]]
+name = "config_merging"
+harness = false
