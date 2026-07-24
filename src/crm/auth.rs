@@ -41,7 +41,22 @@ const INFO_BITS: &[u8] = b"Caldera Derived Key";
 // Public API
 // ──────────────────────────────────────────────────────────────
 
-/// Ensure we have a valid token in `config`, performing login if needed.
+/// Validates the current authentication state and performs a Cognito SRP-6a login flow if necessary.
+///
+/// This function executes a multi-step Secure Remote Password (SRP) authentication protocol
+/// against Amazon Cognito. It computes complex mathematical proofs (A, B, S, K) based on the
+/// 2048-bit group 14 specifications to safely authenticate without transmitting plaintext passwords.
+///
+/// If a valid, non-expired token exists in the provided `config`, this function bypasses the login
+/// network requests and returns the cached token.
+///
+/// # Parameters
+/// - `config`: A mutable reference to the `AppConfig` which holds credentials and caches the resulting JWT.
+/// - `client`: The active HTTP client for network requests.
+/// - `skip_login`: If `true`, strict token validation is bypassed and the cached token is always returned (useful for debugging).
+///
+/// # Returns
+/// A valid ID token (`String`) ready for use in HTTP Authorization headers.
 pub async fn ensure_authenticated(
     config: &mut AppConfig,
     client: &reqwest::Client,

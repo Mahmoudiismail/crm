@@ -14,6 +14,12 @@
       "exclude_categories": [
         "incomplete reservation"
       ],
+      "category_exceptions": [
+        {
+          "category": "urgent exception",
+          "team": "Escalation Team"
+        }
+      ],
       "output_file": "./results.csv",
       "email_config": {
         "team_mapping_file": "./teams.csv",

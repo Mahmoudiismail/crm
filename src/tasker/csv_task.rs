@@ -622,6 +622,19 @@ pub fn generate_csv(params: &CsvAnalysisParams<'_>) -> Result<Option<std::path::
     Ok(Some(output_file_path))
 }
 
+/// Executes the primary CSV parsing, merging, and filtering task.
+///
+/// This function finds the most recently downloaded CRM ticket and user exports,
+/// validates their CSV structure strictly (failing on malformed data), left-joins
+/// the datasets based on assignee names, applies configured inclusion/exclusion filters,
+/// and outputs a finalized `results.csv`.
+///
+/// If `email_config` is defined, it seamlessly triggers `tasker::email::run` to distribute
+/// the resulting data to targeted teams.
+///
+/// # Invariants
+/// - Does not modify or drop trailing columns. Missing or malformed CSV rows yield a descriptive error.
+/// - The "Created At" column is explicitly parsed and formatted to generate a supplementary "Month" (`MMM-yyyy`) column.
 pub fn run(
     config: &CsvAnalysisConfig,
     only_call_center: bool,

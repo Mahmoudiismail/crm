@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+/// Root configuration structure mapping `tasker_config.json`.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TaskerConfig {
     pub tasks: Vec<TaskConfig>,
@@ -17,6 +18,9 @@ fn default_file_log_level() -> String {
     "TRACE".to_string()
 }
 
+/// Represents the different variants of tasks the tasker can execute.
+///
+/// Driven dynamically by the JSON `type` tag.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(tag = "type")]
 pub enum TaskConfig {
@@ -28,6 +32,10 @@ pub enum TaskConfig {
     CrmOpenSohail(CrmOpenSohailConfig),
 }
 
+/// Outlines email templating, routing, and distribution rules.
+///
+/// Enforces invariants: `Option<T>` configurations are exclusively mapped
+/// with `skip_serializing_if` to avoid persisting null values.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct EmailConfig {
     pub team_mapping_file: String,

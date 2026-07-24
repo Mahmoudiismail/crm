@@ -5,7 +5,12 @@ use serde_json::Value;
 use std::path::Path;
 use tracing::{debug, info};
 
-/// All configuration fields — mirrors the JSON config file.
+/// Application configuration for the CRM tool.
+///
+/// Serves as the structured mapping of `crm_config.json`.
+/// Invariants:
+/// - Secrets (passwords, tokens) are omitted during serialization if `remember_secrets` is false.
+/// - Dynamic date variables (e.g., `eomonth`, `today`) are resolved to ISO format upon loading.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     #[serde(default)]

@@ -63,7 +63,18 @@ fn report_defs() -> &'static [ReportDef] {
 // Public API
 // ──────────────────────────────────────────────────────────────
 
-/// Fetch reports based on the requested type. Returns a JSON object keyed by report type.
+/// Initiates concurrent API requests to generate and download CRM reports.
+///
+/// This function coordinates the fetching of requested report types (e.g., tickets, calls, leads).
+/// It handles network retry logic natively. If the CRM API responds with a file size error
+/// (e.g., `Failed to generate signed url...`), the fetcher will dynamically split the requested
+/// date range into smaller chunks and recursively fetch them concurrently.
+///
+/// Once a signed URL is successfully resolved from the API, it immediately spawns an asynchronous
+/// task to begin downloading the payload to the local disk.
+///
+/// # Returns
+/// A JSON structure containing diagnostic results and the downloaded file paths.
 pub async fn fetch_reports(
     config: &AppConfig,
     client: &reqwest::Client,

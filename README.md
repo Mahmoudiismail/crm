@@ -89,6 +89,14 @@ We use `criterion` for benchmarking performance-critical paths (like CSV parsing
 cargo bench
 ```
 
+### Documentation Generation
+
+Generate local documentation for the repository's modules and internal APIs:
+
+```bash
+cargo doc --no-deps --open
+```
+
 ## 📦 Releases & Deployment
 
 Releases are fully automated via GitHub Actions.
