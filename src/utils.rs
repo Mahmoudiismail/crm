@@ -455,6 +455,45 @@ mod tests {
     }
 
     #[test]
+    fn test_to_iso_date_with_base() {
+        let eomonth_may = "2026-05-31";
+        assert_eq!(
+            to_iso_date_with_base("eomonth", Some("2026-05-01")),
+            eomonth_may
+        );
+        assert_eq!(
+            to_iso_date_with_base("invalid", Some("2026-05-01")),
+            "invalid"
+        );
+    }
+
+    #[test]
+    fn test_replace_date_vars() {
+        let eomonth_may = "31-05-2026";
+        assert_eq!(
+            replace_date_vars("eomonth", Some("2026-05-01")),
+            eomonth_may
+        );
+        assert_eq!(replace_date_vars("invalid", Some("2026-05-01")), "invalid");
+    }
+
+    #[test]
+    fn test_parse_flexible_date() {
+        assert!(parse_flexible_date("01-01-2026").is_some());
+        assert!(parse_flexible_date("invalid").is_none());
+        assert!(parse_flexible_date("").is_none());
+        assert!(parse_flexible_date("   ").is_none());
+    }
+
+    #[test]
+    fn test_atomic_write_success() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let file_path = temp_dir.path().join("test.txt");
+        assert!(atomic_write(&file_path, "content").is_ok());
+        assert_eq!(std::fs::read_to_string(&file_path).unwrap(), "content");
+    }
+
+    #[test]
     fn test_csv_reader_strict() {
         // Test strict reading, should fail on unequal lengths if flexible is false
         let csv_data = "col1,col2,col3\nval1,val2\n\nval3,val4,val5,val6\n\"multi\nline\",escaped\"\"quote,val";
@@ -541,6 +580,29 @@ mod tests {
         let changed = super::merge_json(&mut current, &default);
         assert!(!changed);
         assert_eq!(current, default);
+    }
+
+    #[test]
+    fn test_merge_json_no_change() {
+        let mut current = serde_json::json!({
+            "a": 1
+        });
+        let default = serde_json::json!({
+            "a": 2
+        });
+
+        let changed = super::merge_json(&mut current, &default);
+        assert!(!changed);
+        assert_eq!(current["a"], 1);
+    }
+
+    #[test]
+    fn test_executable_dir_resolves() {
+        // Since tests run from within the workspace, this should succeed.
+        let dir = executable_dir();
+        assert!(dir.is_ok());
+        let path = dir.unwrap();
+        assert!(path.is_absolute(), "Expected absolute path, got {:?}", path);
     }
 
     #[test]
