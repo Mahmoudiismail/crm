@@ -10,7 +10,7 @@ use tracing::{error, info};
 
 use crate::runner::config::{
     next_daily_run_after, next_monthly_run_after, next_weekly_run_after, parse_rfc3339_utc,
-    Repetition, RunnerConfig, RunnerTask, TaskKind, TaskSchedule,
+    Repetition, RunnerConfig, RunnerTask, TaskSchedule,
 };
 use crate::runner::engine::pipeline::run_task_inner;
 use crate::runner::engine::state::{
@@ -69,24 +69,6 @@ pub fn spawn_execution_manager(
 
                 if running_tasks.iter().any(|t| t.id == task.id) {
                     can_run = false;
-                }
-
-                if can_run {
-                    if let TaskKind::ExternalApp { app_id, args } = task.legacy_kind() {
-                        if running_tasks.iter().any(|t| {
-                            if let TaskKind::ExternalApp {
-                                app_id: run_app_id,
-                                args: run_args,
-                            } = t.legacy_kind()
-                            {
-                                run_app_id == app_id && run_args == args
-                            } else {
-                                false
-                            }
-                        }) {
-                            can_run = false;
-                        }
-                    }
                 }
 
                 if can_run {
