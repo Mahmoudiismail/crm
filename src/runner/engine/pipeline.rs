@@ -31,11 +31,7 @@ async fn execute_action(
             Ok(())
         }
         ActionSpec::ExternalApp(spec) => {
-            if let Some(app) = policy
-                .registered_apps
-                .iter()
-                .find(|a| a.id == spec.app_id)
-            {
+            if let Some(app) = policy.registered_apps.iter().find(|a| a.id == spec.app_id) {
                 run_external_app(logger, app, &spec.args, timeout_seconds).await
             } else {
                 Err(anyhow::anyhow!(
@@ -153,11 +149,21 @@ pub async fn run_task_inner(
                 logger.log("Task completed successfully.").await;
                 task.last_status = "ok".to_string();
             } else {
-                logger.log("Main pipeline completed. Executing post run steps...").await;
-                let post_run_result = execute_pipeline(&task.post_run_steps, &logger, policy, effective_post_run_timeout).await;
+                logger
+                    .log("Main pipeline completed. Executing post run steps...")
+                    .await;
+                let post_run_result = execute_pipeline(
+                    &task.post_run_steps,
+                    &logger,
+                    policy,
+                    effective_post_run_timeout,
+                )
+                .await;
                 match post_run_result {
                     Ok(_) => {
-                        logger.log("Task and post run steps completed successfully.").await;
+                        logger
+                            .log("Task and post run steps completed successfully.")
+                            .await;
                         task.last_status = "ok".to_string();
                     }
                     Err(e) => {
@@ -248,7 +254,9 @@ mod tests {
             ],
         };
 
-        execute_step(&step, &TaskLogger::new("test", "test"), &policy, 5).await.unwrap();
+        execute_step(&step, &TaskLogger::new("test", "test"), &policy, 5)
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
@@ -263,15 +271,17 @@ mod tests {
         let step = TaskStep {
             name: None,
             mode: ExecutionMode::Sequential,
-            actions: vec![
-                ActionSpec::ShellCommand(ShellCommandSpec {
-                    command: "exit 8".to_string(),
-                    continue_on_error: false,
-                }),
-            ],
+            actions: vec![ActionSpec::ShellCommand(ShellCommandSpec {
+                command: "exit 8".to_string(),
+                continue_on_error: false,
+            })],
         };
 
-        assert!(execute_step(&step, &TaskLogger::new("test", "test"), &policy, 5).await.is_err());
+        assert!(
+            execute_step(&step, &TaskLogger::new("test", "test"), &policy, 5)
+                .await
+                .is_err()
+        );
     }
 
     #[tokio::test]
@@ -286,27 +296,29 @@ mod tests {
         let ignored_step = TaskStep {
             name: None,
             mode: ExecutionMode::Parallel,
-            actions: vec![
-                ActionSpec::ShellCommand(ShellCommandSpec {
-                    command: "exit 8".to_string(),
-                    continue_on_error: true,
-                }),
-            ],
+            actions: vec![ActionSpec::ShellCommand(ShellCommandSpec {
+                command: "exit 8".to_string(),
+                continue_on_error: true,
+            })],
         };
 
-        execute_step(&ignored_step, &TaskLogger::new("test", "test"), &policy, 5).await.unwrap();
+        execute_step(&ignored_step, &TaskLogger::new("test", "test"), &policy, 5)
+            .await
+            .unwrap();
 
         let failed_step = TaskStep {
             name: None,
             mode: ExecutionMode::Parallel,
-            actions: vec![
-                ActionSpec::ShellCommand(ShellCommandSpec {
-                    command: "exit 8".to_string(),
-                    continue_on_error: false,
-                }),
-            ],
+            actions: vec![ActionSpec::ShellCommand(ShellCommandSpec {
+                command: "exit 8".to_string(),
+                continue_on_error: false,
+            })],
         };
-        assert!(execute_step(&failed_step, &TaskLogger::new("test", "test"), &policy, 5).await.is_err());
+        assert!(
+            execute_step(&failed_step, &TaskLogger::new("test", "test"), &policy, 5)
+                .await
+                .is_err()
+        );
     }
 
     #[tokio::test]
@@ -322,12 +334,10 @@ mod tests {
             TaskStep {
                 name: None,
                 mode: ExecutionMode::Sequential,
-                actions: vec![
-                    ActionSpec::ShellCommand(ShellCommandSpec {
-                        command: "echo 1".to_string(),
-                        continue_on_error: false,
-                    }),
-                ],
+                actions: vec![ActionSpec::ShellCommand(ShellCommandSpec {
+                    command: "echo 1".to_string(),
+                    continue_on_error: false,
+                })],
             },
             TaskStep {
                 name: None,
@@ -346,15 +356,15 @@ mod tests {
             TaskStep {
                 name: None,
                 mode: ExecutionMode::Sequential,
-                actions: vec![
-                    ActionSpec::ShellCommand(ShellCommandSpec {
-                        command: "echo 4".to_string(),
-                        continue_on_error: false,
-                    }),
-                ],
+                actions: vec![ActionSpec::ShellCommand(ShellCommandSpec {
+                    command: "echo 4".to_string(),
+                    continue_on_error: false,
+                })],
             },
         ];
 
-        execute_pipeline(&steps, &TaskLogger::new("test", "test"), &policy, 5).await.unwrap();
+        execute_pipeline(&steps, &TaskLogger::new("test", "test"), &policy, 5)
+            .await
+            .unwrap();
     }
 }
