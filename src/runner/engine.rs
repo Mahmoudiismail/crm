@@ -198,12 +198,12 @@ pub fn spawn_execution_manager(
                 }
 
                 if can_run {
-                    if let TaskKind::ExternalApp { app_id, args } = &task.kind {
+                    if let TaskKind::ExternalApp { app_id, args } = task.legacy_kind() {
                         if running_tasks.iter().any(|t| {
                             if let TaskKind::ExternalApp {
                                 app_id: run_app_id,
                                 args: run_args,
-                            } = &t.kind
+                            } = t.legacy_kind()
                             {
                                 run_app_id == app_id && run_args == args
                             } else {
@@ -785,7 +785,8 @@ fn normalize_and_validate_task(task: &mut RunnerTask, cfg: &RunnerConfig) -> Res
 
     normalize_and_validate_schedules(task, cfg.min_task_interval_seconds.max(1))?;
 
-    match &mut task.kind {
+    let mut kind = task.legacy_kind();
+    match &mut kind {
         TaskKind::ShellCommand { commands, .. } => {
             commands.retain(|c| !c.command.trim().is_empty());
             for c in commands.iter_mut() {
@@ -798,11 +799,12 @@ fn normalize_and_validate_task(task: &mut RunnerTask, cfg: &RunnerConfig) -> Res
             }
         }
         TaskKind::ExternalApp { app_id, .. } => {
-            if app_id.is_empty() {
+            if app_id.trim().is_empty() {
                 return Err(anyhow::anyhow!("External App tasks require an app_id"));
             }
         }
     }
+    task.set_legacy_kind(kind);
 
     Ok(())
 }
@@ -883,7 +885,7 @@ async fn run_task_inner(
         policy.post_run_timeout_seconds
     };
 
-    let result = match &task.kind {
+    let result = match task.legacy_kind() {
         TaskKind::ShellCommand { mode, commands } => {
             if !policy.allow_shell_tasks {
                 Err(anyhow::anyhow!(
@@ -892,17 +894,17 @@ async fn run_task_inner(
             } else {
                 match mode {
                     ShellCommandMode::Sequential => {
-                        run_shell_sequential(&logger, commands, effective_shell_timeout).await
+                        run_shell_sequential(&logger, &commands, effective_shell_timeout).await
                     }
                     ShellCommandMode::Parallel => {
-                        run_shell_parallel(&logger, commands, effective_shell_timeout).await
+                        run_shell_parallel(&logger, &commands, effective_shell_timeout).await
                     }
                 }
             }
         }
         TaskKind::ExternalApp { app_id, args } => {
-            if let Some(app) = policy.registered_apps.iter().find(|a| &a.id == app_id) {
-                run_external_app(&logger, app, args, effective_shell_timeout).await
+            if let Some(app) = policy.registered_apps.iter().find(|a| a.id == *app_id) {
+                run_external_app(&logger, app, &args, effective_shell_timeout).await
             } else {
                 Err(anyhow::anyhow!(
                     "Registered app with ID '{}' not found in config",
@@ -914,16 +916,16 @@ async fn run_task_inner(
 
     match result {
         Ok(_) => {
-            if !task.post_run_app_id.trim().is_empty() {
+            if !task.legacy_post_run_app_id().trim().is_empty() {
                 if let Some(app) = policy
                     .registered_apps
                     .iter()
-                    .find(|a| a.id == task.post_run_app_id)
+                    .find(|a| a.id == task.legacy_post_run_app_id())
                 {
                     match run_external_app(
                         &logger,
                         app,
-                        &task.post_run_app_args,
+                        &task.legacy_post_run_app_args(),
                         effective_post_run_timeout,
                     )
                     .await
@@ -951,7 +953,7 @@ async fn run_task_inner(
                 } else {
                     let err_msg = format!(
                         "Registered app with ID '{}' not found in config for post run",
-                        task.post_run_app_id
+                        task.legacy_post_run_app_id()
                     );
                     task.last_status = format!("post-run error: {}", err_msg);
                     let mut st = status.lock().await;
@@ -963,10 +965,10 @@ async fn run_task_inner(
                         "Task Execution Failed in Post Run App"
                     );
                 }
-            } else if !task.post_run_script.trim().is_empty() {
+            } else if !task.legacy_post_run_script().trim().is_empty() {
                 match run_post_run_script(
                     &logger,
-                    &task.post_run_script,
+                    &task.legacy_post_run_script(),
                     effective_post_run_timeout,
                 )
                 .await
@@ -1737,15 +1739,11 @@ mod tests {
             frequency_seconds: 60,
             next_run_at: String::new(),
             schedules: Vec::new(),
-            kind: TaskKind::ShellCommand {
-                mode: ShellCommandMode::Sequential,
-                commands: Vec::new(),
-            },
+            steps: Vec::new(),
+            post_run_steps: Vec::new(),
             last_run_at: String::new(),
             last_status: String::new(),
-            post_run_script: String::new(),
-            post_run_app_id: String::new(),
-            post_run_app_args: std::collections::HashMap::new(),
+
             timeout_seconds: 0,
         };
 

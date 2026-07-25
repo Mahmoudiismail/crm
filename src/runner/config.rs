@@ -44,8 +44,56 @@ pub struct RegisteredApp {
     pub config_path: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExecutionMode {
+    Sequential,
+    Parallel,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskStep {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    pub mode: ExecutionMode,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub actions: Vec<ActionSpec>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ActionSpec {
+    ShellCommand(ShellCommandSpec),
+    ExternalApp(ExternalAppSpec),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExternalAppSpec {
+    pub app_id: String,
+    #[serde(default)]
+    pub args: std::collections::HashMap<String, String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(from = "RunnerTaskLegacy", into = "RunnerTaskLegacy")]
 pub struct RunnerTask {
+    pub id: String,
+    pub name: String,
+    pub enabled: bool,
+    pub repetition: Repetition,
+    pub frequency_seconds: u64,
+    pub next_run_at: String,
+    pub schedules: Vec<TaskSchedule>,
+    pub steps: Vec<TaskStep>,
+    pub post_run_steps: Vec<TaskStep>,
+
+    pub last_run_at: String,
+    pub last_status: String,
+    pub timeout_seconds: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RunnerTaskLegacy {
     #[serde(default)]
     pub id: String,
     #[serde(default)]
@@ -60,20 +108,193 @@ pub struct RunnerTask {
     pub next_run_at: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub schedules: Vec<TaskSchedule>,
-    #[serde(default)]
-    pub kind: TaskKind,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub steps: Vec<TaskStep>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub post_run_steps: Vec<TaskStep>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<TaskKind>,
     #[serde(default)]
     pub last_run_at: String,
     #[serde(default)]
     pub last_status: String,
-    #[serde(default)]
-    pub post_run_script: String,
-    #[serde(default)]
-    pub post_run_app_id: String,
-    #[serde(default)]
-    pub post_run_app_args: std::collections::HashMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub post_run_script: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub post_run_app_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub post_run_app_args: Option<std::collections::HashMap<String, String>>,
     #[serde(default)]
     pub timeout_seconds: u64,
+}
+
+impl From<RunnerTaskLegacy> for RunnerTask {
+    fn from(legacy: RunnerTaskLegacy) -> Self {
+        let mut steps = legacy.steps;
+        let mut post_run_steps = legacy.post_run_steps;
+
+        if steps.is_empty() {
+            if let Some(kind) = legacy.kind {
+                match kind {
+                    TaskKind::ShellCommand { mode, commands } => {
+                        let execution_mode = match mode {
+                            ShellCommandMode::Sequential => ExecutionMode::Sequential,
+                            ShellCommandMode::Parallel => ExecutionMode::Parallel,
+                        };
+                        let actions: Vec<ActionSpec> =
+                            commands.into_iter().map(ActionSpec::ShellCommand).collect();
+
+                        if !actions.is_empty() {
+                            steps.push(TaskStep {
+                                name: Some("Legacy Shell Command".to_string()),
+                                mode: execution_mode,
+                                actions,
+                            });
+                        }
+                    }
+                    TaskKind::ExternalApp { app_id, args } => {
+                        steps.push(TaskStep {
+                            name: Some("Legacy External App".to_string()),
+                            mode: ExecutionMode::Sequential,
+                            actions: vec![ActionSpec::ExternalApp(ExternalAppSpec {
+                                app_id,
+                                args,
+                            })],
+                        });
+                    }
+                }
+            }
+        }
+
+        if post_run_steps.is_empty() {
+            let mut post_actions = Vec::new();
+            if let Some(script) = legacy.post_run_script {
+                if !script.is_empty() {
+                    post_actions.push(ActionSpec::ShellCommand(ShellCommandSpec {
+                        command: script,
+                        continue_on_error: false,
+                    }));
+                }
+            }
+            if let Some(app_id) = legacy.post_run_app_id {
+                if !app_id.is_empty() {
+                    post_actions.push(ActionSpec::ExternalApp(ExternalAppSpec {
+                        app_id,
+                        args: legacy.post_run_app_args.unwrap_or_default(),
+                    }));
+                }
+            }
+            if !post_actions.is_empty() {
+                post_run_steps.push(TaskStep {
+                    name: Some("Legacy Post-Run".to_string()),
+                    mode: ExecutionMode::Sequential,
+                    actions: post_actions,
+                });
+            }
+        }
+
+        RunnerTask {
+            id: legacy.id,
+            name: legacy.name,
+            enabled: legacy.enabled,
+            repetition: legacy.repetition,
+            frequency_seconds: legacy.frequency_seconds,
+            next_run_at: legacy.next_run_at,
+            schedules: legacy.schedules,
+            last_run_at: legacy.last_run_at,
+            last_status: legacy.last_status,
+            timeout_seconds: legacy.timeout_seconds,
+            steps,
+            post_run_steps,
+        }
+    }
+}
+
+impl From<RunnerTask> for RunnerTaskLegacy {
+    fn from(task: RunnerTask) -> Self {
+        RunnerTaskLegacy {
+            id: task.id,
+            name: task.name,
+            enabled: task.enabled,
+            repetition: task.repetition,
+            frequency_seconds: task.frequency_seconds,
+            next_run_at: task.next_run_at,
+            schedules: task.schedules,
+            steps: task.steps,
+            post_run_steps: task.post_run_steps,
+            kind: None,
+            last_run_at: task.last_run_at,
+            last_status: task.last_status,
+
+            timeout_seconds: task.timeout_seconds,
+            post_run_script: None,
+            post_run_app_id: None,
+            post_run_app_args: None,
+        }
+    }
+}
+
+impl RunnerTask {
+    pub fn legacy_kind(&self) -> TaskKind {
+        if let Some(step) = self.steps.first() {
+            let mut commands = Vec::new();
+            for action in &step.actions {
+                match action {
+                    ActionSpec::ShellCommand(spec) => commands.push(spec.clone()),
+                    ActionSpec::ExternalApp(spec) => {
+                        return TaskKind::ExternalApp {
+                            app_id: spec.app_id.clone(),
+                            args: spec.args.clone(),
+                        };
+                    }
+                }
+            }
+            if !commands.is_empty() {
+                let mode = match step.mode {
+                    ExecutionMode::Sequential => ShellCommandMode::Sequential,
+                    ExecutionMode::Parallel => ShellCommandMode::Parallel,
+                };
+                return TaskKind::ShellCommand { mode, commands };
+            }
+        }
+        TaskKind::ShellCommand {
+            mode: ShellCommandMode::Sequential,
+            commands: Vec::new(),
+        }
+    }
+
+    pub fn legacy_post_run_script(&self) -> String {
+        if let Some(step) = self.post_run_steps.first() {
+            for action in &step.actions {
+                if let ActionSpec::ShellCommand(spec) = action {
+                    return spec.command.clone();
+                }
+            }
+        }
+        String::new()
+    }
+
+    pub fn legacy_post_run_app_id(&self) -> String {
+        if let Some(step) = self.post_run_steps.first() {
+            for action in &step.actions {
+                if let ActionSpec::ExternalApp(spec) = action {
+                    return spec.app_id.clone();
+                }
+            }
+        }
+        String::new()
+    }
+
+    pub fn legacy_post_run_app_args(&self) -> std::collections::HashMap<String, String> {
+        if let Some(step) = self.post_run_steps.first() {
+            for action in &step.actions {
+                if let ActionSpec::ExternalApp(spec) = action {
+                    return spec.args.clone();
+                }
+            }
+        }
+        std::collections::HashMap::new()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -933,15 +1154,11 @@ mod tests {
                 working_hours: None,
                 start_time: None,
             }],
-            kind: TaskKind::ShellCommand {
-                mode: ShellCommandMode::Sequential,
-                commands: Vec::new(),
-            },
+            steps: Vec::new(),
+            post_run_steps: Vec::new(),
             last_run_at: String::new(),
             last_status: String::new(),
-            post_run_script: String::new(),
-            post_run_app_id: String::new(),
-            post_run_app_args: std::collections::HashMap::new(),
+
             timeout_seconds: 0,
         };
 
@@ -967,7 +1184,10 @@ mod tests {
         assert_eq!(loaded_task.id, "test_interval");
         assert_eq!(loaded_task.name, "Test Interval Task");
         assert!(loaded_task.enabled);
-        assert!(matches!(loaded_task.kind, TaskKind::ShellCommand { .. }));
+        assert!(matches!(
+            loaded_task.legacy_kind(),
+            TaskKind::ShellCommand { .. }
+        ));
 
         // Verify interval schedule
         assert_eq!(loaded_task.schedules.len(), 1);
@@ -995,24 +1215,24 @@ mod tests {
             frequency_seconds: 0,
             next_run_at: String::new(),
             schedules: vec![],
-            kind: TaskKind::ShellCommand {
-                mode: ShellCommandMode::Parallel,
-                commands: vec![
-                    ShellCommandSpec {
+            last_run_at: String::new(),
+            steps: vec![TaskStep {
+                name: None,
+                mode: ExecutionMode::Parallel,
+                actions: vec![
+                    ActionSpec::ShellCommand(ShellCommandSpec {
                         command: "tar -czf backup.tar.gz /data".to_string(),
                         continue_on_error: false,
-                    },
-                    ShellCommandSpec {
+                    }),
+                    ActionSpec::ShellCommand(ShellCommandSpec {
                         command: "echo Backup complete".to_string(),
                         continue_on_error: true,
-                    },
+                    }),
                 ],
-            },
-            last_run_at: String::new(),
+            }],
+            post_run_steps: Vec::new(),
             last_status: String::new(),
-            post_run_script: String::new(),
-            post_run_app_id: String::new(),
-            post_run_app_args: std::collections::HashMap::new(),
+
             timeout_seconds: 0,
         };
 
@@ -1039,9 +1259,9 @@ mod tests {
         assert_eq!(loaded_task.name, "Test Shell Task");
 
         // Verify shell command kind
-        match &loaded_task.kind {
+        match loaded_task.legacy_kind() {
             TaskKind::ShellCommand { mode, commands } => {
-                assert_eq!(*mode, ShellCommandMode::Parallel);
+                assert_eq!(mode, ShellCommandMode::Parallel);
                 assert_eq!(commands.len(), 2);
                 assert_eq!(
                     commands.first().expect("Missing command").command,
@@ -1072,15 +1292,11 @@ mod tests {
                     working_hours: None,
                     start_time: None,
                 }],
-                kind: TaskKind::ShellCommand {
-                    mode: ShellCommandMode::Sequential,
-                    commands: Vec::new(),
-                },
+                steps: Vec::new(),
+                post_run_steps: Vec::new(),
                 last_run_at: String::new(),
                 last_status: String::new(),
-                post_run_script: String::new(),
-                post_run_app_id: String::new(),
-                post_run_app_args: std::collections::HashMap::new(),
+
                 timeout_seconds: 0,
             },
             RunnerTask {
@@ -1094,18 +1310,18 @@ mod tests {
                     enabled: true,
                     next_run_at: (Utc::now() + chrono::Duration::hours(1)).to_rfc3339(),
                 }],
-                kind: TaskKind::ShellCommand {
-                    mode: ShellCommandMode::Sequential,
-                    commands: vec![ShellCommandSpec {
+                steps: vec![TaskStep {
+                    name: None,
+                    mode: ExecutionMode::Sequential,
+                    actions: vec![ActionSpec::ShellCommand(ShellCommandSpec {
                         command: "echo Hello World".to_string(),
                         continue_on_error: false,
-                    }],
-                },
+                    })],
+                }],
+                post_run_steps: Vec::new(),
                 last_run_at: String::new(),
                 last_status: String::new(),
-                post_run_script: String::new(),
-                post_run_app_id: String::new(),
-                post_run_app_args: std::collections::HashMap::new(),
+
                 timeout_seconds: 0,
             },
         ];
@@ -1130,7 +1346,10 @@ mod tests {
         // Verify first task (CRM with interval)
         let crm_task = loaded.tasks.first().expect("No task");
         assert_eq!(crm_task.id, "crm_task");
-        assert!(matches!(crm_task.kind, TaskKind::ShellCommand { .. }));
+        assert!(matches!(
+            crm_task.legacy_kind(),
+            TaskKind::ShellCommand { .. }
+        ));
         assert!(!crm_task.schedules.is_empty());
         match crm_task.schedules.first().expect("No schedules") {
             TaskSchedule::Interval { every_seconds, .. } => {
@@ -1143,9 +1362,9 @@ mod tests {
         let shell_task = &loaded.tasks[1];
         assert_eq!(shell_task.id, "shell_task");
         assert!(!shell_task.enabled);
-        match &shell_task.kind {
+        match shell_task.legacy_kind() {
             TaskKind::ShellCommand { mode, commands } => {
-                assert_eq!(*mode, ShellCommandMode::Sequential);
+                assert_eq!(mode, ShellCommandMode::Sequential);
                 assert_eq!(commands.len(), 1);
                 assert_eq!(
                     commands.first().expect("Missing command").command,
@@ -1431,5 +1650,81 @@ mod tests {
 
         assert!(is_within_working_hours(&working_hours, dt_fri_10am)); // 10:00 is exactly start (inclusive)
         assert!(!is_within_working_hours(&working_hours, dt_fri_8am)); // 08:00 is before 10:00
+    }
+}
+
+#[cfg(test)]
+mod tests_migration {
+    use super::*;
+
+    #[test]
+    fn test_legacy_configuration_migration() {
+        let legacy_json = r#"{
+            "id": "legacy-task-1",
+            "name": "Legacy Task",
+            "enabled": true,
+            "kind": {
+                "type": "shell_command",
+                "mode": "sequential",
+                "commands": [
+                    {
+                        "command": "echo Hello",
+                        "continue_on_error": false
+                    }
+                ]
+            },
+            "post_run_script": "echo Post",
+            "post_run_app_id": "app1",
+            "post_run_app_args": {
+                "arg1": "val1"
+            }
+        }"#;
+
+        let task: RunnerTask = serde_json::from_str(legacy_json).unwrap();
+        assert_eq!(task.id, "legacy-task-1");
+        assert_eq!(task.name, "Legacy Task");
+
+        // Assert Canonical Translation
+        assert_eq!(task.steps.len(), 1);
+        assert_eq!(task.steps[0].mode, ExecutionMode::Sequential);
+        assert_eq!(task.steps[0].actions.len(), 1);
+        if let ActionSpec::ShellCommand(c) = &task.steps[0].actions[0] {
+            assert_eq!(c.command, "echo Hello");
+        } else {
+            panic!("Expected ShellCommand");
+        }
+
+        assert_eq!(task.post_run_steps.len(), 1);
+        assert_eq!(task.post_run_steps[0].actions.len(), 2);
+    }
+}
+
+impl RunnerTask {
+    pub fn set_legacy_kind(&mut self, kind: TaskKind) {
+        self.steps.clear();
+        match kind {
+            TaskKind::ShellCommand { mode, commands } => {
+                let execution_mode = match mode {
+                    ShellCommandMode::Sequential => ExecutionMode::Sequential,
+                    ShellCommandMode::Parallel => ExecutionMode::Parallel,
+                };
+                let actions: Vec<ActionSpec> =
+                    commands.into_iter().map(ActionSpec::ShellCommand).collect();
+                if !actions.is_empty() {
+                    self.steps.push(TaskStep {
+                        name: Some("Legacy Shell Command".to_string()),
+                        mode: execution_mode,
+                        actions,
+                    });
+                }
+            }
+            TaskKind::ExternalApp { app_id, args } => {
+                self.steps.push(TaskStep {
+                    name: Some("Legacy External App".to_string()),
+                    mode: ExecutionMode::Sequential,
+                    actions: vec![ActionSpec::ExternalApp(ExternalAppSpec { app_id, args })],
+                });
+            }
+        }
     }
 }

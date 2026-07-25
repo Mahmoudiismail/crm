@@ -7,7 +7,7 @@ use tracing::{error, info};
 
 use crate::runner::config::{
     human_datetime, next_daily_run_after, parse_rfc3339_utc, Repetition, RunnerConfig, RunnerTask,
-    ShellCommandMode, ShellCommandSpec, TaskKind, TaskSchedule,
+    RunnerTaskLegacy, ShellCommandMode, ShellCommandSpec, TaskKind, TaskSchedule,
 };
 use crate::runner::engine::{create_task, delete_task, update_task};
 use crate::runner::engine::{RunnerCommand, RunnerHandle};
@@ -582,7 +582,7 @@ fn render_task_row(task: &RunnerTask) -> String {
     } else {
         "<span class='inline-flex rounded bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-700'>Disabled</span>"
     };
-    let kind = match &task.kind {
+    let kind = match task.legacy_kind() {
         TaskKind::ShellCommand { mode, commands } => {
             let command_count = commands.len();
             let mode_str = match mode {
@@ -652,10 +652,13 @@ fn render_task_form(
     let id = task.map(|t| t.id.as_str()).unwrap_or_default();
     let name = task.map(|t| t.name.as_str()).unwrap_or_default();
     let enabled = task.map(|t| t.enabled).unwrap_or(true);
-    let post_run_script = task.map(|t| t.post_run_script.as_str()).unwrap_or_default();
-    let post_run_app_id = task.map(|t| t.post_run_app_id.as_str()).unwrap_or_default();
+    let post_run_script = task.map(|t| t.legacy_post_run_script()).unwrap_or_default();
+    let post_run_app_id = task.map(|t| t.legacy_post_run_app_id()).unwrap_or_default();
     let post_run_app_args = task
-        .map(|t| serde_json::to_string(&t.post_run_app_args).unwrap_or_else(|_| "{}".to_string()))
+        .map(|t| {
+            serde_json::to_string(&t.legacy_post_run_app_args())
+                .unwrap_or_else(|_| "{}".to_string())
+        })
         .unwrap_or_else(|| "{}".to_string());
 
     let post_run_action = if !post_run_app_id.is_empty() {
@@ -675,11 +678,11 @@ fn render_task_form(
     let mut ext_app_id = String::new();
     let mut ext_app_args = String::new();
 
-    let (task_type, _report) = match task.map(|t| &t.kind) {
+    let (task_type, _report) = match task.map(|t| t.legacy_kind()) {
         Some(TaskKind::ShellCommand { .. }) => ("shell_command", "all"),
         Some(TaskKind::ExternalApp { app_id, args }) => {
             ext_app_id = app_id.clone();
-            ext_app_args = serde_json::to_string(args).unwrap_or_else(|_| "{}".to_string());
+            ext_app_args = serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
             ("external_app", "all")
         }
         None => ("shell_command", "all"),
@@ -756,9 +759,9 @@ fn render_task_form(
         name_field = input_field("Name", "name", name),
         checked_attr = if enabled { "checked" } else { "" },
         type_select = select_task_type(task_type),
-        post_run_val = escape_html(post_run_script),
+        post_run_val = escape_html(&post_run_script),
         post_run_args_val = post_run_app_args.replace("'", "&#39;"),
-        post_run_id_val = escape_html(post_run_app_id),
+        post_run_id_val = escape_html(&post_run_app_id),
         post_run_none_selected = if post_run_action == "none" { "selected" } else { "" },
         post_run_script_selected = if post_run_action == "script" { "selected" } else { "" },
         post_run_app_selected = if post_run_action == "external_app" { "selected" } else { "" },
@@ -797,8 +800,8 @@ fn schedule_editor_html(task: Option<&RunnerTask>) -> String {
 }
 
 fn shell_command_editor_html(task: Option<&RunnerTask>) -> String {
-    let mode = match task.map(|t| &t.kind) {
-        Some(TaskKind::ShellCommand { mode, .. }) => *mode,
+    let mode = match task.map(|t| t.legacy_kind()) {
+        Some(TaskKind::ShellCommand { mode, .. }) => mode,
         _ => ShellCommandMode::Sequential,
     };
     let mode_html = format!(
@@ -935,7 +938,7 @@ fn schedule_rows_html(task: &RunnerTask) -> String {
 }
 
 fn shell_command_rows_html(task: &RunnerTask) -> String {
-    match &task.kind {
+    match task.legacy_kind() {
         TaskKind::ShellCommand { commands, .. } => {
             let rows = commands
                 .iter()
@@ -1400,7 +1403,7 @@ fn build_task_from_values(
         }
     };
 
-    Ok(RunnerTask {
+    let task = RunnerTask {
         id,
         name,
         enabled: parse_checkbox(values, "enabled"),
@@ -1408,14 +1411,21 @@ fn build_task_from_values(
         frequency_seconds,
         next_run_at,
         schedules,
-        kind,
+        steps: Vec::new(),
+        post_run_steps: Vec::new(),
         last_run_at: String::new(),
         last_status: String::new(),
-        post_run_script,
-        post_run_app_id,
-        post_run_app_args,
         timeout_seconds,
-    })
+    };
+
+    let mut legacy = RunnerTaskLegacy::from(task);
+    legacy.kind = Some(kind);
+    legacy.post_run_script = Some(post_run_script);
+    legacy.post_run_app_id = Some(post_run_app_id);
+    legacy.post_run_app_args = Some(post_run_app_args);
+    let task = RunnerTask::from(legacy);
+
+    Ok(task)
 }
 
 fn legacy_fields_from_schedules(schedules: &[TaskSchedule]) -> (Repetition, u64, String) {
