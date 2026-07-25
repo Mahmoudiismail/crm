@@ -328,7 +328,7 @@
   const externalAppArgsHidden = document.getElementById("external_app_args");
   const externalAppIdHidden = document.getElementById("external_app_id");
 
-  let registeredAppsCache = null;
+
   const postRunActionSelect = document.getElementById("post_run_action_select");
   const postRunScriptContainer = document.getElementById("post_run_script_container");
   const postRunAppContainer = document.getElementById("post_run_app_container");
@@ -354,10 +354,10 @@
         postRunScriptContainer.classList.remove("block");
         postRunAppContainer.classList.remove("hidden");
         postRunAppContainer.classList.add("block");
-        if (registeredAppsCache === null) {
+        if (window.api.getRegisteredAppsCache() === null || window.api.getRegisteredAppsCache() === undefined) {
           loadRegisteredAppsForContainer(postRunAppSelectContainer, postRunAppDynamicInputs, postRunAppIdHidden, postRunAppArgsHidden, "post-run-ext");
         } else {
-          renderAppList(registeredAppsCache, postRunAppSelectContainer, postRunAppDynamicInputs, postRunAppIdHidden, postRunAppArgsHidden, "post-run-ext");
+          renderAppList(window.api.getRegisteredAppsCache(), postRunAppSelectContainer, postRunAppDynamicInputs, postRunAppIdHidden, postRunAppArgsHidden, "post-run-ext");
         }
       }
     });
@@ -533,10 +533,10 @@
     if (externalAppContainer) {
       externalAppContainer.classList.toggle("hidden", type !== "external_app");
       if (type === "external_app") {
-        if (!registeredAppsCache) {
+        if (!window.api.getRegisteredAppsCache()) {
           loadRegisteredAppsForContainer(appSelectContainer, externalAppDynamicInputs, externalAppIdHidden, externalAppArgsHidden, "main-ext");
         } else {
-          renderAppList(registeredAppsCache, appSelectContainer, externalAppDynamicInputs, externalAppIdHidden, externalAppArgsHidden, "main-ext");
+          renderAppList(window.api.getRegisteredAppsCache(), appSelectContainer, externalAppDynamicInputs, externalAppIdHidden, externalAppArgsHidden, "main-ext");
         }
       }
     }
@@ -548,11 +548,9 @@
     try {
       selectContainer.innerHTML = '<span class="text-sm text-gray-500">Loading apps...</span>';
 
-      let apps = registeredAppsCache;
+      let apps = window.api.getRegisteredAppsCache();
       if (!apps) {
-        const response = await fetch("/api/apps/list");
-        apps = await response.json();
-        registeredAppsCache = apps;
+        apps = await window.api.fetchApps();
       }
 
       renderAppList(apps, selectContainer, dynamicInputs, idHidden, argsHidden, prefix);
@@ -599,10 +597,7 @@
       '<span class="text-sm text-gray-500">Loading manifest...</span>';
 
     try {
-      const response = await fetch(
-        "/api/apps/manifest?app_id=" + encodeURIComponent(appId),
-      );
-      const manifest = await response.json();
+      const manifest = await window.api.fetchAppManifest(appId);
 
       if (manifest.error) {
         dynamicInputs.innerHTML = `<span class="text-sm text-red-500">Error: ${manifest.error}</span>`;
@@ -858,10 +853,10 @@ if (taskTypeSelect) {
   if (postRunActionSelect) {
     // If it's pre-selected as external_app on page load, fetch apps.
     if (postRunActionSelect.value === "external_app") {
-        if (registeredAppsCache === null) {
+        if (window.api.getRegisteredAppsCache() === null || window.api.getRegisteredAppsCache() === undefined) {
           loadRegisteredAppsForContainer(postRunAppSelectContainer, postRunAppDynamicInputs, postRunAppIdHidden, postRunAppArgsHidden, "post-run-ext");
         } else {
-          renderAppList(registeredAppsCache, postRunAppSelectContainer, postRunAppDynamicInputs, postRunAppIdHidden, postRunAppArgsHidden, "post-run-ext");
+          renderAppList(window.api.getRegisteredAppsCache(), postRunAppSelectContainer, postRunAppDynamicInputs, postRunAppIdHidden, postRunAppArgsHidden, "post-run-ext");
         }
     }
   }
@@ -874,50 +869,10 @@ if (taskTypeSelect) {
       if (commandsHidden) commandsHidden.value = buildCommands();
 
 
-      function serializeExternalApp(dynamicInputsElement, hiddenArgsElement) {
-        if (!dynamicInputsElement || !hiddenArgsElement) return true;
-        const argsMap = {};
-        const inputs = dynamicInputsElement.querySelectorAll(
-          "input[data-arg-name], select[data-arg-name]",
-        );
-        let hasMissingRequired = false;
 
-        inputs.forEach((input) => {
-          const argName = input.getAttribute("data-arg-name");
-          const argType = input.getAttribute("data-arg-type");
-
-          if (input.required && !input.value.trim() && argType !== "boolean") {
-            hasMissingRequired = true;
-          }
-
-          if (argType === "boolean") {
-            if (input.checked) {
-              argsMap[argName] = "true";
-            }
-          } else if (argType === "multi_list") {
-            if (input.selectedOptions) {
-              const values = Array.from(input.selectedOptions).map(o => o.value);
-              if (values.length > 0) {
-                argsMap[argName] = values.join(",");
-              } else {
-                argsMap[argName] = "";
-              }
-            }
-          } else if (input.value !== undefined && input.value !== null) {
-            argsMap[argName] = input.value;
-          }
-        });
-
-        if (hasMissingRequired) {
-          return false;
-        }
-
-        hiddenArgsElement.value = JSON.stringify(argsMap);
-        return true;
-      }
 
       if (taskTypeSelect && taskTypeSelect.value === "external_app") {
-        if (!serializeExternalApp(externalAppDynamicInputs, externalAppArgsHidden)) {
+        if (!window.validation.serializeExternalApp(externalAppDynamicInputs, externalAppArgsHidden)) {
           alert("Please fill in all required arguments for the external application.");
           e.preventDefault();
           return false;
@@ -925,7 +880,7 @@ if (taskTypeSelect) {
       }
 
       if (postRunActionSelect && postRunActionSelect.value === "external_app") {
-        if (!serializeExternalApp(postRunAppDynamicInputs, postRunAppArgsHidden)) {
+        if (!window.validation.serializeExternalApp(postRunAppDynamicInputs, postRunAppArgsHidden)) {
           alert("Please fill in all required arguments for the post-run external application.");
           e.preventDefault();
           return false;
