@@ -1227,7 +1227,7 @@ fn select_task_type(value: &str) -> String {
 
 fn html_page(title: &str, content: &str) -> String {
     format!(
-        "<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>{}</title><script src='{}'></script><script src='/assets/js/common.js'></script><script src='/assets/js/api.js'></script><script src='/assets/js/validation.js'></script><script src='/assets/js/notifications.js'></script><script src='/assets/js/forms.js'></script></head><body class='bg-gray-50 text-gray-900'><main class='max-w-7xl mx-auto px-4 py-8'>{}</main></body></html>",
+        "<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>{}</title><script src='{}'></script></head><body class='bg-gray-50 text-gray-900'><main class='max-w-7xl mx-auto px-4 py-8'>{}</main><script src='/assets/js/common.js'></script><script src='/assets/js/api.js'></script><script src='/assets/js/validation.js'></script><script src='/assets/js/notifications.js'></script><script src='/assets/js/forms.js'></script></body></html>",
         escape_html(title),
         TAILWIND_CDN,
         content
@@ -1238,14 +1238,19 @@ fn render_redirect_to_dashboard(message: &str) -> String {
     html_page(
         "Redirecting",
         &format!(
-            "<div class='max-w-xl mx-auto bg-white border border-gray-200 rounded shadow-sm p-6'><h1 class='text-2xl font-bold text-gray-900'>Redirecting</h1><p class='mt-4 text-gray-700'>Returning to the dashboard...</p></div><script>window.onload = function() {{ window.redirectToDashboard('{}'); }};</script>",
+            "<div class='max-w-xl mx-auto bg-white border border-gray-200 rounded shadow-sm p-6'><h1 class='text-2xl font-bold text-gray-900'>Redirecting</h1><p class='mt-4 text-gray-700'>Returning to the dashboard...</p></div><script>window.addEventListener('DOMContentLoaded', function() {{ window.redirectToDashboard('{}'); }});</script>",
             js_escape(message)
         ),
     )
 }
 
-fn render_toast(_message: &str) -> String {
-    String::new()
+fn render_toast(message: &str) -> String {
+    format!(
+        "<div id='runner-toast' class='fixed right-4 top-4 z-50 max-w-sm rounded border border-gray-200 bg-white px-4 py-3 shadow-lg'>\
+            <p class='text-sm font-semibold text-gray-900'>{}</p>\
+        </div>",
+        escape_html(message)
+    )
 }
 
 fn js_escape(value: &str) -> String {

@@ -32,7 +32,7 @@ window.redirectToDashboard = function(message) {
     }
 };
 
-window.onload = function() {
+window.addEventListener('DOMContentLoaded', function() {
     const params = new URLSearchParams(window.location.search);
     const toastMsg = params.get('toast');
     if (toastMsg) {
@@ -41,5 +41,14 @@ window.onload = function() {
         // Remove toast from URL without refreshing the page
         const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
         window.history.replaceState({path:newUrl},'',newUrl);
+    } else {
+        // If a toast was server-rendered natively (no URL param), just set up the timeout to remove it.
+        const existing = document.getElementById('runner-toast');
+        if (existing) {
+            setTimeout(() => {
+                const t = document.getElementById('runner-toast');
+                if (t) t.remove();
+            }, 4000);
+        }
     }
-};
+});

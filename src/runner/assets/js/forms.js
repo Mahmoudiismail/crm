@@ -599,8 +599,9 @@
     try {
       const manifest = await window.api.fetchAppManifest(appId);
 
-      if (manifest.error) {
-        dynamicInputs.innerHTML = `<span class="text-sm text-red-500">Error: ${manifest.error}</span>`;
+      if (!manifest || manifest.error) {
+        const errMsg = manifest && manifest.error ? manifest.error : "Failed to load manifest or network error.";
+        dynamicInputs.innerHTML = `<span class="text-sm text-red-500">Error: ${errMsg}</span>`;
         return;
       }
 
