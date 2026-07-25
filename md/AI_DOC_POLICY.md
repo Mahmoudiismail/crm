@@ -60,6 +60,7 @@ If any answer is `no`, update docs before finalizing.
 - Removed `flexible(true)` centrally in `utils.rs` via `build_csv_reader` to strictly enforce column counts and throw validation errors when data is malformed.
 
 ## Recent Fixes
+- **Pipeline Execution Engine:** Completely replaced the legacy execution model in `runner/engine.rs` with a deterministic pipeline execution engine processing `TaskStep` elements in `Sequential` or `Parallel` execution modes. External apps and shell commands are now natively managed within these steps.
 - **Concurrent API Fetching:** Modified `fetch_with_signed_url_split` in `crm/fetcher.rs` to concurrently fetch split date ranges using a recursive boxed future approach (`fetch_recursive` with `tokio::join!`). This fixes the issue where split fetches were being executed sequentially.
 - **Dashboard Updater Calculation Issue:** Fixed an issue where Excel threw a `0x800A03EC` COM exception when modifying `$Excel.Calculation = -4135` by ensuring the workbook is opened *before* altering application calculation modes.
 - **CrmOpenSohail Pivot Extraction:** Fixed strict casting errors in PowerShell pivot parsing by migrating from `[double]$val` to safe casting (`-as [double]`) with fallback TryParse logic to handle string anomalies gracefully. Added matching Rust tests to ensure the generated scripts uphold this.

@@ -1,133 +1,51 @@
-# CRM Tool — Application Summary
+# Summary of Capabilities
 
-## What It Does
+The system is a collection of Rust binaries designed to:
+- Act as a local GUI runner orchestrator.
+- Automate HTTP fetch requests dynamically to bypass token challenges (CRM).
+- Extract filtered CSV exports via Selenium-style Headless Chrome DOM manipulations (Yasweb).
+- Validate, filter, merge, and pivot heavily-structured CSV data files.
+- Interact with COM objects natively to transmit reports effectively via internal channels using Outlook, injecting directly manipulated HTML tables.
+- Actively manipulate COM instances of Excel to refresh sophisticated internal OLAP/Power Query Data Models directly connected to extracted CSVs, and interact robustly with Native and OLAP Pivot Slicers dynamically prior to extracting tabular results back into the system via dynamically constructed PowerShell scripts (CRM Open Sohail).
 
-This project ships five Rust executables:
-
-- `runner`: tray scheduler + GUI + task engine
-- `crm`: one-shot CRM fetch executable
-- `yasweb`: headless browser automation tool for Yasweb login
-- `wcxx`: fetching tool for Webex Contact Center data (calendars, agents, teams, queues, skills)
-- `tasker`: background worker for CSV processing and emailing
-
-Release builds are optimized for maximum runtime performance and minimal file size through the Cargo release profile (`opt-level=3`, `lto=fat`, `strip=symbols`, `panic=abort`). GitHub release publishing is split by executable so `runner_windows.zip`, `crm_windows.zip`, `yasweb_windows.zip`, and `wcxx_windows.zip` can be built and uploaded independently.
-
-Together they:
+# Core Runner Engine Details
 
 - Run a `runner` layer for scheduling and task execution.
-- Dynamically register and orchestrate apps using an `AppManifest` JSON schema.
-- Authenticate to AWS Cognito using SRP.
-- Fetch CRM report payloads (tickets, calls, leads).
-- Extract signed download URLs from response JSON.
-- Download CSV files to a local folder.
-- Process CSV files robustly (using flexible CSV parsing and centralized diagnostic logic) and generate analytical reports/emails via `tasker`.
-- Run automatically on task schedule and manually from tray + GUI.
-- Fetch Webex CC metrics securely using an OAuth Access Token.
-
-## Runtime Style
-
-- `runner` is tray-oriented (`#![windows_subsystem = "windows"]` on Windows).
-- Tasks can execute `ExternalApp` commands via `tokio::process`, mapping dynamically to apps registered in the GUI.
-- Multiple reports can be run concurrently by setting up task chains using `shell_command` or `external_app`.
-- `crm` is a console-style one-shot command.
-- `yasweb` runs headless browser automation using `headless_chrome`.
-- `wcxx` is a CLI tool that opens an HTML export dynamically in the browser.
-- Single-instance lock via TCP bind on `127.0.0.1:14592`.
-- Async orchestration with `tokio`.
-- Non-blocking logs to file + stdout.
-- Embedded runner GUI HTTP server bound from config (`gui_host`, `gui_port`) with Tailwind CSS loaded from cdnjs.
-
-## Main Workflow (runner)
-
-1. Load/create `runner_config.json` under executable directory.
-2. Ensure CRM `config.json` exists under executable directory.
-3. Start scheduler loop and runner GUI server.
-4. Run tasks from runner config (`shell_command`, and `external_app`).
-5. For external app tasks, execute the dynamically registered binary utilizing `--config` and any extra args.
-6. Persist task run metadata (`next_run_at`, `last_status`, `last_run_at`).
-
-## Main Workflow (crm)
-
-1. Parse runtime CLI args (intercepts `--manifest` for app registration).
-2. Resolve/create `config.json` under executable directory (or provided path).
-3. Authenticate via Cognito SRP.
-4. Fetch requested report set.
-5. Download CSV artifacts when enabled.
-6. Exit process.
-
-Supported CRM args:
-
-- `--manifest`
-- `--report all|tickets|calls|leads|none`
-- `--config <path>`
-- `--start-date <YYYY-MM-DD|today|yesterday|tomorrow|eomonth>` (Optional. Defaults to `from_date` in config.json)
-- `--end-date <YYYY-MM-DD|today|yesterday|tomorrow|eomonth>` (Optional. Defaults to `to_date` in config.json, which dynamically falls back to today)
-
-CRM always performs login.
-
-## Scheduler + Manual Triggers
-
-- Scheduler polls at `poll_interval_seconds` from runner config.
-- Task execution supports legacy `repetition`/`frequency_seconds` fields and the newer multi-schedule `schedules` list.
-- Schedule summaries, next-run times, and last-run times are rendered in human-readable local time in the GUI.
-- Tray and GUI can trigger run-all, tickets-only CRM, or specific task by id.
+- Auto-generate GUI arguments by invoking worker binaries dynamically with `--manifest` to resolve `AppManifest` definitions natively.
+- GUI forms automatically generate correct dynamic fields, variables, checkboxes, and multi-selection structures.
+- Support deep persistence layer auto-healing via `merge_json` handling nested array atomicity explicitly.
+- Centralize all configurations securely without hardcoded credentials.
+- Task execution operates on a deterministic pipeline engine (Sequential/Parallel TaskSteps supporting multiple actions). Schedules support legacy `repetition`/`frequency_seconds` fields and the newer multi-schedule `schedules` list.
+- Run concurrent local web servers supporting HTML templates, REST APIs, and embedded frontend functionality.
 - Atomic run guard prevents overlapping task execution.
-- Supports editing dynamically registered applications via the GUI.
-- Shell tasks are controlled by runner safety policy (`allow_shell_tasks`, per-task timeouts or global fallback timeout, min interval) and can run commands sequentially or in parallel.
 
-## Main Workflow (yasweb)
+# Worker Details
 
-1. Parse CLI arguments (intercepts `--manifest` for app registration).
-2. Load/create `yasweb_config.json` under executable directory.
-3. Parse CLI inputs (`--name`, `--type`, `--filters`, `--monthly`, `--start-date`, `--end-date`).
-4. If `--monthly` is set, chunk the date range into monthly segments.
-5. Launch a single headless Chrome browser session.
-6. For each date chunk (batched up to 6 concurrently), launch a new browser tab.
-7. Set a unique temporary download directory per tab via CDP (`Page.setDownloadBehavior`) to isolate concurrent downloads.
-8. Attach Chrome DevTools Protocol network listeners to log events.
-9. Navigate to the configured Yasweb URL.
-10. Identify and fill the username and password, submitting the login form.
-11. Open menu via "#menuPinnedBtn", toggle it, and click the MIS Reports module.
+1. Automatically parse authentication payloads, sign parameters cryptographically (SRP), bypass Cloudflare WAF, and download required payload links robustly.
+2. Provide comprehensive automated CLI reporting tools exposing standard inputs (`--report tickets,calls`, `--start-date`).
+3. Leverage multi-threaded concurrent async streams using `tokio::join!` strictly isolated boundaries for high-performance concurrent data downloads, API fetching, and headless browser instance scraping.
+4. Auto-chunk date ranges recursively on file-size exceptions.
+5. Inject and extract Javascript dynamically for bypassing UI restrictions (Yasweb).
+6. Provide deep CSV integration testing structures, dynamically parsing context frames directly to stdouts on failures via centralized generic tools.
+7. Support highly variable configurations allowing custom routing per-category/branch exceptions and robust string/path handling logic dynamically resolving relative dependencies to execution boundaries.
+8. Inject data via COM strictly preventing Excel exceptions (`0x800A03EC`) via native property disablements natively embedded within scripts.
+9. Support deep PowerShell integration via custom string parsing scripts bridging multi-type boundaries (double-parsing fallback arrays natively mapped via Rust structures).
+10. Send rich HTML outputs safely bypassing maximum file size barriers.
+11. Support dynamic variables universally mapped to Date inputs allowing recursive logic calculations cleanly across all binary ecosystems (`today`, `yesterday`, `tomorrow`, `eomonth`).
 12. Automatically populate filter dates dynamically mapped to `start_date_key` and `end_date_key` via `yasweb_config.json` during monthly execution.
-13. Execute the report export via JS automation within the iframe.
-14. Wait up to 3 minutes for `.xlsx` downloads in the tab's temporary download directory to complete, rename the file accurately, and move it to a central `downloads` output folder.
-15. Logs are written to the `yasweblog` file. HTML content is extracted and logged heavily across all stages (successes and failures) for debugging purposes. Certificate errors are ignored during browser instantiation.
 
-## Main Workflow (wcxx)
+## Executables
+- `crm`: Fetches logs and API payloads via CLI arguments.
+- `runner`: Exposes the HTTP dashboard and pipeline engine.
+- `tasker`: Parses CSV structures, manipulates DOM arrays, communicates to Excel COM systems, and issues Emails dynamically.
+- `wcxx`: Handles standard API metric fetching asynchronously.
+- `yasweb`: Performs automated Headless Chrome iterations utilizing CDP events, concurrent isolates, and advanced wait conditions dynamically processing MIS filters.
 
-1. Parse CLI arguments (`--manifest` or `--config` to specify the config file path, defaulting to `wcxx_config.json`).
-2. Read the `wcxx_config.json` configuration for the Webex Contact Center base URL, optional org ID, and Bearer token.
-3. Automatically generate a template `wcxx_config.json` and exit if none exists.
-4. Using the provided token, iterate over the organization endpoints (`/calendars`, `/agents`, `/teams`, `/queues`, `/skills`) and fetch the data asynchronously using `reqwest`.
-5. Aggregate the responses into a single JSON map.
-6. Generate a temporary HTML file embedding the JSON data payload formatted nicely.
-7. Use the default system web browser to view the retrieved data via the HTML file.
-8. Logs all operations strictly to a flat file `wcxx.log` via tracing.
-
-## Primary Outputs
-
-- `runner.log` for runner executable.\n- `logs/<task_name>/YYYYMMDD_HHMMSS_<task_name>_<task_id>.log` for detailed per-task execution logs.
-- `crm.log` for crm executable.
-- `yasweblog` for yasweb executable containing network request events.
+## Common paths
+- `tasker_config.json` for tasker rules logic.
+- `yasweb_config.json` for DOM mapping.
+- `runner_config.json` for pipeline persistence.
+- `teams.csv`, `users.csv` for structural mapping tasks.
+- `runner.log` for runner executable.
+- `logs/<task_name>/YYYYMMDD_HHMMSS_<task_name>_<task_id>.log` for detailed per-task execution logs.
 - `wcxx.log` for wcxx execution logs.
-- `Downloads/*.csv` in executable directory.
-- `wcxx_output.html` (in OS temp dir) for browser presentation.
-
-## Modules
-
-- `src/lib.rs`
-- `src/manifest.rs`
-- `src/bin/runner.rs`
-- `src/bin/crm.rs`
-- `src/bin/yasweb.rs`
-- `src/bin/wcxx.rs`
-- `src/bin/tasker.rs`
-- `src/runner/config.rs`
-- `src/runner/engine.rs`
-- `src/runner/gui.rs`
-- `src/crm/mod.rs`
-- `src/crm/auth.rs`
-- `src/crm/config.rs`
-- `src/crm/fetcher.rs`
-- `src/crm/downloader.rs`
-- `src/tasker/*`
