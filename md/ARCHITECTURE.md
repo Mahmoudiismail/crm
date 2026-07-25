@@ -17,7 +17,12 @@ For a detailed guide on how to fundamentally reconstruct these components and th
 
 The runner GUI exposes a central execution dashboard. If a user sets up a new application via the **Apps** page, the `runner` fetches its manifest via the `--manifest` flag (e.g. `crm.exe --manifest`).
 
-When a `TaskKind::ExternalApp` is executed on its schedule, the `runner/engine.rs` dynamically converts the configured `AppManifest` argument values into CLI arguments, spawning the registered process (e.g. `crm.exe --report tickets --config path/to/config.json --start-date 2024-01-01`), piping its logs, and tracking its termination status.
+When a task is executed on its schedule, the `runner/engine.rs` now executes it using a deterministic Pipeline Execution Engine. Tasks are represented as a sequence of `TaskStep`s. Each `TaskStep` contains one or more `ActionSpec`s (representing a `shell_command` or an `external_app`) and operates in either `Sequential` or `Parallel` execution mode.
+
+- **Sequential TaskSteps** execute each action one-by-one. The step fails immediately if any action fails.
+- **Parallel TaskSteps** execute all actions concurrently, waiting for all to complete before continuing. If any action fails, the step is considered failed.
+
+If the primary pipeline completes successfully, any configured `post_run_steps` are subsequently executed using the same pipeline mechanics. The engine leverages `tokio::process` to spawn and track process states, piping logs, and capturing timeouts on a per-action basis.
 
 ## Data Persistence
 
@@ -28,13 +33,3 @@ When a `TaskKind::ExternalApp` is executed on its schedule, the `runner/engine.r
 
 - **`tasker`:** Aggregates and emails reports based on configured bucket logic. Supports `--send-exceptions` to dynamically read teams mapped in `category_exceptions` and group exception tickets dynamically, using only mapped CC lists and ignoring standard global logic.
 ### Recent Fixes
-- **Date Variable Integration:** Integrated dynamic date variables (`today`, `tomorrow`, `yesterday`, `eomonth`) seamlessly into `utils::parse_flexible_date`, establishing it as the single, validated source of truth for date parsing across `crm`, `yasweb`, and `tasker`. Introduced `DateVar` to `AppManifest` to empower the Runner GUI with drop-down context switches between static calendars and dynamic variables.
-- **Dashboard Updater & PowerShell Locking:** Fixed a bug on Windows where `tempfile::Builder` kept file handles open during PowerShell execution. The tempfile `.ps1` handle is now explicitly dropped via `.keep()` before calling PowerShell, and manually removed afterwards, resolving `The process cannot access the file because it is being used by another process` errors.
-- **OLAP Slicer Support in Tasker:** Upgraded the `crm_open_sohail` PowerShell script in `src/tasker/crm_open_sohail.rs` to support Excel Data Model (OLAP) Pivot Tables. The script now dynamically detects OLAP caches and safely retrieves items via `SlicerCacheLevels` and filters via `VisibleSlicerItemsList`.
-- **Dashboard CSV Filtering:** Refined filtering in `src/tasker/dashboard_updater.rs` to guarantee the `Position` and `Is Exception` columns are removed. Added logic to parse the `Created At` date and append it as explicitly formatted `Month` (e.g. `Jan`) and `Day` (e.g. `01`) columns for dashboard Excel injection.
-- **Tasker Call Center Leads:** Corrected conditional logic in `src/tasker/email.rs` where `--only-call-center` did not trigger lead report generation. The `send_cc` flag now implicitly assumes true if `only_call_center` is explicitly specified via the CLI, ensuring leads files are generated and attached as intended.
-- **PowerShell Execution Stability:** Fixed Windows file lock exceptions during PowerShell script execution in `src/tasker/email.rs` and `src/tasker/crm_open_sohail.rs` by correctly dropping the file handle before invoking `std::process::Command`, matching the pattern established in `src/tasker/dashboard_updater.rs`.
-- **PowerShell Calculation and Casting Stability:** Fixed PowerShell `0x800A03EC` COM exceptions when modifying `$Excel.Calculation` in `src/tasker/dashboard_updater.rs` by ensuring the workbook is opened first. Additionally, fixed strict casting errors in `src/tasker/crm_open_sohail.rs` by utilizing `-as [double]` alongside `[double]::TryParse` to cleanly ignore unparseable string values in pivot columns.
-- **Automated Testing:** Per AGENTS.md policy, unit tests were created or adapted to cover PowerShell file unlocking and Dashboard parsing edge cases to prevent regressions.
-- **PowerShell COM Exception Fallbacks:** When automating Outlook emails in `src/tasker/dashboard_updater.rs`, `$Mail.Attachments.Add` operations are wrapped in `try/catch` to gracefully catch and handle attachment size limit exceptions by inserting a warning directly into the HTML body instead of crashing the pipeline.
-- **PowerShell JSON Serialization:** To resolve JSON serialization bugs yielding empty arrays when nested inside `ConvertTo-Json`, dynamically constructed hashtable rows in `src/tasker/crm_open_sohail.rs` are explicitly cast using `[PSCustomObject]@{...}`.
