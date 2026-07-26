@@ -36,8 +36,6 @@ pub struct YaswebCliOptions {
     end_date: Option<String>,
     #[arg(long, action = clap::ArgAction::SetTrue)]
     add_time_to_file: bool,
-    #[arg(long)]
-    download_path: Option<String>,
     #[arg(long, hide = true)]
     manifest: bool,
 }
@@ -133,7 +131,6 @@ fn get_manifest(config_path: Option<PathBuf>) -> AppManifest {
         AppArg::new("--start-date", ArgType::DateVar),
         AppArg::new("--end-date", ArgType::DateVar),
         AppArg::new("--add-time-to-file", ArgType::Boolean),
-        AppArg::new("--download-path", ArgType::String),
     ];
 
     let mut sorted_filters: Vec<_> = filter_dependencies.into_iter().collect();
@@ -328,38 +325,8 @@ async fn main() -> Result<()> {
 
     let mut report_futures = Vec::new();
 
-    // Launch shared browser once for all reports
-    let mut user_data_dir = executable_dir()?;
-    user_data_dir.push("yasweb_chrome_data");
-    user_data_dir.push("shared_session");
-
-    let args_chrome = vec![
-        std::ffi::OsStr::new("--ignore-certificate-errors"),
-        std::ffi::OsStr::new("--start-maximized"),
-        std::ffi::OsStr::new("--disable-web-security"),
-        std::ffi::OsStr::new("--disable-site-isolation-trials"),
-        std::ffi::OsStr::new("--disable-features=IsolateOrigins,site-per-process"),
-        std::ffi::OsStr::new("--disable-session-crashed-bubble"),
-        std::ffi::OsStr::new("--no-first-run"),
-        std::ffi::OsStr::new("--disable-infobars"),
-        std::ffi::OsStr::new("--skip-reopen-last-pages"),
-    ];
-
-    let launch_options = LaunchOptions::default_builder()
-        .headless(config.headless)
-        .sandbox(false)
-        .idle_browser_timeout(std::time::Duration::from_secs(120))
-        .user_data_dir(Some(user_data_dir))
-        .args(args_chrome)
-        .build()
-        .map_err(|e| anyhow::anyhow!("Failed to build launch options: {e}"))?;
-
-    let shared_browser =
-        Arc::new(Browser::new(launch_options).context("Failed to launch shared browser")?);
-    let download_path_global = options.download_path.clone();
-
     // Iterate over active_report_names
-    for (report_idx, active_report_name) in active_report_names.into_iter().enumerate() {
+    for active_report_name in active_report_names {
         let active_report_type = active_report_type_global.clone();
         let active_filters = active_filters_global.clone();
         let start_date_str = start_date_str_global.clone();
@@ -368,19 +335,13 @@ async fn main() -> Result<()> {
         let config = config.clone();
         let config_path_clone = config_path.clone();
 
-        let shared_browser_clone = shared_browser.clone();
-        let is_first_report = report_idx == 0;
-
         let active_report_name_clone_for_future = active_report_name.clone();
-
-        let download_path_global = download_path_global.clone();
 
         // Push an async block into our futures list
         report_futures.push(async move {
             let active_report_name = active_report_name_clone_for_future;
             let mut active_report_type = active_report_type;
             let mut active_filters = active_filters;
-            let browser = shared_browser_clone;
 
             // Retrieve from config
             if let Some(cached) = config.reports.get(&active_report_name) {
@@ -502,6 +463,36 @@ async fn main() -> Result<()> {
             let config_clone = config.clone();
             let active_report_name_clone = active_report_name.clone();
 
+            // Launch browser once
+            let mut user_data_dir = executable_dir()?;
+            user_data_dir.push("yasweb_chrome_data");
+            // Use unique data dir per report to allow simultaneous runs
+            let safe_name = active_report_name.replace(|c: char| !c.is_alphanumeric(), "_");
+            user_data_dir.push(safe_name);
+
+            let args = vec![
+                std::ffi::OsStr::new("--ignore-certificate-errors"),
+                std::ffi::OsStr::new("--start-maximized"),
+                std::ffi::OsStr::new("--disable-web-security"),
+                std::ffi::OsStr::new("--disable-site-isolation-trials"),
+                std::ffi::OsStr::new("--disable-features=IsolateOrigins,site-per-process"),
+                std::ffi::OsStr::new("--disable-session-crashed-bubble"),
+                std::ffi::OsStr::new("--no-first-run"),
+                std::ffi::OsStr::new("--disable-infobars"),
+                std::ffi::OsStr::new("--skip-reopen-last-pages"),
+            ];
+
+            let launch_options = LaunchOptions::default_builder()
+                .headless(config.headless)
+                .sandbox(false)
+                .idle_browser_timeout(std::time::Duration::from_secs(120))
+                .user_data_dir(Some(user_data_dir))
+                .args(args)
+                .build()
+                .map_err(|e| anyhow::anyhow!("Failed to build launch options: {e}"))?;
+
+            let browser = Arc::new(Browser::new(launch_options).context("Failed to launch browser")?);
+
             // Chunk runs into concurrent batches based on config
             let concurrency = if config.concurrency == 0 {
                 1
@@ -575,8 +566,7 @@ async fn main() -> Result<()> {
                     }
 
                     let browser_clone = browser.clone();
-                    // Only use initial tab for the very first chunk's first element of the very first report
-                    let is_initial = is_first_report && i == 0 && !chunk.is_empty();
+                    let is_initial = i == 0 && !chunk.is_empty(); // use initial tab for the first element in the batch to avoid lingering blank tabs
 
                     // Setup download dir for this tab
                     let date_suffix = if is_monthly && !start_dt.is_empty() {
@@ -646,13 +636,8 @@ async fn main() -> Result<()> {
                 let results = futures_util::future::join_all(tasks).await;
 
                 for (discovered_filters, temp_dl_dir, final_filename) in results.into_iter().flatten() {
-                    let final_out_dir = if let Some(ref custom_path) = download_path_global {
-                        PathBuf::from(custom_path)
-                    } else {
-                        let mut d = executable_dir()?;
-                        d.push("downloads");
-                        d
-                    };
+                    let mut final_out_dir = executable_dir()?;
+                    final_out_dir.push("downloads");
                     let _ = finalize_download(&temp_dl_dir, &final_out_dir, &final_filename);
 
                     if !discovered_filters.is_empty() {
