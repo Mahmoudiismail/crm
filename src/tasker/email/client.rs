@@ -9,7 +9,9 @@ use crate::tasker::email::attachments::generate_ticket_attachment;
 use crate::tasker::email::html::generate_pivot_html;
 use crate::tasker::email::message::TicketRow;
 use crate::tasker::email::outlook::run_powershell;
-use crate::tasker::email::recipients::{group_tickets_into_buckets, load_team_mappings, resolve_recipients};
+use crate::tasker::email::recipients::{
+    group_tickets_into_buckets, load_team_mappings, resolve_recipients,
+};
 use crate::tasker::email::reports::generate_leads_report;
 
 #[allow(clippy::too_many_arguments)]
@@ -139,9 +141,12 @@ pub fn process_emails(
         if let Some(idx) = created_at_idx {
             if let Some(val) = record.get(idx) {
                 let trimmed = val.trim();
-                if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(trimmed, "%d/%m/%Y %H:%M:%S") {
+                if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(trimmed, "%d/%m/%Y %H:%M:%S")
+                {
                     created_at_dt = Some(dt.date());
-                } else if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(trimmed, "%m/%d/%Y %H:%M:%S") {
+                } else if let Ok(dt) =
+                    chrono::NaiveDateTime::parse_from_str(trimmed, "%m/%d/%Y %H:%M:%S")
+                {
                     created_at_dt = Some(dt.date());
                 }
             }
@@ -214,10 +219,18 @@ pub fn process_emails(
         }
     });
 
-    let buckets = group_tickets_into_buckets(ticket_rows, config, only_call_center, effective_send_exceptions);
+    let buckets = group_tickets_into_buckets(
+        ticket_rows,
+        config,
+        only_call_center,
+        effective_send_exceptions,
+    );
     let today_str = Local::now().format("%d %b %Y").to_string();
 
-    let send_email_for_bucket = |raw_bucket_name: &str, rows: &[TicketRow], is_branch: bool| -> Result<()> {
+    let send_email_for_bucket = |raw_bucket_name: &str,
+                                 rows: &[TicketRow],
+                                 is_branch: bool|
+     -> Result<()> {
         let bucket_name_cleaned = raw_bucket_name.replace('\u{FFFD}', "").replace("ï¿½", "");
         let bucket_name = bucket_name_cleaned.as_str();
 
@@ -229,7 +242,8 @@ pub fn process_emails(
             }
         }
 
-        let all_closed = rows.is_empty() || rows.iter().all(|r| r.status.eq_ignore_ascii_case("closed"));
+        let all_closed =
+            rows.is_empty() || rows.iter().all(|r| r.status.eq_ignore_ascii_case("closed"));
 
         if all_closed {
             if leads_report_path.is_none() {
@@ -271,10 +285,20 @@ pub fn process_emails(
             })
             .unwrap_or_else(|| "1 May 2026".to_string());
 
-        info!("Generating email for {} with {} rows.", bucket_name, rows.len());
+        info!(
+            "Generating email for {} with {} rows.",
+            bucket_name,
+            rows.len()
+        );
 
         let mapping = team_maps.get(&bucket_name.to_lowercase());
-        let (to_emails, cc_list) = resolve_recipients(bucket_name, mapping, config, effective_send_exceptions, &exception_teams);
+        let (to_emails, cc_list) = resolve_recipients(
+            bucket_name,
+            mapping,
+            config,
+            effective_send_exceptions,
+            &exception_teams,
+        );
 
         let html_table = generate_pivot_html(rows, &statuses_vec, is_branch);
 
@@ -283,13 +307,20 @@ pub fn process_emails(
             .filter(|n| !n.trim().is_empty())
             .unwrap_or_else(|| "All".to_string());
 
-        let (subject, body) = if bucket_name.eq_ignore_ascii_case("Call Center") && !effective_send_exceptions {
+        let (subject, body) = if bucket_name.eq_ignore_ascii_case("Call Center")
+            && !effective_send_exceptions
+        {
             (format!("Open TKTs - {}", bucket_name), "".to_string())
         } else if let Some(template_path_str) = &config.body_template_file {
-            let template_path = crate::tasker::csv_task::resolve_relative_to_exe_dir(template_path_str);
+            let template_path =
+                crate::tasker::csv_task::resolve_relative_to_exe_dir(template_path_str);
             let template_content = if template_path.exists() {
                 std::fs::read_to_string(&template_path).unwrap_or_else(|e| {
-                    error!("Failed to read template file {}: {}", template_path.display(), e);
+                    error!(
+                        "Failed to read template file {}: {}",
+                        template_path.display(),
+                        e
+                    );
                     "".to_string()
                 })
             } else {
@@ -312,13 +343,20 @@ pub fn process_emails(
 </body>
 </html>"#;
                 if let Err(e) = std::fs::write(&template_path, default_template) {
-                    error!("Failed to generate default template at {}: {}", template_path.display(), e);
+                    error!(
+                        "Failed to generate default template at {}: {}",
+                        template_path.display(),
+                        e
+                    );
                 }
                 default_template.to_string()
             };
 
             let mut extracted_subject = format!("Open TKTs - {}", bucket_name);
-            if let (Some(start_idx), Some(relative_end_idx)) = (template_content.find("<title>"), template_content.find("</title>")) {
+            if let (Some(start_idx), Some(relative_end_idx)) = (
+                template_content.find("<title>"),
+                template_content.find("</title>"),
+            ) {
                 if start_idx < relative_end_idx {
                     let title_content = &template_content[start_idx + 7..relative_end_idx];
                     extracted_subject = title_content
@@ -331,7 +369,10 @@ pub fn process_emails(
             }
 
             let mut extracted_body = template_content.clone();
-            if let (Some(start_idx), Some(relative_end_idx)) = (template_content.find("<body>"), template_content.find("</body>")) {
+            if let (Some(start_idx), Some(relative_end_idx)) = (
+                template_content.find("<body>"),
+                template_content.find("</body>"),
+            ) {
                 if start_idx < relative_end_idx {
                     extracted_body = template_content[start_idx + 6..relative_end_idx].to_string();
                 }
@@ -425,10 +466,18 @@ pub fn process_emails(
             let mut f = std::fs::File::create(&html_path)?;
             f.write_all(body.as_bytes())?;
             f.sync_all()?;
-            info!("Saved email HTML for {} to {}", bucket_name, html_path.display());
+            info!(
+                "Saved email HTML for {} to {}",
+                bucket_name,
+                html_path.display()
+            );
         }
 
-        let display_or_send = if config.send_emails.unwrap_or(false) { "Send()" } else { "Display()" };
+        let display_or_send = if config.send_emails.unwrap_or(false) {
+            "Send()"
+        } else {
+            "Display()"
+        };
         let mut ps_script = format!(
             r#"
 $Outlook = New-Object -ComObject Outlook.Application
@@ -445,16 +494,25 @@ $Mail.HTMLBody = '{}'
         );
 
         if !all_closed {
-            ps_script.push_str(&format!("$Mail.Attachments.Add(\"{}\")\n", attachment_path.display()));
+            ps_script.push_str(&format!(
+                "$Mail.Attachments.Add(\"{}\")\n",
+                attachment_path.display()
+            ));
         }
 
         if let Some(ref leads_path) = leads_report_path {
-            ps_script.push_str(&format!("$Mail.Attachments.Add(\"{}\")\n", leads_path.display()));
+            ps_script.push_str(&format!(
+                "$Mail.Attachments.Add(\"{}\")\n",
+                leads_path.display()
+            ));
         }
 
         ps_script.push_str(&format!("$Mail.{}\n", display_or_send));
 
-        if config.save_email_as_html.unwrap_or(false) && config.save_attachment_as_csv.unwrap_or(false) && !config.send_emails.unwrap_or(false) {
+        if config.save_email_as_html.unwrap_or(false)
+            && config.save_attachment_as_csv.unwrap_or(false)
+            && !config.send_emails.unwrap_or(false)
+        {
             info!("Successfully processed email for {} (Display only, powershell execution skipped for test stability)", bucket_name);
             return Ok(());
         }
@@ -478,7 +536,11 @@ $Mail.Display()
             if let Err(e2) = run_powershell(&err_script) {
                 error!("Failed to send error notification email: {}", e2);
             }
-            anyhow::bail!("PowerShell execution failed for email bucket {}: {}", bucket_name, e);
+            anyhow::bail!(
+                "PowerShell execution failed for email bucket {}: {}",
+                bucket_name,
+                e
+            );
         } else {
             info!("Successfully processed email for {}", bucket_name);
         }

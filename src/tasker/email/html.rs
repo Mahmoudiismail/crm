@@ -1,7 +1,11 @@
 use crate::tasker::email::message::TicketRow;
 use std::collections::{HashMap, HashSet};
 
-pub fn generate_pivot_html(rows: &[TicketRow], statuses: &[String], include_team_col: bool) -> String {
+pub fn generate_pivot_html(
+    rows: &[TicketRow],
+    statuses: &[String],
+    include_team_col: bool,
+) -> String {
     #[derive(Default)]
     struct Counts {
         status_counts: HashMap<String, usize>,

@@ -6,7 +6,9 @@ use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use tracing::{error, info};
 
-pub fn load_team_mappings(team_mapping_path: &std::path::Path) -> Result<HashMap<String, TeamMapping>> {
+pub fn load_team_mappings(
+    team_mapping_path: &std::path::Path,
+) -> Result<HashMap<String, TeamMapping>> {
     let mut team_maps = HashMap::new();
     let mapping_file = File::open(team_mapping_path).context(format!(
         "Failed to open team mapping file: {}",
