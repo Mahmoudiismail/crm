@@ -94,12 +94,18 @@ pub struct YaswebConfig {
     pub keep_open: bool,
     #[serde(default = "default_concurrency")]
     pub concurrency: usize,
+    #[serde(default = "default_timeout_minutes")]
+    pub timeout_minutes: u64,
     #[serde(default)]
     pub reports: HashMap<String, ReportConfig>,
     #[serde(default = "default_stdout_log_level")]
     pub log_stdout_level: String,
     #[serde(default = "default_file_log_level")]
     pub log_file_level: String,
+}
+
+fn default_timeout_minutes() -> u64 {
+    60
 }
 
 fn default_stdout_log_level() -> String {
@@ -123,6 +129,7 @@ impl Default for YaswebConfig {
             headless: false,
             keep_open: false,
             concurrency: 6,
+            timeout_minutes: 60,
             reports: HashMap::new(),
             log_stdout_level: "DEBUG".to_string(),
             log_file_level: "TRACE".to_string(),

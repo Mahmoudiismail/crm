@@ -72,6 +72,7 @@ If any answer is `no`, update docs before finalizing.
 - Added TRACE level diagnostic logging for entire page HTML content during specific MIS module navigation steps in `src/yasweb/browser.rs`.
 - Corrected Windows file lock exceptions when running PowerShell in `tasker/email.rs` and `tasker/crm_open_sohail.rs`.
 - Added missing 3rd default task (`crm_open_sohail`) to `tasker_config.json` default generation.
+- Fixed `yasweb` browser automation early timeouts for slow-loading reports. The `YaswebConfig` now includes an adjustable `timeout_minutes` setting (defaulting to 60). Both the JS loader wait logic and the Rust download completion wait logic use this configuration dynamically. Added fallback DOM queries to locate "Export" and "XLSX" buttons more robustly across report variations. Full page HTML is now logged at TRACE level immediately following JS sequence evaluation for better diagnostics.
 
 ## Rule 6: Test-Driven Bug Fixes
 - When a bug is fixed, a corresponding test case must be added to prevent future regressions. The fix and the test case should be documented together in the relevant `md/*.md` file.

@@ -509,9 +509,10 @@ pub fn run_browser_tab(
                                     // `--disable-web-security` flag to work, or we try to run it inside the specific frame.
                                     // Since we added `--disable-web-security`, accessing `iframe.contentWindow.document` should work!
 
+                                    let timeout_loops = (config.timeout_minutes * 60) / 10;
                                     let js_script = format!(
                                         r#"
-                                        (async function(reportType, reportName, filters) {{
+                                        (async function(reportType, reportName, filters, timeoutLoops) {{
                                             function sleep(ms) {{ return new Promise(r => setTimeout(r, ms)); }}
 
                                             async function simulateTyping(inputElem, text) {{
@@ -662,28 +663,55 @@ pub fn run_browser_tab(
                                             }}
 
                                             if (loaderAppeared) {{
-                                                for(let i=0; i<120; i++) {{
+                                                for(let i=0; i<timeoutLoops; i++) {{
                                                     let loader = doc.querySelector('.loading-screen-wrapper, mat-progress-bar');
                                                     if (!loader || loader.offsetParent === null) break;
-                                                    await sleep(1500);
+                                                    await sleep(10000); // 10 seconds wait per loop
                                                 }}
                                             }}
 
                                             await sleep(2000);
                                             let exportBtn = null;
+
+                                            // Primary attempt with dxButtons
                                             let dxButtons = doc.querySelectorAll('.dx-button-text');
                                             for (let btn of dxButtons) {{
                                                 if (btn.textContent.trim() === 'Export') {{ exportBtn = btn.closest('div[role=\"button\"]'); break; }}
+                                            }}
+
+                                            // Fallback if not found
+                                            if (!exportBtn) {{
+                                                let allButtons = doc.querySelectorAll('button, div[role=\"button\"], span');
+                                                for (let btn of allButtons) {{
+                                                    if (btn.textContent.trim() === 'Export' && btn.offsetParent !== null) {{
+                                                        exportBtn = btn;
+                                                        break;
+                                                    }}
+                                                }}
                                             }}
 
                                             if (exportBtn) {{
                                                 exportBtn.click();
                                                 await sleep(1000);
                                                 let xlsxOption = null;
+
+                                                // Primary attempt
                                                 let listItems = doc.querySelectorAll('.dx-list-item-content');
                                                 for (let item of listItems) {{
                                                     if (item.textContent.trim() === 'XLSX') {{ xlsxOption = item.closest('.dx-list-item'); break; }}
                                                 }}
+
+                                                // Fallback if not found
+                                                if (!xlsxOption) {{
+                                                    let allSpans = doc.querySelectorAll('span, div');
+                                                    for (let span of allSpans) {{
+                                                        if (span.textContent.trim() === 'XLSX' && span.offsetParent !== null) {{
+                                                            xlsxOption = span;
+                                                            break;
+                                                        }}
+                                                    }}
+                                                }}
+
                                                 if (xlsxOption) xlsxOption.click();
                                             }}
 
@@ -692,15 +720,21 @@ pub fn run_browser_tab(
                                                 discovered_filters: discoveredFilters
                                             }};
                                             return JSON.stringify(finalResult);
-                                        }})('{}', '{}', {});
+                                        }})('{}', '{}', {}, {});
                                         "#,
-                                        active_report_type, active_report_name, filters_json
+                                        active_report_type,
+                                        active_report_name,
+                                        filters_json,
+                                        timeout_loops
                                     );
 
                                     info!("Evaluating JS to execute automation sequence...");
                                     trace!("JS Script content: {}", js_script);
                                     match tab.evaluate(&js_script, true) {
                                         Ok(res) => {
+                                            if let Ok(html) = tab.get_content() {
+                                                trace!("Page HTML after automation script execution:\n{}", html);
+                                            }
                                             if let Some(v) = res.value {
                                                 let v_str = v.as_str().unwrap_or("");
                                                 info!("JS Result: {}", v_str);
@@ -778,8 +812,9 @@ pub fn run_browser_tab(
     if let Some(dl_dir) = download_dir {
         info!("Waiting for download to complete in {:?}...", dl_dir);
         let mut download_complete = false;
-        // Wait up to 3 minutes
-        for _ in 0..180 {
+        let timeout_seconds = config.timeout_minutes * 60;
+
+        for _ in 0..timeout_seconds {
             if let Ok(entries) = std::fs::read_dir(&dl_dir) {
                 let mut found_incomplete = false;
                 let mut found_completed = false;
