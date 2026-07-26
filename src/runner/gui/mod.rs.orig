@@ -248,21 +248,6 @@ mod tests {
     }
 
     #[test]
-    fn parses_schedule_text_weekly_monthly_with_start_time() {
-        let schedules =
-            parse_schedules_text("weekly: Monday; st: 14:00\nmonthly: day 15; st: 10:30").unwrap();
-        assert_eq!(schedules.len(), 2);
-        match &schedules[0] {
-            TaskSchedule::Weekly { at_time, .. } => assert_eq!(at_time, "14:00"),
-            _ => panic!("expected weekly"),
-        }
-        match &schedules[1] {
-            TaskSchedule::Monthly { at_time, .. } => assert_eq!(at_time, "10:30"),
-            _ => panic!("expected monthly"),
-        }
-    }
-
-    #[test]
     fn parses_shell_commands_text_correctly() {
         let commands = parse_shell_commands_text(
             "run: echo prepare\ncontinue: cleanup-if-present\necho fallback",

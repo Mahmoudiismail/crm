@@ -292,10 +292,20 @@ pub(crate) fn parse_schedules_text(value: &str) -> Result<Vec<TaskSchedule>> {
                         working_hours = Some(wh_map);
                     }
                 }
+
+                let mut at_time = "09:00".to_string();
+                if let Some((r, st_str)) = rest_str.split_once("; st:") {
+                    rest_str = r.trim();
+                    let st_val = st_str.trim();
+                    if !st_val.is_empty() {
+                        at_time = st_val.to_string();
+                    }
+                }
+
                 schedules.push(TaskSchedule::Weekly {
                     enabled: true,
                     day_of_week: rest_str.to_string(),
-                    at_time: "09:00".to_string(),
+                    at_time,
                     next_run_at: Utc::now().to_rfc3339(),
                     working_hours,
                 });
@@ -323,6 +333,16 @@ pub(crate) fn parse_schedules_text(value: &str) -> Result<Vec<TaskSchedule>> {
                         working_hours = Some(wh_map);
                     }
                 }
+
+                let mut at_time = "09:00".to_string();
+                if let Some((r, st_str)) = rest_str.split_once("; st:") {
+                    rest_str = r.trim();
+                    let st_val = st_str.trim();
+                    if !st_val.is_empty() {
+                        at_time = st_val.to_string();
+                    }
+                }
+
                 let day_str = rest_str
                     .strip_prefix("day")
                     .unwrap_or(rest_str)
@@ -332,7 +352,7 @@ pub(crate) fn parse_schedules_text(value: &str) -> Result<Vec<TaskSchedule>> {
                 schedules.push(TaskSchedule::Monthly {
                     enabled: true,
                     day_of_month: day_str.clamp(1, 31),
-                    at_time: "09:00".to_string(),
+                    at_time,
                     next_run_at: Utc::now().to_rfc3339(),
                     working_hours,
                 });

@@ -13,6 +13,10 @@
     row
       .querySelector(".schedule-interval")
       .classList.toggle("hidden", kind !== "interval");
+    const scheduleSt = row.querySelector(".schedule-st");
+    if (scheduleSt) {
+      scheduleSt.classList.toggle("hidden", kind !== "interval" && kind !== "weekly" && kind !== "monthly");
+    }
     row
       .querySelector(".schedule-once")
       .classList.toggle("hidden", kind !== "once");
@@ -134,7 +138,7 @@
                     ${["15m", "30m", "1h", "2h", "4h", "8h", "12h", "24h", "2d", "7d"].map((opt) => `<option value='${opt}' ${opt === interval ? "selected" : ""}>${opt}</option>`).join("")}
                 </select>
             </label>
-            <label class='block schedule-interval schedule-start-time ${kind === "interval" ? "" : "hidden"}'>
+            <label class='block schedule-st schedule-start-time ${kind === "interval" || kind === "weekly" || kind === "monthly" ? "" : "hidden"}'>
                 <span class='text-xs font-semibold text-gray-700'>Start Time (HH:MM)</span>
                 <input class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' type='time' value='${startTime || ""}'>
             </label>
@@ -288,11 +292,21 @@
         }
         if (kind === "weekly") {
           const value = row.querySelector("[data-weekly-day]").value;
-          return value ? "weekly: " + value : "";
+          const startTime = row.querySelector(".schedule-start-time input").value;
+          let result = value ? "weekly: " + value : "";
+          if (result && startTime) {
+            result += "; st: " + startTime;
+          }
+          return result;
         }
         if (kind === "monthly") {
           const value = row.querySelector(".schedule-monthly input").value;
-          return value ? "monthly: day " + value : "";
+          const startTime = row.querySelector(".schedule-start-time input").value;
+          let result = value ? "monthly: day " + value : "";
+          if (result && startTime) {
+            result += "; st: " + startTime;
+          }
+          return result;
         }
         return "";
       })
@@ -534,9 +548,9 @@
       externalAppContainer.classList.toggle("hidden", type !== "external_app");
       if (type === "external_app") {
         if (!window.api.getRegisteredAppsCache()) {
-          loadRegisteredAppsForContainer(appSelectContainer, externalAppDynamicInputs, externalAppIdHidden, externalAppArgsHidden, "main-ext");
+          loadRegisteredAppsForContainer(externalAppSelectContainer, externalAppDynamicInputs, externalAppIdHidden, externalAppArgsHidden, "main-ext");
         } else {
-          renderAppList(window.api.getRegisteredAppsCache(), appSelectContainer, externalAppDynamicInputs, externalAppIdHidden, externalAppArgsHidden, "main-ext");
+          renderAppList(window.api.getRegisteredAppsCache(), externalAppSelectContainer, externalAppDynamicInputs, externalAppIdHidden, externalAppArgsHidden, "main-ext");
         }
       }
     }
@@ -683,6 +697,7 @@
               "today",
               "tomorrow",
               "yesterday",
+              "this_month",
               "eomonth",
             ].includes(currentValue?.toLowerCase());
             const mode = isVar ? "var" : "calendar";
@@ -714,6 +729,7 @@
                         <option value="today" ${currentValue === "today" ? "selected" : ""}>today</option>
                         <option value="tomorrow" ${currentValue === "tomorrow" ? "selected" : ""}>tomorrow</option>
                         <option value="yesterday" ${currentValue === "yesterday" ? "selected" : ""}>yesterday</option>
+                        <option value="this_month" ${currentValue === "this_month" ? "selected" : ""}>this_month</option>
                         <option value="eomonth" ${currentValue === "eomonth" ? "selected" : ""}>eomonth</option>
                     </select>
 
@@ -798,6 +814,29 @@
           const changedInputName = event.target.getAttribute("data-arg-name");
           if (!changedInputName) return;
           const changedValue = event.target.value;
+
+          // Auto-populate end_date with eomonth if start_date is changed to this_month
+          if (changedInputName === "start_date" && changedValue === "this_month") {
+            const endDateInput = Array.from(inputs).find((inp) => inp.getAttribute("data-arg-name") === "end_date");
+            if (endDateInput && endDateInput.getAttribute("data-arg-type") === "date_var") {
+              endDateInput.value = "eomonth";
+
+              // Find the associated variable select and calendar input
+              const endDateId = endDateInput.id;
+              const endDateModeSelect = document.getElementById(`${endDateId}-mode`);
+              const endDateVarSelect = document.getElementById(`${endDateId}-var`);
+              const endDateCalInput = document.getElementById(`${endDateId}-cal`);
+
+              if (endDateModeSelect && endDateVarSelect && endDateCalInput) {
+                endDateModeSelect.value = "var";
+                endDateVarSelect.value = "eomonth";
+                endDateVarSelect.classList.remove("hidden");
+                endDateCalInput.classList.add("hidden");
+              }
+
+              endDateInput.dispatchEvent(new Event("change"));
+            }
+          }
 
           inputs.forEach((input) => {
             const autofillStr = input.getAttribute("data-autofill");
