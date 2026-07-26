@@ -132,10 +132,17 @@ async fn main() -> Result<()> {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        info!("Headless mode: scheduler and GUI server are running.");
-        loop {
-            tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
+        info!("Headless mode: scheduler and GUI server are running. Press Ctrl+C to exit.");
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {
+                info!("Received Ctrl+C, initiating graceful shutdown...");
+                let _ = runner_handle.command_tx.send(RunnerCommand::Shutdown).await;
+                // Give it a moment to process the shutdown command and kill processes
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            }
         }
+        info!("Shutting down runner daemon.");
+        Ok(())
     }
 }
 
@@ -203,6 +210,10 @@ impl ApplicationHandler for App {
             if let Ok(event) = muda::MenuEvent::receiver().try_recv() {
                 if event.id == *quit_id {
                     info!("Exit requested from menu.");
+                    let tx = self.runner.command_tx.clone();
+                    tokio::spawn(async move {
+                        let _ = tx.send(RunnerCommand::Shutdown).await;
+                    });
                     event_loop.exit();
                 } else if event.id == *run_id {
                     info!("Manual run-all requested.");

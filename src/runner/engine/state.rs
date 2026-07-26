@@ -7,6 +7,7 @@ pub enum RunnerCommand {
     RunAllNow,
     RunTaskNow(String),
     SetTaskEnabled { task_id: String, enabled: bool },
+    Shutdown,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -29,6 +30,7 @@ pub enum ExecutionManagerCommand {
         last_status: String,
         last_error: Option<String>,
     },
+    ShutdownExecManager,
 }
 
 #[derive(Clone, Debug)]
@@ -38,6 +40,7 @@ pub struct ExecutionPolicy {
     pub post_run_timeout_seconds: u64,
     pub min_task_interval_seconds: u64,
     pub registered_apps: Vec<RegisteredApp>,
+    pub log_retention_days: u64,
 }
 
 #[derive(Clone, Debug)]

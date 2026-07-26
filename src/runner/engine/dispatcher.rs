@@ -26,7 +26,7 @@ pub fn spawn_execution_manager(
 
     tokio::spawn(async move {
         let mut queued_tasks: VecDeque<(Box<RunnerTask>, ExecutionPolicy)> = VecDeque::new();
-        let mut running_tasks: Vec<RunnerTask> = Vec::new();
+        let mut running_tasks: Vec<(RunnerTask, tokio::task::JoinHandle<()>)> = Vec::new();
 
         while let Some(cmd) = rx.recv().await {
             match cmd {
@@ -38,7 +38,7 @@ pub fn spawn_execution_manager(
                     last_status,
                     last_error,
                 } => {
-                    if let Some(pos) = running_tasks.iter().position(|t| t.id == task_id) {
+                    if let Some(pos) = running_tasks.iter().position(|(t, _)| t.id == task_id) {
                         running_tasks.remove(pos);
                     }
 
@@ -60,6 +60,17 @@ pub fn spawn_execution_manager(
                         }
                     }
                 }
+                ExecutionManagerCommand::ShutdownExecManager => {
+                    info!(
+                        "Execution Manager shutting down... aborting {} running task(s)",
+                        running_tasks.len()
+                    );
+                    for (task, handle) in running_tasks.drain(..) {
+                        info!("Aborting task: {}", task.id);
+                        handle.abort();
+                    }
+                    break;
+                }
             }
 
             let mut i = 0;
@@ -67,7 +78,7 @@ pub fn spawn_execution_manager(
                 let (task, _) = &queued_tasks[i];
                 let mut can_run = true;
 
-                if running_tasks.iter().any(|t| t.id == task.id) {
+                if running_tasks.iter().any(|(t, _)| t.id == task.id) {
                     can_run = false;
                 }
 
@@ -75,9 +86,7 @@ pub fn spawn_execution_manager(
                     // Safe because `i` is checked in the loop condition `i < queued_tasks.len()`.
                     let (task_to_run_box, policy) =
                         queued_tasks.remove(i).expect("Queue index out of bounds");
-                    let mut task_to_run = *task_to_run_box;
-                    running_tasks.push(task_to_run.clone());
-
+                    let task_to_run = *task_to_run_box;
                     {
                         let mut st = status.lock().await;
                         st.running_tasks_count += 1;
@@ -86,7 +95,9 @@ pub fn spawn_execution_manager(
 
                     let tx_finish = tx_clone.clone();
                     let st_clone = status.clone();
-                    tokio::spawn(async move {
+                    let task_to_run_for_spawn = task_to_run.clone();
+                    let handle = tokio::spawn(async move {
+                        let mut task_to_run = task_to_run_for_spawn;
                         let task_id = task_to_run.id.clone();
                         run_task_inner(&mut task_to_run, &policy, &st_clone).await;
 
@@ -106,6 +117,7 @@ pub fn spawn_execution_manager(
                             })
                             .await;
                     });
+                    running_tasks.push((task_to_run.clone(), handle));
                 } else {
                     i += 1;
                 }
@@ -142,6 +154,8 @@ pub fn start_scheduler(runner_config_path: String) -> RunnerHandle {
     let get_mod_time = |p: &str| -> Option<SystemTime> { fs::metadata(p).ok()?.modified().ok() };
 
     let mut last_modified = get_mod_time(&config_path).unwrap_or(SystemTime::now());
+    let mut last_cleanup =
+        Utc::now() - chrono::Duration::try_hours(24).unwrap_or(chrono::Duration::zero());
 
     // Main loop: handle commands and cron-based scheduling
     let config_path_loop = config_path.clone();
@@ -156,10 +170,16 @@ pub fn start_scheduler(runner_config_path: String) -> RunnerHandle {
                 maybe_cmd = rx.recv() => {
                     match maybe_cmd {
                         Some(cmd) => {
+                            let is_shutdown = matches!(cmd, RunnerCommand::Shutdown);
                             if let Err(e) = handle_command(&config_path_loop, cmd, &status_bg, &_exec_tx_loop).await {
                                 error!("Runner command failed: {:#}", e);
                                 let mut st = status_bg.lock().await;
                                 st.last_error = format!("{}", e);
+                            }
+                            if is_shutdown {
+                                info!("Scheduler loop shutting down gracefully.");
+                                let _ = _exec_tx_loop.send(ExecutionManagerCommand::ShutdownExecManager).await;
+                                break;
                             }
                         }
                         None => break,
@@ -181,6 +201,18 @@ pub fn start_scheduler(runner_config_path: String) -> RunnerHandle {
                                     break;
                                 }
                             }
+                        }
+                    }
+
+                    if let Ok(cfg) = RunnerConfig::load(&config_path_loop) {
+                        let now = Utc::now();
+                        if now.signed_duration_since(last_cleanup).num_hours() >= 24 {
+                            info!("Triggering daily log cleanup...");
+                            let retention = cfg.log_retention_days;
+                            tokio::spawn(async move {
+                                crate::runner::engine::logging::cleanup_old_logs(retention).await;
+                            });
+                            last_cleanup = now;
                         }
                     }
 
@@ -218,6 +250,10 @@ async fn handle_command(
         }
         RunnerCommand::SetTaskEnabled { task_id, enabled } => {
             set_task_enabled(path, &task_id, enabled).await
+        }
+        RunnerCommand::Shutdown => {
+            info!("Received Shutdown command in handle_command");
+            Ok(())
         }
     }
 }
@@ -620,6 +656,7 @@ fn policy_from_config(cfg: &RunnerConfig) -> ExecutionPolicy {
         post_run_timeout_seconds: cfg.post_run_timeout_seconds,
         min_task_interval_seconds: cfg.min_task_interval_seconds.max(1),
         registered_apps: cfg.registered_apps.clone(),
+        log_retention_days: cfg.log_retention_days,
     }
 }
 

@@ -69,10 +69,10 @@ impl TaskLoggerInner {
                     file: Some(file),
                     task_id: task_id.to_string(),
                 };
-                logger.log(&format!("Task ID: {}", task_id));
-                logger.log(&format!("Task Name: {}", task_name));
-                logger.log(&format!("Start Time: {}", now.to_rfc3339()));
-                logger.log("--------------------------------------------------");
+                logger.log("==================================================");
+                logger.log(&format!("TASK INITIATED: {} (ID: {})", task_name, task_id));
+                logger.log(&format!("START TIME:     {}", now.to_rfc3339()));
+                logger.log("==================================================");
                 logger
             }
             Err(e) => {
@@ -103,6 +103,49 @@ impl TaskLoggerInner {
         let text = String::from_utf8_lossy(bytes);
         for line in text.lines() {
             self.log(&format!("{}: {}", prefix, line));
+        }
+    }
+}
+
+pub async fn cleanup_old_logs(log_retention_days: u64) {
+    if log_retention_days == 0 {
+        return; // Disable cleanup if 0
+    }
+
+    let log_dir = match std::env::current_exe() {
+        Ok(exe) => exe
+            .parent()
+            .map(|p| p.join("logs"))
+            .unwrap_or_else(|| std::path::PathBuf::from("logs")),
+        Err(_) => std::path::PathBuf::from("logs"),
+    };
+
+    if !log_dir.exists() {
+        return;
+    }
+
+    let threshold = chrono::Utc::now()
+        - chrono::Duration::try_days(log_retention_days as i64).unwrap_or(chrono::Duration::zero());
+
+    let mut walk_dir = walkdir::WalkDir::new(&log_dir).into_iter();
+    while let Some(Ok(entry)) = walk_dir.next() {
+        if entry.file_type().is_file() {
+            if let Some(ext) = entry.path().extension() {
+                if ext == "log" {
+                    if let Ok(metadata) = entry.metadata() {
+                        if let Ok(modified) = metadata.modified() {
+                            let modified_time: chrono::DateTime<chrono::Utc> = modified.into();
+                            if modified_time < threshold {
+                                tracing::info!(
+                                    "Cleaning up old log file: {}",
+                                    entry.path().display()
+                                );
+                                let _ = std::fs::remove_file(entry.path());
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
