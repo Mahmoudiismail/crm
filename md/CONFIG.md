@@ -12,6 +12,7 @@ This file controls the GUI, global timing, and task scheduling. It has a `regist
   "gui_port": 8787,
   "poll_interval_seconds": 30,
   "allow_shell_tasks": false,
+  "log_retention_days": 30,
   "registered_apps": [
     {
       "id": "my_crm",

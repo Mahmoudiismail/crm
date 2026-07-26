@@ -82,6 +82,12 @@ If any answer is `no`, update docs before finalizing.
 - **PowerShell JSON Parsing Bug:** Fixed an issue where the `crm_open_sohail` script generated `0 combinations` from Excel PivotTables due to a JSON serialization quirk in `ConvertTo-Json`. The fix explicitly converts custom row hashtables to `[PSCustomObject]` arrays before serialization.
 - **Task 3 (CrmOpenSohail Email Fixes):** Fixed task 3 logic to not execute task 2's email sending routine by zeroing out `email_to`/`email_cc` configurations when calling `dashboard_updater::run`. Prevented creation of `crm_open_sohail_results.csv` by utilizing the existing `results.csv`. Updated mapping logic to strictly prefer `owner_name` and `owner_email` over old `receiver_name` structures, allowing gracefully handling missing values. Formatted the "All Months (Except Current)" title to show the dynamic month ranges (e.g. `from (Jan to Jun-2026)`). Realigned the generated email to properly indent all HTML content.
 
+
+## Session 8: Production Hardening
+- **Graceful Shutdown:** Implemented `tokio::signal::ctrl_c` handling in the runner daemon. The `ExecutionManager` now explicitly aborts active process handles upon shutdown to prevent orphaned zombie processes.
+- **Log Retention:** Added `log_retention_days` to `RunnerConfig`. The dispatcher scheduler now runs an asynchronous task daily to delete execution logs older than the configured threshold.
+- **Diagnostics & Output Excerpts:** Unified unstructured logging in `TaskLogger` with distinct start/end boundary markers. Output excerpts in `process.rs` explicitly format standard output/error blocks upon process failure, improving diagnostic readability.
+
 ## Configuration & Serialization Audit
 - **Consolidated Configuration Loading:** Refactored `AppConfig`, `RunnerConfig`, and `TaskerConfig` to use a centralized `merge_json` utility to perform deep merging of configuration files, resolving duplicate loading logic.
 - **Atomic Persistence:** Replaced `std::fs::write` calls across `crm`, `runner`, and `yasweb` with `utils::atomic_write` to ensure safe, corrupted-free configuration file persistence across the ecosystem.

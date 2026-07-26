@@ -15,7 +15,13 @@ pub struct ProcessContext<'a> {
 
 pub async fn run_process(mut ctx: ProcessContext<'_>) -> Result<()> {
     ctx.logger
-        .log(&format!("Executing: {}", ctx.command_str))
+        .log("--------------------------------------------------")
+        .await;
+    ctx.logger
+        .log(&format!(">>> EXECUTING ACTION: {}", ctx.command_str))
+        .await;
+    ctx.logger
+        .log("--------------------------------------------------")
         .await;
 
     ctx.cmd.stdout(Stdio::piped());
@@ -41,10 +47,10 @@ pub async fn run_process(mut ctx: ProcessContext<'_>) -> Result<()> {
         let stdout_excerpt = excerpt_utf8(&output.stdout);
         let stderr_excerpt = excerpt_utf8(&output.stderr);
         return Err(anyhow::anyhow!(
-            "Command failed ({:?}): stderr: {}; stdout: {}",
+            "Command failed with exit code {:?}\n\nSTDOUT EXCERPT:\n{}\n\nSTDERR EXCERPT:\n{}",
             output.status.code(),
-            stderr_excerpt,
-            stdout_excerpt
+            stdout_excerpt,
+            stderr_excerpt
         ));
     }
 

@@ -26,6 +26,12 @@ pub struct RunnerConfig {
     pub log_stdout_level: String,
     #[serde(default = "default_file_log_level")]
     pub log_file_level: String,
+    #[serde(default = "default_log_retention_days")]
+    pub log_retention_days: u64,
+}
+
+fn default_log_retention_days() -> u64 {
+    30
 }
 
 fn default_stdout_log_level() -> String {
@@ -424,6 +430,7 @@ impl Default for RunnerConfig {
             tasks: Vec::new(),
             log_stdout_level: "DEBUG".to_string(),
             log_file_level: "TRACE".to_string(),
+            log_retention_days: default_log_retention_days(),
         }
     }
 }

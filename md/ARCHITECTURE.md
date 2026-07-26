@@ -20,9 +20,14 @@ The runner GUI exposes a central execution dashboard. If a user sets up a new ap
 When a task is executed on its schedule, the `runner/engine.rs` now executes it using a deterministic Pipeline Execution Engine. Tasks are represented as a sequence of `TaskStep`s. Each `TaskStep` contains one or more `ActionSpec`s (representing a `shell_command` or an `external_app`) and operates in either `Sequential` or `Parallel` execution mode.
 
 - **Sequential TaskSteps** execute each action one-by-one. The step fails immediately if any action fails.
+
 - **Parallel TaskSteps** execute all actions concurrently, waiting for all to complete before continuing. If any action fails, the step is considered failed.
 
 If the primary pipeline completes successfully, any configured `post_run_steps` are subsequently executed using the same pipeline mechanics. The engine leverages `tokio::process` to spawn and track process states, piping logs, and capturing timeouts on a per-action basis.
+
+## Process Lifecycle & Graceful Shutdown
+The runner acts as an asynchronous daemon. When it receives a termination signal (`Ctrl+C` on Unix, or "Exit" from the Windows system tray), it broadcasts a `Shutdown` command.
+The Execution Manager tracks all actively running processes via `tokio::task::JoinHandle`. During shutdown, it explicitly `.abort()`s these handles, ensuring that child shells, browser sessions, or fetching scripts are cleanly terminated before the daemon exits, preventing zombie processes.
 
 ## Data Persistence
 

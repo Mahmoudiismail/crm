@@ -238,6 +238,7 @@ mod tests {
             post_run_timeout_seconds: 5,
             min_task_interval_seconds: 1,
             registered_apps: vec![],
+            log_retention_days: 30,
         };
         let step = TaskStep {
             name: None,
@@ -267,6 +268,7 @@ mod tests {
             post_run_timeout_seconds: 5,
             min_task_interval_seconds: 1,
             registered_apps: vec![],
+            log_retention_days: 30,
         };
         let step = TaskStep {
             name: None,
@@ -292,6 +294,7 @@ mod tests {
             post_run_timeout_seconds: 5,
             min_task_interval_seconds: 1,
             registered_apps: vec![],
+            log_retention_days: 30,
         };
         let ignored_step = TaskStep {
             name: None,
@@ -329,6 +332,7 @@ mod tests {
             post_run_timeout_seconds: 5,
             min_task_interval_seconds: 1,
             registered_apps: vec![],
+            log_retention_days: 30,
         };
         let steps = vec![
             TaskStep {
