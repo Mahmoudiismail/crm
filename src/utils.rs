@@ -246,6 +246,25 @@ pub(crate) fn resolve_date_var(val: &str, base_date: Option<&str>) -> Result<chr
             trace!("Variable resolution path: yesterday");
             Ok(dt)
         }
+        "this_month" => {
+            info!("Variable detected: {}", val);
+            let base_dt = if let Some(bd) = base_date {
+                parse_flexible_date_impl(bd, None)
+            } else {
+                None
+            };
+            let dt = base_dt.unwrap_or_else(|| Local::now().date_naive());
+            let res = NaiveDate::from_ymd_opt(dt.year(), dt.month(), 1)
+                .context("valid first day of month")?;
+
+            trace!(
+                "Variable resolution path: this_month. Base: {}, Result: {}",
+                dt,
+                res
+            );
+            debug!("Resolved value: {} (Original: {})", res, val);
+            Ok(res)
+        }
         "tomorrow" => {
             info!("Variable detected: {}", val);
             let dt =
@@ -409,6 +428,13 @@ mod tests {
 
         assert_eq!(resolve_date_var("yesterday", None).unwrap(), yesterday);
         assert_eq!(resolve_date_var("tomorrow", None).unwrap(), tomorrow);
+
+        // Test this_month
+        let this_month_may = chrono::NaiveDate::from_ymd_opt(2026, 5, 1).unwrap();
+        assert_eq!(
+            resolve_date_var("this_month", Some("2026-05-15")).unwrap(),
+            this_month_may
+        );
 
         // Test eomonth (31-day month)
         let eomonth_may = chrono::NaiveDate::from_ymd_opt(2026, 5, 31).unwrap();
