@@ -72,6 +72,7 @@ If any answer is `no`, update docs before finalizing.
 - Added TRACE level diagnostic logging for entire page HTML content during specific MIS module navigation steps in `src/yasweb/browser.rs`.
 - Corrected Windows file lock exceptions when running PowerShell in `tasker/email.rs` and `tasker/crm_open_sohail.rs`.
 - Added missing 3rd default task (`crm_open_sohail`) to `tasker_config.json` default generation.
+- Fixed `yasweb` browser automation early timeouts for slow-loading reports. The `YaswebConfig` now includes an adjustable `timeout_minutes` setting (defaulting to 60). Both the JS loader wait logic and the Rust download completion wait logic use this configuration dynamically. Added fallback DOM queries to locate "Export" and "XLSX" buttons more robustly across report variations. Full page HTML is now logged at TRACE level immediately following JS sequence evaluation for better diagnostics.
 
 ## Rule 6: Test-Driven Bug Fixes
 - When a bug is fixed, a corresponding test case must be added to prevent future regressions. The fix and the test case should be documented together in the relevant `md/*.md` file.
@@ -92,5 +93,3 @@ If any answer is `no`, update docs before finalizing.
 - **Consolidated Configuration Loading:** Refactored `AppConfig`, `RunnerConfig`, and `TaskerConfig` to use a centralized `merge_json` utility to perform deep merging of configuration files, resolving duplicate loading logic.
 - **Atomic Persistence:** Replaced `std::fs::write` calls across `crm`, `runner`, and `yasweb` with `utils::atomic_write` to ensure safe, corrupted-free configuration file persistence across the ecosystem.
 - **Serialization Improvements:** Added `#[serde(skip_serializing_if = "Option::is_none")]` broadly across configurations to eliminate null-field pollution during persistence, streamlining configuration files while maintaining backwards compatibility. Arrays are strictly treated as atomic structures during merge operations.
-- **Yasweb Shared Browser Session:** Refactored `src/bin/yasweb.rs` to launch a single headless Chrome instance sharing the same `user_data_dir` for multiple concurrently executed reports. Tabs are launched dynamically and closed upon completion, explicitly checking for already authenticated DOM states to skip redundant login flows.
-- **Yasweb Custom Download Path:** Added the `--download-path` CLI argument to `yasweb.rs`, allowing temporary override of the default `downloads` directory destination.

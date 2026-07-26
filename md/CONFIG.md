@@ -43,7 +43,7 @@ This file controls the GUI, global timing, and task scheduling. It has a `regist
 Executables spawned via the runner or manually have their own configurations.
 
 - **`config.json` (CRM):** Cognito user pool, API endpoints, credentials. Can override the standard `Downloads` folder using `custom_download_folder`. The CLI argument `--custom-download-folder` overrides this config key for a single run without persisting to `config.json`.
-- **`yasweb_config.json`:** Browser automation configurations, cached filter mappings. `start_date_key` and `end_date_key` are dictionaries containing `key` and `format` fields to specify both the web UI filter name and its exact expected date/time format (e.g. `{"key": "FromDate", "format": "%d-%m-%Y 00:00"}`).
+- **`yasweb_config.json`:** Browser automation configurations, cached filter mappings, and report timeout limits. The `timeout_minutes` field defines how long to wait for UI loaders and file downloads. `start_date_key` and `end_date_key` are dictionaries containing `key` and `format` fields to specify both the web UI filter name and its exact expected date/time format (e.g. `{"key": "FromDate", "format": "%d-%m-%Y 00:00"}`).
 - **`wcxx_config.json`:** Webex CC token and organization endpoints.
 - **`tasker_config.json`:** Tasker tasks like CSV pivoting, team mappings, Outlook configuration, and leads reporting for the Call Center. Includes `send_exceptions` to dynamically read from `category_exceptions` and skip standard team branch logic for exception tickets.
 
