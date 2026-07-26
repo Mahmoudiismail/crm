@@ -39,7 +39,7 @@ The system is a collection of Rust binaries designed to:
 - `runner`: Exposes the HTTP dashboard and pipeline engine.
 - `tasker`: Parses CSV structures, manipulates DOM arrays, communicates to Excel COM systems, and issues Emails dynamically.
 - `wcxx`: Handles standard API metric fetching asynchronously.
-- `yasweb`: Performs automated Headless Chrome iterations utilizing CDP events, concurrent isolates, and advanced wait conditions dynamically processing MIS filters.
+- `yasweb`: Performs automated Headless Chrome iterations utilizing CDP events, concurrent tabs within a shared session, custom download paths via CLI, and advanced wait conditions dynamically processing MIS filters.
 
 ## Common paths
 - `tasker_config.json` for tasker rules logic.
