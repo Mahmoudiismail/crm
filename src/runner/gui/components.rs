@@ -28,11 +28,11 @@ pub(crate) fn layout(title: &str, main_content: &str) -> String {
             </div>
         </main>
     </div>
-    <script src="/js/common.js"></script>
-    <script src="/js/api.js"></script>
-    <script src="/js/notifications.js"></script>
-    <script src="/js/validation.js"></script>
-    <script src="/js/forms.js"></script>
+    <script src="/assets/js/common.js"></script>
+    <script src="/assets/js/api.js"></script>
+    <script src="/assets/js/notifications.js"></script>
+    <script src="/assets/js/validation.js"></script>
+    <script src="/assets/js/forms.js"></script>
 </body>
 </html>"#,
         title = escape_html(title),
@@ -119,7 +119,6 @@ fn sidebar_link(href: &str, label: &str, icon_html: &str) -> String {
 fn top_nav() -> String {
     format!(
         r#"
-<div class="md:pl-64 flex flex-col flex-1">
     <div class="sticky top-0 z-10 flex-shrink-0 flex h-16 bg-white border-b border-gray-200">
         <button type="button" id="open-sidebar-btn" class="px-4 border-r border-gray-200 text-gray-500 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-500 md:hidden">
             <span class="sr-only">Open sidebar</span>
@@ -137,7 +136,6 @@ fn top_nav() -> String {
             </div>
         </div>
     </div>
-</div>
 "#,
         icon_menu = icon_menu("h-6 w-6"),
         icon_plus = icon_plus("h-4 w-4 mr-1.5"),

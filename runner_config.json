@@ -1,6 +1,6 @@
 {
-  "gui_host": "127.0.0.1",
-  "gui_port": 8787,
+  "gui_host": "0.0.0.0",
+  "gui_port": 3000,
   "poll_interval_seconds": 30,
   "crm_config_path": "config.json",
   "crm_executable_path": "crm",
