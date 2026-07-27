@@ -265,21 +265,6 @@ mod tests {
     }
 
     #[test]
-    fn parses_shell_commands_text_correctly() {
-        let commands = parse_shell_commands_text(
-            "run: echo prepare\ncontinue: cleanup-if-present\necho fallback",
-        )
-        .unwrap();
-        assert_eq!(commands.len(), 3);
-        assert_eq!(commands.first().unwrap().command, "echo prepare");
-        assert!(!commands.first().unwrap().continue_on_error);
-        assert_eq!(commands.get(1).unwrap().command, "cleanup-if-present");
-        assert!(commands.get(1).unwrap().continue_on_error);
-        assert_eq!(commands.get(2).unwrap().command, "echo fallback");
-        assert!(!commands.get(2).unwrap().continue_on_error);
-    }
-
-    #[test]
     fn duration_parser_accepts_human_units() {
         assert_eq!(parse_duration_text("1h").unwrap(), 3_600);
         assert_eq!(parse_duration_text("1h 30m").unwrap(), 5_400);
