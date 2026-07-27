@@ -412,28 +412,60 @@ pub(crate) fn schedule_row_html(
     let weekly_hidden = if kind == "weekly" { "" } else { "hidden" };
     let monthly_hidden = if kind == "monthly" { "" } else { "hidden" };
 
-    let is_wh_hidden = if kind == "interval" || kind == "daily" { "" } else { "hidden" };
-    let is_st_hidden = if kind == "interval" || kind == "weekly" || kind == "monthly" { "" } else { "hidden" };
+    let is_wh_hidden = if kind == "interval" || kind == "daily" {
+        ""
+    } else {
+        "hidden"
+    };
+    let is_st_hidden = if kind == "interval" || kind == "weekly" || kind == "monthly" {
+        ""
+    } else {
+        "hidden"
+    };
 
     let mut start_time_val = String::new();
     if let Some(schedules) = task.map(|t| &t.schedules) {
         for s in schedules {
-           match s {
-               TaskSchedule::Interval { start_time: Some(st), .. } => start_time_val = st.clone(),
-               TaskSchedule::Weekly { at_time, .. } => start_time_val = at_time.clone(),
-               TaskSchedule::Monthly { at_time, .. } => start_time_val = at_time.clone(),
-               _ => {}
-           }
+            match s {
+                TaskSchedule::Interval {
+                    start_time: Some(st),
+                    ..
+                } => start_time_val = st.clone(),
+                TaskSchedule::Weekly { at_time, .. } => start_time_val = at_time.clone(),
+                TaskSchedule::Monthly { at_time, .. } => start_time_val = at_time.clone(),
+                _ => {}
+            }
         }
     }
 
-    let wh_mon = working_hours.and_then(|wh| wh.get("Monday")).map(|h| format!("{}-{}", h.start, h.end)).unwrap_or_default();
-    let wh_tue = working_hours.and_then(|wh| wh.get("Tuesday")).map(|h| format!("{}-{}", h.start, h.end)).unwrap_or_default();
-    let wh_wed = working_hours.and_then(|wh| wh.get("Wednesday")).map(|h| format!("{}-{}", h.start, h.end)).unwrap_or_default();
-    let wh_thu = working_hours.and_then(|wh| wh.get("Thursday")).map(|h| format!("{}-{}", h.start, h.end)).unwrap_or_default();
-    let wh_fri = working_hours.and_then(|wh| wh.get("Friday")).map(|h| format!("{}-{}", h.start, h.end)).unwrap_or_default();
-    let wh_sat = working_hours.and_then(|wh| wh.get("Saturday")).map(|h| format!("{}-{}", h.start, h.end)).unwrap_or_default();
-    let wh_sun = working_hours.and_then(|wh| wh.get("Sunday")).map(|h| format!("{}-{}", h.start, h.end)).unwrap_or_default();
+    let wh_mon = working_hours
+        .and_then(|wh| wh.get("Monday"))
+        .map(|h| format!("{}-{}", h.start, h.end))
+        .unwrap_or_default();
+    let wh_tue = working_hours
+        .and_then(|wh| wh.get("Tuesday"))
+        .map(|h| format!("{}-{}", h.start, h.end))
+        .unwrap_or_default();
+    let wh_wed = working_hours
+        .and_then(|wh| wh.get("Wednesday"))
+        .map(|h| format!("{}-{}", h.start, h.end))
+        .unwrap_or_default();
+    let wh_thu = working_hours
+        .and_then(|wh| wh.get("Thursday"))
+        .map(|h| format!("{}-{}", h.start, h.end))
+        .unwrap_or_default();
+    let wh_fri = working_hours
+        .and_then(|wh| wh.get("Friday"))
+        .map(|h| format!("{}-{}", h.start, h.end))
+        .unwrap_or_default();
+    let wh_sat = working_hours
+        .and_then(|wh| wh.get("Saturday"))
+        .map(|h| format!("{}-{}", h.start, h.end))
+        .unwrap_or_default();
+    let wh_sun = working_hours
+        .and_then(|wh| wh.get("Sunday"))
+        .map(|h| format!("{}-{}", h.start, h.end))
+        .unwrap_or_default();
 
     format!(
         "<div class='flex flex-col gap-3 p-4 border border-gray-200 rounded-md bg-white'>\
@@ -540,7 +572,6 @@ pub(crate) fn schedule_row_html(
         escape_html(&wh_sun)
     )
 }
-
 
 #[allow(dead_code)]
 pub(crate) fn local_datetime_value(value: &str) -> String {

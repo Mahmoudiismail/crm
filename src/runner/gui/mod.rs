@@ -264,7 +264,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn duration_parser_accepts_human_units() {
         assert_eq!(parse_duration_text("1h").unwrap(), 3_600);
