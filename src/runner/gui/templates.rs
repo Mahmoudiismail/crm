@@ -683,7 +683,6 @@ pub(crate) fn days_of_week_options(selected_day: &str) -> String {
     .join("")
 }
 
-
 pub(crate) fn command_row_html(_index: usize, command: &str, continue_on_error: bool) -> String {
     format!(
         "<div class='grid grid-cols-1 md:grid-cols-[1fr_120px_auto] gap-3 items-end p-4 mb-3 bg-gray-50 border border-gray-200 rounded-md' data-command-row>
