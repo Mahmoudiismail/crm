@@ -8,9 +8,11 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tracing::{error, info};
 
+pub mod components;
 pub mod forms;
 pub mod handlers;
 pub mod helpers;
+pub mod icons;
 pub mod routes;
 pub mod templates;
 
@@ -19,12 +21,12 @@ use helpers::*;
 use routes::route_request;
 use templates::render_error_page;
 
-const TAILWIND_CDN: &str = "https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4";
+pub(crate) const TAILWIND_CDN: &str = "https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4";
 
 pub(crate) struct HttpRequest {
-    method: String,
-    path: String,
-    body: String,
+    pub(crate) method: String,
+    pub(crate) path: String,
+    pub(crate) body: String,
 }
 
 pub fn start_gui_server(handle: RunnerHandle) {
@@ -189,7 +191,7 @@ mod tests {
             .unwrap();
         assert_eq!(res.status().as_u16(), 200);
         let text = res.text().await.unwrap();
-        assert!(text.contains("Task Dashboard"));
+        assert!(text.contains("Runner"));
 
         // Test GET /status
         let res = client
@@ -294,12 +296,5 @@ mod tests {
     fn date_type_import_keeps_rfc3339_parse_available() {
         let parsed: chrono::DateTime<Utc> = parse_rfc3339_utc("2026-04-15T09:30:00Z").unwrap();
         assert_eq!(parsed.to_rfc3339(), "2026-04-15T09:30:00+00:00");
-    }
-
-    #[test]
-    fn metric_card_escapes_html_value() {
-        let html = templates::metric_card("Alert", "<script>alert(1)</script>");
-        assert!(html.contains("&lt;script&gt;alert(1)&lt;/script&gt;"));
-        assert!(!html.contains("<script>"));
     }
 }

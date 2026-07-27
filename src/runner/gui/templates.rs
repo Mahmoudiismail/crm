@@ -1,6 +1,8 @@
 #![allow(unused_imports)]
+use super::components::*;
 use super::forms::*;
 use super::helpers::*;
+use super::icons::*;
 use super::HttpRequest;
 use super::TAILWIND_CDN;
 use crate::runner::config::*;
@@ -16,174 +18,173 @@ pub(crate) fn render_dashboard(
     status: &crate::runner::engine::RunnerStatus,
     toast: Option<&str>,
 ) -> String {
-    let rows = cfg
-        .tasks
-        .iter()
-        .map(render_task_row)
-        .collect::<Vec<_>>()
-        .join("");
+    let mut rows = String::new();
+    if cfg.tasks.is_empty() {
+        rows = "<tr><td colspan='5' class='px-6 py-12 text-center text-gray-500'>No tasks configured.</td></tr>".to_string();
+    } else {
+        for task in &cfg.tasks {
+            rows.push_str(&render_task_row(task));
+        }
+    }
 
     let toast_html = toast.map(render_toast).unwrap_or_default();
 
-    html_page(
-        "Runner GUI",
+    let header = page_header(
+        "Dashboard",
+        "Schedule CRM work and shell command groups from one local control panel.",
         &format!(
-            "{}<div class='space-y-6'>\
-                <div class='flex flex-col md:flex-row md:items-end md:justify-between gap-4'>\
-                    <div><p class='text-sm font-semibold text-emerald-700'>Runner</p><h1 class='text-3xl font-bold text-gray-900'>Task Dashboard</h1><p class='text-gray-600 mt-2'>Schedule CRM work and shell command groups from one local control panel.</p></div>\
-                    <div class='flex flex-wrap gap-2'>\
-                        <a class='rounded bg-gray-900 text-white px-4 py-2 text-sm font-semibold' href='/run-all'>Run All Now</a>\
-                        \
-                        <a class='rounded border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-800' href='/apps'>Apps</a>\
-                        \
-                        <a class='rounded bg-emerald-600 text-white px-4 py-2 text-sm font-semibold' href='/new-task'>New Task</a>\
-                    </div>\
-                </div>\
-                <div class='grid md:grid-cols-4 gap-4'>\
-                    {}\
-                </div>\
-                <div class='bg-white border border-gray-200 rounded shadow-sm overflow-hidden'>\
-                    <div class='px-5 py-4 border-b border-gray-200 flex items-center justify-between'>\
-                        <h2 class='text-lg font-semibold text-gray-900'>Tasks</h2>\
-                        <div class='text-sm'><a class='text-emerald-700 font-semibold' href='/status'>JSON Status</a><span class='text-gray-300 mx-2'>|</span><a class='text-emerald-700 font-semibold' href='/tasks'>JSON Tasks</a></div>\
-                    </div>\
-                    <div class='overflow-x-auto'>\
-                        <table class='min-w-full divide-y divide-gray-200 text-sm'>\
-                            <thead class='bg-gray-50'><tr>\
-                                <th class='px-4 py-3 text-left font-semibold text-gray-700'>Task</th>\
-                                <th class='px-4 py-3 text-left font-semibold text-gray-700'>Schedule</th>\
-                                <th class='px-4 py-3 text-left font-semibold text-gray-700'>Next Run</th>\
-                                <th class='px-4 py-3 text-left font-semibold text-gray-700'>Last Run</th>\
-                                <th class='px-4 py-3 text-left font-semibold text-gray-700'>Status</th>\
-                                <th class='px-4 py-3 text-left font-semibold text-gray-700'>Actions</th>\
-                            </tr></thead>\
-                            <tbody class='bg-white divide-y divide-gray-100'>{}</tbody>\
-                        </table>\
-                    </div>\
-                </div>\
-            </div>",
-            toast_html,
-            render_status_cards(status, cfg.tasks.len()),
-            rows
+            "{} {} {}",
+            secondary_button("Apps", Some("/apps"), Some(&icon_cube("w-4 h-4 mr-2"))),
+            secondary_button(
+                "Run All Now",
+                Some("/run-all"),
+                Some(&icon_play("w-4 h-4 mr-2"))
+            ),
+            primary_button(
+                "New Task",
+                Some("/new-task"),
+                Some(&icon_plus("w-4 h-4 mr-2"))
+            )
         ),
+    );
+
+    let stats_grid = format!(
+        "<div class='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8'>{}</div>",
+        render_status_cards(status)
+    );
+
+    let table_html = format!(
+        "<div class='overflow-x-auto'>
+            <table class='min-w-full divide-y divide-gray-200 text-sm'>
+                <thead class='bg-gray-50'><tr>
+                    <th scope='col' class='px-6 py-3 text-left font-semibold text-gray-900'>Task Name / ID</th>
+                    <th scope='col' class='px-6 py-3 text-left font-semibold text-gray-900'>Status</th>
+                    <th scope='col' class='px-6 py-3 text-left font-semibold text-gray-900'>Schedule</th>
+                    <th scope='col' class='px-6 py-3 text-left font-semibold text-gray-900'>Actions</th>
+                    <th scope='col' class='px-6 py-3 text-left font-semibold text-gray-900'>Controls</th>
+                </tr></thead>
+                <tbody class='bg-white divide-y divide-gray-200'>{}</tbody>
+            </table>
+        </div>",
+        rows
+    );
+
+    let card_html = card("Configured Tasks", &table_html, None);
+
+    layout(
+        "Dashboard",
+        &format!("{}{}{}{}", toast_html, header, stats_grid, card_html),
     )
 }
 
-pub(crate) fn render_status_cards(
-    status: &crate::runner::engine::RunnerStatus,
-    task_count: usize,
-) -> String {
-    let running = if status.running_tasks_count > 0 {
-        format!(
-            "Running ({} active, {} queued)",
-            status.running_tasks_count, status.queued_tasks_count
+pub(crate) fn render_status_cards(status: &crate::runner::engine::RunnerStatus) -> String {
+    format!(
+        "{}{}{}{}",
+        stat_card(
+            "Running Tasks",
+            &status.running_tasks_count.to_string(),
+            "Currently executing"
+        ),
+        stat_card(
+            "Queued Tasks",
+            &status.queued_tasks_count.to_string(),
+            "Waiting in queue"
+        ),
+        stat_card(
+            "Last Task Executed",
+            if status.last_task_id.is_empty() {
+                "None"
+            } else {
+                &status.last_task_id
+            },
+            "Recent activity"
+        ),
+        stat_card(
+            "Last Error",
+            if status.last_error.is_empty() {
+                "None"
+            } else {
+                &status.last_error
+            },
+            "System health"
         )
-    } else if status.queued_tasks_count > 0 {
-        format!("Idle ({} queued)", status.queued_tasks_count)
-    } else {
-        "Idle".to_string()
-    };
-    let last_task = if status.last_task_id.is_empty() {
-        "None"
-    } else {
-        &status.last_task_id
-    };
-    let last_run = if status.last_run_at.is_empty() {
-        "Never".to_string()
-    } else {
-        human_datetime(&status.last_run_at)
-    };
-    let last_error = if status.last_error.is_empty() {
-        "No current error"
-    } else {
-        &status.last_error
-    };
-
-    format!(
-        "{}{}{}<div class='bg-white border border-gray-200 rounded shadow-sm p-4'>\
-            <p class='text-xs uppercase tracking-wide text-gray-500 font-semibold'>Last Run</p>\
-            <p class='mt-2 text-lg font-semibold text-gray-900 break-words'>{}\
-                <span class='block text-xs text-gray-500 mt-1'>{}</span>\
-            </p></div>",
-        metric_card("State", &running),
-        metric_card("Tasks", &task_count.to_string()),
-        metric_card("Last Task", last_task),
-        escape_html(&last_run),
-        escape_html(last_error)
-    )
-}
-
-pub(crate) fn metric_card(label: &str, value: &str) -> String {
-    format!(
-        "<div class='bg-white border border-gray-200 rounded shadow-sm p-4'><p class='text-xs uppercase tracking-wide text-gray-500 font-semibold'>{}</p><p class='mt-2 text-lg font-semibold text-gray-900 break-words'>{}</p></div>",
-        escape_html(label),
-        escape_html(value)
     )
 }
 
 pub(crate) fn render_task_row(task: &RunnerTask) -> String {
-    let enabled_badge = if task.enabled {
-        "<span class='inline-flex rounded bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-800'>Enabled</span>"
+    let task_status = if task.enabled {
+        status_badge(true, "Active", "Inactive")
     } else {
-        "<span class='inline-flex rounded bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-700'>Disabled</span>"
+        status_badge(false, "Active", "Inactive")
     };
-    let kind = match task.legacy_kind() {
-        TaskKind::ShellCommand { mode, commands } => {
-            let command_count = commands.len();
-            let mode_str = match mode {
-                ShellCommandMode::Sequential => "seq",
-                ShellCommandMode::Parallel => "par",
+
+    let schedules_text = task
+        .schedules
+        .iter()
+        .map(|s| {
+            let next = match s {
+                TaskSchedule::Interval { next_run_at, .. } => next_run_at,
+                TaskSchedule::DailyTimes { next_run_at, .. } => next_run_at,
+                TaskSchedule::Weekly { next_run_at, .. } => next_run_at,
+                TaskSchedule::Monthly { next_run_at, .. } => next_run_at,
+                TaskSchedule::Once { next_run_at, .. } => next_run_at,
             };
-            format!(
-                "Shell, {} cmd{} ({})",
-                command_count,
-                if command_count == 1 { "" } else { "s" },
-                mode_str
-            )
-        }
-        TaskKind::ExternalApp { app_id, .. } => {
-            format!("External App ({})", app_id)
-        }
-    };
-    let last_run = if task.last_run_at.is_empty() {
-        "Never".to_string()
+            let mut base = human_schedule(s);
+            if !next.is_empty() {
+                base.push_str(" <br><span class='text-xs text-gray-500'>Next: ");
+                base.push_str(&human_datetime(next));
+                base.push_str("</span>");
+            }
+            base
+        })
+        .collect::<Vec<_>>()
+        .join("<div class='mt-2'></div>");
+
+    let schedule_display = if schedules_text.is_empty() {
+        "<span class='text-gray-400 italic text-xs'>Manual</span>".to_string()
     } else {
-        human_datetime(&task.last_run_at)
+        schedules_text
     };
-    let last_status = if task.last_status.is_empty() {
-        "No result yet".to_string()
-    } else {
-        escape_html(&task.last_status)
-    };
-    let id = escape_html(&task.id);
 
     format!(
-        "<tr>\
-            <td class='px-4 py-4 align-top'><div class='font-semibold text-gray-900'>{}</div><div class='text-xs text-gray-500 mt-1'>{}</div><div class='mt-2'>{}</div></td>\
-            <td class='px-4 py-4 align-top text-gray-700'>{}</td>\
-            <td class='px-4 py-4 align-top text-gray-700'>{}</td>\
-            <td class='px-4 py-4 align-top text-gray-700'>{}</td>\
-            <td class='px-4 py-4 align-top text-gray-700 max-w-xs break-words'>{}</td>\
-            <td class='px-4 py-4 align-top'><div class='flex flex-wrap gap-2'>\
-                <a class='rounded border border-gray-300 px-3 py-1 font-semibold text-gray-800' href='/run/{}'>Run</a>\
-                {}\
-                {}\
-                <a class='rounded bg-emerald-600 text-white px-3 py-1 text-sm font-semibold hover:bg-emerald-700' href='/edit/{}'>Edit</a>\
-                <a class='rounded bg-red-600 text-white px-3 py-1 text-sm font-semibold hover:bg-red-700' href='/delete/{}'>Delete</a>\
-            </div></td>\
+        "<tr>
+            <td class='px-6 py-4 align-top'>
+                <div class='font-medium text-gray-900'>{}</div>
+                <div class='text-xs font-mono text-gray-500 mt-1'>{}</div>
+            </td>
+            <td class='px-6 py-4 align-top whitespace-nowrap'>{}</td>
+            <td class='px-6 py-4 align-top'>{}</td>
+            <td class='px-6 py-4 align-top whitespace-nowrap text-sm font-medium'>
+                <a href='/edit/{}' class='text-emerald-600 hover:text-emerald-900 mr-4 inline-flex items-center'>{} Edit</a>
+                <a href='/delete/{}' class='text-red-600 hover:text-red-900 inline-flex items-center'>{} Delete</a>
+            </td>
+            <td class='px-6 py-4 align-top whitespace-nowrap space-x-2'>
+                <form action='/run/{}' method='POST' class='inline-block'>
+                    <button type='submit' class='inline-flex items-center px-2.5 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none'>
+                        {} Run Now
+                    </button>
+                </form>
+                <form action='/{}' method='POST' class='inline-block'>
+                    <input type='hidden' name='enabled' value='{}'>
+                    <button type='submit' class='inline-flex items-center px-2.5 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none'>
+                        {}
+                    </button>
+                </form>
+            </td>
         </tr>",
         escape_html(&task.name),
-        id,
-        enabled_badge,
-        escape_html(&format!("{} - {}", kind, task.schedule_summary())),
-        escape_html(&task.next_run_summary()),
-        escape_html(&last_run),
-        last_status,
-        id,
-        if !task.enabled { format!("<a class='rounded border border-gray-300 px-3 py-1 font-semibold text-gray-800' href='/enable/{}'>Enable</a>", id) } else { "".to_string() },
-        if task.enabled { format!("<a class='rounded border border-gray-300 px-3 py-1 font-semibold text-gray-800' href='/disable/{}'>Disable</a>", id) } else { "".to_string() },
-        id,
-        id
+        escape_html(&task.id),
+        task_status,
+        schedule_display,
+        escape_html(&task.id),
+        icon_edit("w-4 h-4 mr-1"),
+        escape_html(&task.id),
+        icon_trash("w-4 h-4 mr-1"),
+        escape_html(&task.id),
+        icon_play("w-4 h-4 mr-1"),
+        if task.enabled { format!("disable/{}", escape_html(&task.id)) } else { format!("enable/{}", escape_html(&task.id)) },
+        if task.enabled { "false" } else { "true" },
+        if task.enabled { "Disable" } else { "Enable" },
     )
 }
 
@@ -319,7 +320,7 @@ pub(crate) fn render_task_form(
         ext_id = escape_html(&ext_app_id),
         submit_label = escape_html(submit_label)
     );
-    html_page(title, &form_html)
+    layout(title, &form_html)
 }
 
 pub(crate) fn schedule_editor_html(task: Option<&RunnerTask>) -> String {
@@ -682,31 +683,34 @@ pub(crate) fn days_of_week_options(selected_day: &str) -> String {
     .join("")
 }
 
-pub(crate) fn command_row_html(index: usize, command: &str, continue_on_error: bool) -> String {
+pub(crate) fn command_row_html(_index: usize, command: &str, continue_on_error: bool) -> String {
     format!(
-        "<div class='grid md:grid-cols-[1fr_100px_auto] gap-2 items-center p-2 bg-gray-50 border border-gray-200 rounded' data-command-row>\
-            <div class='grid md:grid-cols-2 gap-2'>\
-                <label class='block'>\
-                    <span class='text-xs font-semibold text-gray-700'>Command</span>\
-                    <input class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm command-text' type='text' value='{}' placeholder='echo hello'>\
-                </label>\
-                <label class='block'>\
-                    <span class='text-xs font-semibold text-gray-700'>Mode</span>\
-                    <select class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm command-mode' name='command_mode_{}'>\
-                        <option value='run' {}>Run</option>\
-                        <option value='continue' {}>Continue</option>\
-                    </select>\
-                </label>\
-            </div>\
-            <button type='button' class='remove-command rounded bg-red-600 text-white px-3 py-2 text-sm font-semibold hover:bg-red-700'>Remove</button>\
+        "<div class='grid grid-cols-1 md:grid-cols-[1fr_120px_auto] gap-3 items-end p-4 mb-3 bg-gray-50 border border-gray-200 rounded-md' data-command-row>
+            <div class='w-full'>
+                <label class='block text-xs font-medium text-gray-700 mb-1'>Command</label>
+                <input class='command-text shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2' type='text' value='{}' placeholder='echo hello'>
+            </div>
+            <div class='w-full'>
+                <label class='block text-xs font-medium text-gray-700 mb-1'>Mode</label>
+                <select class='command-mode shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2'>
+                    <option value='run' {}>Run</option>
+                    <option value='continue' {}>Continue on Error</option>
+                </select>
+            </div>
+            <div>
+                <button type='button' class='remove-command inline-flex items-center p-2 border border-transparent rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none'>
+                    {}
+                </button>
+            </div>
         </div>",
         escape_html(command),
-        index,
         if !continue_on_error { "selected" } else { "" },
-        if continue_on_error { "selected" } else { "" }
+        if continue_on_error { "selected" } else { "" },
+        icon_trash("w-4 h-4")
     )
 }
 
+#[allow(dead_code)]
 pub(crate) fn local_datetime_value(value: &str) -> String {
     if value.is_empty() {
         return String::new();
@@ -729,6 +733,7 @@ pub(crate) fn input_field(label: &str, name: &str, value: &str) -> String {
     )
 }
 
+#[allow(dead_code)]
 pub(crate) fn select_task_type(value: &str) -> String {
     format!(
         "<label class='block'><span class='text-sm font-semibold text-gray-800'>Task Type</span><select id='task-type-select' class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' name='task_type'><option value='shell_command' {}>Shell Command</option><option value='external_app' {}>External App</option></select></label>",
@@ -737,20 +742,19 @@ pub(crate) fn select_task_type(value: &str) -> String {
     )
 }
 
-pub(crate) fn html_page(title: &str, content: &str) -> String {
-    format!(
-        "<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>{}</title><script src='{}'></script></head><body class='bg-gray-50 text-gray-900'><main class='max-w-7xl mx-auto px-4 py-8'>{}</main><script src='/assets/js/common.js'></script><script src='/assets/js/api.js'></script><script src='/assets/js/validation.js'></script><script src='/assets/js/notifications.js'></script><script src='/assets/js/forms.js'></script></body></html>",
-        escape_html(title),
-        TAILWIND_CDN,
-        content
-    )
-}
-
 pub(crate) fn render_redirect_to_dashboard(message: &str) -> String {
-    html_page(
+    layout(
         "Redirecting",
         &format!(
-            "<div class='max-w-xl mx-auto bg-white border border-gray-200 rounded shadow-sm p-6'><h1 class='text-2xl font-bold text-gray-900'>Redirecting</h1><p class='mt-4 text-gray-700'>Returning to the dashboard...</p></div><script>window.addEventListener('DOMContentLoaded', function() {{ window.redirectToDashboard('{}'); }});</script>",
+            "<div class='max-w-xl mx-auto bg-white border border-gray-200 rounded-lg shadow-sm p-6 text-center mt-12'>
+                <div class='mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-emerald-100 mb-4'>
+                    {}
+                </div>
+                <h1 class='text-2xl font-bold text-gray-900'>Success</h1>
+                <p class='mt-2 text-sm text-gray-500'>Returning to the dashboard...</p>
+            </div>
+            <script>window.addEventListener('DOMContentLoaded', function() {{ window.redirectToDashboard('{}'); }});</script>",
+            icon_check("h-6 w-6 text-emerald-600"),
             js_escape(message)
         ),
     )
@@ -758,105 +762,169 @@ pub(crate) fn render_redirect_to_dashboard(message: &str) -> String {
 
 pub(crate) fn render_toast(message: &str) -> String {
     format!(
-        "<div id='runner-toast' class='fixed right-4 top-4 z-50 max-w-sm rounded border border-gray-200 bg-white px-4 py-3 shadow-lg'>\
-            <p class='text-sm font-semibold text-gray-900'>{}</p>\
+        "<div id='runner-toast' class='fixed right-4 top-4 z-50 max-w-sm rounded border border-gray-200 bg-white px-4 py-3 shadow-lg flex items-start gap-3'>
+            <div class='flex-shrink-0'>
+                {}
+            </div>
+            <p class='text-sm font-medium text-gray-900'>{}</p>
         </div>",
+        icon_code("w-5 h-5 text-emerald-500"),
         escape_html(message)
     )
 }
 
 pub(crate) fn render_error_page(title: &str, message: &str) -> String {
-    html_page(
+    layout(
         title,
         &format!(
-            "<div class='max-w-xl mx-auto bg-white border border-red-200 rounded shadow-sm p-6'><h1 class='text-2xl font-bold text-red-800'>{}</h1><p class='mt-3 text-gray-700 break-words'>{}</p><p class='mt-4'><a class='rounded bg-gray-900 text-white px-4 py-2 text-sm font-semibold' href='/'>Open dashboard</a></p></div>",
+            "<div class='max-w-xl mx-auto bg-white border border-red-200 rounded-lg shadow-sm p-6 mt-12 text-center'>
+                <div class='mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4'>
+                    {}
+                </div>
+                <h1 class='text-2xl font-bold text-red-800'>{}</h1>
+                <p class='mt-3 text-sm text-gray-700 break-words'>{}</p>
+                <div class='mt-6'>
+                    {}
+                </div>
+            </div>",
+            icon_exclamation_triangle("h-6 w-6 text-red-600"),
             escape_html(title),
-            escape_html(message)
+            escape_html(message),
+            secondary_button("Return to Dashboard", Some("/"), None)
         ),
     )
 }
 
 pub(crate) fn render_apps_page(apps: &[crate::runner::config::RegisteredApp]) -> String {
-    let rows = apps.iter().map(|app| {
-        format!(
-            "<tr>\
-                <td class='px-4 py-3 align-top font-semibold text-gray-900'>{}</td>\
-                <td class='px-4 py-3 align-top text-gray-700'>{}</td>\
-                <td class='px-4 py-3 align-top text-gray-700 font-mono text-xs'>{}</td>\
-                <td class='px-4 py-3 align-top text-gray-700 font-mono text-xs'>{}</td>\
-                <td class='px-4 py-3 align-top'>\
-                    <a class='rounded bg-blue-600 text-white px-3 py-1 text-sm font-semibold hover:bg-blue-700 mr-2' href='/apps/edit/{}'>Edit</a>\
-                    <a class='rounded bg-red-600 text-white px-3 py-1 text-sm font-semibold hover:bg-red-700' href='/apps/delete/{}'>Delete</a>\
-                </td>\
-            </tr>",
-            escape_html(&app.name),
-            escape_html(&app.id),
-            escape_html(&app.executable_path),
-            escape_html(&app.config_path),
-            escape_html(&app.id),
-            escape_html(&app.id)
-        )
-    }).collect::<String>();
+    let mut rows = String::new();
+    if apps.is_empty() {
+        rows = "<tr><td colspan='5' class='px-6 py-12 text-center text-gray-500'>No applications registered.</td></tr>".to_string();
+    } else {
+        for app in apps {
+            rows.push_str(&format!(
+                "<tr>
+                    <td class='px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900'>{}</td>
+                    <td class='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>{}</td>
+                    <td class='px-6 py-4 whitespace-nowrap text-xs font-mono text-gray-500'>{}</td>
+                    <td class='px-6 py-4 whitespace-nowrap text-xs font-mono text-gray-500'>{}</td>
+                    <td class='px-6 py-4 whitespace-nowrap text-sm font-medium'>
+                        <a href='/apps/edit/{}' class='text-emerald-600 hover:text-emerald-900 mr-4 inline-flex items-center'>{} Edit</a>
+                        <a href='/apps/delete/{}' class='text-red-600 hover:text-red-900 inline-flex items-center'>{} Delete</a>
+                    </td>
+                </tr>",
+                escape_html(&app.name),
+                escape_html(&app.id),
+                escape_html(&app.executable_path),
+                escape_html(&app.config_path),
+                escape_html(&app.id),
+                icon_edit("w-4 h-4 mr-1"),
+                escape_html(&app.id),
+                icon_trash("w-4 h-4 mr-1"),
+            ));
+        }
+    }
 
-    html_page(
+    let header = page_header(
+        "Registered Applications",
+        "Manage external applications that can be scheduled as tasks.",
+        &secondary_button("Back to Dashboard", Some("/"), None),
+    );
+
+    let table_html = format!(
+        "<div class='overflow-x-auto'>
+            <table class='min-w-full divide-y divide-gray-200'>
+                <thead class='bg-gray-50'><tr>
+                    <th scope='col' class='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Name</th>
+                    <th scope='col' class='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>ID</th>
+                    <th scope='col' class='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Executable</th>
+                    <th scope='col' class='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Config Path</th>
+                    <th scope='col' class='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Actions</th>
+                </tr></thead>
+                <tbody class='bg-white divide-y divide-gray-200'>{}</tbody>
+            </table>
+        </div>",
+        rows
+    );
+
+    let list_card = card("App List", &table_html, None);
+
+    let form_html = format!(
+        "<form method='post' action='/apps/create'>
+            <div class='grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2'>
+                <div class='sm:col-span-1'>{}</div>
+                <div class='sm:col-span-1'>{}</div>
+                <div class='sm:col-span-2'>{}</div>
+                <div class='sm:col-span-2'>{}</div>
+            </div>
+            <div class='mt-6 pt-5 border-t border-gray-200 flex justify-end'>
+                {}
+            </div>
+        </form>",
+        input_field("Name", "name", ""),
+        input_field("App ID", "id", ""),
+        input_field("Executable Path (e.g. tasker.exe)", "executable_path", ""),
+        input_field("Config Path (Optional override)", "config_path", ""),
+        primary_button("Register App", None, Some(&icon_plus("w-4 h-4 mr-2")))
+    );
+
+    let register_card = card("Register New App", &form_html, None);
+
+    layout(
         "Registered Apps",
         &format!(
-            "<div class='max-w-5xl mx-auto space-y-6'>\
-                <div>\
-                    <a class='text-sm font-semibold text-emerald-700' href='/'>Back to dashboard</a>\
-                    <h1 class='text-3xl font-bold text-gray-900 mt-2'>Registered Applications</h1>\
-                    <p class='text-gray-600 mt-1'>Manage external applications that can be scheduled as tasks.</p>\
-                </div>\
-                \
-                <div class='bg-white border border-gray-200 rounded shadow-sm overflow-hidden'>\
-                    <div class='px-5 py-4 border-b border-gray-200'>\
-                        <h2 class='text-lg font-semibold text-gray-900'>App List</h2>\
-                    </div>\
-                    <div class='overflow-x-auto'>\
-                        <table class='min-w-full divide-y divide-gray-200 text-sm'>\
-                            <thead class='bg-gray-50'><tr>\
-                                <th class='px-4 py-3 text-left font-semibold text-gray-700'>Name</th>\
-                                <th class='px-4 py-3 text-left font-semibold text-gray-700'>ID</th>\
-                                <th class='px-4 py-3 text-left font-semibold text-gray-700'>Executable</th>\
-                                <th class='px-4 py-3 text-left font-semibold text-gray-700'>Config Path</th>\
-                                <th class='px-4 py-3 text-left font-semibold text-gray-700'>Actions</th>\
-                            </tr></thead>\
-                            <tbody class='bg-white divide-y divide-gray-100'>{}</tbody>\
-                        </table>\
-                    </div>\
-                </div>\
-                \
-                <div class='bg-white border border-gray-200 rounded shadow-sm p-5'>\
-                    <h2 class='text-lg font-semibold text-gray-900 mb-4'>Register New App</h2>\
-                    <form method='post' action='/apps/create' class='space-y-4 max-w-2xl'>\
-                        <div class='grid md:grid-cols-2 gap-4'>\
-                            {}\
-                            {}\
-                        </div>\
-                        {}\
-                        {}\
-                        <button class='rounded bg-emerald-600 text-white px-4 py-2 text-sm font-semibold' type='submit'>Register App</button>\
-                    </form>\
-                </div>\
-            </div>",
-            rows,
-            input_field("Name", "name", ""),
-            input_field("App ID", "id", ""),
-            input_field("Executable Path (e.g. tasker.exe)", "executable_path", ""),
-            input_field("Config Path (Optional override)", "config_path", "")
-        )
+            "{}<div class='space-y-8'>{}<div class='max-w-4xl'>{}</div></div>",
+            header, list_card, register_card
+        ),
     )
 }
 
 pub(crate) fn render_app_edit_page(app: &crate::runner::config::RegisteredApp) -> String {
-    html_page(
+    let form_html = format!(
+        "<form action='/apps/update/{}' method='POST'>
+            <div class='space-y-6'>
+                {}
+                {}
+                {}
+            </div>
+            <div class='mt-8 pt-5 border-t border-gray-200 flex justify-end space-x-3'>
+                {}
+                {}
+            </div>
+        </form>",
+        escape_html(&app.id),
+        input_field("Name", "name", &app.name),
+        input_field("Executable Path", "executable_path", &app.executable_path),
+        input_field("Config Path", "config_path", &app.config_path),
+        secondary_button("Cancel", Some("/apps"), None),
+        primary_button("Update App", None, Some(&icon_check("w-4 h-4 mr-2")))
+    );
+
+    layout(
         "Edit App",
         &format!(
-            "<div class='max-w-2xl mx-auto'>                <h1 class='text-2xl font-bold text-gray-900 mb-6'>Edit App</h1>                <form action='/apps/update/{}' method='POST' class='space-y-4 bg-white p-6 rounded shadow-sm border border-gray-200'>                    {}                    {}                    {}                    <div class='pt-4 flex gap-3'>                        <button type='submit' class='rounded bg-emerald-600 px-4 py-2 text-sm font-semibold text-white'>Update App</button>                        <a href='/apps' class='rounded border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700'>Cancel</a>                    </div>                </form>            </div>",
-            escape_html(&app.id),
-            input_field("Name", "name", &app.name),
-            input_field("Executable Path", "executable_path", &app.executable_path),
-            input_field("Config Path", "config_path", &app.config_path)
+            "{}<div class='max-w-2xl mx-auto'>{}</div>",
+            page_header(&format!("Edit {}", app.name), "", ""),
+            card("Application Details", &form_html, None)
         ),
     )
+}
+
+pub(crate) fn human_schedule(schedule: &TaskSchedule) -> String {
+    match schedule {
+        TaskSchedule::Interval { every_seconds, .. } => {
+            format!("Every {}", compact_duration(*every_seconds))
+        }
+        TaskSchedule::DailyTimes { times, .. } => format!("Daily at {}", times.join(", ")),
+        TaskSchedule::Weekly {
+            day_of_week,
+            at_time,
+            ..
+        } => format!("Weekly on {} at {}", day_of_week, at_time),
+        TaskSchedule::Monthly {
+            day_of_month,
+            at_time,
+            ..
+        } => format!("Monthly on day {} at {}", day_of_month, at_time),
+        TaskSchedule::Once { .. } => "Run Once".to_string(),
+    }
 }

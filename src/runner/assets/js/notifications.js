@@ -9,13 +9,16 @@ window.showToast = function(message) {
 
     const toastDiv = document.createElement('div');
     toastDiv.id = 'runner-toast';
-    toastDiv.className = 'fixed right-4 top-4 z-50 max-w-sm rounded border border-gray-200 bg-white px-4 py-3 shadow-lg';
+    toastDiv.className = 'fixed right-4 top-4 z-50 max-w-sm rounded border border-gray-200 bg-white px-4 py-3 shadow-lg flex items-start gap-3';
+    toastDiv.innerHTML = `
+        <div class='flex-shrink-0'>
+            <svg class="w-5 h-5 text-emerald-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5" />
+            </svg>
+        </div>
+        <p class='text-sm font-medium text-gray-900'>${message}</p>
+    `;
 
-    const textNode = document.createElement('p');
-    textNode.className = 'text-sm font-semibold text-gray-900';
-    textNode.textContent = message;
-
-    toastDiv.appendChild(textNode);
     document.body.appendChild(toastDiv);
 
     setTimeout(() => {
