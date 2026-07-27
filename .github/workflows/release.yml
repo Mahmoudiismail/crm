@@ -22,7 +22,7 @@ jobs:
       build_date: ${{ steps.vars.outputs.build_date }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - id: vars
         shell: bash
@@ -43,7 +43,7 @@ jobs:
       BUILD_DATE: ${{ needs.prepare.outputs.build_date }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -52,11 +52,23 @@ jobs:
       - name: Setup sccache
         uses: mozilla-actions/sccache-action@v0.0.10
 
-      - uses: Swatinem/rust-cache@v2
+      - name: Cache cargo artifacts
+        uses: actions/cache@v6
         with:
-          shared-key: crm-rust-shared-cache
-          cache-on-failure: true
-          cache-targets: true
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+            !target/**/*.exe
+            !target/**/*.zip
+            !target/**/*.log
+            !target/**/*.json
+            !target/**/*.yaml
+            !target/**/*.yml
+          key: ${{ runner.os }}-cargo-crm-rust-shared-cache-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-crm-rust-shared-cache
 
       - name: Build
         shell: bash
@@ -115,7 +127,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: crm_tool_windows_zip
           path: target/release/crm_tool_v${{ env.VERSION }}_${{ env.BUILD_DATE }}_windows.zip
