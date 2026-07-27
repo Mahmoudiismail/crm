@@ -160,13 +160,19 @@ pub fn resolve_recipients(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tasker::email::message::TeamMapping;
     use crate::tasker::config::EmailConfig;
+    use crate::tasker::email::message::TeamMapping;
 
     #[test]
     fn test_clean_email_string() {
-        assert_eq!(clean_email_string("yaalshoakay@fakeeh.care;;"), "yaalshoakay@fakeeh.care");
-        assert_eq!(clean_email_string("  a@b.com ; c@d.com  ;; e@f.com "), "a@b.com;c@d.com;e@f.com");
+        assert_eq!(
+            clean_email_string("yaalshoakay@fakeeh.care;;"),
+            "yaalshoakay@fakeeh.care"
+        );
+        assert_eq!(
+            clean_email_string("  a@b.com ; c@d.com  ;; e@f.com "),
+            "a@b.com;c@d.com;e@f.com"
+        );
         assert_eq!(clean_email_string(";;;"), "");
     }
 
@@ -197,7 +203,13 @@ mod tests {
 
         let exception_teams = HashSet::new();
 
-        let (to, cc) = resolve_recipients("test team", Some(&mapping), &config, false, &exception_teams);
+        let (to, cc) = resolve_recipients(
+            "test team",
+            Some(&mapping),
+            &config,
+            false,
+            &exception_teams,
+        );
 
         assert_eq!(to, "to1@test.com;to2@test.com");
         assert_eq!(cc, "init@test.com;cc1@test.com;end@test.com");
