@@ -127,7 +127,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: crm_tool_windows_zip
           path: target/release/crm_tool_v${{ env.VERSION }}_${{ env.BUILD_DATE }}_windows.zip
