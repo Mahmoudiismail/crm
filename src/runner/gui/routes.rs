@@ -55,10 +55,10 @@ pub(crate) async fn route_request(
         let task_id = route_path.trim_start_matches("/delete/");
         return handle_delete_task(handle, task_id).await;
     }
-    if request.method == "GET" && route_path == "/run-all" {
+    if request.method == "POST" && route_path == "/run-all" {
         return handle_run_all(handle).await;
     }
-    if request.method == "GET" && route_path.starts_with("/run/") {
+    if request.method == "POST" && route_path.starts_with("/run/") {
         let task_id = route_path.trim_start_matches("/run/");
         return handle_run_task(handle, task_id).await;
     }

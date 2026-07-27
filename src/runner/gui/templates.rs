@@ -198,22 +198,6 @@ pub(crate) fn render_task_form(
     let id = task.map(|t| t.id.as_str()).unwrap_or_default();
     let name = task.map(|t| t.name.as_str()).unwrap_or_default();
     let enabled = task.map(|t| t.enabled).unwrap_or(true);
-    let post_run_script = task.map(|t| t.legacy_post_run_script()).unwrap_or_default();
-    let post_run_app_id = task.map(|t| t.legacy_post_run_app_id()).unwrap_or_default();
-    let post_run_app_args = task
-        .map(|t| {
-            serde_json::to_string(&t.legacy_post_run_app_args())
-                .unwrap_or_else(|_| "{}".to_string())
-        })
-        .unwrap_or_else(|| "{}".to_string());
-
-    let post_run_action = if !post_run_app_id.is_empty() {
-        "external_app"
-    } else if !post_run_script.is_empty() {
-        "script"
-    } else {
-        "none"
-    };
 
     let timeout_seconds = task.map(|t| t.timeout_seconds).unwrap_or(0);
     let timeout_seconds_str = if timeout_seconds > 0 {
@@ -221,18 +205,13 @@ pub(crate) fn render_task_form(
     } else {
         String::new()
     };
-    let mut ext_app_id = String::new();
-    let mut ext_app_args = String::new();
 
-    let (task_type, _report) = match task.map(|t| t.legacy_kind()) {
-        Some(TaskKind::ShellCommand { .. }) => ("shell_command", "all"),
-        Some(TaskKind::ExternalApp { app_id, args }) => {
-            ext_app_id = app_id.clone();
-            ext_app_args = serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
-            ("external_app", "all")
-        }
-        None => ("shell_command", "all"),
-    };
+    let steps_json = task
+        .map(|t| serde_json::to_string(&t.steps).unwrap_or_else(|_| "[]".to_string()))
+        .unwrap_or_else(|| "[]".to_string());
+    let post_run_steps_json = task
+        .map(|t| serde_json::to_string(&t.post_run_steps).unwrap_or_else(|_| "[]".to_string()))
+        .unwrap_or_else(|| "[]".to_string());
 
     let error_html = error
         .map(|message| {
@@ -252,9 +231,8 @@ pub(crate) fn render_task_form(
                     {id_field}\
                     {name_field}\
                 </div>\
-                <div class='grid md:grid-cols-2 gap-4 items-center'>\
-                    <label class='flex items-center gap-2 text-sm font-semibold text-gray-800 h-full mt-4'><input type='checkbox' name='enabled' value='on' {checked_attr}> Enabled</label>\
-                    {type_select}\
+                <div class='mb-2'>\
+                    <label class='flex items-center gap-2 text-sm font-semibold text-gray-800 h-full mt-4'><input type='checkbox' name='enabled' value='on' {checked_attr}> Task Enabled</label>\
                 </div>\
                 <div class='grid md:grid-cols-2 gap-4'>\
                     <label class='block mb-4'>\
@@ -263,39 +241,28 @@ pub(crate) fn render_task_form(
                         <p class='text-xs text-gray-500 mt-1'>Overrides the global timeout.</p>\
                     </label>\
                 </div>\
-                <div class='mb-4 p-4 border border-gray-200 bg-gray-50 rounded'>
-                    <h3 class='text-lg font-semibold text-gray-800 mb-2'>Post Run Action</h3>
-                    <select id='post_run_action_select' name='post_run_action' class='mb-4 block w-full rounded border border-gray-300 px-3 py-2 text-sm'>
-                        <option value='none' {post_run_none_selected}>None</option>
-                        <option value='script' {post_run_script_selected}>Script</option>
-                        <option value='external_app' {post_run_app_selected}>External Application</option>
-                    </select>
-
-                    <div id='post_run_script_container' class='{post_run_script_class}'>
-                        <label class='block mb-2'>
-                            <span class='text-sm font-semibold text-gray-700'>Post Run Script</span>
-                            <input class='mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm' type='text' id='post_run_script_input' name='post_run_script' value='{post_run_val}' placeholder='C:\\Scripts\\after_fetch.vbs'>
-                            <p class='text-xs text-gray-500 mt-1'>Runs a script after a task successfully completes.</p>
-                        </label>
-                    </div>
-
-                    <div id='post_run_app_container' class='{post_run_app_class} space-y-4'>
-                        <div id='post-run-external-app-select-container' class='mb-4'></div>
-                        <div id='post-run-external-app-dynamic-inputs' class='space-y-3'></div>
-                        <input type='hidden' id='post_run_app_args' name='post_run_app_args' value='{post_run_args_val}'>
-                        <input type='hidden' id='post_run_app_id' name='post_run_app_id' value='{post_run_id_val}'>
-                    </div>
-                </div>
                 {schedule_editor}\
-                {command_editor}\
-                <div id='external-app-container' class='hidden space-y-4 p-4 border border-purple-200 bg-purple-50 rounded'>\
-                    <h3 class='text-lg font-semibold text-purple-800'>External Application</h3>\
-                    <div id='external-app-select-container' class='mb-4'></div>\
-                    <div id='external-app-dynamic-inputs' class='space-y-3'></div>\
-                    <input type='hidden' id='external_app_args' name='external_app_args' value='{ext_args}'>\
-                    <input type='hidden' id='external_app_id' name='external_app_id' value='{ext_id}'>\
+                <div class='mb-4'>\
+                    <div class='flex items-center justify-between mb-2'>\
+                        <h3 class='text-lg font-semibold text-gray-800'>Steps</h3>\
+                        <button type='button' id='add-step-btn' class='rounded border border-gray-300 bg-emerald-600 text-white px-3 py-1 text-sm font-semibold hover:bg-emerald-700'>+ Add step</button>\
+                    </div>\
+                    <div id='steps-container' class='space-y-4'></div>\
+                    <input type='hidden' id='steps-hidden' name='steps' value='{steps_val}'>\
                 </div>\
-                <button class='rounded bg-emerald-600 text-white px-4 py-2 text-sm font-semibold' type='submit'>{submit_label}</button>\
+                <div class='mb-4 p-4 border border-gray-200 bg-gray-50 rounded'>\
+                    <div class='flex items-center justify-between mb-2'>\
+                        <h3 class='text-lg font-semibold text-gray-800'>Post Run Steps</h3>\
+                        <button type='button' id='add-post-run-step-btn' class='rounded border border-gray-300 bg-emerald-600 text-white px-3 py-1 text-sm font-semibold hover:bg-emerald-700'>+ Add post run step</button>\
+                    </div>\
+                    <p class='text-xs text-gray-500 mb-4'>These steps execute only if the main pipeline succeeds.</p>\
+                    <div id='post-run-steps-container' class='space-y-4'></div>\
+                    <input type='hidden' id='post-run-steps-hidden' name='post_run_steps' value='{post_run_steps_val}'>\
+                </div>\
+                <div class='pt-4 border-t border-gray-200 flex justify-end space-x-3'>\
+                    <a href='/' class='inline-flex justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2'>Cancel</a>\
+                    <button type='submit' class='inline-flex justify-center rounded-md border border-transparent bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2'>{submit_label}</button>\
+                </div>\
             </form>\
         </div>",
         title = escape_html(title),
@@ -304,20 +271,10 @@ pub(crate) fn render_task_form(
         id_field = input_field("ID", "id", id),
         name_field = input_field("Name", "name", name),
         checked_attr = if enabled { "checked" } else { "" },
-        type_select = select_task_type(task_type),
-        post_run_val = escape_html(&post_run_script),
-        post_run_args_val = post_run_app_args.replace("'", "&#39;"),
-        post_run_id_val = escape_html(&post_run_app_id),
-        post_run_none_selected = if post_run_action == "none" { "selected" } else { "" },
-        post_run_script_selected = if post_run_action == "script" { "selected" } else { "" },
-        post_run_app_selected = if post_run_action == "external_app" { "selected" } else { "" },
-        post_run_script_class = if post_run_action == "script" { "block" } else { "hidden" },
-        post_run_app_class = if post_run_action == "external_app" { "block" } else { "hidden" },
         timeout_val = escape_html(&timeout_seconds_str),
         schedule_editor = schedule_editor_html(task),
-        command_editor = shell_command_editor_html(task),
-        ext_args = ext_app_args.replace("'", "&#39;"),
-        ext_id = escape_html(&ext_app_id),
+        steps_val = escape_html(&steps_json),
+        post_run_steps_val = escape_html(&post_run_steps_json),
         submit_label = escape_html(submit_label)
     );
     layout(title, &form_html)
@@ -340,51 +297,6 @@ pub(crate) fn schedule_editor_html(task: Option<&RunnerTask>) -> String {
             <input type='hidden' id='schedules-hidden' name='schedules' value=''>\
             <p class='text-xs text-gray-500'>Select one or more schedules. Supports: Interval, Once, Daily at specific times, Weekly on day, or Monthly on day.</p>\
         </div>",
-        rows
-    )
-}
-
-pub(crate) fn shell_command_editor_html(task: Option<&RunnerTask>) -> String {
-    let mode = match task.map(|t| t.legacy_kind()) {
-        Some(TaskKind::ShellCommand { mode, .. }) => mode,
-        _ => ShellCommandMode::Sequential,
-    };
-    let mode_html = format!(
-        "<label class='block mb-3'>\
-            <span class='text-sm font-semibold text-gray-800'>Execution Mode</span>\
-            <select class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' name='shell_command_mode'>\
-                <option value='sequential' {}>Sequential</option>\
-                <option value='parallel' {}>Parallel</option>\
-            </select>\
-        </label>",
-        if mode == ShellCommandMode::Sequential { "selected" } else { "" },
-        if mode == ShellCommandMode::Parallel { "selected" } else { "" }
-    );
-
-    let rows = if let Some(task) = task {
-        shell_command_rows_html(task)
-    } else {
-        command_row_html(0, "", false)
-    };
-
-    format!(
-        "<div id='shell-command-container' class='space-y-3 hidden'>\
-            {}\
-            <div class='flex items-center justify-between'>\
-                <span class='text-sm font-semibold text-gray-800'>Shell Commands</span>\
-                <button type='button' id='add-command-row' class='rounded border border-gray-300 bg-emerald-600 text-white px-3 py-1 text-sm font-semibold hover:bg-emerald-700'>+ Add command</button>\
-            </div>\
-            <div id='command-rows' class='space-y-3'>{}</div>\
-            <input type='hidden' id='commands-hidden' name='commands' value=''>\
-            <div class='text-xs text-gray-600 space-y-1'>\
-                <p><strong>Modes:</strong></p>\
-                <ul class='list-disc list-inside'>\
-                    <li><strong>Run:</strong> Halt on error (default)</li>\
-                    <li><strong>Continue:</strong> Ignore errors and proceed</li>\
-                </ul>\
-            </div>\
-        </div>",
-        mode_html,
         rows
     )
 }
@@ -482,27 +394,9 @@ pub(crate) fn schedule_rows_html(task: &RunnerTask) -> String {
     rows.join("")
 }
 
-pub(crate) fn shell_command_rows_html(task: &RunnerTask) -> String {
-    match task.legacy_kind() {
-        TaskKind::ShellCommand { commands, .. } => {
-            let rows = commands
-                .iter()
-                .enumerate()
-                .map(|(index, spec)| command_row_html(index, &spec.command, spec.continue_on_error))
-                .collect::<Vec<_>>();
-            if rows.is_empty() {
-                command_row_html(0, "", false)
-            } else {
-                rows.join("")
-            }
-        }
-        _ => command_row_html(0, "", false),
-    }
-}
-
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn schedule_row_html(
-    index: usize,
+    _index: usize,
     kind: &str,
     interval_value: &str,
     once_value: &str,
@@ -517,198 +411,136 @@ pub(crate) fn schedule_row_html(
     let daily_hidden = if kind == "daily" { "" } else { "hidden" };
     let weekly_hidden = if kind == "weekly" { "" } else { "hidden" };
     let monthly_hidden = if kind == "monthly" { "" } else { "hidden" };
-    let interval_options = [
-        "15m", "30m", "1h", "2h", "4h", "8h", "12h", "24h", "2d", "7d",
-    ]
-    .iter()
-    .map(|value| {
-        format!(
-            "<option value='{}' {}>{}</option>",
-            value,
-            if *value == interval_value {
-                "selected"
-            } else {
-                ""
-            },
-            value
-        )
-    })
-    .collect::<Vec<_>>()
-    .join("");
 
-    let days_of_week = [
-        "Monday",
-        "Tuesday",
-        "Wednesday",
-        "Thursday",
-        "Friday",
-        "Saturday",
-        "Sunday",
-    ]
-    .iter()
-    .map(|day| {
-        format!(
-            "<option value='{}' {}>{}</option>",
-            day,
-            if weekly_value == *day { "selected" } else { "" },
-            day
-        )
-    })
-    .collect::<Vec<_>>()
-    .join("");
+    let is_wh_hidden = if kind == "interval" || kind == "daily" { "" } else { "hidden" };
+    let is_st_hidden = if kind == "interval" || kind == "weekly" || kind == "monthly" { "" } else { "hidden" };
 
     let mut start_time_val = String::new();
-    if let Some(TaskSchedule::Interval { start_time, .. }) =
-        task.and_then(|t| t.schedules.get(index))
-    {
-        start_time_val = start_time.clone().unwrap_or_default();
-    }
-
-    let mut working_hours_html = String::new();
-    if let Some(wh) = working_hours {
-        for (day, hours) in wh {
-            let day_options = days_of_week_options(day);
-            working_hours_html.push_str(&format!(
-                "<div class='flex gap-2 items-center mt-2' data-wh-row>\
-                    <select class='rounded border border-gray-300 px-2 py-1 text-sm wh-day'>{}</select>\
-                    <input class='rounded border border-gray-300 px-2 py-1 text-sm w-24 wh-start' type='time' value='{}'>\
-                    <span class='text-xs text-gray-500'>to</span>\
-                    <input class='rounded border border-gray-300 px-2 py-1 text-sm w-24 wh-end' type='time' value='{}'>\
-                    <button type='button' class='remove-wh rounded bg-red-100 px-2 py-1 text-xs font-semibold text-red-700'>&times;</button>\
-                </div>",
-                day_options, hours.start, hours.end
-            ));
+    if let Some(schedules) = task.map(|t| &t.schedules) {
+        for s in schedules {
+           match s {
+               TaskSchedule::Interval { start_time: Some(st), .. } => start_time_val = st.clone(),
+               TaskSchedule::Weekly { at_time, .. } => start_time_val = at_time.clone(),
+               TaskSchedule::Monthly { at_time, .. } => start_time_val = at_time.clone(),
+               _ => {}
+           }
         }
     }
 
+    let wh_mon = working_hours.and_then(|wh| wh.get("Monday")).map(|h| format!("{}-{}", h.start, h.end)).unwrap_or_default();
+    let wh_tue = working_hours.and_then(|wh| wh.get("Tuesday")).map(|h| format!("{}-{}", h.start, h.end)).unwrap_or_default();
+    let wh_wed = working_hours.and_then(|wh| wh.get("Wednesday")).map(|h| format!("{}-{}", h.start, h.end)).unwrap_or_default();
+    let wh_thu = working_hours.and_then(|wh| wh.get("Thursday")).map(|h| format!("{}-{}", h.start, h.end)).unwrap_or_default();
+    let wh_fri = working_hours.and_then(|wh| wh.get("Friday")).map(|h| format!("{}-{}", h.start, h.end)).unwrap_or_default();
+    let wh_sat = working_hours.and_then(|wh| wh.get("Saturday")).map(|h| format!("{}-{}", h.start, h.end)).unwrap_or_default();
+    let wh_sun = working_hours.and_then(|wh| wh.get("Sunday")).map(|h| format!("{}-{}", h.start, h.end)).unwrap_or_default();
+
     format!(
-        "<div class='p-3 border border-gray-200 rounded mb-2' data-schedule-row>\
-          <div class='grid md:grid-cols-6 gap-2 items-end'>\
-            <label class='block'>\
-                <span class='text-xs font-semibold text-gray-700'>Type</span>\
-                <select class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm schedule-kind' name='schedule_kind_{}'>\
-                    <option value='interval' {}>Interval</option>\
-                    <option value='once' {}>Once</option>\
-                    <option value='daily' {}>Daily</option>\
-                    <option value='weekly' {}>Weekly</option>\
-                    <option value='monthly' {}>Monthly</option>\
-                </select>\
-            </label>\
-            <label class='block schedule-interval {}'>\
-                <span class='text-xs font-semibold text-gray-700'>Interval</span>\
-                <select class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' name='schedule_interval_{}'>{}\
-                </select>\
-            </label>\
-            <label class='block schedule-interval schedule-start-time {}'>\
-                <span class='text-xs font-semibold text-gray-700'>Start Time (HH:MM)</span>\
-                <input class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' type='time' name='schedule_start_time_{}' value='{}'>\
-            </label>\
-            <label class='block schedule-once {}'>\
-                <span class='text-xs font-semibold text-gray-700'>Date & Time</span>\
-                <input class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' type='datetime-local' name='schedule_once_at_{}' value='{}'>\
-            </label>\
-            <label class='block schedule-daily {}'>\
-                <span class='text-xs font-semibold text-gray-700'>Times (HH:MM)</span>\
-                <input class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' type='text' name='schedule_daily_at_{}' value='{}' placeholder='09:00, 13:00'>\
-            </label>\
-            <label class='block schedule-weekly {}'>\
-                <span class='text-xs font-semibold text-gray-700'>Day</span>\
-                <select class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' name='schedule_weekly_at_{}' data-weekly-day>\
-                    {}\
-                </select>\
-            </label>\
-            <label class='block schedule-monthly {}'>\
-                <span class='text-xs font-semibold text-gray-700'>Day (1-31)</span>\
-                <input class='mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm' type='number' name='schedule_monthly_at_{}' value='{}' min='1' max='31'>\
-            </label>\
-            <button type='button' class='remove-schedule rounded border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700'>Remove</button>\
-          </div>\
-          <div class='mt-3 schedule-wh {}'>\
-              <div class='flex items-center justify-between'>\
-                  <span class='text-xs font-semibold text-gray-700'>Working Hours (Optional)</span>\
-                  <button type='button' class='add-wh-row rounded border border-gray-300 bg-white px-2 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50'>+ Add Day</button>\
-              </div>\
-              <div class='wh-rows'>{}</div>\
-          </div>\
+        "<div class='flex flex-col gap-3 p-4 border border-gray-200 rounded-md bg-white'>\
+            <div class='flex flex-wrap items-end gap-3 w-full'>\
+                <div class='w-full sm:w-auto flex-1'>\
+                    <label class='block text-xs font-medium text-gray-700 mb-1'>Type</label>\
+                    <select class='schedule-kind shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2 bg-gray-50'>\
+                        <option value='interval' {}>Interval</option>\
+                        <option value='once' {}>Once</option>\
+                        <option value='daily' {}>Daily</option>\
+                        <option value='weekly' {}>Weekly</option>\
+                        <option value='monthly' {}>Monthly</option>\
+                    </select>\
+                </div>\
+                <div class='schedule-interval w-full sm:w-auto flex-1 {}'>\
+                    <label class='block text-xs font-medium text-gray-700 mb-1'>Every</label>\
+                    <select class='interval-value shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2'>\
+                        <option value='15m' {}>15m</option>\
+                        <option value='30m' {}>30m</option>\
+                        <option value='1h' {}>1h</option>\
+                        <option value='2h' {}>2h</option>\
+                        <option value='4h' {}>4h</option>\
+                        <option value='8h' {}>8h</option>\
+                        <option value='12h' {}>12h</option>\
+                        <option value='24h' {}>24h</option>\
+                        <option value='2d' {}>2d</option>\
+                        <option value='7d' {}>7d</option>\
+                    </select>\
+                </div>\
+                <div class='schedule-once w-full sm:w-auto flex-1 {}'>\
+                    <label class='block text-xs font-medium text-gray-700 mb-1'>At</label>\
+                    <input class='once-value shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2' type='datetime-local' value='{}'>\
+                </div>\
+                <div class='schedule-daily w-full sm:w-auto flex-1 {}'>\
+                    <label class='block text-xs font-medium text-gray-700 mb-1'>Times (comma sep, e.g. 09:00,15:30)</label>\
+                    <input class='daily-value shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2' type='text' placeholder='09:00' value='{}'>\
+                </div>\
+                <div class='schedule-weekly w-full sm:w-auto flex-1 {}'>\
+                    <label class='block text-xs font-medium text-gray-700 mb-1'>Day and Time (e.g. Monday@09:00)</label>\
+                    <input class='weekly-value shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2' type='text' placeholder='Monday@09:00' value='{}'>\
+                </div>\
+                <div class='schedule-monthly w-full sm:w-auto flex-1 {}'>\
+                    <label class='block text-xs font-medium text-gray-700 mb-1'>Day and Time (e.g. 15@09:00 or -1@09:00)</label>\
+                    <input class='monthly-value shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2' type='text' placeholder='1@09:00' value='{}'>\
+                </div>\
+                <div class='schedule-st w-full sm:w-auto flex-1 {}'>\
+                  <label class='block text-xs font-medium text-gray-700 mb-1'>Start Time (Optional)</label>\
+                  <input class='st-value shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2' type='time' value='{}'>\
+                </div>\
+                <div>\
+                    <button type='button' class='remove-schedule inline-flex items-center p-2 border border-transparent rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none'>\
+                        <svg class='h-4 w-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'></path></svg>\
+                    </button>\
+                </div>\
+            </div>\
+            <div class='schedule-wh w-full bg-gray-50 p-3 rounded border border-gray-200 {}'>\
+               <div class='flex items-center justify-between mb-2'>\
+                   <span class='text-xs font-medium text-gray-700'>Working Hours (Optional, e.g. 09:00-17:00)</span>\
+               </div>\
+               <div class='grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs'>\
+                   <div><label class='block text-gray-600 mb-1'>Monday</label><input type='text' class='wh-mon block w-full rounded-md border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1.5' placeholder='09:00-17:00' value='{}'></div>\
+                   <div><label class='block text-gray-600 mb-1'>Tuesday</label><input type='text' class='wh-tue block w-full rounded-md border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1.5' placeholder='09:00-17:00' value='{}'></div>\
+                   <div><label class='block text-gray-600 mb-1'>Wednesday</label><input type='text' class='wh-wed block w-full rounded-md border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1.5' placeholder='09:00-17:00' value='{}'></div>\
+                   <div><label class='block text-gray-600 mb-1'>Thursday</label><input type='text' class='wh-thu block w-full rounded-md border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1.5' placeholder='09:00-17:00' value='{}'></div>\
+                   <div><label class='block text-gray-600 mb-1'>Friday</label><input type='text' class='wh-fri block w-full rounded-md border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1.5' placeholder='09:00-17:00' value='{}'></div>\
+                   <div><label class='block text-gray-600 mb-1'>Saturday</label><input type='text' class='wh-sat block w-full rounded-md border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1.5' placeholder='09:00-17:00' value='{}'></div>\
+                   <div><label class='block text-gray-600 mb-1'>Sunday</label><input type='text' class='wh-sun block w-full rounded-md border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1.5' placeholder='09:00-17:00' value='{}'></div>\
+               </div>\
+            </div>\
         </div>",
-        index,
         if kind == "interval" { "selected" } else { "" },
         if kind == "once" { "selected" } else { "" },
         if kind == "daily" { "selected" } else { "" },
         if kind == "weekly" { "selected" } else { "" },
         if kind == "monthly" { "selected" } else { "" },
         interval_hidden,
-        index,
-        interval_options,
-        interval_hidden,
-        index,
-        start_time_val,
+        if interval_value == "15m" { "selected" } else { "" },
+        if interval_value == "30m" { "selected" } else { "" },
+        if interval_value == "1h" { "selected" } else { "" },
+        if interval_value == "2h" { "selected" } else { "" },
+        if interval_value == "4h" { "selected" } else { "" },
+        if interval_value == "8h" { "selected" } else { "" },
+        if interval_value == "12h" { "selected" } else { "" },
+        if interval_value == "24h" { "selected" } else { "" },
+        if interval_value == "2d" { "selected" } else { "" },
+        if interval_value == "7d" { "selected" } else { "" },
         once_hidden,
-        index,
         escape_html(once_value),
         daily_hidden,
-        index,
         escape_html(daily_value),
         weekly_hidden,
-        index,
-        days_of_week,
+        escape_html(weekly_value),
         monthly_hidden,
-        index,
         escape_html(monthly_value),
-        interval_hidden,
-        working_hours_html,
+        is_st_hidden,
+        escape_html(&start_time_val),
+        is_wh_hidden,
+        escape_html(&wh_mon),
+        escape_html(&wh_tue),
+        escape_html(&wh_wed),
+        escape_html(&wh_thu),
+        escape_html(&wh_fri),
+        escape_html(&wh_sat),
+        escape_html(&wh_sun)
     )
 }
 
-pub(crate) fn days_of_week_options(selected_day: &str) -> String {
-    [
-        "Monday",
-        "Tuesday",
-        "Wednesday",
-        "Thursday",
-        "Friday",
-        "Saturday",
-        "Sunday",
-    ]
-    .iter()
-    .map(|day| {
-        format!(
-            "<option value='{}' {}>{}</option>",
-            day,
-            if selected_day == *day { "selected" } else { "" },
-            day
-        )
-    })
-    .collect::<Vec<_>>()
-    .join("")
-}
-
-pub(crate) fn command_row_html(_index: usize, command: &str, continue_on_error: bool) -> String {
-    format!(
-        "<div class='grid grid-cols-1 md:grid-cols-[1fr_120px_auto] gap-3 items-end p-4 mb-3 bg-gray-50 border border-gray-200 rounded-md' data-command-row>
-            <div class='w-full'>
-                <label class='block text-xs font-medium text-gray-700 mb-1'>Command</label>
-                <input class='command-text shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2' type='text' value='{}' placeholder='echo hello'>
-            </div>
-            <div class='w-full'>
-                <label class='block text-xs font-medium text-gray-700 mb-1'>Mode</label>
-                <select class='command-mode shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2'>
-                    <option value='run' {}>Run</option>
-                    <option value='continue' {}>Continue on Error</option>
-                </select>
-            </div>
-            <div>
-                <button type='button' class='remove-command inline-flex items-center p-2 border border-transparent rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none'>
-                    {}
-                </button>
-            </div>
-        </div>",
-        escape_html(command),
-        if !continue_on_error { "selected" } else { "" },
-        if continue_on_error { "selected" } else { "" },
-        icon_trash("w-4 h-4")
-    )
-}
 
 #[allow(dead_code)]
 pub(crate) fn local_datetime_value(value: &str) -> String {

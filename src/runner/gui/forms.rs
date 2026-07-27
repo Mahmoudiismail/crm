@@ -25,34 +25,6 @@ pub(crate) fn build_task_from_values(
         .map(|v| v.trim().to_string())
         .unwrap_or_default();
 
-    let post_run_action = values
-        .get("post_run_action")
-        .map(|v| v.trim().to_string())
-        .unwrap_or_default();
-
-    let mut post_run_script = String::new();
-    let mut post_run_app_id = String::new();
-    let mut post_run_app_args = std::collections::HashMap::new();
-
-    if post_run_action == "script" {
-        post_run_script = values
-            .get("post_run_script")
-            .map(|v| v.trim().to_string())
-            .unwrap_or_default();
-    } else if post_run_action == "external_app" {
-        post_run_app_id = values
-            .get("post_run_app_id")
-            .map(|v| v.trim().to_string())
-            .unwrap_or_default();
-        let args_json = values
-            .get("post_run_app_args")
-            .map(|s| s.as_str())
-            .unwrap_or("{}");
-        if let Ok(parsed_args) = serde_json::from_str(args_json) {
-            post_run_app_args = parsed_args;
-        }
-    }
-
     let timeout_seconds = values
         .get("timeout_seconds")
         .and_then(|v| v.trim().parse::<u64>().ok())
@@ -69,43 +41,16 @@ pub(crate) fn build_task_from_values(
         legacy_fields_from_values(values)
     };
 
-    let task_type = values
-        .get("task_type")
-        .map(|v| v.to_ascii_lowercase())
-        .unwrap_or_else(|| "shell_command".to_string());
+    let steps_json = values.get("steps").map(|v| v.as_str()).unwrap_or("[]");
+    let steps: Vec<TaskStep> = serde_json::from_str(steps_json)
+        .with_context(|| format!("Invalid steps JSON: {}", steps_json))?;
 
-    let kind = if task_type == "shell_command" {
-        let mode = match values.get("shell_command_mode").map(|v| v.as_str()) {
-            Some("parallel") => ShellCommandMode::Parallel,
-            _ => ShellCommandMode::Sequential,
-        };
-        TaskKind::ShellCommand {
-            mode,
-            commands: parse_shell_commands_text(
-                values
-                    .get("commands")
-                    .map(String::as_str)
-                    .unwrap_or_default(),
-            )?,
-        }
-    } else if task_type == "external_app" {
-        let app_id = values
-            .get("external_app_id")
-            .map(|s| s.trim().to_string())
-            .unwrap_or_default();
-        let args_json = values
-            .get("external_app_args")
-            .map(|s| s.as_str())
-            .unwrap_or("{}");
-        let args: std::collections::HashMap<String, String> = serde_json::from_str(args_json)
-            .with_context(|| format!("Invalid external app args JSON: {}", args_json))?;
-        TaskKind::ExternalApp { app_id, args }
-    } else {
-        TaskKind::ShellCommand {
-            mode: ShellCommandMode::Sequential,
-            commands: Vec::new(),
-        }
-    };
+    let post_run_steps_json = values
+        .get("post_run_steps")
+        .map(|v| v.as_str())
+        .unwrap_or("[]");
+    let post_run_steps: Vec<TaskStep> = serde_json::from_str(post_run_steps_json)
+        .with_context(|| format!("Invalid post_run_steps JSON: {}", post_run_steps_json))?;
 
     let task = RunnerTask {
         id,
@@ -115,19 +60,12 @@ pub(crate) fn build_task_from_values(
         frequency_seconds,
         next_run_at,
         schedules,
-        steps: Vec::new(),
-        post_run_steps: Vec::new(),
+        steps,
+        post_run_steps,
         last_run_at: String::new(),
         last_status: String::new(),
         timeout_seconds,
     };
-
-    let mut legacy = RunnerTaskLegacy::from(task);
-    legacy.kind = Some(kind);
-    legacy.post_run_script = Some(post_run_script);
-    legacy.post_run_app_id = Some(post_run_app_id);
-    legacy.post_run_app_args = Some(post_run_app_args);
-    let task = RunnerTask::from(legacy);
 
     Ok(task)
 }
@@ -425,36 +363,6 @@ pub(crate) fn compact_duration(seconds: u64) -> String {
     } else {
         format!("{}s", seconds)
     }
-}
-
-pub(crate) fn parse_shell_commands_text(value: &str) -> Result<Vec<ShellCommandSpec>> {
-    let mut commands = Vec::new();
-
-    for raw_line in value.lines() {
-        let line = raw_line.trim();
-        if line.is_empty() {
-            continue;
-        }
-
-        if let Some(command) = line.strip_prefix("run:") {
-            commands.push(ShellCommandSpec {
-                command: command.trim().to_string(),
-                continue_on_error: false,
-            });
-        } else if let Some(command) = line.strip_prefix("continue:") {
-            commands.push(ShellCommandSpec {
-                command: command.trim().to_string(),
-                continue_on_error: true,
-            });
-        } else {
-            commands.push(ShellCommandSpec {
-                command: line.to_string(),
-                continue_on_error: false,
-            });
-        }
-    }
-
-    Ok(commands)
 }
 
 pub(crate) fn parse_checkbox(values: &HashMap<String, String>, key: &str) -> bool {
