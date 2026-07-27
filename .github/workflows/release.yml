@@ -22,7 +22,7 @@ jobs:
       build_date: ${{ steps.vars.outputs.build_date }}
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
       - id: vars
         shell: bash
@@ -43,17 +43,14 @@ jobs:
       BUILD_DATE: ${{ needs.prepare.outputs.build_date }}
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-msvc
 
-      - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.10
-
       - name: Cache cargo artifacts
-        uses: actions/cache@v6
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry/index/
@@ -70,11 +67,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-crm-rust-shared-cache
 
+      - name: List Cache Contents
+        shell: bash
+        run: |
+          echo "Listing target directory..."
+          find target/ -type f || true
+          echo "Listing cargo registry..."
+          find ~/.cargo/registry/ -type f || true
+
       - name: Build
         shell: bash
-        env:
-          SCCACHE_GHA_ENABLED: "true"
-          RUSTC_WRAPPER: "sccache"
         run: |
           if [ "${{ github.event.inputs.binary }}" == "all" ]; then
             cargo build --release --bin crm --bin runner --bin yasweb --bin wcxx --bin tasker
@@ -127,7 +129,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: crm_tool_windows_zip
           path: target/release/crm_tool_v${{ env.VERSION }}_${{ env.BUILD_DATE }}_windows.zip
