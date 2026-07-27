@@ -113,6 +113,15 @@ pub fn group_tickets_into_buckets(
     }
 }
 
+fn clean_email_string(emails: &str) -> String {
+    emails
+        .split(';')
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join(";")
+}
+
 pub fn resolve_recipients(
     bucket_name: &str,
     mapping: Option<&TeamMapping>,
@@ -125,7 +134,7 @@ pub fn resolve_recipients(
         .unwrap_or_default();
 
     if mapped_to.trim().is_empty() {
-        (config.default_to_email.clone(), String::new())
+        (clean_email_string(&config.default_to_email), String::new())
     } else {
         let mapped_cc = mapping.and_then(|m| m.cc.clone()).unwrap_or_default();
         let ccs = if bucket_name.eq_ignore_ascii_case("call center")
@@ -144,6 +153,53 @@ pub fn resolve_recipients(
         .filter(|s| !s.is_empty())
         .collect::<Vec<String>>()
         .join(";");
-        (mapped_to, ccs)
+        (clean_email_string(&mapped_to), clean_email_string(&ccs))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tasker::email::message::TeamMapping;
+    use crate::tasker::config::EmailConfig;
+
+    #[test]
+    fn test_clean_email_string() {
+        assert_eq!(clean_email_string("yaalshoakay@fakeeh.care;;"), "yaalshoakay@fakeeh.care");
+        assert_eq!(clean_email_string("  a@b.com ; c@d.com  ;; e@f.com "), "a@b.com;c@d.com;e@f.com");
+        assert_eq!(clean_email_string(";;;"), "");
+    }
+
+    #[test]
+    fn test_resolve_recipients_cleans_strings() {
+        let mapping = TeamMapping {
+            team_name: "test team".to_string(),
+            receiver_name: None,
+            to_emails: Some("  to1@test.com ; ; to2@test.com  ; ".to_string()),
+            cc: Some(" cc1@test.com ;  ;; ".to_string()),
+        };
+        let config = EmailConfig {
+            initial_cc: " init@test.com ; ".to_string(),
+            ending_cc: " ; end@test.com ;; ".to_string(),
+            default_to_email: " def@test.com ; ".to_string(),
+            team_mapping_file: "".to_string(),
+            body_template_file: None,
+            send_emails: None,
+            send_per_team_all_branches: vec![],
+            send_per_branch_branches: vec![],
+            send_per_team_branches: None,
+            send_call_center: None,
+            send_exceptions: None,
+            indentation_spaces: None,
+            save_attachment_as_csv: None,
+            save_email_as_html: None,
+        };
+
+        let exception_teams = HashSet::new();
+
+        let (to, cc) = resolve_recipients("test team", Some(&mapping), &config, false, &exception_teams);
+
+        assert_eq!(to, "to1@test.com;to2@test.com");
+        assert_eq!(cc, "init@test.com;cc1@test.com;end@test.com");
     }
 }
