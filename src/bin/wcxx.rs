@@ -22,7 +22,7 @@ struct WcxxCliOptions {
     manifest: bool,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Deserialize, Serialize)]
 struct Config {
     #[serde(default = "default_base_url")]
     base_url: String,
@@ -112,6 +112,7 @@ async fn main() -> Result<()> {
         parse_log_level(&config.log_file_level)?,
     )?;
 
+    info!("Loaded config: {:#?}", config);
     info!("Starting wcxx tool");
 
     let client = Client::new();
@@ -216,4 +217,19 @@ async fn main() -> Result<()> {
 
     info!("Finished wcxx tool");
     Ok(())
+}
+
+impl std::fmt::Debug for Config {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Config")
+            .field("base_url", &self.base_url)
+            .field("token", &"***REDACTED***")
+            .field("org_id", &self.org_id)
+            .field("client_id", &self.client_id)
+            .field("client_secret", &self.client_secret.as_ref().map(|_| "***REDACTED***"))
+            .field("refresh_token", &self.refresh_token.as_ref().map(|_| "***REDACTED***"))
+            .field("log_stdout_level", &self.log_stdout_level)
+            .field("log_file_level", &self.log_file_level)
+            .finish()
+    }
 }

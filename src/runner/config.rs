@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Datelike, Local, NaiveTime, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct RunnerConfig {
     #[serde(default = "default_gui_host")]
     pub gui_host: String,
@@ -1963,4 +1963,24 @@ fn normalize_and_validate_schedules(
     }
 
     Ok(())
+}
+
+impl std::fmt::Debug for RunnerConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // No secrets in RunnerConfig itself, but implement for completeness
+        f.debug_struct("RunnerConfig")
+            .field("gui_host", &self.gui_host)
+            .field("gui_port", &self.gui_port)
+            .field("poll_interval_seconds", &self.poll_interval_seconds)
+            .field("allow_shell_tasks", &self.allow_shell_tasks)
+            .field("shell_timeout_seconds", &self.shell_timeout_seconds)
+            .field("post_run_timeout_seconds", &self.post_run_timeout_seconds)
+            .field("min_task_interval_seconds", &self.min_task_interval_seconds)
+            .field("tasks", &self.tasks)
+            .field("registered_apps", &self.registered_apps)
+            .field("log_stdout_level", &self.log_stdout_level)
+            .field("log_file_level", &self.log_file_level)
+            .field("log_retention_days", &self.log_retention_days)
+            .finish()
+    }
 }

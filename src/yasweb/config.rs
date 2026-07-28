@@ -82,7 +82,7 @@ pub struct ReportConfig {
     pub end_date_key: Option<DateKeyConfig>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct YaswebConfig {
     pub url: String,
     pub username: String,
@@ -134,5 +134,22 @@ impl Default for YaswebConfig {
             log_stdout_level: "DEBUG".to_string(),
             log_file_level: "TRACE".to_string(),
         }
+    }
+}
+
+impl std::fmt::Debug for YaswebConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("YaswebConfig")
+            .field("url", &self.url)
+            .field("username", &self.username)
+            .field("password", &self.password.as_ref().map(|_| "***REDACTED***"))
+            .field("headless", &self.headless)
+            .field("keep_open", &self.keep_open)
+            .field("concurrency", &self.concurrency)
+            .field("timeout_minutes", &self.timeout_minutes)
+            .field("reports", &self.reports)
+            .field("log_stdout_level", &self.log_stdout_level)
+            .field("log_file_level", &self.log_file_level)
+            .finish()
     }
 }

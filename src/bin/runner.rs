@@ -59,7 +59,7 @@ async fn main() -> Result<()> {
     };
 
     let config_path = executable_dir()?.join("runner_config.json");
-    let (stdout_lvl, file_lvl) = if config_path.exists() {
+let (stdout_lvl, file_lvl) = if config_path.exists() {
         if let Ok(raw) = std::fs::read_to_string(&config_path) {
             if let Ok(cfg) = serde_json::from_str::<crm_tool::runner::config::RunnerConfig>(&raw) {
                 (cfg.log_stdout_level, cfg.log_file_level)
@@ -84,6 +84,10 @@ async fn main() -> Result<()> {
             std::process::exit(1);
         }
     };
+
+    if let Ok(config) = crm_tool::runner::config::RunnerConfig::load(&config_path.to_string_lossy()) {
+        info!("Loaded config: {:#?}", config);
+    }
 
     info!("==================================================");
     info!("RUNNER - Starting tray scheduler mode");

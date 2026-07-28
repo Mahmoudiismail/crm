@@ -133,6 +133,7 @@ pub fn run_app(options: TaskerCliOptions) -> Result<()> {
     let config = crm_tool::utils::load_or_create_config(&config_path, &default_config)?;
 
     config.validate()?;
+    info!("Loaded config: {:#?}", config);
 
     if let Some(filter) = task_filter {
         if filter == 0 || filter > config.tasks.len() {
