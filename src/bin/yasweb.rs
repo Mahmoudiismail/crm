@@ -342,6 +342,9 @@ async fn main() -> Result<()> {
         std::ffi::OsStr::new("--no-first-run"),
         std::ffi::OsStr::new("--disable-infobars"),
         std::ffi::OsStr::new("--skip-reopen-last-pages"),
+        std::ffi::OsStr::new("--disable-background-timer-throttling"),
+        std::ffi::OsStr::new("--disable-backgrounding-occluded-windows"),
+        std::ffi::OsStr::new("--disable-renderer-backgrounding"),
     ];
 
     let launch_options = LaunchOptions::default_builder()
