@@ -105,6 +105,11 @@ pub(crate) async fn read_http_request(
     let method = parts.next().unwrap_or_default().to_string();
     let path = parts.next().unwrap_or("/").to_string();
 
+    info!(
+        "HTTP Request: {} {}\nHeaders:\n{}\nBody:\n{}",
+        method, path, headers, body
+    );
+
     Ok(Some(HttpRequest {
         method,
         path,
@@ -203,6 +208,75 @@ mod tests {
         let status_json: serde_json::Value = res.json().await.unwrap();
         assert_eq!(status_json["last_task_id"], "test_task");
         assert_eq!(status_json["last_error"], "Test Error");
+
+        // Test GET /api/apps/list (ensure apps endpoint doesn't return 404 or 500)
+        let res = client
+            .get(format!("http://127.0.0.1:{}/api/apps/list", port))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status().as_u16(), 200);
+        let text = res.text().await.unwrap();
+        assert!(text.starts_with('['));
+
+        // Test POST /tasks/create mimicking forms.js output
+        let payload = [
+            ("id", "report_callcenter"),
+            ("name", "report callcenter"),
+            ("enabled", "on"),
+            ("timeout_seconds", "9999"),
+            ("schedules", "interval: every 1h; st: 07:00; wh: Saturday=07:00-23:00,Sunday=07:00-23:00,Monday=07:00-23:00,Tuesday=07:00-23:00,Wednesday=07:00-23:00,Thursday=07:00-23:00,Friday=07:00-23:00\ndaily: 12:00, 15:00; wh: Monday=09:00-17:00\nweekly: Monday; st: 14:00\nmonthly: day 15; st: 10:30"),
+            ("steps", "[{\"name\":\"Legacy External App\",\"mode\":\"sequential\",\"actions\":[{\"type\":\"external_app\",\"app_id\":\"CRM\",\"args\":{\"--report\":\"tickets,leads\"}}]}]"),
+            ("post_run_steps", "[]")
+        ];
+
+        let mut form_encoded = String::new();
+        for (k, v) in payload.iter() {
+            if !form_encoded.is_empty() {
+                form_encoded.push('&');
+            }
+            form_encoded.push_str(&urlencoding::encode(k));
+            form_encoded.push('=');
+            form_encoded.push_str(&urlencoding::encode(v));
+        }
+
+        let res = client
+            .post(format!("http://127.0.0.1:{}/create", port))
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .body(form_encoded)
+            .send()
+            .await
+            .unwrap();
+
+        // Should redirect to dashboard on success
+        assert_eq!(res.status().as_u16(), 200);
+
+        let saved_cfg = RunnerConfig::load(&config_path).unwrap();
+        let saved_task = saved_cfg
+            .tasks
+            .iter()
+            .find(|t| t.id == "report_callcenter")
+            .unwrap();
+        assert_eq!(saved_task.name, "report callcenter");
+        assert!(saved_task.enabled);
+        assert_eq!(saved_task.schedules.len(), 4);
+
+        match &saved_task.schedules[0] {
+            TaskSchedule::Interval {
+                every_seconds,
+                working_hours,
+                start_time,
+                ..
+            } => {
+                assert_eq!(*every_seconds, 3600);
+                assert_eq!(start_time.as_deref(), Some("07:00"));
+                let wh = working_hours.as_ref().unwrap();
+                assert_eq!(wh.len(), 7);
+                assert_eq!(wh.get("Saturday").unwrap().start, "07:00");
+                assert_eq!(wh.get("Saturday").unwrap().end, "23:00");
+            }
+            _ => panic!("Expected interval schedule"),
+        }
     }
 
     #[test]
