@@ -453,7 +453,7 @@
       '<div class="text-sm text-gray-500">Loading manifest...</div>';
     try {
       const manifest = await window.api.fetchAppManifest(appId);
-      if (!manifest || !manifest.args || manifest.args.length === 0) {
+      if (!manifest || !manifest.arguments || manifest.arguments.length === 0) {
         dynamicInputs.innerHTML =
           '<span class="text-sm text-gray-500">No configurable arguments.</span>';
         return;
@@ -469,7 +469,7 @@
       let html =
         '<h4 class="text-sm font-semibold text-gray-800 border-b border-gray-200 pb-1 mb-3">Arguments</h4>';
 
-      manifest.args.forEach((arg) => {
+      manifest.arguments.forEach((arg) => {
         const val =
           currentArgs[arg.name] !== undefined
             ? currentArgs[arg.name]
