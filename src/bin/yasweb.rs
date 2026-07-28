@@ -321,6 +321,7 @@ async fn main() -> Result<()> {
         info!("yasweb_config.json updated successfully.");
     }
 
+    info!("Loaded config: {:#?}", config);
     info!("Loaded config for URL: {}", config.url);
 
     let mut report_futures = Vec::new();

@@ -85,6 +85,11 @@ async fn main() -> Result<()> {
         }
     };
 
+    if let Ok(config) = crm_tool::runner::config::RunnerConfig::load(&config_path.to_string_lossy())
+    {
+        info!("Loaded config: {:#?}", config);
+    }
+
     info!("==================================================");
     info!("RUNNER - Starting tray scheduler mode");
     info!("==================================================");

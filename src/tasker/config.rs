@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Root configuration structure mapping `tasker_config.json`.
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone)]
 pub struct TaskerConfig {
     pub tasks: Vec<TaskConfig>,
     #[serde(default = "default_stdout_log_level")]
@@ -145,6 +145,17 @@ pub struct CrmOpenSohailConfig {
     pub dashboard_pivot_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub table_column_widths: Option<Vec<String>>,
+}
+
+impl std::fmt::Debug for TaskerConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // No secrets in TaskerConfig itself, but implement for completeness
+        f.debug_struct("TaskerConfig")
+            .field("tasks", &self.tasks)
+            .field("log_stdout_level", &self.log_stdout_level)
+            .field("log_file_level", &self.log_file_level)
+            .finish()
+    }
 }
 
 #[cfg(test)]

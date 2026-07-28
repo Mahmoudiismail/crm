@@ -11,7 +11,7 @@ use tracing::{debug, info};
 /// Invariants:
 /// - Secrets (passwords, tokens) are omitted during serialization if `remember_secrets` is false.
 /// - Dynamic date variables (e.g., `eomonth`, `today`) are resolved to ISO format upon loading.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     #[serde(default)]
     pub region: String,
@@ -226,6 +226,40 @@ fn strip_nulls(value: &mut Value) {
             }
         }
         _ => {}
+    }
+}
+
+impl std::fmt::Debug for AppConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AppConfig")
+            .field("region", &self.region)
+            .field("user_pool_id", &self.user_pool_id)
+            .field("client_id", &self.client_id)
+            .field("username", &self.username)
+            .field("password", &"***REDACTED***")
+            .field("no_verify_ssl", &self.no_verify_ssl)
+            .field("remember_secrets", &self.remember_secrets)
+            .field("email", &self.email)
+            .field("from_date", &self.from_date)
+            .field("calls_from_date", &self.calls_from_date)
+            .field("to_date", &self.to_date)
+            .field("download_csv", &self.download_csv)
+            .field("account_id", &self.account_id)
+            .field("application_id", &self.application_id)
+            .field("app_timezone_plus_minutes", &self.app_timezone_plus_minutes)
+            .field("base_url", &self.base_url)
+            .field("scheduled_time", &self.scheduled_time)
+            .field("custom_download_folder", &self.custom_download_folder)
+            .field("access_token", &"***REDACTED***")
+            .field("access_token_expiry", &self.access_token_expiry)
+            .field("id_token", &"***REDACTED***")
+            .field("refresh_token", &"***REDACTED***")
+            .field("token_timestamp", &"***REDACTED***")
+            .field("dynamic_to_date", &self.dynamic_to_date)
+            .field("dynamic_calls_from_date", &self.dynamic_calls_from_date)
+            .field("log_stdout_level", &self.log_stdout_level)
+            .field("log_file_level", &self.log_file_level)
+            .finish()
     }
 }
 

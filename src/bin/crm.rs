@@ -56,6 +56,7 @@ async fn run_crm_startup(options: CrmCliOptions) -> Result<()> {
     )
     .context("Failed to initialize logging")?;
 
+    info!("Loaded config: {:#?}", config);
     info!("==================================================");
     info!("CRM - One-shot run started");
     info!("==================================================");

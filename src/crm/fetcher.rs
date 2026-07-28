@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use chrono::{Datelike, Duration as ChronoDuration, NaiveDate};
-use futures_util::future::join_all;
 use serde_json::Value;
 use std::fmt::Write;
 use std::path::Path;
@@ -89,12 +88,34 @@ pub async fn fetch_reports(
         return Ok(Value::Object(results));
     }
 
+    let (download_tx, download_rx) = tokio::sync::mpsc::unbounded_channel::<(
+        reqwest::Client,
+        String,
+        String,
+        std::path::PathBuf,
+    )>();
+
+    // Spawn a background task to process downloads concurrently (limit 6)
+    let download_processor = tokio::spawn(async move {
+        let stream = futures_util::stream::unfold(download_rx, |mut rx| async {
+            rx.recv().await.map(|item| (item, rx))
+        });
+        stream
+            .for_each_concurrent(6, |(client, url, k, dir)| async move {
+                if let Err(e) = crate::crm::downloader::download_csv(&client, &url, &k, &dir).await
+                {
+                    error!("Download failed for {}: {:#}", k, e);
+                }
+            })
+            .await;
+    });
+
     let defs = report_defs();
 
     let should_fetch = |key: &str| -> bool { report_type.iter().any(|r| r == "all" || r == key) };
 
-    // Build task list
-    let mut handles: Vec<tokio::task::JoinHandle<(String, Value)>> = Vec::new();
+    // Build task list using Futures so we can process them with buffer_unordered
+    let mut futures = Vec::new();
 
     let context = Arc::new(FetchContext {
         token: token.to_string(),
@@ -147,9 +168,100 @@ pub async fn fetch_reports(
                 let context = Arc::clone(&context);
                 let download_csv = config.download_csv;
                 let download_dir = download_dir.to_path_buf();
+                let download_tx = download_tx.clone();
 
-                handles.push(tokio::spawn(async move {
-                    let key = format!("calls_{}_{}", batch_from, batch_to);
+                futures.push(
+                    async move {
+                        let key = format!("calls_{}_{}", batch_from, batch_to);
+                        let params = FetchParams {
+                            base_url: &context.base_url,
+                            email: &context.email,
+                            account_id: &context.account_id,
+                            application_id: &context.application_id,
+                            tz: &context.tz,
+                            extra_params: extra,
+                        };
+                        let v = fetch_with_signed_url_split(
+                            &client,
+                            &context.token,
+                            endpoint,
+                            &batch_from,
+                            &batch_to,
+                            &params,
+                            download_csv,
+                            Some(&download_dir),
+                            &key,
+                            download_tx,
+                        )
+                        .await
+                        .unwrap_or_else(|e| {
+                            error!("Call log batch {}-{} failed: {}", batch_from, batch_to, e);
+                            serde_json::json!({"error": format!("{}", e)})
+                        });
+
+                        (key, v)
+                    }
+                    .boxed(),
+                );
+            }
+        } else if def.key == "users" {
+            // Users report: direct GET request, no dates, returns Base64 CSV
+            let client = client.clone();
+            let context = Arc::clone(&context);
+            let key = def.key.to_string();
+            let download_csv = config.download_csv;
+            let download_dir = download_dir.to_path_buf();
+
+            futures.push(
+                async move {
+                    let params = FetchParams {
+                        base_url: &context.base_url,
+                        email: &context.email,
+                        account_id: &context.account_id,
+                        application_id: &context.application_id,
+                        tz: &context.tz,
+                        extra_params: extra,
+                    };
+
+                    let v = fetch_users_report(&client, &context.token, endpoint, &params)
+                        .await
+                        .unwrap_or_else(|e| {
+                            error!("Report '{}' failed: {}", endpoint, e);
+                            serde_json::json!({"error": format!("{}", e)})
+                        });
+
+                    if download_csv {
+                        if let Some(base64_val) = v.get("base64_data").and_then(|b| b.as_str()) {
+                            if let Err(e) = crate::crm::downloader::process_base64_payload(
+                                base64_val,
+                                &key,
+                                &download_dir,
+                            )
+                            .await
+                            {
+                                error!("Failed to process {} Base64 payload: {:#}", key, e);
+                            }
+                        }
+                    }
+
+                    (key, v)
+                }
+                .boxed(),
+            );
+        } else {
+            // Tickets / Leads: try the full range first, then split if the
+            // backend refuses to generate a signed URL for a large file.
+            let client = client.clone();
+            let context = Arc::clone(&context);
+            let from_date = config.from_date.clone();
+            let to_date = config.to_date.clone();
+            let key = def.key.to_string();
+            let download_csv = config.download_csv;
+            let download_dir = download_dir.to_path_buf();
+            let download_tx = download_tx.clone();
+
+            futures.push(
+                async move {
                     let params = FetchParams {
                         base_url: &context.base_url,
                         email: &context.email,
@@ -162,123 +274,47 @@ pub async fn fetch_reports(
                         &client,
                         &context.token,
                         endpoint,
-                        &batch_from,
-                        &batch_to,
+                        &from_date,
+                        &to_date,
                         &params,
                         download_csv,
                         Some(&download_dir),
                         &key,
+                        download_tx,
                     )
-                    .await
-                    .unwrap_or_else(|e| {
-                        error!("Call log batch {}-{} failed: {}", batch_from, batch_to, e);
-                        serde_json::json!({"error": format!("{}", e)})
-                    });
-
-                    (key, v)
-                }));
-            }
-        } else if def.key == "users" {
-            // Users report: direct GET request, no dates, returns Base64 CSV
-            let client = client.clone();
-            let context = Arc::clone(&context);
-            let key = def.key.to_string();
-            let download_csv = config.download_csv;
-            let download_dir = download_dir.to_path_buf();
-
-            handles.push(tokio::spawn(async move {
-                let params = FetchParams {
-                    base_url: &context.base_url,
-                    email: &context.email,
-                    account_id: &context.account_id,
-                    application_id: &context.application_id,
-                    tz: &context.tz,
-                    extra_params: extra,
-                };
-
-                let v = fetch_users_report(&client, &context.token, endpoint, &params)
                     .await
                     .unwrap_or_else(|e| {
                         error!("Report '{}' failed: {}", endpoint, e);
                         serde_json::json!({"error": format!("{}", e)})
                     });
 
-                if download_csv {
-                    if let Some(base64_val) = v.get("base64_data").and_then(|b| b.as_str()) {
-                        if let Err(e) = crate::crm::downloader::process_base64_payload(
-                            base64_val,
-                            &key,
-                            &download_dir,
-                        )
-                        .await
-                        {
-                            error!("Failed to process {} Base64 payload: {:#}", key, e);
-                        }
-                    }
+                    (key, v)
                 }
-
-                (key, v)
-            }));
-        } else {
-            // Tickets / Leads: try the full range first, then split if the
-            // backend refuses to generate a signed URL for a large file.
-            let client = client.clone();
-            let context = Arc::clone(&context);
-            let from_date = config.from_date.clone();
-            let to_date = config.to_date.clone();
-            let key = def.key.to_string();
-            let download_csv = config.download_csv;
-            let download_dir = download_dir.to_path_buf();
-
-            handles.push(tokio::spawn(async move {
-                let params = FetchParams {
-                    base_url: &context.base_url,
-                    email: &context.email,
-                    account_id: &context.account_id,
-                    application_id: &context.application_id,
-                    tz: &context.tz,
-                    extra_params: extra,
-                };
-                let v = fetch_with_signed_url_split(
-                    &client,
-                    &context.token,
-                    endpoint,
-                    &from_date,
-                    &to_date,
-                    &params,
-                    download_csv,
-                    Some(&download_dir),
-                    &key,
-                )
-                .await
-                .unwrap_or_else(|e| {
-                    error!("Report '{}' failed: {}", endpoint, e);
-                    serde_json::json!({"error": format!("{}", e)})
-                });
-
-                (key, v)
-            }));
+                .boxed(),
+            );
         }
     }
 
-    // Await all
-    let task_results = join_all(handles).await;
+    // Drop the sender so the download_processor can finish when all downloads are queued
+    drop(download_tx);
+
+    // Process up to 4 concurrent top-level fetch streams
+    let task_results: Vec<(String, Value)> = futures_util::stream::iter(futures)
+        .buffer_unordered(4)
+        .collect()
+        .await;
+
+    // Await all downloads to complete
+    let _ = download_processor.await;
 
     // Assemble results
     let mut calls_array: Vec<Value> = Vec::new();
 
-    for task_result in task_results {
-        match task_result {
-            Ok((key, value)) => {
-                if key.starts_with("calls_") {
-                    calls_array.push(value);
-                } else {
-                    results.insert(key, value);
-                }
-            }
-            Err(e) => {
-                error!("Task join error: {}", e);
-            }
+    for (key, value) in task_results {
+        if key.starts_with("calls_") {
+            calls_array.push(value);
+        } else {
+            results.insert(key, value);
         }
     }
 
@@ -350,6 +386,7 @@ struct FetchParams<'a> {
 }
 
 use futures_util::future::BoxFuture;
+use futures_util::stream::StreamExt;
 use futures_util::FutureExt;
 
 #[allow(clippy::too_many_arguments)]
@@ -363,6 +400,12 @@ async fn fetch_with_signed_url_split(
     download_csv: bool,
     download_dir: Option<&Path>,
     key_prefix: &str,
+    download_tx: tokio::sync::mpsc::UnboundedSender<(
+        reqwest::Client,
+        String,
+        String,
+        std::path::PathBuf,
+    )>,
 ) -> Result<Value> {
     let mut completed = fetch_recursive(
         client.clone(),
@@ -375,10 +418,15 @@ async fn fetch_with_signed_url_split(
         params.account_id.to_string(),
         params.application_id.to_string(),
         params.tz.to_string(),
-        params.extra_params.to_vec(),
+        params
+            .extra_params
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect(),
         download_csv,
         download_dir.map(|d| d.to_path_buf()),
         key_prefix.to_string(),
+        download_tx,
     )
     .await?;
 
@@ -397,7 +445,7 @@ async fn fetch_with_signed_url_split(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn fetch_recursive<'a>(
+fn fetch_recursive(
     client: reqwest::Client,
     token: String,
     endpoint: String,
@@ -408,51 +456,41 @@ fn fetch_recursive<'a>(
     account_id: String,
     application_id: String,
     tz: String,
-    extra_params: Vec<(&'a str, &'a str)>,
+    extra_params: Vec<(String, String)>,
     download_csv: bool,
     download_dir: Option<std::path::PathBuf>,
     key_prefix: String,
-) -> BoxFuture<'a, Result<Vec<(String, String, Value)>>> {
+    download_tx: tokio::sync::mpsc::UnboundedSender<(
+        reqwest::Client,
+        String,
+        String,
+        std::path::PathBuf,
+    )>,
+) -> BoxFuture<'static, Result<Vec<(String, String, Value)>>> {
     async move {
+        let ep_refs: Vec<(&str, &str)> = extra_params.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
         let params = FetchParams {
             base_url: &base_url,
             email: &email,
             account_id: &account_id,
             application_id: &application_id,
             tz: &tz,
-            extra_params: &extra_params,
+            extra_params: &ep_refs,
         };
 
         let result = fetch_single(&client, &token, &endpoint, &from_date, &to_date, &params).await;
 
         match result {
             Ok(value) => {
-                let mut download_tasks = Vec::new();
                 if download_csv {
                     if let Some(dir) = &download_dir {
                         let mut urls = Vec::new();
                         extract_urls_for_key(&key_prefix, &value, &mut urls);
                         for (k, url) in urls {
-                            let client_clone = client.clone();
-                            let dir_clone = dir.clone();
-                            download_tasks.push(tokio::spawn(async move {
-                                if let Err(e) = crate::crm::downloader::download_csv(
-                                    &client_clone,
-                                    &url,
-                                    &k,
-                                    &dir_clone,
-                                )
-                                .await
-                                {
-                                    error!("Download failed for {}: {:#}", k, e);
-                                }
-                            }));
+                            let _ = download_tx.send((client.clone(), url, k, dir.clone()));
                         }
                     }
                 }
-
-
-                join_all(download_tasks).await;
 
                 Ok(vec![(from_date, to_date, value)])
             }
@@ -478,6 +516,7 @@ fn fetch_recursive<'a>(
                         download_csv,
                         download_dir.clone(),
                         key_prefix.clone(),
+                        download_tx.clone(),
                     );
 
                     let right_fut = fetch_recursive(
@@ -495,13 +534,17 @@ fn fetch_recursive<'a>(
                         download_csv,
                         download_dir,
                         key_prefix,
+                        download_tx,
                     );
 
-                    // Concurrently fetch both halves
-                    let (left_res, right_res) = tokio::join!(left_fut, right_fut);
+                    // Concurrently fetch both halves using tokio::spawn for true parallel execution
+                    let left_handle = tokio::spawn(left_fut);
+                    let right_handle = tokio::spawn(right_fut);
 
-                    let mut combined = left_res?;
-                    combined.extend(right_res?);
+                    let (left_res, right_res) = tokio::join!(left_handle, right_handle);
+
+                    let mut combined = left_res.context("Left half task panicked")??;
+                    combined.extend(right_res.context("Right half task panicked")??);
 
                     Ok(combined)
                 } else {
