@@ -46,7 +46,9 @@ fn run_powershell(script: &str) -> Result<()> {
         .arg(&path)
         .output()?;
 
-    let _ = std::fs::remove_file(&path);
+    if let Err(e) = std::fs::remove_file(&path) {
+        tracing::warn!("Failed to remove temporary file {}: {}", path.display(), e);
+    }
 
     let stdout_str = String::from_utf8_lossy(&output.stdout);
     let stderr_str = String::from_utf8_lossy(&output.stderr);
@@ -563,7 +565,13 @@ try {{
     );
 
     // Cleanup temporary JSON
-    let _ = std::fs::remove_file(&json_output_path);
+    if let Err(e) = std::fs::remove_file(&json_output_path) {
+        tracing::warn!(
+            "Failed to remove temporary file {}: {}",
+            json_output_path.display(),
+            e
+        );
+    }
 
     // Step 5: Process Data & Enrich OUL Column
     let team_mapping_path =

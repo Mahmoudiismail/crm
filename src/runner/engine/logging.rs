@@ -140,7 +140,13 @@ pub async fn cleanup_old_logs(log_retention_days: u64) {
                                     "Cleaning up old log file: {}",
                                     entry.path().display()
                                 );
-                                let _ = std::fs::remove_file(entry.path());
+                                if let Err(e) = std::fs::remove_file(entry.path()) {
+                                    tracing::warn!(
+                                        "Failed to remove temporary file {}: {}",
+                                        entry.path().display(),
+                                        e
+                                    );
+                                }
                             }
                         }
                     }
