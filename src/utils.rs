@@ -661,3 +661,32 @@ mod tests {
         assert_eq!(ctx_late_lines[25].trim(), "50 | Line 50");
     }
 }
+
+/// A guard that automatically removes a file when it goes out of scope.
+/// This prevents temporary files from leaking if an early return (e.g. `?`) occurs.
+#[derive(Debug)]
+pub struct FileCleanupGuard {
+    path: PathBuf,
+}
+
+impl FileCleanupGuard {
+    pub fn new<P: AsRef<Path>>(path: P) -> Self {
+        Self {
+            path: path.as_ref().to_path_buf(),
+        }
+    }
+}
+
+impl Drop for FileCleanupGuard {
+    fn drop(&mut self) {
+        if self.path.exists() {
+            if let Err(e) = std::fs::remove_file(&self.path) {
+                tracing::warn!(
+                    "Failed to securely delete temporary file {:?}: {}",
+                    self.path,
+                    e
+                );
+            }
+        }
+    }
+}
