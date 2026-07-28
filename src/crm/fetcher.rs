@@ -88,18 +88,26 @@ pub async fn fetch_reports(
         return Ok(Value::Object(results));
     }
 
-    let (download_tx, download_rx) = tokio::sync::mpsc::unbounded_channel::<(reqwest::Client, String, String, std::path::PathBuf)>();
+    let (download_tx, download_rx) = tokio::sync::mpsc::unbounded_channel::<(
+        reqwest::Client,
+        String,
+        String,
+        std::path::PathBuf,
+    )>();
 
     // Spawn a background task to process downloads concurrently (limit 6)
     let download_processor = tokio::spawn(async move {
         let stream = futures_util::stream::unfold(download_rx, |mut rx| async {
             rx.recv().await.map(|item| (item, rx))
         });
-        stream.for_each_concurrent(6, |(client, url, k, dir)| async move {
-            if let Err(e) = crate::crm::downloader::download_csv(&client, &url, &k, &dir).await {
-                error!("Download failed for {}: {:#}", k, e);
-            }
-        }).await;
+        stream
+            .for_each_concurrent(6, |(client, url, k, dir)| async move {
+                if let Err(e) = crate::crm::downloader::download_csv(&client, &url, &k, &dir).await
+                {
+                    error!("Download failed for {}: {:#}", k, e);
+                }
+            })
+            .await;
     });
 
     let defs = report_defs();
@@ -162,36 +170,39 @@ pub async fn fetch_reports(
                 let download_dir = download_dir.to_path_buf();
                 let download_tx = download_tx.clone();
 
-                futures.push(async move {
-                    let key = format!("calls_{}_{}", batch_from, batch_to);
-                    let params = FetchParams {
-                        base_url: &context.base_url,
-                        email: &context.email,
-                        account_id: &context.account_id,
-                        application_id: &context.application_id,
-                        tz: &context.tz,
-                        extra_params: extra,
-                    };
-                    let v = fetch_with_signed_url_split(
-                        &client,
-                        &context.token,
-                        endpoint,
-                        &batch_from,
-                        &batch_to,
-                        &params,
-                        download_csv,
-                        Some(&download_dir),
-                        &key,
-                        download_tx,
-                    )
-                    .await
-                    .unwrap_or_else(|e| {
-                        error!("Call log batch {}-{} failed: {}", batch_from, batch_to, e);
-                        serde_json::json!({"error": format!("{}", e)})
-                    });
+                futures.push(
+                    async move {
+                        let key = format!("calls_{}_{}", batch_from, batch_to);
+                        let params = FetchParams {
+                            base_url: &context.base_url,
+                            email: &context.email,
+                            account_id: &context.account_id,
+                            application_id: &context.application_id,
+                            tz: &context.tz,
+                            extra_params: extra,
+                        };
+                        let v = fetch_with_signed_url_split(
+                            &client,
+                            &context.token,
+                            endpoint,
+                            &batch_from,
+                            &batch_to,
+                            &params,
+                            download_csv,
+                            Some(&download_dir),
+                            &key,
+                            download_tx,
+                        )
+                        .await
+                        .unwrap_or_else(|e| {
+                            error!("Call log batch {}-{} failed: {}", batch_from, batch_to, e);
+                            serde_json::json!({"error": format!("{}", e)})
+                        });
 
-                    (key, v)
-                }.boxed());
+                        (key, v)
+                    }
+                    .boxed(),
+                );
             }
         } else if def.key == "users" {
             // Users report: direct GET request, no dates, returns Base64 CSV
@@ -201,39 +212,42 @@ pub async fn fetch_reports(
             let download_csv = config.download_csv;
             let download_dir = download_dir.to_path_buf();
 
-            futures.push(async move {
-                let params = FetchParams {
-                    base_url: &context.base_url,
-                    email: &context.email,
-                    account_id: &context.account_id,
-                    application_id: &context.application_id,
-                    tz: &context.tz,
-                    extra_params: extra,
-                };
+            futures.push(
+                async move {
+                    let params = FetchParams {
+                        base_url: &context.base_url,
+                        email: &context.email,
+                        account_id: &context.account_id,
+                        application_id: &context.application_id,
+                        tz: &context.tz,
+                        extra_params: extra,
+                    };
 
-                let v = fetch_users_report(&client, &context.token, endpoint, &params)
-                    .await
-                    .unwrap_or_else(|e| {
-                        error!("Report '{}' failed: {}", endpoint, e);
-                        serde_json::json!({"error": format!("{}", e)})
-                    });
-
-                if download_csv {
-                    if let Some(base64_val) = v.get("base64_data").and_then(|b| b.as_str()) {
-                        if let Err(e) = crate::crm::downloader::process_base64_payload(
-                            base64_val,
-                            &key,
-                            &download_dir,
-                        )
+                    let v = fetch_users_report(&client, &context.token, endpoint, &params)
                         .await
-                        {
-                            error!("Failed to process {} Base64 payload: {:#}", key, e);
+                        .unwrap_or_else(|e| {
+                            error!("Report '{}' failed: {}", endpoint, e);
+                            serde_json::json!({"error": format!("{}", e)})
+                        });
+
+                    if download_csv {
+                        if let Some(base64_val) = v.get("base64_data").and_then(|b| b.as_str()) {
+                            if let Err(e) = crate::crm::downloader::process_base64_payload(
+                                base64_val,
+                                &key,
+                                &download_dir,
+                            )
+                            .await
+                            {
+                                error!("Failed to process {} Base64 payload: {:#}", key, e);
+                            }
                         }
                     }
-                }
 
-                (key, v)
-            }.boxed());
+                    (key, v)
+                }
+                .boxed(),
+            );
         } else {
             // Tickets / Leads: try the full range first, then split if the
             // backend refuses to generate a signed URL for a large file.
@@ -246,35 +260,38 @@ pub async fn fetch_reports(
             let download_dir = download_dir.to_path_buf();
             let download_tx = download_tx.clone();
 
-            futures.push(async move {
-                let params = FetchParams {
-                    base_url: &context.base_url,
-                    email: &context.email,
-                    account_id: &context.account_id,
-                    application_id: &context.application_id,
-                    tz: &context.tz,
-                    extra_params: extra,
-                };
-                let v = fetch_with_signed_url_split(
-                    &client,
-                    &context.token,
-                    endpoint,
-                    &from_date,
-                    &to_date,
-                    &params,
-                    download_csv,
-                    Some(&download_dir),
-                    &key,
-                    download_tx,
-                )
-                .await
-                .unwrap_or_else(|e| {
-                    error!("Report '{}' failed: {}", endpoint, e);
-                    serde_json::json!({"error": format!("{}", e)})
-                });
+            futures.push(
+                async move {
+                    let params = FetchParams {
+                        base_url: &context.base_url,
+                        email: &context.email,
+                        account_id: &context.account_id,
+                        application_id: &context.application_id,
+                        tz: &context.tz,
+                        extra_params: extra,
+                    };
+                    let v = fetch_with_signed_url_split(
+                        &client,
+                        &context.token,
+                        endpoint,
+                        &from_date,
+                        &to_date,
+                        &params,
+                        download_csv,
+                        Some(&download_dir),
+                        &key,
+                        download_tx,
+                    )
+                    .await
+                    .unwrap_or_else(|e| {
+                        error!("Report '{}' failed: {}", endpoint, e);
+                        serde_json::json!({"error": format!("{}", e)})
+                    });
 
-                (key, v)
-            }.boxed());
+                    (key, v)
+                }
+                .boxed(),
+            );
         }
     }
 
@@ -368,8 +385,8 @@ struct FetchParams<'a> {
     extra_params: &'a [(&'a str, &'a str)],
 }
 
-use futures_util::stream::StreamExt;
 use futures_util::future::BoxFuture;
+use futures_util::stream::StreamExt;
 use futures_util::FutureExt;
 
 #[allow(clippy::too_many_arguments)]
@@ -383,7 +400,12 @@ async fn fetch_with_signed_url_split(
     download_csv: bool,
     download_dir: Option<&Path>,
     key_prefix: &str,
-    download_tx: tokio::sync::mpsc::UnboundedSender<(reqwest::Client, String, String, std::path::PathBuf)>,
+    download_tx: tokio::sync::mpsc::UnboundedSender<(
+        reqwest::Client,
+        String,
+        String,
+        std::path::PathBuf,
+    )>,
 ) -> Result<Value> {
     let mut completed = fetch_recursive(
         client.clone(),
@@ -396,7 +418,11 @@ async fn fetch_with_signed_url_split(
         params.account_id.to_string(),
         params.application_id.to_string(),
         params.tz.to_string(),
-        params.extra_params.iter().map(|(k,v)| (k.to_string(), v.to_string())).collect(),
+        params
+            .extra_params
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect(),
         download_csv,
         download_dir.map(|d| d.to_path_buf()),
         key_prefix.to_string(),
@@ -434,7 +460,12 @@ fn fetch_recursive(
     download_csv: bool,
     download_dir: Option<std::path::PathBuf>,
     key_prefix: String,
-    download_tx: tokio::sync::mpsc::UnboundedSender<(reqwest::Client, String, String, std::path::PathBuf)>,
+    download_tx: tokio::sync::mpsc::UnboundedSender<(
+        reqwest::Client,
+        String,
+        String,
+        std::path::PathBuf,
+    )>,
 ) -> BoxFuture<'static, Result<Vec<(String, String, Value)>>> {
     async move {
         let ep_refs: Vec<(&str, &str)> = extra_params.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();

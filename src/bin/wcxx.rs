@@ -226,8 +226,14 @@ impl std::fmt::Debug for Config {
             .field("token", &"***REDACTED***")
             .field("org_id", &self.org_id)
             .field("client_id", &self.client_id)
-            .field("client_secret", &self.client_secret.as_ref().map(|_| "***REDACTED***"))
-            .field("refresh_token", &self.refresh_token.as_ref().map(|_| "***REDACTED***"))
+            .field(
+                "client_secret",
+                &self.client_secret.as_ref().map(|_| "***REDACTED***"),
+            )
+            .field(
+                "refresh_token",
+                &self.refresh_token.as_ref().map(|_| "***REDACTED***"),
+            )
             .field("log_stdout_level", &self.log_stdout_level)
             .field("log_file_level", &self.log_file_level)
             .finish()

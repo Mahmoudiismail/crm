@@ -142,7 +142,10 @@ impl std::fmt::Debug for YaswebConfig {
         f.debug_struct("YaswebConfig")
             .field("url", &self.url)
             .field("username", &self.username)
-            .field("password", &self.password.as_ref().map(|_| "***REDACTED***"))
+            .field(
+                "password",
+                &self.password.as_ref().map(|_| "***REDACTED***"),
+            )
             .field("headless", &self.headless)
             .field("keep_open", &self.keep_open)
             .field("concurrency", &self.concurrency)

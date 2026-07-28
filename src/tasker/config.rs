@@ -147,7 +147,6 @@ pub struct CrmOpenSohailConfig {
     pub table_column_widths: Option<Vec<String>>,
 }
 
-
 impl std::fmt::Debug for TaskerConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // No secrets in TaskerConfig itself, but implement for completeness

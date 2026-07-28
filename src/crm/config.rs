@@ -229,7 +229,6 @@ fn strip_nulls(value: &mut Value) {
     }
 }
 
-
 impl std::fmt::Debug for AppConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AppConfig")
