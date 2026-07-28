@@ -999,8 +999,20 @@ pub mod tests {
             "CSV attachment should be generated"
         );
 
-        let _ = std::fs::remove_file(html_path);
-        let _ = std::fs::remove_file(csv_attachment);
+        if let Err(e) = std::fs::remove_file(&html_path) {
+            tracing::warn!(
+                "Failed to remove temporary file {}: {}",
+                html_path.display(),
+                e
+            );
+        }
+        if let Err(e) = std::fs::remove_file(&csv_attachment) {
+            tracing::warn!(
+                "Failed to remove temporary file {}: {}",
+                csv_attachment.display(),
+                e
+            );
+        }
     }
 
     #[test]
@@ -1062,10 +1074,28 @@ pub mod tests {
         let csv_content = std::fs::read_to_string(&csv_attachment).unwrap();
         assert!(csv_content.contains("Ticket Id"));
 
-        let _ = std::fs::remove_file(html_path);
-        let _ = std::fs::remove_file(csv_attachment);
+        if let Err(e) = std::fs::remove_file(&html_path) {
+            tracing::warn!(
+                "Failed to remove temporary file {}: {}",
+                html_path.display(),
+                e
+            );
+        }
+        if let Err(e) = std::fs::remove_file(&csv_attachment) {
+            tracing::warn!(
+                "Failed to remove temporary file {}: {}",
+                csv_attachment.display(),
+                e
+            );
+        }
         if leads_attachment.exists() {
-            let _ = std::fs::remove_file(leads_attachment);
+            if let Err(e) = std::fs::remove_file(&leads_attachment) {
+                tracing::warn!(
+                    "Failed to remove temporary file {}: {}",
+                    leads_attachment.display(),
+                    e
+                );
+            }
         }
     }
 
@@ -1153,8 +1183,20 @@ pub mod tests {
             println!("Warning: PRE_AUTHORIZATION_email.html exists. send_exceptions should prevent regular team emails from generating, or it generated from another concurrent test.");
         }
 
-        let _ = std::fs::remove_file(html_path);
-        let _ = std::fs::remove_file(csv_attachment);
+        if let Err(e) = std::fs::remove_file(&html_path) {
+            tracing::warn!(
+                "Failed to remove temporary file {}: {}",
+                html_path.display(),
+                e
+            );
+        }
+        if let Err(e) = std::fs::remove_file(&csv_attachment) {
+            tracing::warn!(
+                "Failed to remove temporary file {}: {}",
+                csv_attachment.display(),
+                e
+            );
+        }
     }
 
     #[test]
