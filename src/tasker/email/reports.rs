@@ -219,9 +219,7 @@ mod tests {
         assert!(path.exists());
         assert!(path.to_string_lossy().contains("Call_Center_Leads.xlsx"));
 
-        if let Err(e) = std::fs::remove_file(&path) {
-            tracing::warn!("Failed to remove temporary file {}: {}", path.display(), e);
-        }
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]

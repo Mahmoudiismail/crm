@@ -38,6 +38,7 @@ fn run_powershell(script: &str) -> Result<()> {
 
     let (file, path) = temp_file.keep()?;
     drop(file);
+    let _cleanup_guard = crate::utils::FileCleanupGuard::new(&path);
 
     let output = std::process::Command::new("powershell")
         .arg("-ExecutionPolicy")
@@ -45,10 +46,6 @@ fn run_powershell(script: &str) -> Result<()> {
         .arg("-File")
         .arg(&path)
         .output()?;
-
-    if let Err(e) = std::fs::remove_file(&path) {
-        tracing::warn!("Failed to remove temporary file {}: {}", path.display(), e);
-    }
 
     let stdout_str = String::from_utf8_lossy(&output.stdout);
     let stderr_str = String::from_utf8_lossy(&output.stderr);
@@ -95,6 +92,7 @@ pub fn run(config: &CrmOpenSohailConfig) -> Result<()> {
         "crm_open_sohail_data_{}.json",
         chrono::Local::now().timestamp_nanos_opt().unwrap_or(0)
     ));
+    let _json_cleanup_guard = crate::utils::FileCleanupGuard::new(&json_output_path);
 
     let dashboard_path_str = dashboard_file_path.to_string_lossy().to_string();
     let json_path_str = json_output_path.to_string_lossy().to_string();
@@ -563,15 +561,6 @@ try {{
         "Extracted {} combinations of branch/month.",
         extracted_data.len()
     );
-
-    // Cleanup temporary JSON
-    if let Err(e) = std::fs::remove_file(&json_output_path) {
-        tracing::warn!(
-            "Failed to remove temporary file {}: {}",
-            json_output_path.display(),
-            e
-        );
-    }
 
     // Step 5: Process Data & Enrich OUL Column
     let team_mapping_path =

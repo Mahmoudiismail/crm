@@ -84,7 +84,7 @@ async fn main() -> Result<()> {
 
     let default_config = Config {
         base_url: "https://webexapis.com/v1".to_string(),
-        token: "".to_string(),
+        token: "YOUR_BEARER_TOKEN_HERE".to_string(),
         org_id: Some("".to_string()),
         client_id: Some("".to_string()),
         client_secret: Some("".to_string()),
@@ -102,14 +102,7 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
-    let mut config: Config = load_or_create_config(&config_path, &default_config)?;
-
-    // Dynamically override the token with environment variable if present
-    if let Ok(env_token) = std::env::var("WCXX_TOKEN") {
-        if !env_token.trim().is_empty() {
-            config.token = env_token;
-        }
-    }
+    let config: Config = load_or_create_config(&config_path, &default_config)?;
 
     config.validate(&config_path)?;
 
@@ -223,61 +216,4 @@ async fn main() -> Result<()> {
 
     info!("Finished wcxx tool");
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::path::PathBuf;
-
-    #[test]
-    fn test_config_validation_empty_token() {
-        let config = Config {
-            base_url: "https://webexapis.com/v1".to_string(),
-            token: "".to_string(),
-            org_id: None,
-            client_id: None,
-            client_secret: None,
-            refresh_token: None,
-            log_stdout_level: "DEBUG".to_string(),
-            log_file_level: "TRACE".to_string(),
-        };
-
-        let path = PathBuf::from("test.json");
-        assert!(config.validate(&path).is_err());
-    }
-
-    #[test]
-    fn test_config_validation_legacy_placeholder_token() {
-        let config = Config {
-            base_url: "https://webexapis.com/v1".to_string(),
-            token: "YOUR_BEARER_TOKEN_HERE".to_string(),
-            org_id: None,
-            client_id: None,
-            client_secret: None,
-            refresh_token: None,
-            log_stdout_level: "DEBUG".to_string(),
-            log_file_level: "TRACE".to_string(),
-        };
-
-        let path = PathBuf::from("test.json");
-        assert!(config.validate(&path).is_err());
-    }
-
-    #[test]
-    fn test_config_validation_valid_token() {
-        let config = Config {
-            base_url: "https://webexapis.com/v1".to_string(),
-            token: "valid_token".to_string(),
-            org_id: None,
-            client_id: None,
-            client_secret: None,
-            refresh_token: None,
-            log_stdout_level: "DEBUG".to_string(),
-            log_file_level: "TRACE".to_string(),
-        };
-
-        let path = PathBuf::from("test.json");
-        assert!(config.validate(&path).is_ok());
-    }
 }

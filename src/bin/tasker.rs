@@ -246,13 +246,7 @@ mod tests {
     fn test_tasker_args_parsing() {
         let tmp = std::env::temp_dir();
         let config_path = tmp.join("mock_tasker_config.json");
-        if let Err(e) = std::fs::remove_file(&config_path) {
-            tracing::warn!(
-                "Failed to remove temporary file {}: {}",
-                config_path.display(),
-                e
-            );
-        }
+        let _ = std::fs::remove_file(&config_path);
 
         let args = vec![
             "tasker".to_string(),
@@ -264,13 +258,7 @@ mod tests {
 
         let options = TaskerCliOptions::parse_from(args);
         let _res = run_app(options);
-        if let Err(e) = std::fs::remove_file(&config_path) {
-            tracing::warn!(
-                "Failed to remove temporary file {}: {}",
-                config_path.display(),
-                e
-            );
-        }
+        let _ = std::fs::remove_file(&config_path);
     }
 
     #[test]
@@ -380,13 +368,7 @@ mod tests {
             "Error message should mention bounds"
         );
 
-        if let Err(e) = std::fs::remove_file(&config_path) {
-            tracing::warn!(
-                "Failed to remove temporary file {}: {}",
-                config_path.display(),
-                e
-            );
-        }
+        let _ = std::fs::remove_file(&config_path);
     }
 
     #[test]
