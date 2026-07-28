@@ -1083,7 +1083,6 @@ pub fn run_browser_tab(
                                         step_num,
                                         "After clicking XLSX",
                                     );
-                                    step_num += 1;
                                     std::thread::sleep(Duration::from_secs(5));
                                 }
                             }
