@@ -76,42 +76,24 @@ pub fn run_browser_tab(
     active_report_name: &str,
     active_report_type: &str,
     active_filters: &HashMap<String, String>,
-    is_initial_tab: bool,
     download_dir: Option<PathBuf>,
 ) -> Result<Vec<String>> {
     let mut discovered_filters = Vec::new();
     let mut step_num = 1;
 
-    let tab = if is_initial_tab {
-        let mut found = None;
-        for _ in 0..5 {
-            let tabs = browser.get_tabs().lock().unwrap_or_else(|e| e.into_inner());
-            for t in tabs.iter() {
-                let url = t.get_url();
-                if url.contains("about:blank") || url.is_empty() {
-                    found = Some(t.clone());
-                    break;
-                }
-            }
-            if found.is_some() {
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(500));
+    let mut found = None;
+    for _ in 0..5 {
+        let tabs = browser.get_tabs().lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(first) = tabs.first() {
+            found = Some(first.clone());
+            break;
         }
+        std::thread::sleep(Duration::from_millis(500));
+    }
 
-        if found.is_none() {
-            let tabs = browser.get_tabs().lock().unwrap_or_else(|e| e.into_inner());
-            if let Some(first) = tabs.first() {
-                found = Some(first.clone());
-            }
-        }
-
-        match found {
-            Some(t) => t,
-            None => browser.new_tab().context("Failed to open new tab")?,
-        }
-    } else {
-        browser.new_tab().context("Failed to open new tab")?
+    let tab = match found {
+        Some(t) => t,
+        None => browser.new_tab().context("Failed to open new tab")?,
     };
 
     // Configure download behavior to use temp dir
@@ -1161,13 +1143,6 @@ pub fn run_browser_tab(
 
     if config.keep_open {
         std::thread::sleep(Duration::from_secs(60));
-    }
-
-    // Cleanup tab if it is not the only tab left
-    if !is_initial_tab {
-        if let Err(e) = tab.close(true) {
-            error!("Failed to close tab: {:?}", e);
-        }
     }
 
     Ok(discovered_filters)
