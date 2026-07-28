@@ -189,13 +189,7 @@ pub fn finalize_download(
                         tracing::error!("Failed to rename/move file: {}", e);
                         // Fallback to copy+delete across mount points
                         if std::fs::copy(&path, &out_file).is_ok() {
-                            if let Err(e) = std::fs::remove_file(&path) {
-                                tracing::warn!(
-                                    "Failed to remove temporary file {}: {}",
-                                    path.display(),
-                                    e
-                                );
-                            }
+                            let _ = std::fs::remove_file(&path);
                         }
                     }
                 }

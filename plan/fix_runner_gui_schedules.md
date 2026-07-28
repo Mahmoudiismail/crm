@@ -1,1 +1,0 @@
-# Fix Schedule Serialization and JS Execution\n1. Analyze the serialization differences.\n2. Fix `buildSchedules` function in `forms.js`.\n3. Fix `fetchRegisteredApps` to `fetchApps` in `forms.js`. \n4. Verify tests pass.

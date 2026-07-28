@@ -45,8 +45,9 @@ fn run_powershell(script: &str) -> Result<()> {
         .arg("Bypass")
         .arg("-File")
         .arg(&path)
-        .output();
-  
+        .output()?;
+
+    let stdout_str = String::from_utf8_lossy(&output.stdout);
     let stderr_str = String::from_utf8_lossy(&output.stderr);
 
     if !stdout_str.trim().is_empty() {

@@ -158,20 +158,17 @@
           if (wh) {
               const parts = [];
               for (const [day, range] of Object.entries(wh)) {
-                  parts.push(`${day}=${range.start}-${range.end}`);
+                  parts.push(`${day.substring(0, 3)}|${range.start}-${range.end}`);
               }
-              whStr = "; wh: " + parts.join(",");
+              whStr = ";" + parts.join(",");
           }
       }
-
-      let baseStr = schedule + whStr;
-
       if (stVal && (kind === "interval" || kind === "weekly" || kind === "monthly")) {
-        baseStr = baseStr + "; st: " + stVal;
+        schedule = schedule + "|st:" + stVal;
       }
-      schedules.push(baseStr);
+      schedules.push(schedule + whStr);
     }
-    return schedules.join("\n");
+    return schedules.join("|");
   }
 
   if (addScheduleBtn) {
@@ -397,7 +394,7 @@
 
   function loadRegisteredAppsForContainer(selectContainer, dynamicInputs, idHidden, argsHidden, idPrefix) {
       window.api
-        .fetchApps()
+        .fetchRegisteredApps()
         .then((apps) => {
           window.api.setRegisteredAppsCache(apps);
           renderAppList(apps, selectContainer, dynamicInputs, idHidden, argsHidden, idPrefix);

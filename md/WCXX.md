@@ -9,7 +9,7 @@ The component uses a configuration file named `wcxx_config.json`. If it does not
 ```json
 {
   "base_url": "https://webexapis.com/v1",
-  "token": "",
+  "token": "YOUR_BEARER_TOKEN_HERE",
   "org_id": "",
   "client_id": "",
   "client_secret": "",

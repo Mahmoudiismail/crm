@@ -20,9 +20,7 @@ pub fn run_powershell(script: &str) -> Result<()> {
         .arg(&path)
         .output()?;
 
-    if let Err(e) = std::fs::remove_file(&path) {
-        tracing::warn!("Failed to remove temporary file {}: {}", path.display(), e);
-    }
+    let _ = std::fs::remove_file(&path);
 
     let stdout_str = String::from_utf8_lossy(&output.stdout);
     let stderr_str = String::from_utf8_lossy(&output.stderr);
