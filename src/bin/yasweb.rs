@@ -327,34 +327,34 @@ async fn main() -> Result<()> {
 
     // Iterate over active_report_names
     let mut user_data_dir = executable_dir()?;
-            user_data_dir.push("yasweb_chrome_data");
-            // Use unique data dir per report to allow simultaneous runs
-            user_data_dir.push("shared_session");
+    user_data_dir.push("yasweb_chrome_data");
+    // Use unique data dir per report to allow simultaneous runs
+    user_data_dir.push("shared_session");
 
-            let args = vec![
-                std::ffi::OsStr::new("--ignore-certificate-errors"),
-                std::ffi::OsStr::new("--start-maximized"),
-                std::ffi::OsStr::new("--disable-web-security"),
-                std::ffi::OsStr::new("--disable-site-isolation-trials"),
-                std::ffi::OsStr::new("--disable-features=IsolateOrigins,site-per-process"),
-                std::ffi::OsStr::new("--disable-session-crashed-bubble"),
-                std::ffi::OsStr::new("--no-first-run"),
-                std::ffi::OsStr::new("--disable-infobars"),
-                std::ffi::OsStr::new("--skip-reopen-last-pages"),
-            ];
+    let args = vec![
+        std::ffi::OsStr::new("--ignore-certificate-errors"),
+        std::ffi::OsStr::new("--start-maximized"),
+        std::ffi::OsStr::new("--disable-web-security"),
+        std::ffi::OsStr::new("--disable-site-isolation-trials"),
+        std::ffi::OsStr::new("--disable-features=IsolateOrigins,site-per-process"),
+        std::ffi::OsStr::new("--disable-session-crashed-bubble"),
+        std::ffi::OsStr::new("--no-first-run"),
+        std::ffi::OsStr::new("--disable-infobars"),
+        std::ffi::OsStr::new("--skip-reopen-last-pages"),
+    ];
 
-            let launch_options = LaunchOptions::default_builder()
-                .headless(config.headless)
-                .sandbox(false)
-                .idle_browser_timeout(std::time::Duration::from_secs(120))
-                .user_data_dir(Some(user_data_dir))
-                .args(args)
-                .build()
-                .map_err(|e| anyhow::anyhow!("Failed to build launch options: {e}"))?;
+    let launch_options = LaunchOptions::default_builder()
+        .headless(config.headless)
+        .sandbox(false)
+        .idle_browser_timeout(std::time::Duration::from_secs(120))
+        .user_data_dir(Some(user_data_dir))
+        .args(args)
+        .build()
+        .map_err(|e| anyhow::anyhow!("Failed to build launch options: {e}"))?;
 
-            let browser = Arc::new(Browser::new(launch_options).context("Failed to launch browser")?);
+    let browser = Arc::new(Browser::new(launch_options).context("Failed to launch browser")?);
 
-            // Chunk runs into concurrent batches based on config
+    // Chunk runs into concurrent batches based on config
 
     for active_report_name in active_report_names {
         let active_report_type = active_report_type_global.clone();
