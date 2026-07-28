@@ -209,3 +209,4 @@ The `DashboardUpdater` script explicitly optimizes Excel interactions by:
 - Disabling `ScreenUpdating` and `EnableEvents`.
 - Setting `Calculation` mode to Manual before pasting data to avoid 10+ minute refresh locks on large data sets (like 45,000+ rows).
 - Capturing and logging all PowerShell standard and error outputs sequentially through Rust's `tracing` mechanisms to ensure operational transparency.
+- Securely handling temporary PowerShell scripts by logging any cleanup/deletion failures to prevent unmanaged files remaining on disk silently.
