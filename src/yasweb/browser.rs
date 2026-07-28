@@ -16,6 +16,52 @@ pub fn get_global_download_dir() -> Arc<Mutex<Option<PathBuf>>> {
     Arc::new(Mutex::new(None)) // To decouple, pass this from caller
 }
 
+
+pub fn save_html_state(tab: &Arc<headless_chrome::Tab>, active_report_name: &str, step_num: u32, step_name: &str) {
+    let get_html_js = r#"
+        (function() {
+            let mainHtml = document.documentElement ? document.documentElement.outerHTML : "";
+            let iframeHtml = "";
+            try {
+                let iframe = document.querySelector('iframe');
+                if (iframe && iframe.contentWindow && iframe.contentWindow.document && iframe.contentWindow.document.documentElement) {
+                    iframeHtml = iframe.contentWindow.document.documentElement.outerHTML;
+                }
+            } catch (e) {
+                iframeHtml = "ERROR ACCESSING IFRAME: " + e.message;
+            }
+            return "=== MAIN DOCUMENT ===\n" + mainHtml + "\n\n=== IFRAME DOCUMENT ===\n" + iframeHtml;
+        })();
+    "#;
+
+    match tab.evaluate(get_html_js, true) {
+        Ok(res) => {
+            if let Some(v) = res.value {
+                if let Some(html) = v.as_str() {
+                    if let Ok(mut exe_dir) = crate::utils::executable_dir() {
+                        exe_dir.push("debug_html");
+                        let _ = std::fs::create_dir_all(&exe_dir);
+
+                        let safe_name = active_report_name.replace(|c: char| !c.is_alphanumeric(), "_");
+                        let safe_step = step_name.replace(|c: char| !c.is_alphanumeric(), "_").to_lowercase();
+                        let file_name = format!("step_{:02}_{}_{}.html", step_num, safe_step, safe_name);
+
+                        exe_dir.push(&file_name);
+                        if std::fs::write(&exe_dir, html).is_ok() {
+                            info!("Saved HTML state for '{}' to {:?}", step_name, exe_dir);
+                        } else {
+                            error!("Failed to write HTML state for '{}' to disk", step_name);
+                        }
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            error!("Failed to extract HTML at {}: {:?}", step_name, e);
+        }
+    }
+}
+
 pub fn run_browser_tab(
     browser: Arc<Browser>,
     config: &YaswebConfig,
@@ -26,6 +72,7 @@ pub fn run_browser_tab(
     download_dir: Option<PathBuf>,
 ) -> Result<Vec<String>> {
     let mut discovered_filters = Vec::new();
+    let mut step_num = 1;
 
     let tab = if is_initial_tab {
         let mut found = None;
@@ -106,6 +153,7 @@ pub fn run_browser_tab(
         );
     } else {
         info!("Successfully navigated to {}", config.url);
+        crate::yasweb::browser::save_html_state(&tab, active_report_name, step_num, "Main page load"); step_num += 1;
     }
 
     // Attempt to wait until navigated, ignore error if it timeouts but page loads
@@ -206,6 +254,7 @@ pub fn run_browser_tab(
                     if let Ok(html) = tab.get_content() {
                         info!("Page HTML after clicking login:\n{}", html);
                     }
+                    crate::yasweb::browser::save_html_state(&tab, active_report_name, step_num, "After login"); step_num += 1;
                 }
                 Err(e) => {
                     error!("Failed to find login button: {:?}", e);
@@ -390,6 +439,7 @@ pub fn run_browser_tab(
                     } else {
                         info!("Menu successfully opened.");
                     }
+                    crate::yasweb::browser::save_html_state(&tab, active_report_name, step_num, "After clicking #menuPinnedBtn"); step_num += 1;
 
                     // Wait for MIS module to appear in DOM (it usually is there, but just to be sure)
                     info!("Waiting for MIS module to be present in DOM...");
@@ -472,6 +522,7 @@ pub fn run_browser_tab(
 
                                     info!("MIS Reports button successfully verified. MIS module click was successful.");
                                     println!("MIS Reports button successfully verified. MIS module click was successful.");
+                                    crate::yasweb::browser::save_html_state(&tab, active_report_name, step_num, "After clicking MIS module"); step_num += 1;
                                     if let Ok(html) = tab.get_content() {
                                         tracing::trace!(
                                             "Page HTML after MIS Reports verification:\n{}",
@@ -502,46 +553,7 @@ pub fn run_browser_tab(
 
                                     info!("Running full JS automation sequence...");
 
-                                    let log_html_state =
-                                        |tab: &std::sync::Arc<headless_chrome::Tab>,
-                                         step_name: &str| {
-                                            info!("STEP: {}", step_name);
-                                            let get_html_js = r#"
-                                            (function() {
-                                                let mainHtml = document.documentElement ? document.documentElement.outerHTML : "";
-                                                let iframeHtml = "";
-                                                try {
-                                                    let iframe = document.querySelector('iframe');
-                                                    if (iframe && iframe.contentWindow && iframe.contentWindow.document && iframe.contentWindow.document.documentElement) {
-                                                        iframeHtml = iframe.contentWindow.document.documentElement.outerHTML;
-                                                    }
-                                                } catch (e) {
-                                                    iframeHtml = "ERROR ACCESSING IFRAME: " + e.message;
-                                                }
-                                                return "=== MAIN DOCUMENT ===\n" + mainHtml + "\n\n=== IFRAME DOCUMENT ===\n" + iframeHtml;
-                                            })();
-                                        "#;
-                                            match tab.evaluate(get_html_js, true) {
-                                                Ok(res) => {
-                                                    if let Some(v) = res.value {
-                                                        if let Some(html) = v.as_str() {
-                                                            tracing::trace!(
-                                                                "Page HTML at {}:\n{}",
-                                                                step_name,
-                                                                html
-                                                            );
-                                                        }
-                                                    }
-                                                }
-                                                Err(e) => {
-                                                    tracing::trace!(
-                                                        "Failed to extract HTML at {}: {:?}",
-                                                        step_name,
-                                                        e
-                                                    );
-                                                }
-                                            }
-                                        };
+
 
                                     let filters_json = serde_json::to_string(active_filters)
                                         .unwrap_or_else(|_| "{}".to_string());
@@ -588,6 +600,7 @@ pub fn run_browser_tab(
                                         serde_json::to_string(&active_report_type).unwrap()
                                     );
 
+                                    crate::yasweb::browser::save_html_state(&tab, active_report_name, step_num, "Before selecting Report Type"); step_num += 1;
                                     info!("Selecting Report Type: {}", active_report_type);
                                     if let Ok(res) = tab.evaluate(&step1_js, true) {
                                         if let Some(v) = res.value {
@@ -604,7 +617,7 @@ pub fn run_browser_tab(
                                         error!("Failed to evaluate Step 1 JS.");
                                         return Err(anyhow::anyhow!("Automation Step failed"));
                                     }
-                                    log_html_state(&tab, "After Select Report Type");
+                                    crate::yasweb::browser::save_html_state(&tab, active_report_name, step_num, "After Select Report Type"); step_num += 1;
 
                                     // STEP 2: Wait for list & search report
                                     let step2_js = format!(
@@ -675,7 +688,7 @@ pub fn run_browser_tab(
                                         error!("Failed to evaluate Step 2 JS.");
                                         return Err(anyhow::anyhow!("Automation Step failed"));
                                     }
-                                    log_html_state(&tab, "After Selecting Report from List");
+                                    crate::yasweb::browser::save_html_state(&tab, active_report_name, step_num, "After Selecting Report from List"); step_num += 1;
 
                                     // STEP 3: Wait for Binding
                                     let step3_js = format!(
@@ -714,10 +727,11 @@ pub fn run_browser_tab(
                                             }
                                         }
                                     }
-                                    log_html_state(&tab, "After Report Bound");
+                                    crate::yasweb::browser::save_html_state(&tab, active_report_name, step_num, "After Report Bound"); step_num += 1;
 
                                     // STEP 4: Fill Filters & Click Search
-                                    let step4_js = format!(
+
+                                    let step4_fill_js = format!(
                                         r#"
                                         (async function(filters) {{
                                             function sleep(ms) {{ return new Promise(r => setTimeout(r, ms)); }}
@@ -769,51 +783,60 @@ pub fn run_browser_tab(
                                                     }}
                                                 }}
                                             }}
-
-                                            await sleep(1000);
-                                            let searchBtnIcon = doc.querySelector('button.btn-primary i.bi-search');
-                                            if (searchBtnIcon) searchBtnIcon.closest('button').click();
-
                                             return JSON.stringify({{ status: "SUCCESS", discovered: discoveredFilters }});
                                         }}({});
                                         "#,
                                         filters_json
                                     );
 
-                                    info!("Filling filters & Clicking Search...");
-                                    if let Ok(res) = tab.evaluate(&step4_js, true) {
+                                    info!("Filling filters...");
+                                    if let Ok(res) = tab.evaluate(&step4_fill_js, true) {
                                         if let Some(v) = res.value {
                                             if let Some(s) = v.as_str() {
                                                 if s.starts_with("ERROR") {
-                                                    error!("Step 4 Failed: {}", s);
-                                                    return Err(anyhow::anyhow!(
-                                                        "Automation Step failed"
-                                                    ));
+                                                    error!("Step 4 (Fill Filters) Failed: {}", s);
+                                                    return Err(anyhow::anyhow!("Automation Step failed"));
                                                 } else {
-                                                    if let Ok(parsed) =
-                                                        serde_json::from_str::<serde_json::Value>(s)
-                                                    {
-                                                        if let Some(arr) = parsed
-                                                            .get("discovered")
-                                                            .and_then(|a| a.as_array())
-                                                        {
+                                                    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(s) {
+                                                        if let Some(arr) = parsed.get("discovered").and_then(|a| a.as_array()) {
                                                             for item in arr {
                                                                 if let Some(val) = item.as_str() {
-                                                                    discovered_filters
-                                                                        .push(val.to_string());
+                                                                    discovered_filters.push(val.to_string());
                                                                 }
                                                             }
-                                                            info!(
-                                                                "Discovered filters: {:?}",
-                                                                discovered_filters
-                                                            );
+                                                            info!("Discovered filters: {:?}", discovered_filters);
                                                         }
                                                     }
                                                 }
                                             }
                                         }
                                     }
-                                    log_html_state(&tab, "After Search Click");
+                                    crate::yasweb::browser::save_html_state(&tab, active_report_name, step_num, "After filling in the filters"); step_num += 1;
+
+                                    let step4_search_js = r#"
+                                        (async function() {
+                                            let doc = document.querySelector('iframe').contentWindow.document;
+                                            let searchBtnIcon = doc.querySelector('button.btn-primary i.bi-search');
+                                            if (searchBtnIcon) {
+                                                searchBtnIcon.closest('button').click();
+                                                return "SUCCESS";
+                                            }
+                                            return "ERROR: Search button not found";
+                                        })();
+                                    "#;
+                                    info!("Clicking Search...");
+                                    if let Ok(res) = tab.evaluate(step4_search_js, true) {
+                                        if let Some(v) = res.value {
+                                            if let Some(s) = v.as_str() {
+                                                if s.starts_with("ERROR") {
+                                                    error!("Step 4 (Search) Failed: {}", s);
+                                                    return Err(anyhow::anyhow!("Automation Step failed"));
+                                                }
+                                            }
+                                        }
+                                    }
+                                    crate::yasweb::browser::save_html_state(&tab, active_report_name, step_num, "After clicking the Search button"); step_num += 1;
+
 
                                     // STEP 5: Poll for loader across BOTH documents
                                     info!(
@@ -868,21 +891,19 @@ pub fn run_browser_tab(
                                                 }
                                             }
                                             std::thread::sleep(Duration::from_secs(10));
-                                            log_html_state(
-                                                &tab,
-                                                &format!("Waiting for loader (Loop {})", i),
-                                            );
+                                            crate::yasweb::browser::save_html_state(&tab, active_report_name, step_num, &format!("Waiting for loader (Loop {})", i)); step_num += 1;
                                         }
                                     } else {
                                         info!("No loader detected after search click.");
                                     }
-                                    log_html_state(&tab, "After Loader Clear");
+                                    crate::yasweb::browser::save_html_state(&tab, active_report_name, step_num, "After Loader Clear"); step_num += 1;
                                     std::thread::sleep(Duration::from_secs(2));
 
                                     // STEP 6: Export & XLSX
-                                    let step6_js = r#"
+
+                                    // STEP 6: Export & XLSX
+                                    let step6_export_js = r#"
                                         (async function() {
-                                            function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
                                             let doc = document.querySelector('iframe').contentWindow.document;
 
                                             let exportBtn = null;
@@ -902,8 +923,27 @@ pub fn run_browser_tab(
                                             if (!exportBtn) return "ERROR: Export button not found.";
 
                                             exportBtn.click();
-                                            await sleep(1500);
+                                            return "SUCCESS";
+                                        })();
+                                    "#;
 
+                                    info!("Clicking Export...");
+                                    if let Ok(res) = tab.evaluate(step6_export_js, true) {
+                                        if let Some(v) = res.value {
+                                            if let Some(s) = v.as_str() {
+                                                if s.starts_with("ERROR") {
+                                                    error!("Step 6 (Export) Failed: {}", s);
+                                                    return Err(anyhow::anyhow!("Automation Step failed"));
+                                                }
+                                            }
+                                        }
+                                    }
+                                    std::thread::sleep(Duration::from_secs(1));
+                                    crate::yasweb::browser::save_html_state(&tab, active_report_name, step_num, "After clicking Export"); step_num += 1;
+
+                                    let step6_xlsx_js = r#"
+                                        (async function() {
+                                            let doc = document.querySelector('iframe').contentWindow.document;
                                             let xlsxOption = null;
                                             let listItems = doc.querySelectorAll('.dx-list-item-content');
                                             for (let item of listItems) {
@@ -924,23 +964,22 @@ pub fn run_browser_tab(
                                         })();
                                     "#;
 
-                                    info!("Clicking Export & XLSX...");
-                                    if let Ok(res) = tab.evaluate(step6_js, true) {
+                                    info!("Clicking XLSX...");
+                                    if let Ok(res) = tab.evaluate(step6_xlsx_js, true) {
                                         if let Some(v) = res.value {
                                             if let Some(s) = v.as_str() {
                                                 if s.starts_with("ERROR") {
-                                                    error!("Step 6 Failed: {}", s);
-                                                    return Err(anyhow::anyhow!(
-                                                        "Automation Step failed"
-                                                    ));
+                                                    error!("Step 6 (XLSX) Failed: {}", s);
+                                                    return Err(anyhow::anyhow!("Automation Step failed"));
                                                 } else {
                                                     info!("JS Automation Sequence Completed Successfully!");
                                                 }
                                             }
                                         }
                                     }
-                                    log_html_state(&tab, "After XLSX Click");
+                                    crate::yasweb::browser::save_html_state(&tab, active_report_name, step_num, "After clicking XLSX"); step_num += 1;
                                     std::thread::sleep(Duration::from_secs(5));
+
                                 }
                             }
                             Err(e) => {

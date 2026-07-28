@@ -326,6 +326,36 @@ async fn main() -> Result<()> {
     let mut report_futures = Vec::new();
 
     // Iterate over active_report_names
+    let mut user_data_dir = executable_dir()?;
+            user_data_dir.push("yasweb_chrome_data");
+            // Use unique data dir per report to allow simultaneous runs
+            user_data_dir.push("shared_session");
+
+            let args = vec![
+                std::ffi::OsStr::new("--ignore-certificate-errors"),
+                std::ffi::OsStr::new("--start-maximized"),
+                std::ffi::OsStr::new("--disable-web-security"),
+                std::ffi::OsStr::new("--disable-site-isolation-trials"),
+                std::ffi::OsStr::new("--disable-features=IsolateOrigins,site-per-process"),
+                std::ffi::OsStr::new("--disable-session-crashed-bubble"),
+                std::ffi::OsStr::new("--no-first-run"),
+                std::ffi::OsStr::new("--disable-infobars"),
+                std::ffi::OsStr::new("--skip-reopen-last-pages"),
+            ];
+
+            let launch_options = LaunchOptions::default_builder()
+                .headless(config.headless)
+                .sandbox(false)
+                .idle_browser_timeout(std::time::Duration::from_secs(120))
+                .user_data_dir(Some(user_data_dir))
+                .args(args)
+                .build()
+                .map_err(|e| anyhow::anyhow!("Failed to build launch options: {e}"))?;
+
+            let browser = Arc::new(Browser::new(launch_options).context("Failed to launch browser")?);
+
+            // Chunk runs into concurrent batches based on config
+
     for active_report_name in active_report_names {
         let active_report_type = active_report_type_global.clone();
         let active_filters = active_filters_global.clone();
@@ -338,6 +368,7 @@ async fn main() -> Result<()> {
         let active_report_name_clone_for_future = active_report_name.clone();
 
         // Push an async block into our futures list
+        let browser = browser.clone();
         report_futures.push(async move {
             let active_report_name = active_report_name_clone_for_future;
             let mut active_report_type = active_report_type;
@@ -464,36 +495,6 @@ async fn main() -> Result<()> {
             let active_report_name_clone = active_report_name.clone();
 
             // Launch browser once
-            let mut user_data_dir = executable_dir()?;
-            user_data_dir.push("yasweb_chrome_data");
-            // Use unique data dir per report to allow simultaneous runs
-            let safe_name = active_report_name.replace(|c: char| !c.is_alphanumeric(), "_");
-            user_data_dir.push(safe_name);
-
-            let args = vec![
-                std::ffi::OsStr::new("--ignore-certificate-errors"),
-                std::ffi::OsStr::new("--start-maximized"),
-                std::ffi::OsStr::new("--disable-web-security"),
-                std::ffi::OsStr::new("--disable-site-isolation-trials"),
-                std::ffi::OsStr::new("--disable-features=IsolateOrigins,site-per-process"),
-                std::ffi::OsStr::new("--disable-session-crashed-bubble"),
-                std::ffi::OsStr::new("--no-first-run"),
-                std::ffi::OsStr::new("--disable-infobars"),
-                std::ffi::OsStr::new("--skip-reopen-last-pages"),
-            ];
-
-            let launch_options = LaunchOptions::default_builder()
-                .headless(config.headless)
-                .sandbox(false)
-                .idle_browser_timeout(std::time::Duration::from_secs(120))
-                .user_data_dir(Some(user_data_dir))
-                .args(args)
-                .build()
-                .map_err(|e| anyhow::anyhow!("Failed to build launch options: {e}"))?;
-
-            let browser = Arc::new(Browser::new(launch_options).context("Failed to launch browser")?);
-
-            // Chunk runs into concurrent batches based on config
             let concurrency = if config.concurrency == 0 {
                 1
             } else {
