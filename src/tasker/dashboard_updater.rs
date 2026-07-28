@@ -59,7 +59,9 @@ fn run_powershell(script: &str) -> Result<()> {
     let _ = stdout_thread.join();
     let _ = stderr_thread.join();
 
-    let _ = std::fs::remove_file(&path);
+    if let Err(e) = std::fs::remove_file(&path) {
+        tracing::warn!("Failed to remove temporary file {}: {}", path.display(), e);
+    }
 
     if !status.success() {
         anyhow::bail!("PowerShell script exited with status: {}", status);
@@ -368,7 +370,13 @@ mod tests {
             html_content
         );
 
-        let _ = std::fs::remove_file(&html_path);
+        if let Err(e) = std::fs::remove_file(&html_path) {
+            tracing::warn!(
+                "Failed to remove temporary file {}: {}",
+                html_path.display(),
+                e
+            );
+        }
 
         let output_csv_path = std::path::PathBuf::from(&dash_config.output_file);
         assert!(

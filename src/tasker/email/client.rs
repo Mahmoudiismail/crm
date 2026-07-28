@@ -545,9 +545,21 @@ $Mail.Display()
             info!("Successfully processed email for {}", bucket_name);
         }
 
-        let _ = std::fs::remove_file(attachment_path);
+        if let Err(e) = std::fs::remove_file(&attachment_path) {
+            tracing::warn!(
+                "Failed to remove temporary file {}: {}",
+                attachment_path.display(),
+                e
+            );
+        }
         if let Some(ref leads_path) = leads_report_path {
-            let _ = std::fs::remove_file(leads_path);
+            if let Err(e) = std::fs::remove_file(leads_path) {
+                tracing::warn!(
+                    "Failed to remove temporary file {}: {}",
+                    leads_path.display(),
+                    e
+                );
+            }
         }
 
         Ok(())
@@ -686,8 +698,20 @@ mod tests {
         assert!(!html_content.contains("<body></body>"));
         assert!(html_content.contains("Kindly find below"));
 
-        let _ = std::fs::remove_file(email_html_path);
-        let _ = std::fs::remove_file(temp_dir.join("Call_Center_open_tickets.csv"));
+        if let Err(e) = std::fs::remove_file(&email_html_path) {
+            tracing::warn!(
+                "Failed to remove temporary file {}: {}",
+                email_html_path.display(),
+                e
+            );
+        }
+        if let Err(e) = std::fs::remove_file(temp_dir.join("Call_Center_open_tickets.csv")) {
+            tracing::warn!(
+                "Failed to remove temporary file {}: {}",
+                temp_dir.join("Call_Center_open_tickets.csv").display(),
+                e
+            );
+        }
     }
 
     #[test]
@@ -757,7 +781,19 @@ mod tests {
         assert!(html_content.contains("alice"));
         assert!(!html_content.contains("bob"));
 
-        let _ = std::fs::remove_file(attachment_csv);
-        let _ = std::fs::remove_file(email_html);
+        if let Err(e) = std::fs::remove_file(&attachment_csv) {
+            tracing::warn!(
+                "Failed to remove temporary file {}: {}",
+                attachment_csv.display(),
+                e
+            );
+        }
+        if let Err(e) = std::fs::remove_file(&email_html) {
+            tracing::warn!(
+                "Failed to remove temporary file {}: {}",
+                email_html.display(),
+                e
+            );
+        }
     }
 }
