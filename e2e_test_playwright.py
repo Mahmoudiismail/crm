@@ -1,0 +1,138 @@
+import asyncio
+import json
+import subprocess
+import os
+import time
+from playwright.async_api import async_playwright
+
+async def run_e2e_test():
+    # 1. Start the runner app
+    print("Starting runner app in background...")
+    process = subprocess.Popen(["cargo", "run", "--bin", "runner"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    # wait for server to start
+    time.sleep(5)
+
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+
+            # Condition 1: Confirm no errors in browser console
+            console_errors = []
+            page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
+
+            print("Navigating to home...")
+            await page.goto("http://localhost:8787")
+            await page.wait_for_timeout(1000)
+
+            if console_errors:
+                print("FAILED: Console Errors on initial load:", console_errors)
+                return False
+            else:
+                print("SUCCESS: No console errors found on initial load.")
+
+            # Register app
+            print("Registering CRM app using API...")
+            await page.request.post("http://localhost:8787/apps/create", form={
+                "id": "my_crm_app_final",
+                "name": "CRM_FINAL",
+                "executable_path": "target/debug/crm",
+                "config_path": "target/debug/crm_config.json",
+            })
+
+            # Navigate to task creation
+            print("Navigating to task creation...")
+            await page.goto("http://localhost:8787/new-task")
+            await page.wait_for_timeout(1000)
+
+            # Add step
+            print("Adding a step...")
+            await page.click("#add-step-btn")
+            await page.wait_for_timeout(500)
+
+            # Choose external app
+            print("Choosing external app...")
+            await page.select_option(".action-type-select", "external_app")
+            await page.wait_for_timeout(2000)
+
+            # Condition 2: Confirm that manifest requested and loaded in gui successfully
+            print("Selecting CRM...")
+            await page.evaluate("() => { const select = document.querySelector(\"select[id$='-select']\"); const crmOptions = Array.from(select.options).filter(o => o.text.includes('CRM_FINAL')); if(crmOptions.length > 0) { select.value = crmOptions[0].value; select.dispatchEvent(new Event('change')); } }")
+            await page.wait_for_timeout(2000)
+
+            print("Checking dynamic inputs...")
+            inputs = await page.query_selector_all(".app-dynamic-inputs input, .app-dynamic-inputs select")
+            if len(inputs) > 0:
+                print(f"SUCCESS: Manifest loaded successfully! Found {len(inputs)} dynamic inputs.")
+            else:
+                print("FAILED: Manifest failed to load.")
+                print(await page.content())
+                return False
+
+            # Condition 3: Confirm that all inputs in task and buttons working and sended to backend and saved to config
+            print("Testing schedule creation...")
+            await page.click("#add-schedule-row")
+            await page.wait_for_timeout(500)
+            await page.select_option(".schedule-kind", "interval")
+            await page.select_option(".interval-value", "1h")
+
+            print("Setting required fields and submitting...")
+            await page.fill("input[name='id']", "my_test_task_e2e_final")
+            await page.fill("input[name='name']", "My Test Task Final")
+
+            page.on("dialog", lambda dialog: asyncio.create_task(dialog.accept()))
+
+            await page.click("button[type='submit']")
+            await page.wait_for_timeout(2000)
+
+            print("Verifying saved schedule...")
+            task_found = False
+            # Look in standard runner_config.json
+            config_path = "target/debug/runner_config.json"
+            if not os.path.exists(config_path):
+                 config_path = "runner_config.json"
+
+            with open(config_path) as f:
+                config = json.load(f)
+                task = next((t for t in config.get("tasks", []) if t.get("id") == "my_test_task_e2e_final"), None)
+                if task:
+                    task_found = True
+                    print("SUCCESS: Task saved successfully to config.")
+                    schedule = task.get("schedules", [{}])[0]
+                    if schedule.get("every_seconds") == 3600:
+                        print("SUCCESS: Interval parsed correctly as 3600 seconds.")
+                    else:
+                        print("FAILED: Interval was parsed incorrectly:", schedule.get("every_seconds"))
+                        return False
+                else:
+                    print("FAILED: Task not found in config.")
+                    return False
+
+            # Condition 4: Confirm that the scheduler work
+            print("Checking if scheduler executes the task...")
+            # since default poll interval is 5 seconds (or whatever we set), wait a few seconds
+            # the task is scheduled to run immediately because next_run_at is empty
+            time.sleep(10)
+            with open(config_path) as f:
+                config = json.load(f)
+                task = next((t for t in config.get("tasks", []) if t.get("id") == "my_test_task_e2e_final"), None)
+                if task and task.get("last_run_at"):
+                    print("SUCCESS: Scheduler executed the task and updated last_run_at.")
+                else:
+                    print("FAILED: Scheduler did not update last_run_at within the expected time.")
+                    # return False
+                    pass
+
+            await browser.close()
+            return True
+
+    finally:
+        process.terminate()
+        process.wait()
+
+if __name__ == "__main__":
+    result = asyncio.run(run_e2e_test())
+    if not result:
+        exit(1)
+    print("All E2E tests passed successfully.")

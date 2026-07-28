@@ -152,7 +152,7 @@ pub(crate) fn parse_schedules_text(value: &str) -> Result<Vec<TaskSchedule>> {
                     }
                 }
 
-                let mut base_str = every_str.strip_prefix("every").unwrap_or(every_str).trim();
+                let mut base_str = every_str;
                 let mut start_time = None;
                 if let Some((e, st_str)) = base_str.split_once("; st:") {
                     base_str = e.trim();
@@ -161,6 +161,7 @@ pub(crate) fn parse_schedules_text(value: &str) -> Result<Vec<TaskSchedule>> {
                         start_time = Some(st_val.to_string());
                     }
                 }
+                base_str = base_str.strip_prefix("every").unwrap_or(base_str).trim();
 
                 schedules.push(TaskSchedule::Interval {
                     enabled: true,
