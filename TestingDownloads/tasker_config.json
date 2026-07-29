@@ -12,10 +12,10 @@
       "download_path": "../crm_windows/Downloads",
       "email_config": {
         "body_template_file": "./task1/email_template.html",
-        "default_to_email": "mahmoud_iismail@rayacx.com",
-        "ending_cc": "Adel_TGomaa@rayacx.com; mahmoud_iismail@rayacx.com;",
+        "default_to_email": "REDACTED",
+        "ending_cc": "REDACTED;",
         "indentation_spaces": 4,
-        "initial_cc": "aaabdulhamid@fakeeh.care",
+        "initial_cc": "REDACTED",
         "send_call_center": true,
         "send_emails": true,
         "send_exceptions": false,
@@ -49,8 +49,8 @@
       "assignment_settings_file": "./task1/assignments.csv",
       "dashboard_file": "C:/Users/Rayacorp21/Downloads/0.xlsx",
       "download_path": "../crm_windows/Downloads",
-      "email_cc": "cc@example.com",
-      "email_to": "stakeholder@example.com",
+      "email_cc": "REDACTED",
+      "email_to": "REDACTED",
       "exclude_branches": [
         "Dr. Soliman Fakeeh Hospital Madinah",
         "Medical Fakeeh"

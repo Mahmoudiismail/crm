@@ -1,6 +1,0 @@
-refactor(audit): apply audit remediation fixes
-
-- Fix memory fragmentation in GUI template by replacing `collect::<Vec<_>>().join(...)` with `fold`.
-- Redact secrets across configurations via custom `Debug` implementations.
-- Clean up inactive CI platform configurations.
-- Verify `HashSet` caching and date `Option` safety matches `audit_report` remediation strategies.
