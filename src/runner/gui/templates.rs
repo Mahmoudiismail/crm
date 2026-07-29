@@ -137,8 +137,13 @@ pub(crate) fn render_task_row(task: &RunnerTask) -> String {
             }
             base
         })
-        .collect::<Vec<_>>()
-        .join("<div class='mt-2'></div>");
+        .fold(String::new(), |mut acc, s| {
+            if !acc.is_empty() {
+                acc.push_str("<div class=\'mt-2\'></div>");
+            }
+            acc.push_str(&s);
+            acc
+        });
 
     let schedule_display = if schedules_text.is_empty() {
         "<span class='text-gray-400 italic text-xs'>Manual</span>".to_string()

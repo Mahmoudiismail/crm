@@ -10,3 +10,5 @@ yasweb_chrome_data/
 wcxx_config.json
 wcxx.log
 GibsonSpewing
+*.local.json
+.claude/settings.local.json
