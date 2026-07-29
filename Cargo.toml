@@ -5,6 +5,10 @@ edition = "2021"
 authors = ["CRM Tool"]
 description = "Runner + CRM tool with tray scheduler, configurable tasks, and Cognito authentication"
 autobins = false
+build = "build.rs"
+
+[build-dependencies]
+chrono = "0.4.44"
 
 [dependencies]
 csv = "1.3.0"

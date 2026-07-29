@@ -52,7 +52,16 @@
           <div class='schedule-interval w-full sm:w-auto flex-1'>
               <label class='block text-xs font-medium text-gray-700 mb-1'>Every</label>
               <select class='interval-value shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2'>
-                  <option value='15m'>15m</option><option value='30m'>30m</option><option value='1h' selected>1h</option><option value='2h'>2h</option><option value='4h'>4h</option><option value='8h'>8h</option><option value='12h'>12h</option><option value='24h'>24h</option><option value='2d'>2d</option><option value='7d'>7d</option>
+                  <option value='15m'>15m</option>
+                  <option value='30m'>30m</option>
+                  <option value='1h' selected>1h</option>
+                  <option value='2h'>2h</option>
+                  <option value='4h'>4h</option>
+                  <option value='8h'>8h</option>
+                  <option value='12h'>12h</option>
+                  <option value='24h'>24h</option>
+                  <option value='2d'>2d</option>
+                  <option value='7d'>7d</option>
               </select>
           </div>
           <div class='schedule-once w-full sm:w-auto flex-1 hidden'>
@@ -495,11 +504,7 @@
                 ${arg.description ? `<p class="text-xs text-gray-500 mt-1 ml-6">${arg.description}</p>` : ""}
             </div>
           `;
-        } else if (
-          arg.arg_type === "String" &&
-          arg.allowed_values &&
-          arg.allowed_values.length > 0
-        ) {
+        } else if (arg.arg_type === "List" || (arg.arg_type === "String" && arg.allowed_values && arg.allowed_values.length > 0)) {
           let opts = "";
           arg.allowed_values.forEach((opt) => {
             const selected = opt === val ? "selected" : "";
@@ -563,6 +568,14 @@
               </div>
             `;
 
+        } else if (arg.arg_type === "Number") {
+          html += `
+            <div class="mb-3 arg-container" ${dependsData}>
+                <label class="block text-sm font-semibold text-gray-700 mb-1">${arg.name} ${requiredAsterisk}</label>
+                <input type="number" id="${id}" data-arg-name="${arg.name}" class="block w-full rounded border border-gray-300 px-3 py-2 text-sm" value="${val || ""}">
+                ${arg.description ? `<p class="text-xs text-gray-500 mt-1">${arg.description}</p>` : ""}
+            </div>
+          `;
         } else {
           html += `
             <div class="mb-3 arg-container" ${dependsData}>

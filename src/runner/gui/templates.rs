@@ -483,16 +483,7 @@ pub(crate) fn schedule_row_html(
                 <div class='schedule-interval w-full sm:w-auto flex-1 {}'>\
                     <label class='block text-xs font-medium text-gray-700 mb-1'>Every</label>\
                     <select class='interval-value shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2'>\
-                        <option value='15m' {}>15m</option>\
-                        <option value='30m' {}>30m</option>\
-                        <option value='1h' {}>1h</option>\
-                        <option value='2h' {}>2h</option>\
-                        <option value='4h' {}>4h</option>\
-                        <option value='8h' {}>8h</option>\
-                        <option value='12h' {}>12h</option>\
-                        <option value='24h' {}>24h</option>\
-                        <option value='2d' {}>2d</option>\
-                        <option value='7d' {}>7d</option>\
+                        {}\
                     </select>\
                 </div>\
                 <div class='schedule-once w-full sm:w-auto flex-1 {}'>\
@@ -542,16 +533,7 @@ pub(crate) fn schedule_row_html(
         if kind == "weekly" { "selected" } else { "" },
         if kind == "monthly" { "selected" } else { "" },
         interval_hidden,
-        if interval_value == "15m" { "selected" } else { "" },
-        if interval_value == "30m" { "selected" } else { "" },
-        if interval_value == "1h" { "selected" } else { "" },
-        if interval_value == "2h" { "selected" } else { "" },
-        if interval_value == "4h" { "selected" } else { "" },
-        if interval_value == "8h" { "selected" } else { "" },
-        if interval_value == "12h" { "selected" } else { "" },
-        if interval_value == "24h" { "selected" } else { "" },
-        if interval_value == "2d" { "selected" } else { "" },
-        if interval_value == "7d" { "selected" } else { "" },
+        {            let opts = vec!["15m", "30m", "1h", "2h", "4h", "8h", "12h", "24h", "2d", "7d"];            let mut found = false;            let mut html = String::new();            for opt in &opts {                if *opt == interval_value {                    html.push_str(&format!("<option value='{}' selected>{}</option>", opt, opt));                    found = true;                } else {                    html.push_str(&format!("<option value='{}'>{}</option>", opt, opt));                }            }            if !found && !interval_value.is_empty() {                html.push_str(&format!("<option value='{}' selected>{}</option>", interval_value, interval_value));            }            html        },
         once_hidden,
         escape_html(once_value),
         daily_hidden,
