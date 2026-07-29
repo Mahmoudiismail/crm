@@ -28,11 +28,11 @@ pub(crate) fn layout(title: &str, main_content: &str) -> String {
             </div>
         </main>
     </div>
-    <script src="/assets/js/common.js"></script>
-    <script src="/assets/js/api.js"></script>
-    <script src="/assets/js/notifications.js"></script>
-    <script src="/assets/js/validation.js"></script>
-    <script src="/assets/js/forms.js"></script>
+    <script src="/assets/js/common.js?v={v}"></script>
+    <script src="/assets/js/api.js?v={v}"></script>
+    <script src="/assets/js/notifications.js?v={v}"></script>
+    <script src="/assets/js/validation.js?v={v}"></script>
+    <script src="/assets/js/forms.js?v={v}"></script>
 </body>
 </html>"#,
         title = escape_html(title),
@@ -40,6 +40,7 @@ pub(crate) fn layout(title: &str, main_content: &str) -> String {
         sidebar = sidebar(),
         top_nav = top_nav(),
         main_content = main_content,
+        v = env!("BUILD_TIME"),
     )
 }
 

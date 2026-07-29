@@ -574,7 +574,14 @@ async fn run_task_by_id(
     let policy = policy_from_config(&cfg);
 
     if let Some(task) = cfg.tasks.iter_mut().find(|t| t.id == task_id) {
-        update_next_run(task, now, policy.min_task_interval_seconds);
+        task.last_run_at = now.to_rfc3339();
+        if !task.schedules.is_empty() {
+            for schedule in &mut task.schedules {
+                advance_schedule(schedule, now, policy.min_task_interval_seconds);
+            }
+        } else {
+            update_next_run(task, now, policy.min_task_interval_seconds);
+        }
         let _ = exec_tx
             .send(ExecutionManagerCommand::QueueTask {
                 task: Box::new(task.clone()),

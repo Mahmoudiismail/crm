@@ -54,19 +54,33 @@ pub(crate) async fn run_server(handle: RunnerHandle) -> Result<()> {
             };
 
             let (status, content_type, body) = match route_request(&request, &handle_clone).await {
-                Ok(v) => v,
-                Err(e) => (
-                    500,
-                    "text/html; charset=utf-8",
-                    render_error_page("Request failed", &format!("{e}")),
-                ),
+                Ok(v) => {
+                    if v.0 == 404 && !request.path.starts_with("/assets/js/") {
+                        tracing::warn!("HTTP 404 Not Found: {}", request.path);
+                    }
+                    v
+                }
+                Err(e) => {
+                    tracing::error!("HTTP 500 Internal Error on {}: {:#}", request.path, e);
+                    (
+                        500,
+                        "text/html; charset=utf-8",
+                        render_error_page("Request failed", &format!("{e}")),
+                    )
+                }
             };
 
+            let cache_header = if request.path.starts_with("/assets/js/") {
+                "Cache-Control: public, max-age=604800\r\n"
+            } else {
+                "Cache-Control: no-cache\r\n"
+            };
             let response = format!(
-                "HTTP/1.1 {} OK\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                "HTTP/1.1 {} OK\r\nContent-Type: {}\r\nContent-Length: {}\r\n{}Connection: close\r\n\r\n{}",
                 status,
                 content_type,
                 body.len(),
+                cache_header,
                 body
             );
 
@@ -105,10 +119,12 @@ pub(crate) async fn read_http_request(
     let method = parts.next().unwrap_or_default().to_string();
     let path = parts.next().unwrap_or("/").to_string();
 
-    info!(
-        "HTTP Request: {} {}\nHeaders:\n{}\nBody:\n{}",
-        method, path, headers, body
-    );
+    if !path.starts_with("/assets/js/") {
+        info!(
+            "HTTP Request: {} {}\nHeaders:\n{}\nBody:\n{}",
+            method, path, headers, body
+        );
+    }
 
     Ok(Some(HttpRequest {
         method,
