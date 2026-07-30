@@ -166,7 +166,10 @@ pub(crate) async fn handle_app_edit_page(
 }
 
 pub(crate) async fn handle_run_all(handle: &RunnerHandle) -> Result<(u16, &'static str, String)> {
-    handle.command_tx.send(RunnerCommand::RunAllNow { is_manual: true }).await?;
+    handle
+        .command_tx
+        .send(RunnerCommand::RunAllNow { is_manual: true })
+        .await?;
     Ok((
         200,
         "text/html; charset=utf-8",

@@ -247,7 +247,9 @@ async fn handle_command(
     exec_tx: &mpsc::Sender<ExecutionManagerCommand>,
 ) -> Result<()> {
     match cmd {
-        RunnerCommand::RunAllNow { is_manual } => run_all_tasks_now(path, _status, exec_tx, is_manual).await,
+        RunnerCommand::RunAllNow { is_manual } => {
+            run_all_tasks_now(path, _status, exec_tx, is_manual).await
+        }
         RunnerCommand::RunTaskNow { task_id, is_manual } => {
             run_task_by_id(path, &task_id, _status, exec_tx, is_manual).await
         }
