@@ -197,7 +197,10 @@ pub fn start_scheduler(runner_config_path: String) -> RunnerHandle {
                             for schedule in &task.schedules {
                                 if schedule_is_due(schedule, now) {
                                     info!("Cron schedule triggered for task: {}", task.id);
-                                    let _ = tx_clone.send(RunnerCommand::RunTaskNow(task.id.clone())).await;
+                                    let _ = tx_clone.send(RunnerCommand::RunTaskNow {
+                                        task_id: task.id.clone(),
+                                        is_manual: false,
+                                    }).await;
                                     break;
                                 }
                             }
@@ -244,9 +247,11 @@ async fn handle_command(
     exec_tx: &mpsc::Sender<ExecutionManagerCommand>,
 ) -> Result<()> {
     match cmd {
-        RunnerCommand::RunAllNow => run_all_tasks_now(path, _status, exec_tx).await,
-        RunnerCommand::RunTaskNow(task_id) => {
-            run_task_by_id(path, &task_id, _status, exec_tx).await
+        RunnerCommand::RunAllNow { is_manual } => {
+            run_all_tasks_now(path, _status, exec_tx, is_manual).await
+        }
+        RunnerCommand::RunTaskNow { task_id, is_manual } => {
+            run_task_by_id(path, &task_id, _status, exec_tx, is_manual).await
         }
         RunnerCommand::SetTaskEnabled { task_id, enabled } => {
             set_task_enabled(path, &task_id, enabled).await
@@ -535,6 +540,7 @@ async fn run_all_tasks_now(
     path: &str,
     _status: &Arc<Mutex<RunnerStatus>>,
     exec_tx: &mpsc::Sender<ExecutionManagerCommand>,
+    is_manual: bool,
 ) -> Result<()> {
     let path_str = path.to_string();
     let mut cfg = tokio::task::spawn_blocking(move || RunnerConfig::load(&path_str))
@@ -544,7 +550,10 @@ async fn run_all_tasks_now(
     let policy = policy_from_config(&cfg);
     for task in &mut cfg.tasks {
         if task.enabled {
-            update_next_run(task, now, policy.min_task_interval_seconds);
+            task.last_run_at = now.to_rfc3339();
+            if !is_manual {
+                update_next_run(task, now, policy.min_task_interval_seconds);
+            }
             let _ = exec_tx
                 .send(ExecutionManagerCommand::QueueTask {
                     task: Box::new(task.clone()),
@@ -565,6 +574,7 @@ async fn run_task_by_id(
     task_id: &str,
     _status: &Arc<Mutex<RunnerStatus>>,
     exec_tx: &mpsc::Sender<ExecutionManagerCommand>,
+    is_manual: bool,
 ) -> Result<()> {
     let path_str = path.to_string();
     let mut cfg = tokio::task::spawn_blocking(move || RunnerConfig::load(&path_str))
@@ -575,13 +585,17 @@ async fn run_task_by_id(
 
     if let Some(task) = cfg.tasks.iter_mut().find(|t| t.id == task_id) {
         task.last_run_at = now.to_rfc3339();
-        if !task.schedules.is_empty() {
-            for schedule in &mut task.schedules {
-                advance_schedule(schedule, now, policy.min_task_interval_seconds);
+
+        if !is_manual {
+            if !task.schedules.is_empty() {
+                for schedule in &mut task.schedules {
+                    advance_schedule(schedule, now, policy.min_task_interval_seconds);
+                }
+            } else {
+                update_next_run(task, now, policy.min_task_interval_seconds);
             }
-        } else {
-            update_next_run(task, now, policy.min_task_interval_seconds);
         }
+
         let _ = exec_tx
             .send(ExecutionManagerCommand::QueueTask {
                 task: Box::new(task.clone()),
@@ -928,11 +942,14 @@ mod tests_queue {
         let (tx, _rx) = mpsc::channel::<RunnerCommand>(64);
 
         for i in 0..64 {
-            let res = tx.try_send(RunnerCommand::RunTaskNow(format!("task_{}", i)));
+            let res = tx.try_send(RunnerCommand::RunTaskNow {
+                task_id: format!("task_{}", i),
+                is_manual: false,
+            });
             assert!(res.is_ok(), "Should send up to capacity");
         }
 
-        let res = tx.try_send(RunnerCommand::RunAllNow);
+        let res = tx.try_send(RunnerCommand::RunAllNow { is_manual: false });
         assert!(res.is_err(), "Should fail when capacity reached");
 
         // Characterize 128-capacity ExecutionManagerCommand queue

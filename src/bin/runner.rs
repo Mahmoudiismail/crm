@@ -107,7 +107,7 @@ async fn main() -> Result<()> {
     let tx = runner_handle.command_tx.clone();
     if !config_exists {
         tokio::spawn(async move {
-            let _ = tx.send(RunnerCommand::RunAllNow).await;
+            let _ = tx.send(RunnerCommand::RunAllNow { is_manual: false }).await;
         });
     }
 
@@ -224,7 +224,7 @@ impl ApplicationHandler for App {
                     info!("Manual run-all requested.");
                     let tx = self.runner.command_tx.clone();
                     tokio::spawn(async move {
-                        let _ = tx.send(RunnerCommand::RunAllNow).await;
+                        let _ = tx.send(RunnerCommand::RunAllNow { is_manual: true }).await;
                     });
                 } else if event.id == *logs_id {
                     info!("Opening logs file.");

@@ -4,8 +4,8 @@ use tokio::sync::Mutex;
 
 #[derive(Debug, Clone)]
 pub enum RunnerCommand {
-    RunAllNow,
-    RunTaskNow(String),
+    RunAllNow { is_manual: bool },
+    RunTaskNow { task_id: String, is_manual: bool },
     SetTaskEnabled { task_id: String, enabled: bool },
     Shutdown,
 }

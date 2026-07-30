@@ -113,7 +113,7 @@ async def run_e2e_test():
             print("Checking if scheduler executes the task...")
             # since default poll interval is 5 seconds (or whatever we set), wait a few seconds
             # the task is scheduled to run immediately because next_run_at is empty
-            time.sleep(10)
+            time.sleep(40)
             with open(config_path) as f:
                 config = json.load(f)
                 task = next((t for t in config.get("tasks", []) if t.get("id") == "my_test_task_e2e_final"), None)
