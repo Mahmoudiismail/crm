@@ -13,6 +13,9 @@ Tasks can also configure **Post Run Steps**, which trigger their own isolated st
 
 When configuring an application's actions, the Runner GUI will dynamically inject the available parameters based on the executed application's manifest. This means Runner can seamlessly schedule Yasweb downloads, CRM fetching, or simple Shell Commands out of the box.
 
+## Manual Executions
+When you manually trigger a task from the GUI (e.g. clicking **Run Now** or **Run All**), the task is queued for immediate execution without advancing its `next_run_at` schedule. This ensures that manually forcing a task does not overwrite or skip the originally scheduled automatic run.
+
 ## API Endpoints
-- `/run/{task_id}` (POST) - Forces immediate execution of the given task ID.
-- `/run-all` (POST) - Enqueues all tasks for immediate execution.
+- `/run/{task_id}` (POST) - Forces immediate execution of the given task ID (Manual mode).
+- `/run-all` (POST) - Enqueues all tasks for immediate execution (Manual mode).

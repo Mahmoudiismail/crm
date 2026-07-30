@@ -107,7 +107,7 @@ async fn main() -> Result<()> {
     let tx = runner_handle.command_tx.clone();
     if !config_exists {
         tokio::spawn(async move {
-            let _ = tx.send(RunnerCommand::RunAllNow).await;
+            let _ = tx.send(RunnerCommand::RunAllNow { is_manual: false }).await;
         });
     }
 
