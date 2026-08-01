@@ -22,6 +22,7 @@
 //! - `utils`: Cross-binary utilities such as logging, config management, and dynamic date parsing.
 
 pub mod crm;
+pub mod crm_updater;
 pub mod manifest;
 pub mod runner;
 pub mod tasker;

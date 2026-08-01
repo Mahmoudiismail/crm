@@ -47,6 +47,8 @@ rust_xlsxwriter = "0.95.0"
 clap = { version = "4.6.1", features = ["derive"] }
 lazy_static = "1.5.0"
 tempfile = "3.10.1"
+zip = { version = "7.2.0", features = ["aes-crypto", "deflate"] }
+winsafe = { version = "0.0.28", features = ["oleaut"] }
 
 
 [profile.release]
@@ -100,3 +102,7 @@ harness = false
 [[bench]]
 name = "config_merging"
 harness = false
+
+[[bin]]
+name = "crm_updater"
+path = "src/bin/crm_updater.rs"
