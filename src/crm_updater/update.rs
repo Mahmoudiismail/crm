@@ -56,11 +56,9 @@ pub fn process_update_pipeline(config: &crate::crm_updater::config::UpdaterConfi
 
 #[cfg(target_os = "windows")]
 fn download_update_zip_from_drafts(downloads_dir: &Path) -> Result<Option<PathBuf>> {
-    use winsafe::prelude::*;
-    use winsafe::{co, IDispatch, IUnknown, VARIANT};
+        use winsafe::co;
 
     // Try to get the active Outlook application
-    let prog_id = "Outlook.Application";
 
     // We must initialize COM
     let _com_guard = match winsafe::CoInitializeEx(co::COINIT::MULTITHREADED) {
