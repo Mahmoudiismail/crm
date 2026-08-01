@@ -56,7 +56,7 @@ pub fn process_update_pipeline(config: &crate::crm_updater::config::UpdaterConfi
 
 #[cfg(target_os = "windows")]
 fn download_update_zip_from_drafts(downloads_dir: &Path) -> Result<Option<PathBuf>> {
-        use winsafe::co;
+    use winsafe::co;
 
     // Try to get the active Outlook application
 
