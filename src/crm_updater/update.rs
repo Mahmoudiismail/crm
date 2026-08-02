@@ -66,6 +66,15 @@ fn download_update_zip_from_drafts(downloads_dir: &Path) -> Result<Option<PathBu
         Err(e) => bail!("Failed to initialize COM: {}", e),
     };
 
+    let abs_downloads_dir = match std::fs::canonicalize(downloads_dir) {
+        Ok(path) => path,
+        Err(e) => bail!("Failed to canonicalize downloads directory: {}", e),
+    };
+
+    // Canonicalize returns paths like `\\?\C:\...` on Windows, which can break COM objects.
+    let abs_downloads_dir_str = abs_downloads_dir.display().to_string();
+    let abs_downloads_dir_str = abs_downloads_dir_str.strip_prefix(r"\\?\").unwrap_or(abs_downloads_dir_str.as_str());
+
     // Since winsafe doesn't have a direct GetActiveObject equivalent that returns IDispatch for arbitrary prog_id,
     // and implementing a full COM caller here without type libs is quite verbose (GetIDsOfNames, Invoke),
     // we'll stick to a robust PowerShell script execution (which is COM automation).
@@ -114,7 +123,7 @@ if ($TargetItem -and $TargetAttachment) {{
     Write-Output "NOT_FOUND"
 }}
 "#,
-        downloads_dir.display().to_string().replace('\\', "\\\\")
+        abs_downloads_dir_str
     );
 
     let mut temp_file = tempfile::Builder::new()
