@@ -193,10 +193,16 @@ impl AppConfig {
 
         if let Value::Object(ref mut map) = value {
             if self.dynamic_to_date {
-                map.remove("to_date");
+                map.insert(
+                    "to_date".to_string(),
+                    serde_json::Value::String("".to_string()),
+                );
             }
             if self.dynamic_calls_from_date {
-                map.remove("calls_from_date");
+                map.insert(
+                    "calls_from_date".to_string(),
+                    serde_json::Value::String("".to_string()),
+                );
             }
         }
 
@@ -204,6 +210,23 @@ impl AppConfig {
         strip_nulls(&mut value);
 
         let pretty = serde_json::to_string_pretty(&value)?;
+
+        if let Ok(existing_content) = std::fs::read_to_string(path) {
+            if existing_content == pretty {
+                debug!("Config unchanged, skipping file write");
+                return Ok(());
+            }
+            if let (Ok(existing_val), Ok(new_val)) = (
+                serde_json::from_str::<serde_json::Value>(&existing_content),
+                serde_json::from_str::<serde_json::Value>(&pretty),
+            ) {
+                if existing_val == new_val {
+                    debug!("Config unchanged, skipping file write");
+                    return Ok(());
+                }
+            }
+        }
+
         crate::utils::atomic_write(std::path::Path::new(path), &pretty)
             .with_context(|| format!("Failed to write config to {}", path))?;
         info!("Config saved to {}", path);
