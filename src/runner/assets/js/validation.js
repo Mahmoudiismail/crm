@@ -22,18 +22,28 @@ window.validation = {
                     argsMap[argName] = "true";
                 }
             } else if (argType === "multi_list") {
-                if (input.selectedOptions) {
-                    const values = Array.from(input.selectedOptions).map(o => o.value);
-                    if (values.length > 0) {
-                        argsMap[argName] = values.join(",");
-                    } else {
-                        argsMap[argName] = "";
+                if (input.checked) {
+                    if (!argsMap[argName]) {
+                        argsMap[argName] = [];
                     }
+                    argsMap[argName].push(input.value);
+                }
+            } else if (argType === "datevar") {
+                if (input.style.display !== 'none') {
+                    argsMap[argName] = input.value;
                 }
             } else if (input.value !== undefined && input.value !== null) {
                 argsMap[argName] = input.value;
             }
         });
+
+        // Map arrays to comma-separated strings for multi_list
+        Object.keys(argsMap).forEach(key => {
+            if (Array.isArray(argsMap[key])) {
+                argsMap[key] = argsMap[key].join(",");
+            }
+        });
+
 
         if (hasMissingRequired) {
             return false;

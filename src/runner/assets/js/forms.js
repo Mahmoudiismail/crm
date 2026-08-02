@@ -69,16 +69,34 @@
               <input class='once-value shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2' type='datetime-local'>
           </div>
           <div class='schedule-daily w-full sm:w-auto flex-1 hidden'>
-              <label class='block text-xs font-medium text-gray-700 mb-1'>Times (comma sep, e.g. 09:00,15:30)</label>
-              <input class='daily-value shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2' type='text' placeholder='09:00'>
+              <label class='block text-xs font-medium text-gray-700 mb-1'>Times</label>
+              <div class='daily-times-container flex flex-wrap gap-2 mb-2'></div>
+              <button type='button' class='add-daily-time-btn inline-flex items-center px-2 py-1 border border-gray-300 text-xs font-medium rounded shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none'>+ Add Time</button>
+              <input type='hidden' class='daily-value'>
           </div>
           <div class='schedule-weekly w-full sm:w-auto flex-1 hidden'>
-              <label class='block text-xs font-medium text-gray-700 mb-1'>Day and Time (e.g. Monday@09:00)</label>
-              <input class='weekly-value shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2' type='text' placeholder='Monday@09:00'>
+              <label class='block text-xs font-medium text-gray-700 mb-1'>Day and Time</label>
+              <div class='flex gap-2'>
+                  <select class='weekly-day shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2'>
+                      <option value='Monday'>Monday</option>
+                      <option value='Tuesday'>Tuesday</option>
+                      <option value='Wednesday'>Wednesday</option>
+                      <option value='Thursday'>Thursday</option>
+                      <option value='Friday'>Friday</option>
+                      <option value='Saturday'>Saturday</option>
+                      <option value='Sunday'>Sunday</option>
+                  </select>
+                  <input class='weekly-time shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2' type='time'>
+                  <input class='weekly-value' type='hidden'>
+              </div>
           </div>
           <div class='schedule-monthly w-full sm:w-auto flex-1 hidden'>
-              <label class='block text-xs font-medium text-gray-700 mb-1'>Day and Time (e.g. 15@09:00 or -1@09:00)</label>
-              <input class='monthly-value shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2' type='text' placeholder='1@09:00'>
+              <label class='block text-xs font-medium text-gray-700 mb-1'>Day and Time (1-31 or -1)</label>
+              <div class='flex gap-2'>
+                  <input class='monthly-day shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2' type='number' min='-1' max='31' placeholder='1'>
+                  <input class='monthly-time shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2' type='time'>
+                  <input class='monthly-value' type='hidden'>
+              </div>
           </div>
           <div class='schedule-st w-full sm:w-auto flex-1'>
             <label class='block text-xs font-medium text-gray-700 mb-1'>Start Time (Optional)</label>
@@ -94,14 +112,14 @@
          <div class='flex items-center justify-between mb-2'>
              <span class='text-xs font-medium text-gray-700'>Working Hours (Optional, e.g. 09:00-17:00)</span>
          </div>
-         <div class='grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs'>
-             <div><label class='block text-gray-600 mb-1'>Monday</label><input type='text' class='wh-mon block w-full rounded-md border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1.5' placeholder='09:00-17:00'></div>
-             <div><label class='block text-gray-600 mb-1'>Tuesday</label><input type='text' class='wh-tue block w-full rounded-md border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1.5' placeholder='09:00-17:00'></div>
-             <div><label class='block text-gray-600 mb-1'>Wednesday</label><input type='text' class='wh-wed block w-full rounded-md border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1.5' placeholder='09:00-17:00'></div>
-             <div><label class='block text-gray-600 mb-1'>Thursday</label><input type='text' class='wh-thu block w-full rounded-md border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1.5' placeholder='09:00-17:00'></div>
-             <div><label class='block text-gray-600 mb-1'>Friday</label><input type='text' class='wh-fri block w-full rounded-md border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1.5' placeholder='09:00-17:00'></div>
-             <div><label class='block text-gray-600 mb-1'>Saturday</label><input type='text' class='wh-sat block w-full rounded-md border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1.5' placeholder='09:00-17:00'></div>
-             <div><label class='block text-gray-600 mb-1'>Sunday</label><input type='text' class='wh-sun block w-full rounded-md border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1.5' placeholder='09:00-17:00'></div>
+         <div class='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 text-xs'>
+             <div><label class='block text-gray-600 mb-1 font-semibold'>Monday</label><div class='flex items-center gap-1'><input type='time' class='wh-mon-start block w-full rounded border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1' title='From'><span class='text-gray-400'>-</span><input type='time' class='wh-mon-end block w-full rounded border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1' title='To'><input type='hidden' class='wh-mon'></div></div>
+             <div><label class='block text-gray-600 mb-1 font-semibold'>Tuesday</label><div class='flex items-center gap-1'><input type='time' class='wh-tue-start block w-full rounded border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1' title='From'><span class='text-gray-400'>-</span><input type='time' class='wh-tue-end block w-full rounded border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1' title='To'><input type='hidden' class='wh-tue'></div></div>
+             <div><label class='block text-gray-600 mb-1 font-semibold'>Wednesday</label><div class='flex items-center gap-1'><input type='time' class='wh-wed-start block w-full rounded border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1' title='From'><span class='text-gray-400'>-</span><input type='time' class='wh-wed-end block w-full rounded border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1' title='To'><input type='hidden' class='wh-wed'></div></div>
+             <div><label class='block text-gray-600 mb-1 font-semibold'>Thursday</label><div class='flex items-center gap-1'><input type='time' class='wh-thu-start block w-full rounded border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1' title='From'><span class='text-gray-400'>-</span><input type='time' class='wh-thu-end block w-full rounded border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1' title='To'><input type='hidden' class='wh-thu'></div></div>
+             <div><label class='block text-gray-600 mb-1 font-semibold'>Friday</label><div class='flex items-center gap-1'><input type='time' class='wh-fri-start block w-full rounded border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1' title='From'><span class='text-gray-400'>-</span><input type='time' class='wh-fri-end block w-full rounded border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1' title='To'><input type='hidden' class='wh-fri'></div></div>
+             <div><label class='block text-gray-600 mb-1 font-semibold'>Saturday</label><div class='flex items-center gap-1'><input type='time' class='wh-sat-start block w-full rounded border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1' title='From'><span class='text-gray-400'>-</span><input type='time' class='wh-sat-end block w-full rounded border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1' title='To'><input type='hidden' class='wh-sat'></div></div>
+             <div><label class='block text-gray-600 mb-1 font-semibold'>Sunday</label><div class='flex items-center gap-1'><input type='time' class='wh-sun-start block w-full rounded border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1' title='From'><span class='text-gray-400'>-</span><input type='time' class='wh-sun-end block w-full rounded border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1' title='To'><input type='hidden' class='wh-sun'></div></div>
          </div>
       </div>
     `;
@@ -111,6 +129,25 @@
     row.querySelector(".remove-schedule").addEventListener("click", () => {
       row.remove();
     });
+
+    // Add Daily Time logic
+    const addDailyTimeBtn = row.querySelector('.add-daily-time-btn');
+    if (addDailyTimeBtn) {
+        addDailyTimeBtn.addEventListener('click', () => {
+            const container = row.querySelector('.daily-times-container');
+            const timeWrap = document.createElement('div');
+            timeWrap.className = 'flex items-center gap-1';
+            timeWrap.innerHTML = `
+                <input type='time' class='block rounded border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1 text-sm'>
+                <button type='button' class='remove-daily-time text-red-500 hover:text-red-700 font-bold px-1'>&times;</button>
+            `;
+            timeWrap.querySelector('.remove-daily-time').addEventListener('click', () => {
+                timeWrap.remove();
+            });
+            container.appendChild(timeWrap);
+        });
+    }
+
     scheduleRows.appendChild(row);
     updateVisibility(row);
     scheduleIndex++;
@@ -129,13 +166,14 @@
     ];
     let hasWh = false;
     for (const day of days) {
-      const val = row.querySelector(day.cls).value.trim();
-      if (val) {
-        const parts = val.split('-');
-        if (parts.length === 2) {
-          wh[day.key] = { start: parts[0].trim(), end: parts[1].trim() };
+      const startVal = row.querySelector(day.cls + "-start").value.trim();
+      const endVal = row.querySelector(day.cls + "-end").value.trim();
+      if (startVal && endVal) {
+          wh[day.key] = { start: startVal, end: endVal };
           hasWh = true;
-        }
+          row.querySelector(day.cls).value = `${startVal}-${endVal}`;
+      } else {
+          row.querySelector(day.cls).value = "";
       }
     }
     return hasWh ? wh : null;
@@ -154,11 +192,23 @@
       } else if (kind === "once") {
         schedule = `once:${row.querySelector(".once-value").value}`;
       } else if (kind === "daily") {
-        schedule = `daily:${row.querySelector(".daily-value").value}`;
+        // Collect times from all the time inputs in the daily container
+        const timeInputs = Array.from(row.querySelectorAll('.daily-times-container input[type="time"]')).map(i => i.value).filter(v => v);
+        const val = timeInputs.join(',');
+        row.querySelector('.daily-value').value = val;
+        schedule = `daily:${val}`;
       } else if (kind === "weekly") {
-        schedule = `weekly:${row.querySelector(".weekly-value").value}`;
+        const day = row.querySelector('.weekly-day').value;
+        const time = row.querySelector('.weekly-time').value;
+        const val = (day && time) ? `${day}@${time}` : "";
+        row.querySelector('.weekly-value').value = val;
+        schedule = `weekly:${val}`;
       } else if (kind === "monthly") {
-        schedule = `monthly:${row.querySelector(".monthly-value").value}`;
+        const day = row.querySelector('.monthly-day').value;
+        const time = row.querySelector('.monthly-time').value;
+        const val = (day && time) ? `${day}@${time}` : "";
+        row.querySelector('.monthly-value').value = val;
+        schedule = `monthly:${val}`;
       }
 
       let whStr = "";
@@ -193,6 +243,89 @@
       row.querySelector(".remove-schedule").addEventListener("click", () => {
         row.remove();
       });
+
+      const addDailyTimeBtn = row.querySelector('.add-daily-time-btn');
+      if (addDailyTimeBtn) {
+          addDailyTimeBtn.addEventListener('click', () => {
+              const container = row.querySelector('.daily-times-container');
+              const timeWrap = document.createElement('div');
+              timeWrap.className = 'flex items-center gap-1';
+              timeWrap.innerHTML = `
+                  <input type='time' class='block rounded border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1 text-sm'>
+                  <button type='button' class='remove-daily-time text-red-500 hover:text-red-700 font-bold px-1'>&times;</button>
+              `;
+              timeWrap.querySelector('.remove-daily-time').addEventListener('click', () => {
+                  timeWrap.remove();
+              });
+              container.appendChild(timeWrap);
+          });
+
+          // Re-hydrate daily times logic if value exists
+          const hiddenVal = row.querySelector('.daily-value');
+          if (hiddenVal && hiddenVal.value) {
+             const times = hiddenVal.value.split(',').map(s => s.trim()).filter(s => s);
+             const container = row.querySelector('.daily-times-container');
+             times.forEach(t => {
+                 const timeWrap = document.createElement('div');
+                 timeWrap.className = 'flex items-center gap-1';
+                 timeWrap.innerHTML = `
+                     <input type='time' class='block rounded border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1 text-sm' value='${t}'>
+                     <button type='button' class='remove-daily-time text-red-500 hover:text-red-700 font-bold px-1'>&times;</button>
+                 `;
+                 timeWrap.querySelector('.remove-daily-time').addEventListener('click', () => {
+                     timeWrap.remove();
+                 });
+                 container.appendChild(timeWrap);
+             });
+          }
+      }
+
+      // Re-hydrate weekly/monthly values if they exist
+      const weeklyVal = row.querySelector('.weekly-value');
+      if (weeklyVal && weeklyVal.value) {
+          const parts = weeklyVal.value.split('@');
+          if (parts.length === 2) {
+             const selectEl = row.querySelector('.weekly-day');
+             const timeEl = row.querySelector('.weekly-time');
+             if (selectEl) selectEl.value = parts[0];
+             if (timeEl) timeEl.value = parts[1];
+          }
+      }
+
+      const monthlyVal = row.querySelector('.monthly-value');
+      if (monthlyVal && monthlyVal.value) {
+          const parts = monthlyVal.value.split('@');
+          if (parts.length === 2) {
+             const dayEl = row.querySelector('.monthly-day');
+             const timeEl = row.querySelector('.monthly-time');
+             if (dayEl) dayEl.value = parts[0];
+             if (timeEl) timeEl.value = parts[1];
+          }
+      }
+
+      // Re-hydrate working hours if they exist
+      const days = [
+        { key: "Monday", cls: ".wh-mon" },
+        { key: "Tuesday", cls: ".wh-tue" },
+        { key: "Wednesday", cls: ".wh-wed" },
+        { key: "Thursday", cls: ".wh-thu" },
+        { key: "Friday", cls: ".wh-fri" },
+        { key: "Saturday", cls: ".wh-sat" },
+        { key: "Sunday", cls: ".wh-sun" }
+      ];
+      for (const day of days) {
+          const hiddenInput = row.querySelector(day.cls);
+          if (hiddenInput && hiddenInput.value) {
+              const parts = hiddenInput.value.split('-');
+              if (parts.length === 2) {
+                  const startInput = row.querySelector(day.cls + "-start");
+                  const endInput = row.querySelector(day.cls + "-end");
+                  if (startInput) startInput.value = parts[0];
+                  if (endInput) endInput.value = parts[1];
+              }
+          }
+      }
+
       updateVisibility(row);
     }
   }
@@ -425,7 +558,7 @@
     }
 
     let options = "<option value=''>-- Select Application --</option>";
-    const selectedId = idHidden.value;
+    const selectedId = idHidden ? idHidden.value : null;
     apps.forEach((app) => {
       const selected = app.id === selectedId ? "selected" : "";
       options += `<option value="${app.id}" ${selected}>${app.name} (${app.id})</option>`;
@@ -442,22 +575,29 @@
 
     const selectEl = document.getElementById(`${idPrefix}-select`);
     selectEl.addEventListener("change", function () {
-      idHidden.value = this.value;
+      if (idHidden) {
+          idHidden.value = this.value;
+      }
       if (this.value) {
-        argsHidden.value = "{}"; // Reset args when app changes
+        if (argsHidden) argsHidden.value = "{}"; // Reset args when app changes
         loadAppManifest(this.value, dynamicInputs, argsHidden, idPrefix);
       } else {
-        dynamicInputs.innerHTML = "";
-        argsHidden.value = "{}";
+        if (dynamicInputs) dynamicInputs.innerHTML = "";
+        if (argsHidden) argsHidden.value = "{}";
       }
     });
 
     if (selectedId) {
-      loadAppManifest(selectedId, dynamicInputs, argsHidden, idPrefix);
+      // Use requestAnimationFrame to ensure the modal/DOM updates are processed
+      // before attempting to render dynamic inputs.
+      requestAnimationFrame(() => {
+          loadAppManifest(selectedId, dynamicInputs, argsHidden, idPrefix);
+      });
     }
   }
 
   async function loadAppManifest(appId, dynamicInputs, argsHidden, idPrefix) {
+    if (!dynamicInputs) return;
     dynamicInputs.innerHTML =
       '<div class="text-sm text-gray-500">Loading manifest...</div>';
     try {
@@ -470,7 +610,9 @@
 
       let currentArgs = {};
       try {
-        currentArgs = JSON.parse(argsHidden.value || "{}");
+        if (argsHidden && argsHidden.value) {
+            currentArgs = JSON.parse(argsHidden.value || "{}");
+        }
       } catch (e) {
         console.error("Failed to parse existing args", e);
       }
@@ -498,7 +640,7 @@
           html += `
             <div class="mb-3 arg-container" ${dependsData}>
                 <label class="flex items-center gap-2 text-sm text-gray-700">
-                    <input type="checkbox" id="${id}" data-arg-name="${arg.name}" ${checked} class="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500">
+                    <input type="checkbox" id="${id}" data-arg-name="${arg.name}" data-arg-type="boolean" ${checked} class="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500">
                     <span class="font-semibold">${arg.name}</span> ${requiredAsterisk}
                 </label>
                 ${arg.description ? `<p class="text-xs text-gray-500 mt-1 ml-6">${arg.description}</p>` : ""}
@@ -532,8 +674,8 @@
                        <label class="text-xs flex items-center gap-1"><input type="radio" name="mode_${id}" value="fixed" ${!isVar ? 'checked' : ''} onchange="document.getElementById('fixed_${id}').style.display='block'; document.getElementById('var_${id}').style.display='none';"> Fixed Date</label>
                        <label class="text-xs flex items-center gap-1"><input type="radio" name="mode_${id}" value="var" ${isVar ? 'checked' : ''} onchange="document.getElementById('fixed_${id}').style.display='none'; document.getElementById('var_${id}').style.display='block';"> Dynamic</label>
                    </div>
-                   <input type="date" id="fixed_${id}" data-arg-name="${arg.name}" data-group="datevar" class="block w-full rounded border border-gray-300 px-3 py-2 text-sm" value="${dateVal}" style="display: ${!isVar ? 'block' : 'none'}">
-                   <select id="var_${id}" data-arg-name="${arg.name}" data-group="datevar" class="block w-full rounded border border-gray-300 px-3 py-2 text-sm" style="display: ${isVar ? 'block' : 'none'}">
+                   <input type="date" id="fixed_${id}" data-arg-name="${arg.name}" data-arg-type="datevar" data-group="datevar" class="block w-full rounded border border-gray-300 px-3 py-2 text-sm" value="${dateVal}" style="display: ${!isVar ? 'block' : 'none'}">
+                   <select id="var_${id}" data-arg-name="${arg.name}" data-arg-type="datevar" data-group="datevar" class="block w-full rounded border border-gray-300 px-3 py-2 text-sm" style="display: ${isVar ? 'block' : 'none'}">
                       <option value="today" ${varVal === 'today' ? 'selected' : ''}>Today</option>
                       <option value="yesterday" ${varVal === 'yesterday' ? 'selected' : ''}>Yesterday</option>
                       <option value="tomorrow" ${varVal === 'tomorrow' ? 'selected' : ''}>Tomorrow</option>
@@ -552,7 +694,7 @@
                const checked = currentList.includes(opt) ? "checked" : "";
                checkBoxes += `
                  <label class="flex items-center gap-2 text-sm text-gray-700 py-1">
-                     <input type="checkbox" data-multilist="${arg.name}" value="${opt}" ${checked} class="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500">
+                     <input type="checkbox" data-arg-name="${arg.name}" data-arg-type="multi_list" data-multilist="${arg.name}" value="${opt}" ${checked} class="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500">
                      <span>${opt}</span>
                  </label>
                `;
@@ -561,7 +703,7 @@
             html += `
               <div class="mb-3 arg-container" ${dependsData}>
                   <label class="block text-sm font-semibold text-gray-700 mb-1">${arg.name} ${requiredAsterisk}</label>
-                  <div class="max-h-48 overflow-y-auto border border-gray-300 rounded p-2 bg-white" data-arg-name="${arg.name}" data-group="multilist" id="${id}">
+                  <div class="max-h-48 overflow-y-auto border border-gray-300 rounded p-2 bg-white" data-group="multilist" id="${id}">
                       ${checkBoxes}
                   </div>
                   ${arg.description ? `<p class="text-xs text-gray-500 mt-1">${arg.description}</p>` : ""}
