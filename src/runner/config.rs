@@ -1815,7 +1815,9 @@ pub fn normalize_and_validate_task(
     }
 
     if task.steps.iter().all(|s| s.actions.is_empty()) {
-        return Err(anyhow::anyhow!("Task requires at least one non-empty action"));
+        return Err(anyhow::anyhow!(
+            "Task requires at least one non-empty action"
+        ));
     }
 
     Ok(())

@@ -193,10 +193,16 @@ impl AppConfig {
 
         if let Value::Object(ref mut map) = value {
             if self.dynamic_to_date {
-                map.insert("to_date".to_string(), serde_json::Value::String("".to_string()));
+                map.insert(
+                    "to_date".to_string(),
+                    serde_json::Value::String("".to_string()),
+                );
             }
             if self.dynamic_calls_from_date {
-                map.insert("calls_from_date".to_string(), serde_json::Value::String("".to_string()));
+                map.insert(
+                    "calls_from_date".to_string(),
+                    serde_json::Value::String("".to_string()),
+                );
             }
         }
 
