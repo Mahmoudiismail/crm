@@ -27,7 +27,7 @@ else
         echo "=========================================="
         echo "Build complete."
         echo "Binaries are located in the target directory."
-        echo "Specifically: runner.exe, crm.exe, yasweb.exe, tasker.exe, wcxx.exe"
+        echo "Specifically: runner.exe, crm.exe, yasweb.exe, tasker.exe, wcxx.exe, crm_updater.exe"
         echo "=========================================="
     fi
 fi
