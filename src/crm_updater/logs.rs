@@ -17,16 +17,18 @@ pub fn process_and_send_logs(config: &UpdaterConfig) -> Result<()> {
         return Ok(());
     }
 
-    // 1. Gather all log files
+    // 1. Gather all log files recursively using WalkDir
     let mut log_files = Vec::new();
-    for entry in fs::read_dir(logs_dir)? {
-        let entry = entry?;
+    for entry in walkdir::WalkDir::new(logs_dir)
+        .into_iter()
+        .filter_map(Result::ok)
+    {
         let path = entry.path();
         if path.is_file() {
-            // We only care about .log files
+            // We only care about .log files (case-insensitive)
             if let Some(ext) = path.extension() {
-                if ext == "log" {
-                    log_files.push(path);
+                if ext.to_string_lossy().to_lowercase() == "log" {
+                    log_files.push(path.to_path_buf());
                 }
             }
         }
