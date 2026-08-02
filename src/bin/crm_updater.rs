@@ -84,15 +84,15 @@ fn main() -> Result<()> {
 
     let run_all = !args.update_only && !args.logs_only;
 
-    if run_all || args.update_only {
-        if let Err(e) = crm_tool::crm_updater::update::process_update_pipeline(&config) {
-            tracing::error!("Update pipeline failed: {}", e);
-        }
-    }
-
     if run_all || args.logs_only {
         if let Err(e) = crm_tool::crm_updater::logs::process_and_send_logs(&config) {
             tracing::error!("Logs pipeline failed: {}", e);
+        }
+    }
+
+    if run_all || args.update_only {
+        if let Err(e) = crm_tool::crm_updater::update::process_update_pipeline(&config) {
+            tracing::error!("Update pipeline failed: {}", e);
         }
     }
 

@@ -219,7 +219,13 @@ fn generate_update_script(
     config: &crate::crm_updater::config::UpdaterConfig,
     downloads_dir: &Path,
 ) -> Result<PathBuf> {
-    let mut script = String::from("$ErrorActionPreference = 'Continue'\n\n");
+    let mut script = String::from("$ErrorActionPreference = 'Continue'
+
+");
+
+    let abs_downloads_dir = std::fs::canonicalize(downloads_dir)?;
+    let downloads_dir_str = abs_downloads_dir.display().to_string();
+    let downloads_dir_str = downloads_dir_str.strip_prefix(r"\?\").unwrap_or(&downloads_dir_str);
 
     // Stop processes
     let mut apps_to_stop = std::collections::HashSet::new();
@@ -230,35 +236,65 @@ fn generate_update_script(
     for app in apps_to_stop {
         let process_name = app.strip_suffix(".exe").unwrap_or(&app);
         script.push_str(&format!(
-            "Stop-Process -Name '{}' -Force -ErrorAction SilentlyContinue\n",
-            process_name
+            "Stop-Process -Name '{}' -Force -ErrorAction SilentlyContinue
+",
+            process_name.replace("'", "''")
         ));
     }
 
     // Wait for file handles to release
-    script.push_str("Start-Sleep -Seconds 3\n\n");
+    script.push_str("Start-Sleep -Seconds 3
+
+");
 
     // Replace files
     for entry in &config.file_replacement_map {
-        let src = downloads_dir.join(&entry.source_file);
-        let dst = Path::new(&entry.target_path).join(&entry.executable_name);
+        let src = Path::new(downloads_dir_str).join(&entry.source_file);
+
+        // Canonicalize target_path to ensure absolute path
+        // Target path might not exist, but we can canonicalize '.' and then join.
+        // Or if it exists, canonicalize it.
+        let target_dir = Path::new(&entry.target_path);
+        let abs_target_dir = if target_dir.exists() {
+            std::fs::canonicalize(target_dir).unwrap_or_else(|_| target_dir.to_path_buf())
+        } else {
+            target_dir.to_path_buf()
+        };
+
+        let abs_target_str = abs_target_dir.display().to_string();
+        let abs_target_str = abs_target_str.strip_prefix(r"\?\").unwrap_or(&abs_target_str);
+
+        let dst = Path::new(abs_target_str).join(&entry.executable_name);
 
         script.push_str(&format!(
-            "if (Test-Path '{}') {{\n    Copy-Item -Path '{}' -Destination '{}' -Force\n}}\n",
-            src.display(),
-            src.display(),
-            dst.display()
+            "if (Test-Path '{}') {{
+    Copy-Item -Path '{}' -Destination '{}' -Force
+}}
+",
+            src.display().to_string().replace("'", "''"),
+            src.display().to_string().replace("'", "''"),
+            dst.display().to_string().replace("'", "''")
         ));
     }
 
     // Restart apps
     for entry in &config.file_replacement_map {
-        let dst = Path::new(&entry.target_path).join(&entry.executable_name);
+        let target_dir = Path::new(&entry.target_path);
+        let abs_target_dir = if target_dir.exists() {
+            std::fs::canonicalize(target_dir).unwrap_or_else(|_| target_dir.to_path_buf())
+        } else {
+            target_dir.to_path_buf()
+        };
+        let abs_target_str = abs_target_dir.display().to_string();
+        let abs_target_str = abs_target_str.strip_prefix(r"\?\").unwrap_or(&abs_target_str);
+
+        let dst = Path::new(abs_target_str).join(&entry.executable_name);
+
         let args_str = match &entry.restart_args {
             Some(args) => {
                 let joined = args
                     .iter()
-                    .map(|a| format!("'{}'", a))
+                    .map(|a| format!("'{}'", a.replace("'", "''")))
                     .collect::<Vec<_>>()
                     .join(" ");
                 format!("-ArgumentList {}", joined)
@@ -267,25 +303,33 @@ fn generate_update_script(
         };
 
         script.push_str(&format!(
-            "if (Test-Path '{}') {{\n    Start-Process -FilePath '{}' {} \n}}\n",
-            dst.display(),
-            dst.display(),
+            "if (Test-Path '{}') {{
+    Start-Process -FilePath '{}' -WorkingDirectory '{}' {}
+}}
+",
+            dst.display().to_string().replace("'", "''"),
+            dst.display().to_string().replace("'", "''"),
+            abs_target_str.replace("'", "''"),
             args_str
         ));
     }
 
     // Clean up extracted files
     for entry in &config.file_replacement_map {
-        let src = downloads_dir.join(&entry.source_file);
+        let src = Path::new(downloads_dir_str).join(&entry.source_file);
         let src_escaped = src.display().to_string().replace("'", "''");
         script.push_str(&format!(
-            "if (Test-Path '{}') {{\n    Remove-Item -Path '{}' -Force\n}}\n",
+            "if (Test-Path '{}') {{
+    Remove-Item -Path '{}' -Force
+}}
+",
             src_escaped, src_escaped
         ));
     }
 
     // Delete the PowerShell script itself
-    script.push_str("Remove-Item -Path $PSCommandPath -Force\n");
+    script.push_str("Remove-Item -Path $PSCommandPath -Force
+");
 
     let mut temp_file = tempfile::Builder::new()
         .prefix("update_")
