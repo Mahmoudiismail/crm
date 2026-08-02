@@ -801,19 +801,52 @@ pub fn run_browser_tab(
                                                         if (labelParent && labelParent.hasAttribute('for')) {{
                                                             let inputId = labelParent.getAttribute('for');
                                                             let input = doc.getElementById(inputId);
-                                                            if (input && input.tagName === 'INPUT') {{
-                                                                let v = value;
-                                                                if (key.toLowerCase().includes('date') && v.includes('-')) {{
-                                                                    let parts = v.split(' ')[0].split('-');
-                                                                    if (parts.length === 3) {{
-                                                                        let d = parts[0].padStart(2, '0');
-                                                                        let m = parts[1].padStart(2, '0');
-                                                                        let y = parts[2];
-                                                                        v = d + "-" + m + "-" + y + (v.includes(' ') ? ' ' + v.split(' ').slice(1).join(' ') : '');
+                                                            if (input) {{
+                                                                if (input.tagName === 'INPUT') {{
+                                                                    let v = value;
+                                                                    if (key.toLowerCase().includes('date') && v.includes('-')) {{
+                                                                        let parts = v.split(' ')[0].split('-');
+                                                                        if (parts.length === 3) {{
+                                                                            let d = parts[0].padStart(2, '0');
+                                                                            let m = parts[1].padStart(2, '0');
+                                                                            let y = parts[2];
+                                                                            v = d + "-" + m + "-" + y + (v.includes(' ') ? ' ' + v.split(' ').slice(1).join(' ') : '');
+                                                                        }}
                                                                     }}
+                                                                    await simulateTyping(input, v);
+                                                                    break;
+                                                                }} else if (input.tagName === 'MAT-SELECT') {{
+                                                                    // Handle Angular Material dropdowns
+                                                                    input.click();
+                                                                    await sleep(500);
+
+                                                                    let options = doc.querySelectorAll('mat-option');
+                                                                    if (options.length === 0) {{
+                                                                        // Try looking in cdk-overlay-container on main document
+                                                                        let mainOverlay = document.querySelector('.cdk-overlay-container');
+                                                                        if (mainOverlay) {{
+                                                                            options = mainOverlay.querySelectorAll('mat-option');
+                                                                        }}
+                                                                    }}
+
+                                                                    let optionFound = false;
+                                                                    for (let opt of options) {{
+                                                                        if (opt.textContent.toLowerCase().includes(value.toLowerCase())) {{
+                                                                            opt.click();
+                                                                            optionFound = true;
+                                                                            break;
+                                                                        }}
+                                                                    }}
+
+                                                                    if (!optionFound) {{
+                                                                        // fallback, click backdrop to close
+                                                                        let backdrop = doc.querySelector('.cdk-overlay-backdrop') || document.querySelector('.cdk-overlay-backdrop');
+                                                                        if (backdrop) backdrop.click();
+                                                                    }}
+
+                                                                    await sleep(500);
+                                                                    break;
                                                                 }}
-                                                                await simulateTyping(input, v);
-                                                                break;
                                                             }}
                                                         }}
                                                     }}
@@ -869,11 +902,24 @@ pub fn run_browser_tab(
                                     let step4_search_js = r#"
                                         (async function() {
                                             let doc = document.querySelector('iframe').contentWindow.document;
-                                            let searchBtnIcon = doc.querySelector('button.btn-primary i.bi-search');
-                                            if (searchBtnIcon) {
-                                                searchBtnIcon.closest('button').click();
+
+                                            // Try mattooltip="Search"
+                                            let btn = doc.querySelector('button[mattooltip="Search"]');
+                                            if (btn) {
+                                                btn.click();
                                                 return "SUCCESS";
                                             }
+
+                                            // Try bi-search icon
+                                            let searchBtnIcon = doc.querySelector('i.bi-search');
+                                            if (searchBtnIcon) {
+                                                let parentBtn = searchBtnIcon.closest('button');
+                                                if (parentBtn) {
+                                                    parentBtn.click();
+                                                    return "SUCCESS";
+                                                }
+                                            }
+
                                             return "ERROR: Search button not found";
                                         })();
                                     "#;
@@ -978,7 +1024,12 @@ pub fn run_browser_tab(
                                         (async function() {
                                             let doc = document.querySelector('iframe').contentWindow.document;
 
-                                            let exportBtn = null;
+                                            let exportBtn = doc.querySelector('div[aria-label="Export"]');
+                                            if (exportBtn && exportBtn.offsetParent !== null) {
+                                                exportBtn.click();
+                                                return "SUCCESS";
+                                            }
+
                                             let dxButtons = doc.querySelectorAll('.dx-button-text');
                                             for (let btn of dxButtons) {
                                                 if (btn.textContent.trim() === 'Export') { exportBtn = btn.closest('div[role="button"]'); break; }
