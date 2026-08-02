@@ -73,7 +73,9 @@ fn download_update_zip_from_drafts(downloads_dir: &Path) -> Result<Option<PathBu
 
     // Canonicalize returns paths like `\\?\C:\...` on Windows, which can break COM objects.
     let abs_downloads_dir_str = abs_downloads_dir.display().to_string();
-    let abs_downloads_dir_str = abs_downloads_dir_str.strip_prefix(r"\\?\").unwrap_or(abs_downloads_dir_str.as_str());
+    let abs_downloads_dir_str = abs_downloads_dir_str
+        .strip_prefix(r"\\?\")
+        .unwrap_or(abs_downloads_dir_str.as_str());
 
     // Since winsafe doesn't have a direct GetActiveObject equivalent that returns IDispatch for arbitrary prog_id,
     // and implementing a full COM caller here without type libs is quite verbose (GetIDsOfNames, Invoke),
