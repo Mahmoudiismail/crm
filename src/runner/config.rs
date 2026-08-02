@@ -454,6 +454,24 @@ impl RunnerConfig {
 
     pub fn save(&self, path: &str) -> Result<()> {
         let pretty = serde_json::to_string_pretty(self)?;
+
+        if let Ok(existing_content) = std::fs::read_to_string(path) {
+            if existing_content == pretty {
+                tracing::debug!("Config unchanged, skipping file write");
+                return Ok(());
+            }
+            // Fallback to value equality in case of formatting differences
+            if let (Ok(existing_val), Ok(new_val)) = (
+                serde_json::from_str::<serde_json::Value>(&existing_content),
+                serde_json::from_str::<serde_json::Value>(&pretty),
+            ) {
+                if existing_val == new_val {
+                    tracing::debug!("Config unchanged, skipping file write");
+                    return Ok(());
+                }
+            }
+        }
+
         crate::utils::atomic_write(std::path::Path::new(path), &pretty)
             .with_context(|| format!("Failed to write runner config: {}", path))?;
         Ok(())
@@ -1774,26 +1792,31 @@ pub fn normalize_and_validate_task(
 
     normalize_and_validate_schedules(task, cfg.min_task_interval_seconds.max(1))?;
 
-    let mut kind = task.legacy_kind();
-    match &mut kind {
-        TaskKind::ShellCommand { commands, .. } => {
-            commands.retain(|c| !c.command.trim().is_empty());
-            for c in commands.iter_mut() {
+    // Validate steps directly instead of converting to/from legacy kind
+    for step in &mut task.steps {
+        step.actions.retain(|action| match action {
+            ActionSpec::ShellCommand(c) => !c.command.trim().is_empty(),
+            ActionSpec::ExternalApp(_) => true,
+        });
+
+        for action in &mut step.actions {
+            if let ActionSpec::ShellCommand(c) = action {
                 c.command = c.command.trim().to_string();
             }
-            if commands.is_empty() {
-                return Err(anyhow::anyhow!(
-                    "shell_command requires at least one non-empty command"
-                ));
-            }
         }
-        TaskKind::ExternalApp { app_id, .. } => {
-            if app_id.trim().is_empty() {
-                return Err(anyhow::anyhow!("External App tasks require an app_id"));
+
+        for action in &step.actions {
+            if let ActionSpec::ExternalApp(app) = action {
+                if app.app_id.trim().is_empty() {
+                    return Err(anyhow::anyhow!("External App tasks require an app_id"));
+                }
             }
         }
     }
-    task.set_legacy_kind(kind);
+
+    if task.steps.iter().all(|s| s.actions.is_empty()) {
+        return Err(anyhow::anyhow!("Task requires at least one non-empty action"));
+    }
 
     Ok(())
 }
