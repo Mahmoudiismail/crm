@@ -496,16 +496,34 @@ pub(crate) fn schedule_row_html(
                     <input class='once-value shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2' type='datetime-local' value='{}'>\
                 </div>\
                 <div class='schedule-daily w-full sm:w-auto flex-1 {}'>\
-                    <label class='block text-xs font-medium text-gray-700 mb-1'>Times (comma sep, e.g. 09:00,15:30)</label>\
-                    <input class='daily-value shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2' type='text' placeholder='09:00' value='{}'>\
+                    <label class='block text-xs font-medium text-gray-700 mb-1'>Times</label>\
+                    <div class='daily-times-container flex flex-wrap gap-2 mb-2'></div>\
+                    <button type='button' class='add-daily-time-btn inline-flex items-center px-2 py-1 border border-gray-300 text-xs font-medium rounded shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none'>+ Add Time</button>\
+                    <input type='hidden' class='daily-value' value='{}'>\
                 </div>\
                 <div class='schedule-weekly w-full sm:w-auto flex-1 {}'>\
-                    <label class='block text-xs font-medium text-gray-700 mb-1'>Day and Time (e.g. Monday@09:00)</label>\
-                    <input class='weekly-value shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2' type='text' placeholder='Monday@09:00' value='{}'>\
+                    <label class='block text-xs font-medium text-gray-700 mb-1'>Day and Time</label>\
+                    <div class='flex gap-2'>\
+                        <select class='weekly-day shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2'>\
+                            <option value='Monday'>Monday</option>\
+                            <option value='Tuesday'>Tuesday</option>\
+                            <option value='Wednesday'>Wednesday</option>\
+                            <option value='Thursday'>Thursday</option>\
+                            <option value='Friday'>Friday</option>\
+                            <option value='Saturday'>Saturday</option>\
+                            <option value='Sunday'>Sunday</option>\
+                        </select>\
+                        <input class='weekly-time shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2' type='time'>\
+                        <input class='weekly-value' type='hidden' value='{}'>\
+                    </div>\
                 </div>\
                 <div class='schedule-monthly w-full sm:w-auto flex-1 {}'>\
-                    <label class='block text-xs font-medium text-gray-700 mb-1'>Day and Time (e.g. 15@09:00 or -1@09:00)</label>\
-                    <input class='monthly-value shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2' type='text' placeholder='1@09:00' value='{}'>\
+                    <label class='block text-xs font-medium text-gray-700 mb-1'>Day and Time (1-31 or -1)</label>\
+                    <div class='flex gap-2'>\
+                        <input class='monthly-day shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2' type='number' min='-1' max='31' placeholder='1'>\
+                        <input class='monthly-time shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2' type='time'>\
+                        <input class='monthly-value' type='hidden' value='{}'>\
+                    </div>\
                 </div>\
                 <div class='schedule-st w-full sm:w-auto flex-1 {}'>\
                   <label class='block text-xs font-medium text-gray-700 mb-1'>Start Time (Optional)</label>\
@@ -521,14 +539,14 @@ pub(crate) fn schedule_row_html(
                <div class='flex items-center justify-between mb-2'>\
                    <span class='text-xs font-medium text-gray-700'>Working Hours (Optional, e.g. 09:00-17:00)</span>\
                </div>\
-               <div class='grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs'>\
-                   <div><label class='block text-gray-600 mb-1'>Monday</label><input type='text' class='wh-mon block w-full rounded-md border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1.5' placeholder='09:00-17:00' value='{}'></div>\
-                   <div><label class='block text-gray-600 mb-1'>Tuesday</label><input type='text' class='wh-tue block w-full rounded-md border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1.5' placeholder='09:00-17:00' value='{}'></div>\
-                   <div><label class='block text-gray-600 mb-1'>Wednesday</label><input type='text' class='wh-wed block w-full rounded-md border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1.5' placeholder='09:00-17:00' value='{}'></div>\
-                   <div><label class='block text-gray-600 mb-1'>Thursday</label><input type='text' class='wh-thu block w-full rounded-md border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1.5' placeholder='09:00-17:00' value='{}'></div>\
-                   <div><label class='block text-gray-600 mb-1'>Friday</label><input type='text' class='wh-fri block w-full rounded-md border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1.5' placeholder='09:00-17:00' value='{}'></div>\
-                   <div><label class='block text-gray-600 mb-1'>Saturday</label><input type='text' class='wh-sat block w-full rounded-md border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1.5' placeholder='09:00-17:00' value='{}'></div>\
-                   <div><label class='block text-gray-600 mb-1'>Sunday</label><input type='text' class='wh-sun block w-full rounded-md border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1.5' placeholder='09:00-17:00' value='{}'></div>\
+               <div class='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 text-xs'>\
+                   <div><label class='block text-gray-600 mb-1 font-semibold'>Monday</label><div class='flex items-center gap-1'><input type='time' class='wh-mon-start block w-full rounded border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1' title='From'><span class='text-gray-400'>-</span><input type='time' class='wh-mon-end block w-full rounded border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1' title='To'><input type='hidden' class='wh-mon' value='{}'></div></div>\
+                   <div><label class='block text-gray-600 mb-1 font-semibold'>Tuesday</label><div class='flex items-center gap-1'><input type='time' class='wh-tue-start block w-full rounded border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1' title='From'><span class='text-gray-400'>-</span><input type='time' class='wh-tue-end block w-full rounded border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1' title='To'><input type='hidden' class='wh-tue' value='{}'></div></div>\
+                   <div><label class='block text-gray-600 mb-1 font-semibold'>Wednesday</label><div class='flex items-center gap-1'><input type='time' class='wh-wed-start block w-full rounded border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1' title='From'><span class='text-gray-400'>-</span><input type='time' class='wh-wed-end block w-full rounded border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1' title='To'><input type='hidden' class='wh-wed' value='{}'></div></div>\
+                   <div><label class='block text-gray-600 mb-1 font-semibold'>Thursday</label><div class='flex items-center gap-1'><input type='time' class='wh-thu-start block w-full rounded border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1' title='From'><span class='text-gray-400'>-</span><input type='time' class='wh-thu-end block w-full rounded border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1' title='To'><input type='hidden' class='wh-thu' value='{}'></div></div>\
+                   <div><label class='block text-gray-600 mb-1 font-semibold'>Friday</label><div class='flex items-center gap-1'><input type='time' class='wh-fri-start block w-full rounded border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1' title='From'><span class='text-gray-400'>-</span><input type='time' class='wh-fri-end block w-full rounded border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1' title='To'><input type='hidden' class='wh-fri' value='{}'></div></div>\
+                   <div><label class='block text-gray-600 mb-1 font-semibold'>Saturday</label><div class='flex items-center gap-1'><input type='time' class='wh-sat-start block w-full rounded border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1' title='From'><span class='text-gray-400'>-</span><input type='time' class='wh-sat-end block w-full rounded border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1' title='To'><input type='hidden' class='wh-sat' value='{}'></div></div>\
+                   <div><label class='block text-gray-600 mb-1 font-semibold'>Sunday</label><div class='flex items-center gap-1'><input type='time' class='wh-sun-start block w-full rounded border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1' title='From'><span class='text-gray-400'>-</span><input type='time' class='wh-sun-end block w-full rounded border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1' title='To'><input type='hidden' class='wh-sun' value='{}'></div></div>\
                </div>\
             </div>\
         </div>",

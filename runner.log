@@ -1,0 +1,129 @@
+   Compiling serde_core v1.0.228
+   Compiling darling_core v0.20.11
+   Compiling slab v0.4.12
+   Compiling zerocopy v0.8.54
+   Compiling futures-util v0.3.32
+   Compiling serde v1.0.228
+   Compiling darling_macro v0.20.11
+   Compiling num-traits v0.2.19
+   Compiling darling v0.20.11
+   Compiling hyper v1.10.1
+   Compiling ppv-lite86 v0.2.21
+   Compiling auto_generate_cdp v0.4.6
+   Compiling derive_builder_core v0.20.2
+   Compiling rand_chacha v0.9.0
+   Compiling hyper-util v0.1.20
+   Compiling tower v0.5.3
+   Compiling derive_builder_macro v0.20.2
+   Compiling rand v0.9.4
+   Compiling headless_chrome v1.0.22
+   Compiling crossbeam-utils v0.8.22
+   Compiling serde_json v1.0.150
+   Compiling crossbeam-channel v0.5.16
+   Compiling hyper-rustls v0.27.9
+   Compiling tungstenite v0.29.0
+   Compiling derive_builder v0.20.2
+   Compiling tower-http v0.6.11
+   Compiling serde_urlencoded v0.7.1
+   Compiling chrono v0.4.45
+   Compiling num-integer v0.1.46
+   Compiling tokio-util v0.7.18
+   Compiling tracing-appender v0.2.5
+   Compiling reqwest v0.13.4
+   Compiling chrono-tz v0.10.4
+   Compiling csv v1.4.0
+   Compiling num-bigint v0.4.8
+   Compiling crm_tool v1.1.0 (/app)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 28s
+     Running `target/debug/runner`
+2026-08-02T10:25:02.032612Z  INFO ThreadId(01) runner: Loaded config: RunnerConfig {
+    gui_host: "127.0.0.1",
+    gui_port: 8787,
+    poll_interval_seconds: 30,
+    allow_shell_tasks: false,
+    shell_timeout_seconds: 900,
+    post_run_timeout_seconds: 900,
+    min_task_interval_seconds: 5,
+    tasks: [],
+    registered_apps: [],
+    log_stdout_level: "DEBUG",
+    log_file_level: "TRACE",
+    log_retention_days: 30,
+}
+2026-08-02T10:25:02.032675Z  INFO ThreadId(01) runner: ==================================================
+2026-08-02T10:25:02.032693Z  INFO ThreadId(01) runner: RUNNER - Starting tray scheduler mode
+2026-08-02T10:25:02.032710Z  INFO ThreadId(01) runner: ==================================================
+2026-08-02T10:25:02.032778Z  INFO ThreadId(01) crm_tool::runner::engine::dispatcher: Starting scheduler with config: /app/target/debug/runner_config.json
+2026-08-02T10:25:02.033088Z  INFO ThreadId(01) runner: Headless mode: scheduler and GUI server are running. Press Ctrl+C to exit.
+2026-08-02T10:25:02.033609Z  INFO ThreadId(04) crm_tool::runner::gui: Runner GUI listening on http://127.0.0.1:8787
+2026-08-02T10:25:32.036514Z  INFO ThreadId(03) crm_tool::runner::engine::dispatcher: Triggering daily log cleanup...
+2026-08-02T10:26:34.981242Z  INFO ThreadId(03) crm_tool::runner::gui: HTTP Request: GET /new-task
+Headers:
+GET /new-task HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-02T10:27:02.195967Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /new-task
+Headers:
+GET /new-task HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-02T10:27:54.306876Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /new-task
+Headers:
+GET /new-task HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-02T10:27:59.423775Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /api/apps/list
+Headers:
+GET /api/apps/list HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua-platform: "Linux"
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+Accept: */*
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: cors
+Sec-Fetch-Dest: empty
+Referer: http://localhost:8787/new-task
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
