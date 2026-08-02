@@ -79,7 +79,7 @@ jobs:
         shell: bash
         run: |
           if [ "${{ github.event.inputs.binary }}" == "all" ]; then
-            cargo build --release --bin crm --bin runner --bin yasweb --bin wcxx --bin tasker
+            cargo build --release --bin crm --bin runner --bin yasweb --bin wcxx --bin tasker --bin crm_updater
           else
             BINS="${{ github.event.inputs.binary }}"
             IFS=',' read -ra BIN_ARRAY <<< "$BINS"
@@ -99,7 +99,7 @@ jobs:
           cd target/release
           EXE_FILES=""
           if [ "${{ github.event.inputs.binary }}" == "all" ]; then
-            EXE_FILES="crm.exe runner.exe yasweb.exe wcxx.exe tasker.exe"
+            EXE_FILES="crm.exe runner.exe yasweb.exe wcxx.exe tasker.exe crm_updater.exe"
           else
             BINS="${{ github.event.inputs.binary }}"
             IFS=',' read -ra BIN_ARRAY <<< "$BINS"
