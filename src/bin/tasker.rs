@@ -195,7 +195,11 @@ fn get_manifest() -> AppManifest {
                 .to_string(),
         arguments: vec![
             AppArg::new("--config", ArgType::String),
-            AppArg::new("--task", ArgType::List).options(vec!["1".to_string(), "2".to_string(), "3".to_string()]),
+            AppArg::new("--task", ArgType::List).options(vec![
+                "1".to_string(),
+                "2".to_string(),
+                "3".to_string(),
+            ]),
             AppArg::new("--only-call-center", ArgType::Boolean).depends_on(
                 std::collections::HashMap::from([("--task".to_string(), vec!["1".to_string()])]),
             ),

@@ -219,13 +219,17 @@ fn generate_update_script(
     config: &crate::crm_updater::config::UpdaterConfig,
     downloads_dir: &Path,
 ) -> Result<PathBuf> {
-    let mut script = String::from("$ErrorActionPreference = 'Continue'
+    let mut script = String::from(
+        "$ErrorActionPreference = 'Continue'
 
-");
+",
+    );
 
     let abs_downloads_dir = std::fs::canonicalize(downloads_dir)?;
     let downloads_dir_str = abs_downloads_dir.display().to_string();
-    let downloads_dir_str = downloads_dir_str.strip_prefix(r"\?\").unwrap_or(&downloads_dir_str);
+    let downloads_dir_str = downloads_dir_str
+        .strip_prefix(r"\?\")
+        .unwrap_or(&downloads_dir_str);
 
     // Stop processes
     let mut apps_to_stop = std::collections::HashSet::new();
@@ -243,9 +247,11 @@ fn generate_update_script(
     }
 
     // Wait for file handles to release
-    script.push_str("Start-Sleep -Seconds 3
+    script.push_str(
+        "Start-Sleep -Seconds 3
 
-");
+",
+    );
 
     // Replace files
     for entry in &config.file_replacement_map {
@@ -262,7 +268,9 @@ fn generate_update_script(
         };
 
         let abs_target_str = abs_target_dir.display().to_string();
-        let abs_target_str = abs_target_str.strip_prefix(r"\?\").unwrap_or(&abs_target_str);
+        let abs_target_str = abs_target_str
+            .strip_prefix(r"\?\")
+            .unwrap_or(&abs_target_str);
 
         let dst = Path::new(abs_target_str).join(&entry.executable_name);
 
@@ -286,7 +294,9 @@ fn generate_update_script(
             target_dir.to_path_buf()
         };
         let abs_target_str = abs_target_dir.display().to_string();
-        let abs_target_str = abs_target_str.strip_prefix(r"\?\").unwrap_or(&abs_target_str);
+        let abs_target_str = abs_target_str
+            .strip_prefix(r"\?\")
+            .unwrap_or(&abs_target_str);
 
         let dst = Path::new(abs_target_str).join(&entry.executable_name);
 
@@ -328,8 +338,10 @@ fn generate_update_script(
     }
 
     // Delete the PowerShell script itself
-    script.push_str("Remove-Item -Path $PSCommandPath -Force
-");
+    script.push_str(
+        "Remove-Item -Path $PSCommandPath -Force
+",
+    );
 
     let mut temp_file = tempfile::Builder::new()
         .prefix("update_")
