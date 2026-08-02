@@ -579,35 +579,57 @@ pub fn run_browser_tab(
                                     // STEP 1: Select Report Type
                                     let step1_js = format!(
                                         r#"
-                                        (async function(reportType) {{
+                                        return await (async function(reportType) {{
+                                            function sleep(ms) {{ return new Promise(r => setTimeout(r, ms)); }}
+                                            let logs = [];
                                             let iframe = document.querySelector('iframe');
-                                            if (!iframe) return "ERROR: No iframe found.";
+                                            if (!iframe) return JSON.stringify({{ status: "ERROR", msg: "No iframe found." }});
                                             let doc;
                                             try {{
                                                 doc = iframe.contentWindow.document;
                                             }} catch (e) {{
-                                                return "ERROR: Cross origin blocked.";
+                                                return JSON.stringify({{ status: "ERROR", msg: "Cross origin blocked." }});
                                             }}
-
-                                            let xpathType = `//*[contains(text(), '${{reportType}}')]/ancestor-or-self::mat-radio-button`;
-                                            let resultType = doc.evaluate(xpathType, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-                                            let matRadioButton = resultType.singleNodeValue;
 
                                             let clickedType = false;
-                                            if (matRadioButton) {{
-                                                let innerInput = matRadioButton.querySelector('input[type="radio"]');
-                                                if (innerInput) {{ innerInput.click(); clickedType = true; }}
-                                                else {{ matRadioButton.click(); clickedType = true; }}
-                                            }} else {{
-                                                let fallbackXpath = `//label[contains(text(), '${{reportType}}')]`;
-                                                let fallbackResult = doc.evaluate(fallbackXpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-                                                let labelNode = fallbackResult.singleNodeValue;
-                                                if (labelNode) {{ labelNode.click(); clickedType = true; }}
+                                            logs.push("Searching for reportType: " + reportType);
+
+                                            for (let i = 0; i < 20; i++) {{
+                                                let xpathType = `//*[contains(text(), '${{reportType}}')]/ancestor-or-self::mat-radio-button`;
+                                                let resultType = doc.evaluate(xpathType, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                                                let matRadioButton = resultType.singleNodeValue;
+
+                                                if (matRadioButton) {{
+                                                    logs.push("Found mat-radio-button");
+                                                    let innerInput = matRadioButton.querySelector('input[type="radio"]');
+                                                    if (innerInput) {{
+                                                        innerInput.click();
+                                                        innerInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                                                        clickedType = true;
+                                                        logs.push("Clicked innerInput");
+                                                    }} else {{
+                                                        matRadioButton.click();
+                                                        clickedType = true;
+                                                        logs.push("Clicked matRadioButton");
+                                                    }}
+                                                }} else {{
+                                                    let fallbackXpath = `//label[contains(text(), '${{reportType}}')]`;
+                                                    let fallbackResult = doc.evaluate(fallbackXpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                                                    let labelNode = fallbackResult.singleNodeValue;
+                                                    if (labelNode) {{
+                                                        labelNode.click();
+                                                        clickedType = true;
+                                                        logs.push("Clicked label fallback");
+                                                    }}
+                                                }}
+
+                                                if (clickedType) break;
+                                                await sleep(500);
                                             }}
 
-                                            if (!clickedType) return "ERROR: Report type not found: " + reportType;
-                                            return "SUCCESS";
-                                        }}({});
+                                            if (!clickedType) return JSON.stringify({{ status: "ERROR", msg: "Report type not found: " + reportType, logs }});
+                                            return JSON.stringify({{ status: "SUCCESS", logs }});
+                                        }})({});
                                         "#,
                                         serde_json::to_string(&active_report_type).unwrap()
                                     );
@@ -623,17 +645,36 @@ pub fn run_browser_tab(
                                     if let Ok(res) = tab.evaluate(&step1_js, true) {
                                         if let Some(v) = res.value {
                                             if let Some(s) = v.as_str() {
-                                                if s.starts_with("ERROR") {
-                                                    error!("Step 1 Failed: {}", s);
+                                                let parsed: serde_json::Value =
+                                                    serde_json::from_str(s).unwrap_or_default();
+                                                let status = parsed
+                                                    .get("status")
+                                                    .and_then(|v| v.as_str())
+                                                    .unwrap_or("UNKNOWN");
+                                                let logs = parsed
+                                                    .get("logs")
+                                                    .map(|v| v.to_string())
+                                                    .unwrap_or_default();
+                                                if status == "ERROR" {
+                                                    let msg = parsed
+                                                        .get("msg")
+                                                        .and_then(|v| v.as_str())
+                                                        .unwrap_or("Unknown error");
+                                                    error!(
+                                                        "Step 1 Failed: {} | Logs: {}",
+                                                        msg, logs
+                                                    );
                                                     return Err(anyhow::anyhow!(
-                                                        "Automation Step failed"
+                                                        "Automation Step 1 failed"
                                                     ));
+                                                } else {
+                                                    info!("Step 1 Success | Logs: {}", logs);
                                                 }
                                             }
                                         }
                                     } else {
                                         error!("Failed to evaluate Step 1 JS.");
-                                        return Err(anyhow::anyhow!("Automation Step failed"));
+                                        return Err(anyhow::anyhow!("Automation Step 1 failed"));
                                     }
                                     crate::yasweb::browser::save_html_state(
                                         &tab,
@@ -646,13 +687,15 @@ pub fn run_browser_tab(
                                     // STEP 2: Wait for list & search report
                                     let step2_js = format!(
                                         r#"
-                                        (async function(reportType, reportName) {{
+                                        return await (async function(reportType, reportName) {{
                                             function sleep(ms) {{ return new Promise(r => setTimeout(r, ms)); }}
+                                            let logs = [];
                                             let iframe = document.querySelector('iframe');
-                                            if (!iframe) return "ERROR: No iframe found.";
+                                            if (!iframe) return JSON.stringify({{ status: "ERROR", msg: "No iframe found." }});
                                             let doc = iframe.contentWindow.document;
 
                                             let listLoaded = false;
+                                            logs.push("Waiting for report list to load...");
                                             for (let i = 0; i < 20; i++) {{
                                                 let divs = doc.querySelectorAll('div.fw-semibold');
                                                 for (let d of divs) {{
@@ -664,33 +707,46 @@ pub fn run_browser_tab(
                                                 if (listLoaded) break;
                                                 await sleep(500);
                                             }}
-                                            if (!listLoaded) return "ERROR: Report list timeout.";
+                                            if (!listLoaded) return JSON.stringify({{ status: "ERROR", msg: "Report list timeout.", logs }});
+                                            logs.push("Report list loaded.");
 
                                             await sleep(1000);
                                             let searchInputList = doc.querySelector('input[formcontrolname="searchInput"], input[placeholder="Search"]');
                                             if (searchInputList) {{
+                                                logs.push("Found searchInputList");
+                                                searchInputList.focus();
                                                 searchInputList.value = reportName;
                                                 searchInputList.dispatchEvent(new Event('input', {{ bubbles: true }}));
                                                 searchInputList.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                                                searchInputList.dispatchEvent(new KeyboardEvent('keyup', {{ bubbles: true }}));
+                                                searchInputList.dispatchEvent(new KeyboardEvent('keyup', {{ key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }}));
+                                            }} else {{
+                                                logs.push("Warning: searchInputList not found.");
                                             }}
 
                                             let reportFound = false;
+                                            logs.push("Waiting for report span in list: " + reportName);
                                             for (let i = 0; i < 20; i++) {{
                                                 let itemXpath = `//li[contains(@class, 'sub-list-items')]//span[contains(text(), '${{reportName}}')]`;
                                                 let itemResult = doc.evaluate(itemXpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
                                                 let reportSpan = itemResult.singleNodeValue;
                                                 if (reportSpan) {{
+                                                    logs.push("Found reportSpan");
                                                     let liElement = reportSpan.closest('li.sub-list-items');
-                                                    if (liElement) liElement.click(); else reportSpan.click();
+                                                    if (liElement) {{
+                                                        liElement.click();
+                                                        logs.push("Clicked liElement");
+                                                    }} else {{
+                                                        reportSpan.click();
+                                                        logs.push("Clicked reportSpan");
+                                                    }}
                                                     reportFound = true;
                                                     break;
                                                 }}
                                                 await sleep(1500);
                                             }}
-                                            if (!reportFound) return "ERROR: Report name not found: " + reportName;
-                                            return "SUCCESS";
-                                        }}({}, {});
+                                            if (!reportFound) return JSON.stringify({{ status: "ERROR", msg: "Report name not found: " + reportName, logs }});
+                                            return JSON.stringify({{ status: "SUCCESS", logs }});
+                                        }})({}, {});
                                         "#,
                                         serde_json::to_string(&active_report_type).unwrap(),
                                         serde_json::to_string(&active_report_name).unwrap()
@@ -700,17 +756,36 @@ pub fn run_browser_tab(
                                     if let Ok(res) = tab.evaluate(&step2_js, true) {
                                         if let Some(v) = res.value {
                                             if let Some(s) = v.as_str() {
-                                                if s.starts_with("ERROR") {
-                                                    error!("Step 2 Failed: {}", s);
+                                                let parsed: serde_json::Value =
+                                                    serde_json::from_str(s).unwrap_or_default();
+                                                let status = parsed
+                                                    .get("status")
+                                                    .and_then(|v| v.as_str())
+                                                    .unwrap_or("UNKNOWN");
+                                                let logs = parsed
+                                                    .get("logs")
+                                                    .map(|v| v.to_string())
+                                                    .unwrap_or_default();
+                                                if status == "ERROR" {
+                                                    let msg = parsed
+                                                        .get("msg")
+                                                        .and_then(|v| v.as_str())
+                                                        .unwrap_or("Unknown error");
+                                                    error!(
+                                                        "Step 2 Failed: {} | Logs: {}",
+                                                        msg, logs
+                                                    );
                                                     return Err(anyhow::anyhow!(
-                                                        "Automation Step failed"
+                                                        "Automation Step 2 failed"
                                                     ));
+                                                } else {
+                                                    info!("Step 2 Success | Logs: {}", logs);
                                                 }
                                             }
                                         }
                                     } else {
                                         error!("Failed to evaluate Step 2 JS.");
-                                        return Err(anyhow::anyhow!("Automation Step failed"));
+                                        return Err(anyhow::anyhow!("Automation Step 2 failed"));
                                     }
                                     crate::yasweb::browser::save_html_state(
                                         &tab,
@@ -723,10 +798,12 @@ pub fn run_browser_tab(
                                     // STEP 3: Wait for Binding
                                     let step3_js = format!(
                                         r#"
-                                        (async function(reportName) {{
+                                        return await (async function(reportName) {{
                                             function sleep(ms) {{ return new Promise(r => setTimeout(r, ms)); }}
+                                            let logs = [];
                                             let doc = document.querySelector('iframe').contentWindow.document;
                                             let reportBound = false;
+                                            logs.push("Waiting for report binding...");
                                             for (let i = 0; i < 30; i++) {{
                                                 let selects = doc.querySelectorAll('mat-select');
                                                 for (let s of selects) {{
@@ -737,9 +814,9 @@ pub fn run_browser_tab(
                                                 if (reportBound) break;
                                                 await sleep(1500);
                                             }}
-                                            if (!reportBound) return "ERROR: Binding timeout.";
-                                            return "SUCCESS";
-                                        }}({});
+                                            if (!reportBound) return JSON.stringify({{ status: "ERROR", msg: "Binding timeout.", logs }});
+                                            return JSON.stringify({{ status: "SUCCESS", logs }});
+                                        }})({});
                                         "#,
                                         serde_json::to_string(&active_report_name).unwrap()
                                     );
@@ -748,14 +825,36 @@ pub fn run_browser_tab(
                                     if let Ok(res) = tab.evaluate(&step3_js, true) {
                                         if let Some(v) = res.value {
                                             if let Some(s) = v.as_str() {
-                                                if s.starts_with("ERROR") {
-                                                    error!("Step 3 Failed: {}", s);
+                                                let parsed: serde_json::Value =
+                                                    serde_json::from_str(s).unwrap_or_default();
+                                                let status = parsed
+                                                    .get("status")
+                                                    .and_then(|v| v.as_str())
+                                                    .unwrap_or("UNKNOWN");
+                                                let logs = parsed
+                                                    .get("logs")
+                                                    .map(|v| v.to_string())
+                                                    .unwrap_or_default();
+                                                if status == "ERROR" {
+                                                    let msg = parsed
+                                                        .get("msg")
+                                                        .and_then(|v| v.as_str())
+                                                        .unwrap_or("Unknown error");
+                                                    error!(
+                                                        "Step 3 Failed: {} | Logs: {}",
+                                                        msg, logs
+                                                    );
                                                     return Err(anyhow::anyhow!(
-                                                        "Automation Step failed"
+                                                        "Automation Step 3 failed"
                                                     ));
+                                                } else {
+                                                    info!("Step 3 Success | Logs: {}", logs);
                                                 }
                                             }
                                         }
+                                    } else {
+                                        error!("Failed to evaluate Step 3 JS.");
+                                        return Err(anyhow::anyhow!("Automation Step 3 failed"));
                                     }
                                     crate::yasweb::browser::save_html_state(
                                         &tab,
@@ -769,8 +868,9 @@ pub fn run_browser_tab(
 
                                     let step4_fill_js = format!(
                                         r#"
-                                        (async function(filters) {{
+                                        return await (async function(filters) {{
                                             function sleep(ms) {{ return new Promise(r => setTimeout(r, ms)); }}
+                                            let logs = [];
                                             async function simulateTyping(inputElem, text) {{
                                                 inputElem.focus();
                                                 inputElem.value = '';
@@ -793,8 +893,10 @@ pub fn run_browser_tab(
                                             for (let lbl of labels) {{
                                                 if (lbl.innerText) {{ discoveredFilters.push(lbl.innerText.trim()); }}
                                             }}
+                                            logs.push("Discovered filters count: " + discoveredFilters.length);
 
                                             for (const [key, value] of Object.entries(filters)) {{
+                                                logs.push("Applying filter: " + key + " = " + value);
                                                 for (let lbl of labels) {{
                                                     if (lbl.innerText.trim().toLowerCase() === key.toLowerCase()) {{
                                                         let labelParent = lbl.closest('label');
@@ -814,15 +916,14 @@ pub fn run_browser_tab(
                                                                         }}
                                                                     }}
                                                                     await simulateTyping(input, v);
+                                                                    logs.push("Typed into INPUT for " + key);
                                                                     break;
                                                                 }} else if (input.tagName === 'MAT-SELECT') {{
-                                                                    // Handle Angular Material dropdowns
                                                                     input.click();
                                                                     await sleep(500);
 
                                                                     let options = doc.querySelectorAll('mat-option');
                                                                     if (options.length === 0) {{
-                                                                        // Try looking in cdk-overlay-container on main document
                                                                         let mainOverlay = document.querySelector('.cdk-overlay-container');
                                                                         if (mainOverlay) {{
                                                                             options = mainOverlay.querySelectorAll('mat-option');
@@ -834,14 +935,15 @@ pub fn run_browser_tab(
                                                                         if (opt.textContent.toLowerCase().includes(value.toLowerCase())) {{
                                                                             opt.click();
                                                                             optionFound = true;
+                                                                            logs.push("Selected MAT-OPTION for " + key);
                                                                             break;
                                                                         }}
                                                                     }}
 
                                                                     if (!optionFound) {{
-                                                                        // fallback, click backdrop to close
                                                                         let backdrop = doc.querySelector('.cdk-overlay-backdrop') || document.querySelector('.cdk-overlay-backdrop');
                                                                         if (backdrop) backdrop.click();
+                                                                        logs.push("MAT-OPTION not found for " + key);
                                                                     }}
 
                                                                     await sleep(500);
@@ -852,8 +954,8 @@ pub fn run_browser_tab(
                                                     }}
                                                 }}
                                             }}
-                                            return JSON.stringify({{ status: "SUCCESS", discovered: discoveredFilters }});
-                                        }}({});
+                                            return JSON.stringify({{ status: "SUCCESS", discovered: discoveredFilters, logs }});
+                                        }})({});
                                         "#,
                                         filters_json
                                     );
@@ -862,34 +964,54 @@ pub fn run_browser_tab(
                                     if let Ok(res) = tab.evaluate(&step4_fill_js, true) {
                                         if let Some(v) = res.value {
                                             if let Some(s) = v.as_str() {
-                                                if s.starts_with("ERROR") {
-                                                    error!("Step 4 (Fill Filters) Failed: {}", s);
+                                                let parsed: serde_json::Value =
+                                                    serde_json::from_str(s).unwrap_or_default();
+                                                let status = parsed
+                                                    .get("status")
+                                                    .and_then(|v| v.as_str())
+                                                    .unwrap_or("UNKNOWN");
+                                                let logs = parsed
+                                                    .get("logs")
+                                                    .map(|v| v.to_string())
+                                                    .unwrap_or_default();
+
+                                                if status == "ERROR" {
+                                                    let msg = parsed
+                                                        .get("msg")
+                                                        .and_then(|v| v.as_str())
+                                                        .unwrap_or("Unknown error");
+                                                    error!("Step 4 (Fill Filters) Failed: {} | Logs: {}", msg, logs);
                                                     return Err(anyhow::anyhow!(
-                                                        "Automation Step failed"
+                                                        "Automation Step 4 (Fill) failed"
                                                     ));
                                                 } else {
-                                                    if let Ok(parsed) =
-                                                        serde_json::from_str::<serde_json::Value>(s)
+                                                    info!(
+                                                        "Step 4 (Fill Filters) Success | Logs: {}",
+                                                        logs
+                                                    );
+                                                    if let Some(arr) = parsed
+                                                        .get("discovered")
+                                                        .and_then(|a| a.as_array())
                                                     {
-                                                        if let Some(arr) = parsed
-                                                            .get("discovered")
-                                                            .and_then(|a| a.as_array())
-                                                        {
-                                                            for item in arr {
-                                                                if let Some(val) = item.as_str() {
-                                                                    discovered_filters
-                                                                        .push(val.to_string());
-                                                                }
-                                                            }
-                                                            info!(
-                                                                "Discovered filters: {:?}",
+                                                        for item in arr {
+                                                            if let Some(val) = item.as_str() {
                                                                 discovered_filters
-                                                            );
+                                                                    .push(val.to_string());
+                                                            }
                                                         }
+                                                        info!(
+                                                            "Discovered filters: {:?}",
+                                                            discovered_filters
+                                                        );
                                                     }
                                                 }
                                             }
                                         }
+                                    } else {
+                                        error!("Failed to evaluate Step 4 (Fill) JS.");
+                                        return Err(anyhow::anyhow!(
+                                            "Automation Step 4 (Fill) failed"
+                                        ));
                                     }
                                     crate::yasweb::browser::save_html_state(
                                         &tab,
@@ -900,41 +1022,86 @@ pub fn run_browser_tab(
                                     step_num += 1;
 
                                     let step4_search_js = r#"
-                                        (async function() {
+                                        return await (async function() {
+                                            function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+                                            let logs = [];
                                             let doc = document.querySelector('iframe').contentWindow.document;
 
-                                            // Try mattooltip="Search"
-                                            let btn = doc.querySelector('button[mattooltip="Search"]');
-                                            if (btn) {
-                                                btn.click();
-                                                return "SUCCESS";
-                                            }
+                                            logs.push("Waiting for Search button to appear...");
+                                            let clickedSearch = false;
 
-                                            // Try bi-search icon
-                                            let searchBtnIcon = doc.querySelector('i.bi-search');
-                                            if (searchBtnIcon) {
-                                                let parentBtn = searchBtnIcon.closest('button');
-                                                if (parentBtn) {
-                                                    parentBtn.click();
-                                                    return "SUCCESS";
+                                            for (let i = 0; i < 20; i++) {
+                                                // Try mattooltip="Search"
+                                                let btn = doc.querySelector('button[mattooltip="Search"]');
+                                                if (btn && btn.offsetParent !== null) {
+                                                    btn.click();
+                                                    clickedSearch = true;
+                                                    logs.push("Clicked button[mattooltip='Search']");
+                                                    break;
                                                 }
+
+                                                // Try bi-search icon
+                                                let searchBtnIcon = doc.querySelector('i.bi-search');
+                                                if (searchBtnIcon && searchBtnIcon.offsetParent !== null) {
+                                                    let parentBtn = searchBtnIcon.closest('button');
+                                                    if (parentBtn) {
+                                                        parentBtn.click();
+                                                        clickedSearch = true;
+                                                        logs.push("Clicked button containing i.bi-search");
+                                                        break;
+                                                    }
+                                                }
+
+                                                await sleep(1000);
                                             }
 
-                                            return "ERROR: Search button not found";
+                                            if (!clickedSearch) {
+                                                return JSON.stringify({ status: "ERROR", msg: "Search button not found.", logs });
+                                            }
+
+                                            return JSON.stringify({ status: "SUCCESS", logs });
                                         })();
                                     "#;
                                     info!("Clicking Search...");
                                     if let Ok(res) = tab.evaluate(step4_search_js, true) {
                                         if let Some(v) = res.value {
                                             if let Some(s) = v.as_str() {
-                                                if s.starts_with("ERROR") {
-                                                    error!("Step 4 (Search) Failed: {}", s);
+                                                let parsed: serde_json::Value =
+                                                    serde_json::from_str(s).unwrap_or_default();
+                                                let status = parsed
+                                                    .get("status")
+                                                    .and_then(|v| v.as_str())
+                                                    .unwrap_or("UNKNOWN");
+                                                let logs = parsed
+                                                    .get("logs")
+                                                    .map(|v| v.to_string())
+                                                    .unwrap_or_default();
+
+                                                if status == "ERROR" {
+                                                    let msg = parsed
+                                                        .get("msg")
+                                                        .and_then(|v| v.as_str())
+                                                        .unwrap_or("Unknown error");
+                                                    error!(
+                                                        "Step 4 (Search) Failed: {} | Logs: {}",
+                                                        msg, logs
+                                                    );
                                                     return Err(anyhow::anyhow!(
-                                                        "Automation Step failed"
+                                                        "Automation Step 4 (Search) failed"
                                                     ));
+                                                } else {
+                                                    info!(
+                                                        "Step 4 (Search) Success | Logs: {}",
+                                                        logs
+                                                    );
                                                 }
                                             }
                                         }
+                                    } else {
+                                        error!("Failed to evaluate Step 4 (Search) JS.");
+                                        return Err(anyhow::anyhow!(
+                                            "Automation Step 4 (Search) failed"
+                                        ));
                                     }
                                     crate::yasweb::browser::save_html_state(
                                         &tab,
@@ -951,7 +1118,7 @@ pub fn run_browser_tab(
                                     );
                                     let mut loader_found_at_least_once = false;
                                     let check_loader_js = r#"
-                                        (function() {
+                                        return (function() {
                                             let hasLoader = false;
 
                                             // Check main document
@@ -1021,13 +1188,15 @@ pub fn run_browser_tab(
 
                                     // STEP 6: Export & XLSX
                                     let step6_export_js = r#"
-                                        (async function() {
+                                        return await (async function() {
                                             let doc = document.querySelector('iframe').contentWindow.document;
+                                            let logs = [];
 
                                             let exportBtn = doc.querySelector('div[aria-label="Export"]');
                                             if (exportBtn && exportBtn.offsetParent !== null) {
                                                 exportBtn.click();
-                                                return "SUCCESS";
+                                                logs.push("Clicked div[aria-label='Export']");
+                                                return JSON.stringify({ status: "SUCCESS", logs });
                                             }
 
                                             let dxButtons = doc.querySelectorAll('.dx-button-text');
@@ -1043,10 +1212,11 @@ pub fn run_browser_tab(
                                                 }
                                             }
 
-                                            if (!exportBtn) return "ERROR: Export button not found.";
+                                            if (!exportBtn) return JSON.stringify({ status: "ERROR", msg: "Export button not found.", logs });
 
                                             exportBtn.click();
-                                            return "SUCCESS";
+                                            logs.push("Clicked Export button via fallback");
+                                            return JSON.stringify({ status: "SUCCESS", logs });
                                         })();
                                     "#;
 
@@ -1054,14 +1224,42 @@ pub fn run_browser_tab(
                                     if let Ok(res) = tab.evaluate(step6_export_js, true) {
                                         if let Some(v) = res.value {
                                             if let Some(s) = v.as_str() {
-                                                if s.starts_with("ERROR") {
-                                                    error!("Step 6 (Export) Failed: {}", s);
+                                                let parsed: serde_json::Value =
+                                                    serde_json::from_str(s).unwrap_or_default();
+                                                let status = parsed
+                                                    .get("status")
+                                                    .and_then(|v| v.as_str())
+                                                    .unwrap_or("UNKNOWN");
+                                                let logs = parsed
+                                                    .get("logs")
+                                                    .map(|v| v.to_string())
+                                                    .unwrap_or_default();
+
+                                                if status == "ERROR" {
+                                                    let msg = parsed
+                                                        .get("msg")
+                                                        .and_then(|v| v.as_str())
+                                                        .unwrap_or("Unknown error");
+                                                    error!(
+                                                        "Step 6 (Export) Failed: {} | Logs: {}",
+                                                        msg, logs
+                                                    );
                                                     return Err(anyhow::anyhow!(
-                                                        "Automation Step failed"
+                                                        "Automation Step 6 (Export) failed"
                                                     ));
+                                                } else {
+                                                    info!(
+                                                        "Step 6 (Export) Success | Logs: {}",
+                                                        logs
+                                                    );
                                                 }
                                             }
                                         }
+                                    } else {
+                                        error!("Failed to evaluate Step 6 (Export) JS.");
+                                        return Err(anyhow::anyhow!(
+                                            "Automation Step 6 (Export) failed"
+                                        ));
                                     }
                                     std::thread::sleep(Duration::from_secs(1));
                                     crate::yasweb::browser::save_html_state(
@@ -1073,8 +1271,9 @@ pub fn run_browser_tab(
                                     step_num += 1;
 
                                     let step6_xlsx_js = r#"
-                                        (async function() {
+                                        return await (async function() {
                                             let doc = document.querySelector('iframe').contentWindow.document;
+                                            let logs = [];
                                             let xlsxOption = null;
                                             let listItems = doc.querySelectorAll('.dx-list-item-content');
                                             for (let item of listItems) {
@@ -1089,9 +1288,10 @@ pub fn run_browser_tab(
                                                 }
                                             }
 
-                                            if (!xlsxOption) return "ERROR: XLSX option not found.";
+                                            if (!xlsxOption) return JSON.stringify({ status: "ERROR", msg: "XLSX option not found.", logs });
                                             xlsxOption.click();
-                                            return "SUCCESS";
+                                            logs.push("Clicked XLSX option");
+                                            return JSON.stringify({ status: "SUCCESS", logs });
                                         })();
                                     "#;
 
@@ -1099,16 +1299,40 @@ pub fn run_browser_tab(
                                     if let Ok(res) = tab.evaluate(step6_xlsx_js, true) {
                                         if let Some(v) = res.value {
                                             if let Some(s) = v.as_str() {
-                                                if s.starts_with("ERROR") {
-                                                    error!("Step 6 (XLSX) Failed: {}", s);
+                                                let parsed: serde_json::Value =
+                                                    serde_json::from_str(s).unwrap_or_default();
+                                                let status = parsed
+                                                    .get("status")
+                                                    .and_then(|v| v.as_str())
+                                                    .unwrap_or("UNKNOWN");
+                                                let logs = parsed
+                                                    .get("logs")
+                                                    .map(|v| v.to_string())
+                                                    .unwrap_or_default();
+
+                                                if status == "ERROR" {
+                                                    let msg = parsed
+                                                        .get("msg")
+                                                        .and_then(|v| v.as_str())
+                                                        .unwrap_or("Unknown error");
+                                                    error!(
+                                                        "Step 6 (XLSX) Failed: {} | Logs: {}",
+                                                        msg, logs
+                                                    );
                                                     return Err(anyhow::anyhow!(
-                                                        "Automation Step failed"
+                                                        "Automation Step 6 (XLSX) failed"
                                                     ));
                                                 } else {
+                                                    info!("Step 6 (XLSX) Success | Logs: {}", logs);
                                                     info!("JS Automation Sequence Completed Successfully!");
                                                 }
                                             }
                                         }
+                                    } else {
+                                        error!("Failed to evaluate Step 6 (XLSX) JS.");
+                                        return Err(anyhow::anyhow!(
+                                            "Automation Step 6 (XLSX) failed"
+                                        ));
                                     }
                                     crate::yasweb::browser::save_html_state(
                                         &tab,
