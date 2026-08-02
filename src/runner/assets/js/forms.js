@@ -632,10 +632,10 @@
 
         let dependsData = "";
         if (arg.depends_on) {
-          dependsData = ` data-depends-on="${arg.depends_on.arg_name}" data-depends-val="${arg.depends_on.expected_value}"`;
+          dependsData = ` data-depends='${JSON.stringify(arg.depends_on).replace(/'/g, "&#39;")}'`;
         }
 
-        if (arg.arg_type === "Boolean") {
+        if (arg.arg_type === "boolean") {
           const checked = val === "true" || val === true ? "checked" : "";
           html += `
             <div class="mb-3 arg-container" ${dependsData}>
@@ -646,9 +646,9 @@
                 ${arg.description ? `<p class="text-xs text-gray-500 mt-1 ml-6">${arg.description}</p>` : ""}
             </div>
           `;
-        } else if (arg.arg_type === "List" || (arg.arg_type === "String" && arg.allowed_values && arg.allowed_values.length > 0)) {
+        } else if (arg.arg_type === "list" || (arg.arg_type === "string" && arg.options && arg.options.length > 0)) {
           let opts = "";
-          arg.allowed_values.forEach((opt) => {
+          arg.options.forEach((opt) => {
             const selected = opt === val ? "selected" : "";
             opts += `<option value="${opt}" ${selected}>${opt}</option>`;
           });
@@ -661,7 +661,7 @@
                 ${arg.description ? `<p class="text-xs text-gray-500 mt-1">${arg.description}</p>` : ""}
             </div>
           `;
-        } else if (arg.arg_type === "DateVar") {
+        } else if (arg.arg_type === "date_var") {
              const dateVars = ["today", "yesterday", "tomorrow", "eomonth"];
              let isVar = dateVars.includes(val);
              let dateVal = isVar ? "" : val;
@@ -684,13 +684,13 @@
                    ${arg.description ? `<p class="text-xs text-gray-500 mt-1">${arg.description}</p>` : ""}
                </div>
              `;
-        } else if (arg.arg_type === "MultiList" && arg.allowed_values && arg.allowed_values.length > 0) {
+        } else if (arg.arg_type === "multi_list" && arg.options && arg.options.length > 0) {
             let currentList = [];
             if (val) {
                 currentList = val.split(',').map(s => s.trim());
             }
             let checkBoxes = "";
-            arg.allowed_values.forEach((opt, idx) => {
+            arg.options.forEach((opt, idx) => {
                const checked = currentList.includes(opt) ? "checked" : "";
                checkBoxes += `
                  <label class="flex items-center gap-2 text-sm text-gray-700 py-1">
@@ -710,7 +710,7 @@
               </div>
             `;
 
-        } else if (arg.arg_type === "Number") {
+        } else if (arg.arg_type === "number") {
           html += `
             <div class="mb-3 arg-container" ${dependsData}>
                 <label class="block text-sm font-semibold text-gray-700 mb-1">${arg.name} ${requiredAsterisk}</label>
@@ -732,27 +732,42 @@
       dynamicInputs.innerHTML = html;
 
       function evaluateDependencies() {
-        const containers = dynamicInputs.querySelectorAll(".arg-container[data-depends-on]");
+        const containers = dynamicInputs.querySelectorAll(".arg-container[data-depends]");
         containers.forEach(container => {
-           const depName = container.getAttribute("data-depends-on");
-           const depVal = container.getAttribute("data-depends-val");
+           const dependsJson = container.getAttribute("data-depends");
+           if (!dependsJson) return;
 
-           const depInput = dynamicInputs.querySelector(`[data-arg-name="${depName}"]`);
-           if (depInput) {
-               let currentVal = "";
-               if (depInput.type === "checkbox" && !depInput.hasAttribute("data-multilist")) {
-                   currentVal = depInput.checked ? "true" : "false";
-               } else if (depInput.tagName === "SELECT") {
-                   currentVal = depInput.value;
-               } else {
-                   currentVal = depInput.value;
-               }
+           let dependsMap;
+           try {
+               dependsMap = JSON.parse(dependsJson);
+           } catch(e) {
+               return;
+           }
 
-               if (currentVal === depVal) {
-                   container.style.display = "block";
-               } else {
-                   container.style.display = "none";
+           let allMet = true;
+           for (const [depName, allowedValues] of Object.entries(dependsMap)) {
+               const depInput = dynamicInputs.querySelector(`[data-arg-name="${depName}"]`);
+               if (depInput) {
+                   let currentVal = "";
+                   if (depInput.type === "checkbox" && !depInput.hasAttribute("data-multilist")) {
+                       currentVal = depInput.checked ? "true" : "false";
+                   } else if (depInput.tagName === "SELECT") {
+                       currentVal = depInput.value;
+                   } else {
+                       currentVal = depInput.value;
+                   }
+
+                   if (!allowedValues.includes(currentVal)) {
+                       allMet = false;
+                       break;
+                   }
                }
+           }
+
+           if (allMet) {
+               container.style.display = "block";
+           } else {
+               container.style.display = "none";
            }
         });
       }
@@ -782,11 +797,17 @@
       if (schedulesHidden) schedulesHidden.value = buildSchedules();
 
       try {
-          const steps = serializeSteps("steps-container");
-          document.getElementById("steps-hidden").value = JSON.stringify(steps);
+          const stepsHidden = document.getElementById("steps-hidden");
+          if (stepsHidden) {
+              const steps = serializeSteps("steps-container");
+              stepsHidden.value = JSON.stringify(steps);
+          }
 
-          const postRunSteps = serializeSteps("post-run-steps-container");
-          document.getElementById("post-run-steps-hidden").value = JSON.stringify(postRunSteps);
+          const postRunStepsHidden = document.getElementById("post-run-steps-hidden");
+          if (postRunStepsHidden) {
+              const postRunSteps = serializeSteps("post-run-steps-container");
+              postRunStepsHidden.value = JSON.stringify(postRunSteps);
+          }
       } catch (err) {
           alert(err.message || "Please fill in all required arguments.");
           e.preventDefault();

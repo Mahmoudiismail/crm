@@ -28,7 +28,7 @@ window.validation = {
                     }
                     argsMap[argName].push(input.value);
                 }
-            } else if (argType === "datevar") {
+            } else if (argType === "date_var") {
                 if (input.style.display !== 'none') {
                     argsMap[argName] = input.value;
                 }
