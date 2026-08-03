@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use headless_chrome::{protocol::cdp::types::Event, Browser, Tab};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
-use tracing::{info};
+use tracing::info;
 
 pub fn get_or_create_tab(browser: &Arc<Browser>) -> Result<Arc<Tab>> {
     let mut found = None;
@@ -21,8 +21,11 @@ pub fn get_or_create_tab(browser: &Arc<Browser>) -> Result<Arc<Tab>> {
     }
 }
 
-pub fn enable_network_logging(tab: &Arc<Tab>) -> Result<Weak<dyn headless_chrome::browser::tab::EventListener<Event> + Send + Sync>> {
-    tab.enable_log().context("Failed to enable network domain")?;
+pub fn enable_network_logging(
+    tab: &Arc<Tab>,
+) -> Result<Weak<dyn headless_chrome::browser::tab::EventListener<Event> + Send + Sync>> {
+    tab.enable_log()
+        .context("Failed to enable network domain")?;
 
     let events = tab
         .add_event_listener(Arc::new(|event: &Event| match event {
