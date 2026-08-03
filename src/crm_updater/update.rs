@@ -72,10 +72,7 @@ fn download_update_zip_from_drafts(downloads_dir: &Path) -> Result<Option<PathBu
     };
 
     // Canonicalize returns paths like `\\?\C:\...` on Windows, which can break COM objects.
-    let abs_downloads_dir_str = abs_downloads_dir.display().to_string();
-    let abs_downloads_dir_str = abs_downloads_dir_str
-        .strip_prefix(r"\\?\")
-        .unwrap_or(abs_downloads_dir_str.as_str());
+    let abs_downloads_dir_str = clean_canonicalized_path(&abs_downloads_dir);
 
     // Since winsafe doesn't have a direct GetActiveObject equivalent that returns IDispatch for arbitrary prog_id,
     // and implementing a full COM caller here without type libs is quite verbose (GetIDsOfNames, Invoke),
@@ -215,6 +212,14 @@ fn unblock_file(path: &Path) {
         .status();
 }
 
+fn clean_canonicalized_path(path: &Path) -> String {
+    let path_str = path.display().to_string();
+    path_str
+        .strip_prefix(r"\\?\")
+        .unwrap_or(&path_str)
+        .to_string()
+}
+
 fn generate_update_script(
     config: &crate::crm_updater::config::UpdaterConfig,
     downloads_dir: &Path,
@@ -226,10 +231,7 @@ fn generate_update_script(
     );
 
     let abs_downloads_dir = std::fs::canonicalize(downloads_dir)?;
-    let downloads_dir_str = abs_downloads_dir.display().to_string();
-    let downloads_dir_str = downloads_dir_str
-        .strip_prefix(r"\?\")
-        .unwrap_or(&downloads_dir_str);
+    let downloads_dir_str = clean_canonicalized_path(&abs_downloads_dir);
 
     // Stop processes
     let mut apps_to_stop = std::collections::HashSet::new();
@@ -255,7 +257,7 @@ fn generate_update_script(
 
     // Replace files
     for entry in &config.file_replacement_map {
-        let src = Path::new(downloads_dir_str).join(&entry.source_file);
+        let src = Path::new(&downloads_dir_str).join(&entry.source_file);
 
         // Canonicalize target_path to ensure absolute path
         // Target path might not exist, but we can canonicalize '.' and then join.
@@ -267,12 +269,9 @@ fn generate_update_script(
             target_dir.to_path_buf()
         };
 
-        let abs_target_str = abs_target_dir.display().to_string();
-        let abs_target_str = abs_target_str
-            .strip_prefix(r"\?\")
-            .unwrap_or(&abs_target_str);
+        let abs_target_str = clean_canonicalized_path(&abs_target_dir);
 
-        let dst = Path::new(abs_target_str).join(&entry.executable_name);
+        let dst = Path::new(&abs_target_str).join(&entry.executable_name);
 
         script.push_str(&format!(
             "if (Test-Path '{}') {{
@@ -293,12 +292,9 @@ fn generate_update_script(
         } else {
             target_dir.to_path_buf()
         };
-        let abs_target_str = abs_target_dir.display().to_string();
-        let abs_target_str = abs_target_str
-            .strip_prefix(r"\?\")
-            .unwrap_or(&abs_target_str);
+        let abs_target_str = clean_canonicalized_path(&abs_target_dir);
 
-        let dst = Path::new(abs_target_str).join(&entry.executable_name);
+        let dst = Path::new(&abs_target_str).join(&entry.executable_name);
 
         let args_str = match &entry.restart_args {
             Some(args) => {
@@ -326,7 +322,7 @@ fn generate_update_script(
 
     // Clean up extracted files
     for entry in &config.file_replacement_map {
-        let src = Path::new(downloads_dir_str).join(&entry.source_file);
+        let src = Path::new(&downloads_dir_str).join(&entry.source_file);
         let src_escaped = src.display().to_string().replace("'", "''");
         script.push_str(&format!(
             "if (Test-Path '{}') {{
@@ -387,4 +383,22 @@ fn execute_detached_powershell(script_path: &Path) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn test_clean_canonicalized_path() {
+        let unc_path = Path::new(r"\\?\C:\test\path");
+        assert_eq!(clean_canonicalized_path(unc_path), r"C:\test\path");
+
+        let normal_path = Path::new(r"C:\test\path");
+        assert_eq!(clean_canonicalized_path(normal_path), r"C:\test\path");
+
+        let unix_path = Path::new(r"/usr/bin/test");
+        assert_eq!(clean_canonicalized_path(unix_path), r"/usr/bin/test");
+    }
 }
