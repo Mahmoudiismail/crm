@@ -1,0 +1,14 @@
+--- e2e_test_playwright.py
++++ e2e_test_playwright.py
+@@ -82,8 +82,9 @@
+             await page.fill("input[name='name']", "My Test Task Final")
+
+             print("Filling out date variables...")
+-            await page.fill("input[data-arg-name='--start-date'][type='date']", "2025-05-15")
+-            await page.click("input[data-arg-name='--end-date'][type='radio'][value='var']")
++            # Note: playright needs the element to be visible. The radio buttons don't have data-arg-name, they just have name starting with mode_
++            await page.fill("input[data-arg-name='--start-date'][type='date']", "2025-05-15")
++            await page.click("input[type='radio'][value='var']")
+             await page.select_option("select[data-arg-name='--end-date']", "today")
+
+             page.on("dialog", lambda dialog: asyncio.create_task(dialog.accept()))

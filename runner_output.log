@@ -1,0 +1,2450 @@
+   Compiling crm_tool v1.1.0 (/app)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.95s
+     Running `target/debug/runner`
+2026-08-03T06:58:04.222571Z  INFO ThreadId(01) runner: Loaded config: RunnerConfig {
+    gui_host: "127.0.0.1",
+    gui_port: 8787,
+    poll_interval_seconds: 30,
+    allow_shell_tasks: false,
+    shell_timeout_seconds: 900,
+    post_run_timeout_seconds: 900,
+    min_task_interval_seconds: 5,
+    tasks: [],
+    registered_apps: [],
+    log_stdout_level: "DEBUG",
+    log_file_level: "TRACE",
+    log_retention_days: 30,
+}
+2026-08-03T06:58:04.222676Z  INFO ThreadId(01) runner: ==================================================
+2026-08-03T06:58:04.222696Z  INFO ThreadId(01) runner: RUNNER - Starting tray scheduler mode
+2026-08-03T06:58:04.222713Z  INFO ThreadId(01) runner: ==================================================
+2026-08-03T06:58:04.222759Z  INFO ThreadId(01) crm_tool::runner::engine::dispatcher: Starting scheduler with config: /app/target/debug/runner_config.json
+2026-08-03T06:58:04.223130Z  INFO ThreadId(01) runner: Headless mode: scheduler and GUI server are running. Press Ctrl+C to exit.
+2026-08-03T06:58:04.223656Z  INFO ThreadId(03) crm_tool::runner::gui: Runner GUI listening on http://127.0.0.1:8787
+2026-08-03T06:58:34.224610Z  INFO ThreadId(02) crm_tool::runner::engine::dispatcher: Triggering daily log cleanup...
+2026-08-03T06:58:38.601838Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /
+Headers:
+GET / HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T06:58:39.893658Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /apps
+Headers:
+GET /apps HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T06:59:29.222484Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /
+Headers:
+GET / HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T06:59:29.964795Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /apps
+Headers:
+GET /apps HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:00:36.957407Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /
+Headers:
+GET / HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:00:37.696772Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /apps
+Headers:
+GET /apps HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:00:38.410162Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: POST /apps/create
+Headers:
+POST /apps/create HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+Content-Length: 39
+Cache-Control: max-age=0
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Origin: http://localhost:8787
+Content-Type: application/x-www-form-urlencoded
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Referer: http://localhost:8787/apps
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+name=&id=&executable_path=&config_path=
+2026-08-03T07:00:38.481230Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /?toast=App%20registered
+Headers:
+GET /?toast=App%20registered HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: navigate
+Sec-Fetch-Dest: document
+Referer: http://localhost:8787/apps/create
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:01:04.235082Z  INFO ThreadId(04) crm_tool::runner::engine::dispatcher: Config file changed
+2026-08-03T07:01:45.100661Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /
+Headers:
+GET / HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:01:45.844538Z  INFO ThreadId(05) crm_tool::runner::gui: HTTP Request: GET /apps
+Headers:
+GET /apps HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:01:46.528163Z  INFO ThreadId(05) crm_tool::runner::gui: HTTP Request: POST /apps/create
+Headers:
+POST /apps/create HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+Content-Length: 39
+Cache-Control: max-age=0
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Origin: http://localhost:8787
+Content-Type: application/x-www-form-urlencoded
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Referer: http://localhost:8787/apps
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+name=&id=&executable_path=&config_path=
+2026-08-03T07:01:46.599495Z  INFO ThreadId(05) crm_tool::runner::gui: HTTP Request: GET /?toast=App%20registered
+Headers:
+GET /?toast=App%20registered HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: navigate
+Sec-Fetch-Dest: document
+Referer: http://localhost:8787/apps/create
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:02:04.237893Z  INFO ThreadId(05) crm_tool::runner::engine::dispatcher: Config file changed
+2026-08-03T07:02:35.050937Z  INFO ThreadId(05) crm_tool::runner::gui: HTTP Request: GET /
+Headers:
+GET / HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:02:35.782060Z  INFO ThreadId(05) crm_tool::runner::gui: HTTP Request: GET /apps
+Headers:
+GET /apps HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:02:36.480666Z  INFO ThreadId(05) crm_tool::runner::gui: HTTP Request: POST /apps/create
+Headers:
+POST /apps/create HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+Content-Length: 39
+Cache-Control: max-age=0
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Origin: http://localhost:8787
+Content-Type: application/x-www-form-urlencoded
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Referer: http://localhost:8787/apps
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+name=&id=&executable_path=&config_path=
+2026-08-03T07:02:36.564376Z  INFO ThreadId(05) crm_tool::runner::gui: HTTP Request: GET /?toast=App%20registered
+Headers:
+GET /?toast=App%20registered HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: navigate
+Sec-Fetch-Dest: document
+Referer: http://localhost:8787/apps/create
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:03:04.241639Z  INFO ThreadId(05) crm_tool::runner::engine::dispatcher: Config file changed
+2026-08-03T07:03:34.455899Z  INFO ThreadId(05) crm_tool::runner::gui: HTTP Request: GET /
+Headers:
+GET / HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:03:35.210277Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /apps
+Headers:
+GET /apps HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:03:37.487884Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: POST /apps/create
+Headers:
+POST /apps/create HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+Content-Length: 60
+Cache-Control: max-age=0
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Origin: http://localhost:8787
+Content-Type: application/x-www-form-urlencoded
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Referer: http://localhost:8787/apps
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+name=CRM+Application&id=CRM&executable_path=crm&config_path=
+2026-08-03T07:03:37.569685Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /?toast=App%20registered
+Headers:
+GET /?toast=App%20registered HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: navigate
+Sec-Fetch-Dest: document
+Referer: http://localhost:8787/apps/create
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:03:38.509541Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /tasks
+Headers:
+GET /tasks HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:04:04.246086Z  INFO ThreadId(02) crm_tool::runner::engine::dispatcher: Config file changed
+2026-08-03T07:04:52.153320Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /
+Headers:
+GET / HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:04:52.889173Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /apps
+Headers:
+GET /apps HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:04:55.164841Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: POST /apps/create
+Headers:
+POST /apps/create HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+Content-Length: 60
+Cache-Control: max-age=0
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Origin: http://localhost:8787
+Content-Type: application/x-www-form-urlencoded
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Referer: http://localhost:8787/apps
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+name=CRM+Application&id=CRM&executable_path=crm&config_path=
+2026-08-03T07:04:55.232006Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /?toast=App%20registered
+Headers:
+GET /?toast=App%20registered HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: navigate
+Sec-Fetch-Dest: document
+Referer: http://localhost:8787/apps/create
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:04:56.184034Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /tasks
+Headers:
+GET /tasks HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:05:04.248818Z  INFO ThreadId(02) crm_tool::runner::engine::dispatcher: Config file changed
+2026-08-03T07:05:48.174622Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /
+Headers:
+GET / HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:05:48.895073Z  INFO ThreadId(03) crm_tool::runner::gui: HTTP Request: GET /apps
+Headers:
+GET /apps HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:05:51.164026Z  INFO ThreadId(03) crm_tool::runner::gui: HTTP Request: POST /apps/create
+Headers:
+POST /apps/create HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+Content-Length: 60
+Cache-Control: max-age=0
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Origin: http://localhost:8787
+Content-Type: application/x-www-form-urlencoded
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Referer: http://localhost:8787/apps
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+name=CRM+Application&id=CRM&executable_path=crm&config_path=
+2026-08-03T07:05:51.242543Z  INFO ThreadId(03) crm_tool::runner::gui: HTTP Request: GET /?toast=App%20registered
+Headers:
+GET /?toast=App%20registered HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: navigate
+Sec-Fetch-Dest: document
+Referer: http://localhost:8787/apps/create
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:05:52.182052Z  INFO ThreadId(03) crm_tool::runner::gui: HTTP Request: GET /new-task
+Headers:
+GET /new-task HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:06:04.252730Z  INFO ThreadId(03) crm_tool::runner::engine::dispatcher: Config file changed
+2026-08-03T07:06:40.633742Z  INFO ThreadId(03) crm_tool::runner::gui: HTTP Request: GET /
+Headers:
+GET / HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:06:41.380881Z  INFO ThreadId(03) crm_tool::runner::gui: HTTP Request: GET /apps
+Headers:
+GET /apps HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:06:43.646935Z  INFO ThreadId(03) crm_tool::runner::gui: HTTP Request: POST /apps/create
+Headers:
+POST /apps/create HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+Content-Length: 60
+Cache-Control: max-age=0
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Origin: http://localhost:8787
+Content-Type: application/x-www-form-urlencoded
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Referer: http://localhost:8787/apps
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+name=CRM+Application&id=CRM&executable_path=crm&config_path=
+2026-08-03T07:06:43.732859Z  INFO ThreadId(03) crm_tool::runner::gui: HTTP Request: GET /?toast=App%20registered
+Headers:
+GET /?toast=App%20registered HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: navigate
+Sec-Fetch-Dest: document
+Referer: http://localhost:8787/apps/create
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:06:44.666261Z  INFO ThreadId(03) crm_tool::runner::gui: HTTP Request: GET /new-task
+Headers:
+GET /new-task HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:07:04.257516Z  INFO ThreadId(03) crm_tool::runner::engine::dispatcher: Config file changed
+2026-08-03T07:07:38.265923Z  INFO ThreadId(03) crm_tool::runner::gui: HTTP Request: GET /
+Headers:
+GET / HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:07:39.014890Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /apps
+Headers:
+GET /apps HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:07:41.277165Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: POST /apps/create
+Headers:
+POST /apps/create HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+Content-Length: 60
+Cache-Control: max-age=0
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Origin: http://localhost:8787
+Content-Type: application/x-www-form-urlencoded
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Referer: http://localhost:8787/apps
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+name=CRM+Application&id=CRM&executable_path=crm&config_path=
+2026-08-03T07:07:41.345634Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /?toast=App%20registered
+Headers:
+GET /?toast=App%20registered HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: navigate
+Sec-Fetch-Dest: document
+Referer: http://localhost:8787/apps/create
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:07:42.295320Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /new-task
+Headers:
+GET /new-task HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:07:45.088916Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /api/apps/list
+Headers:
+GET /api/apps/list HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua-platform: "Linux"
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+Accept: */*
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: cors
+Sec-Fetch-Dest: empty
+Referer: http://localhost:8787/new-task
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:08:04.263041Z  INFO ThreadId(02) crm_tool::runner::engine::dispatcher: Config file changed
+2026-08-03T07:08:34.853109Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /
+Headers:
+GET / HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:08:35.582224Z  INFO ThreadId(03) crm_tool::runner::gui: HTTP Request: GET /apps
+Headers:
+GET /apps HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:08:37.843403Z  INFO ThreadId(03) crm_tool::runner::gui: HTTP Request: POST /apps/create
+Headers:
+POST /apps/create HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+Content-Length: 60
+Cache-Control: max-age=0
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Origin: http://localhost:8787
+Content-Type: application/x-www-form-urlencoded
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Referer: http://localhost:8787/apps
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+name=CRM+Application&id=CRM&executable_path=crm&config_path=
+2026-08-03T07:08:37.927499Z  INFO ThreadId(03) crm_tool::runner::gui: HTTP Request: GET /?toast=App%20registered
+Headers:
+GET /?toast=App%20registered HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: navigate
+Sec-Fetch-Dest: document
+Referer: http://localhost:8787/apps/create
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:08:38.863348Z  INFO ThreadId(03) crm_tool::runner::gui: HTTP Request: GET /new-task
+Headers:
+GET /new-task HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:08:41.680016Z  INFO ThreadId(03) crm_tool::runner::gui: HTTP Request: GET /api/apps/list
+Headers:
+GET /api/apps/list HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua-platform: "Linux"
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+Accept: */*
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: cors
+Sec-Fetch-Dest: empty
+Referer: http://localhost:8787/new-task
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:09:04.267088Z  INFO ThreadId(03) crm_tool::runner::engine::dispatcher: Config file changed
+2026-08-03T07:09:30.142477Z  INFO ThreadId(03) crm_tool::runner::gui: HTTP Request: GET /
+Headers:
+GET / HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:09:30.874762Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /apps
+Headers:
+GET /apps HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:09:33.138812Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: POST /apps/create
+Headers:
+POST /apps/create HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+Content-Length: 60
+Cache-Control: max-age=0
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Origin: http://localhost:8787
+Content-Type: application/x-www-form-urlencoded
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Referer: http://localhost:8787/apps
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+name=CRM+Application&id=CRM&executable_path=crm&config_path=
+2026-08-03T07:09:33.215570Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /?toast=App%20registered
+Headers:
+GET /?toast=App%20registered HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: navigate
+Sec-Fetch-Dest: document
+Referer: http://localhost:8787/apps/create
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:09:34.157179Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /new-task
+Headers:
+GET /new-task HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:09:34.268649Z  INFO ThreadId(02) crm_tool::runner::engine::dispatcher: Config file changed
+2026-08-03T07:09:36.977319Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /api/apps/list
+Headers:
+GET /api/apps/list HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua-platform: "Linux"
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+Accept: */*
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: cors
+Sec-Fetch-Dest: empty
+Referer: http://localhost:8787/new-task
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:09:38.001540Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /api/apps/manifest?app_id=1785740438410
+Headers:
+GET /api/apps/manifest?app_id=1785740438410 HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua-platform: "Linux"
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+Accept: */*
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: cors
+Sec-Fetch-Dest: empty
+Referer: http://localhost:8787/new-task
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:10:55.250137Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /
+Headers:
+GET / HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:10:55.990145Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /apps
+Headers:
+GET /apps HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:10:58.253393Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: POST /apps/create
+Headers:
+POST /apps/create HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+Content-Length: 60
+Cache-Control: max-age=0
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Origin: http://localhost:8787
+Content-Type: application/x-www-form-urlencoded
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Referer: http://localhost:8787/apps
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+name=CRM+Application&id=CRM&executable_path=crm&config_path=
+2026-08-03T07:10:58.326918Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /?toast=App%20registered
+Headers:
+GET /?toast=App%20registered HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: navigate
+Sec-Fetch-Dest: document
+Referer: http://localhost:8787/apps/create
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:10:59.272008Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /new-task
+Headers:
+GET /new-task HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:11:02.042846Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /api/apps/list
+Headers:
+GET /api/apps/list HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua-platform: "Linux"
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+Accept: */*
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: cors
+Sec-Fetch-Dest: empty
+Referer: http://localhost:8787/new-task
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:11:04.274142Z  INFO ThreadId(02) crm_tool::runner::engine::dispatcher: Config file changed
+2026-08-03T07:12:02.784059Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /
+Headers:
+GET / HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:12:03.512744Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /apps
+Headers:
+GET /apps HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:12:05.748707Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: POST /apps/create
+Headers:
+POST /apps/create HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+Content-Length: 60
+Cache-Control: max-age=0
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Origin: http://localhost:8787
+Content-Type: application/x-www-form-urlencoded
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Referer: http://localhost:8787/apps
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+name=CRM+Application&id=CRM&executable_path=crm&config_path=
+2026-08-03T07:12:05.826378Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /?toast=App%20registered
+Headers:
+GET /?toast=App%20registered HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: navigate
+Sec-Fetch-Dest: document
+Referer: http://localhost:8787/apps/create
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:12:06.769352Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /new-task
+Headers:
+GET /new-task HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:12:09.571704Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /api/apps/list
+Headers:
+GET /api/apps/list HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua-platform: "Linux"
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+Accept: */*
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: cors
+Sec-Fetch-Dest: empty
+Referer: http://localhost:8787/new-task
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:12:34.280319Z  INFO ThreadId(02) crm_tool::runner::engine::dispatcher: Config file changed
+2026-08-03T07:13:43.571127Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /
+Headers:
+GET / HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:13:44.320473Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /apps
+Headers:
+GET /apps HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:13:46.583723Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: POST /apps/create
+Headers:
+POST /apps/create HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+Content-Length: 65
+Cache-Control: max-age=0
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Origin: http://localhost:8787
+Content-Type: application/x-www-form-urlencoded
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Referer: http://localhost:8787/apps
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+name=CRM+Application&id=MYCRMAPP&executable_path=crm&config_path=
+2026-08-03T07:13:46.668543Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /?toast=App%20registered
+Headers:
+GET /?toast=App%20registered HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: navigate
+Sec-Fetch-Dest: document
+Referer: http://localhost:8787/apps/create
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:13:47.605463Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /new-task
+Headers:
+GET /new-task HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:13:50.440663Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /api/apps/list
+Headers:
+GET /api/apps/list HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua-platform: "Linux"
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+Accept: */*
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: cors
+Sec-Fetch-Dest: empty
+Referer: http://localhost:8787/new-task
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:14:04.285679Z  INFO ThreadId(02) crm_tool::runner::engine::dispatcher: Config file changed
+2026-08-03T07:14:40.059730Z  INFO ThreadId(02) crm_tool::runner::gui: HTTP Request: GET /
+Headers:
+GET / HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:14:40.819098Z  INFO ThreadId(05) crm_tool::runner::gui: HTTP Request: GET /apps
+Headers:
+GET /apps HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:15:41.472695Z  INFO ThreadId(05) crm_tool::runner::gui: HTTP Request: GET /
+Headers:
+GET / HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:15:42.199906Z  INFO ThreadId(05) crm_tool::runner::gui: HTTP Request: GET /apps
+Headers:
+GET /apps HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:15:44.460321Z  INFO ThreadId(05) crm_tool::runner::gui: HTTP Request: POST /apps/create
+Headers:
+POST /apps/create HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+Content-Length: 65
+Cache-Control: max-age=0
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Origin: http://localhost:8787
+Content-Type: application/x-www-form-urlencoded
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Referer: http://localhost:8787/apps
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+name=CRM+Application&id=MYCRMAPP&executable_path=crm&config_path=
+2026-08-03T07:15:44.544618Z  INFO ThreadId(05) crm_tool::runner::gui: HTTP Request: GET /?toast=App%20registered
+Headers:
+GET /?toast=App%20registered HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: navigate
+Sec-Fetch-Dest: document
+Referer: http://localhost:8787/apps/create
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:15:45.481722Z  INFO ThreadId(05) crm_tool::runner::gui: HTTP Request: GET /new-task
+Headers:
+GET /new-task HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:15:48.328264Z  INFO ThreadId(05) crm_tool::runner::gui: HTTP Request: GET /api/apps/list
+Headers:
+GET /api/apps/list HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua-platform: "Linux"
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+Accept: */*
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: cors
+Sec-Fetch-Dest: empty
+Referer: http://localhost:8787/new-task
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:16:04.294722Z  INFO ThreadId(05) crm_tool::runner::engine::dispatcher: Config file changed
+2026-08-03T07:16:37.715958Z  INFO ThreadId(05) crm_tool::runner::gui: HTTP Request: GET /
+Headers:
+GET / HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:16:38.449569Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /new-task
+Headers:
+GET /new-task HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:17:41.579441Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /
+Headers:
+GET / HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:17:42.331745Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /new-task
+Headers:
+GET /new-task HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:17:59.312145Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /
+Headers:
+GET / HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:18:00.068483Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /apps
+Headers:
+GET /apps HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:18:02.334430Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: POST /apps/create
+Headers:
+POST /apps/create HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+Content-Length: 65
+Cache-Control: max-age=0
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Origin: http://localhost:8787
+Content-Type: application/x-www-form-urlencoded
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Referer: http://localhost:8787/apps
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+name=CRM+Application&id=MYCRMAPP&executable_path=crm&config_path=
+2026-08-03T07:18:02.414860Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /?toast=App%20registered
+Headers:
+GET /?toast=App%20registered HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: navigate
+Sec-Fetch-Dest: document
+Referer: http://localhost:8787/apps/create
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:18:03.353273Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /new-task
+Headers:
+GET /new-task HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:18:04.303787Z  INFO ThreadId(04) crm_tool::runner::engine::dispatcher: Config file changed
+2026-08-03T07:18:06.155036Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /api/apps/list
+Headers:
+GET /api/apps/list HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua-platform: "Linux"
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+Accept: */*
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: cors
+Sec-Fetch-Dest: empty
+Referer: http://localhost:8787/new-task
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:19:12.628031Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /
+Headers:
+GET / HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:19:13.374457Z  INFO ThreadId(03) crm_tool::runner::gui: HTTP Request: GET /apps
+Headers:
+GET /apps HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:20:11.206430Z  INFO ThreadId(03) crm_tool::runner::gui: HTTP Request: GET /
+Headers:
+GET / HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:20:11.938068Z  INFO ThreadId(03) crm_tool::runner::gui: HTTP Request: GET /apps
+Headers:
+GET /apps HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:20:33.281600Z  INFO ThreadId(03) crm_tool::runner::gui: HTTP Request: GET /
+Headers:
+GET / HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:20:34.018243Z  INFO ThreadId(03) crm_tool::runner::gui: HTTP Request: GET /apps
+Headers:
+GET /apps HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:20:36.296008Z  INFO ThreadId(03) crm_tool::runner::gui: HTTP Request: POST /apps/create
+Headers:
+POST /apps/create HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+Content-Length: 65
+Cache-Control: max-age=0
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Origin: http://localhost:8787
+Content-Type: application/x-www-form-urlencoded
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Referer: http://localhost:8787/apps
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+name=CRM+Application&id=MYCRMAPP&executable_path=crm&config_path=
+2026-08-03T07:20:36.378150Z  INFO ThreadId(03) crm_tool::runner::gui: HTTP Request: GET /?toast=App%20registered
+Headers:
+GET /?toast=App%20registered HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: navigate
+Sec-Fetch-Dest: document
+Referer: http://localhost:8787/apps/create
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:20:37.316981Z  INFO ThreadId(03) crm_tool::runner::gui: HTTP Request: GET /new-task
+Headers:
+GET /new-task HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:20:40.123589Z  INFO ThreadId(03) crm_tool::runner::gui: HTTP Request: GET /api/apps/list
+Headers:
+GET /api/apps/list HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua-platform: "Linux"
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+Accept: */*
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: cors
+Sec-Fetch-Dest: empty
+Referer: http://localhost:8787/new-task
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:21:04.319084Z  INFO ThreadId(03) crm_tool::runner::engine::dispatcher: Config file changed
+2026-08-03T07:21:32.238114Z  INFO ThreadId(03) crm_tool::runner::gui: HTTP Request: GET /
+Headers:
+GET / HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:21:32.984403Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /apps
+Headers:
+GET /apps HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:21:33.607695Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /new-task
+Headers:
+GET /new-task HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:22:34.772326Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /
+Headers:
+GET / HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:22:35.520706Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /new-task
+Headers:
+GET /new-task HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:22:38.359525Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /api/apps/list
+Headers:
+GET /api/apps/list HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua-platform: "Linux"
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+Accept: */*
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: cors
+Sec-Fetch-Dest: empty
+Referer: http://localhost:8787/new-task
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:22:39.390306Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /api/apps/manifest?app_id=1785741636296
+Headers:
+GET /api/apps/manifest?app_id=1785741636296 HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua-platform: "Linux"
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+Accept: */*
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: cors
+Sec-Fetch-Dest: empty
+Referer: http://localhost:8787/new-task
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:23:39.847537Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /
+Headers:
+GET / HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:23:40.593616Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /apps
+Headers:
+GET /apps HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:23:41.219906Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /new-task
+Headers:
+GET /new-task HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:25:33.425498Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /new-task
+Headers:
+GET /new-task HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:25:35.361774Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /api/apps/list
+Headers:
+GET /api/apps/list HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua-platform: "Linux"
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+Accept: */*
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: cors
+Sec-Fetch-Dest: empty
+Referer: http://localhost:8787/new-task
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:25:36.392629Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /api/apps/manifest?app_id=1785741636296
+Headers:
+GET /api/apps/manifest?app_id=1785741636296 HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua-platform: "Linux"
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+Accept: */*
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: cors
+Sec-Fetch-Dest: empty
+Referer: http://localhost:8787/new-task
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:27:08.860447Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /
+Headers:
+GET / HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:27:10.425494Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: POST /apps/create
+Headers:
+POST /apps/create HTTP/1.1
+user-agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+accept: */*
+accept-encoding: gzip,deflate,br
+content-type: application/x-www-form-urlencoded
+content-length: 116
+Host: localhost:8787
+Connection: keep-alive
+Body:
+id=my_crm_app_final&name=CRM_FINAL&executable_path=target%2Fdebug%2Fcrm&config_path=target%2Fdebug%2Fcrm_config.json
+2026-08-03T07:27:10.437759Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /new-task
+Headers:
+GET /new-task HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:27:12.233252Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /api/apps/list
+Headers:
+GET /api/apps/list HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua-platform: "Linux"
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+Accept: */*
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: cors
+Sec-Fetch-Dest: empty
+Referer: http://localhost:8787/new-task
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:27:14.248649Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /api/apps/manifest?app_id=1785742030425
+Headers:
+GET /api/apps/manifest?app_id=1785742030425 HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua-platform: "Linux"
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+Accept: */*
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: cors
+Sec-Fetch-Dest: empty
+Referer: http://localhost:8787/new-task
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:27:34.346211Z  INFO ThreadId(04) crm_tool::runner::engine::dispatcher: Config file changed
+2026-08-03T07:28:21.771469Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /
+Headers:
+GET / HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:28:23.348622Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: POST /apps/create
+Headers:
+POST /apps/create HTTP/1.1
+user-agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+accept: */*
+accept-encoding: gzip,deflate,br
+content-type: application/x-www-form-urlencoded
+content-length: 116
+Host: localhost:8787
+Connection: keep-alive
+Body:
+id=my_crm_app_final&name=CRM_FINAL&executable_path=target%2Fdebug%2Fcrm&config_path=target%2Fdebug%2Fcrm_config.json
+2026-08-03T07:28:23.362077Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /new-task
+Headers:
+GET /new-task HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:28:25.206863Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /api/apps/list
+Headers:
+GET /api/apps/list HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua-platform: "Linux"
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+Accept: */*
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: cors
+Sec-Fetch-Dest: empty
+Referer: http://localhost:8787/new-task
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:28:27.223166Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /api/apps/manifest?app_id=1785742030425
+Headers:
+GET /api/apps/manifest?app_id=1785742030425 HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua-platform: "Linux"
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+Accept: */*
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: cors
+Sec-Fetch-Dest: empty
+Referer: http://localhost:8787/new-task
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:28:34.350632Z  INFO ThreadId(04) crm_tool::runner::engine::dispatcher: Config file changed
+2026-08-03T07:29:31.916734Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /
+Headers:
+GET / HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:29:33.473952Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: POST /apps/create
+Headers:
+POST /apps/create HTTP/1.1
+user-agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+accept: */*
+accept-encoding: gzip,deflate,br
+content-type: application/x-www-form-urlencoded
+content-length: 116
+Host: localhost:8787
+Connection: keep-alive
+Body:
+id=my_crm_app_final&name=CRM_FINAL&executable_path=target%2Fdebug%2Fcrm&config_path=target%2Fdebug%2Fcrm_config.json
+2026-08-03T07:29:33.488830Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /new-task
+Headers:
+GET /new-task HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:29:34.355317Z  INFO ThreadId(04) crm_tool::runner::engine::dispatcher: Config file changed
+2026-08-03T07:29:35.281550Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /api/apps/list
+Headers:
+GET /api/apps/list HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua-platform: "Linux"
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+Accept: */*
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: cors
+Sec-Fetch-Dest: empty
+Referer: http://localhost:8787/new-task
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:29:37.301743Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /api/apps/manifest?app_id=1785742030425
+Headers:
+GET /api/apps/manifest?app_id=1785742030425 HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua-platform: "Linux"
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+Accept: */*
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: cors
+Sec-Fetch-Dest: empty
+Referer: http://localhost:8787/new-task
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:29:40.156476Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: POST /create
+Headers:
+POST /create HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+Content-Length: 606
+Cache-Control: max-age=0
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Origin: http://localhost:8787
+Content-Type: application/x-www-form-urlencoded
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: navigate
+Sec-Fetch-User: ?1
+Sec-Fetch-Dest: document
+Referer: http://localhost:8787/new-task
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+id=my_test_task_e2e_final&name=My+Test+Task+Final&enabled=on&timeout_seconds=&schedules=interval%3A1h%0D%0Ainterval%3A1h&mode_app-17857421746958uaip-arg---start-date=fixed&mode_app-17857421746958uaip-arg---end-date=var&steps=%5B%7B%22name%22%3A%22Step%22%2C%22mode%22%3A%22sequential%22%2C%22actions%22%3A%5B%7B%22type%22%3A%22external_app%22%2C%22app_id%22%3A%221785742030425%22%2C%22args%22%3A%7B%22--report%22%3A%22tickets%22%2C%22--config%22%3A%22%22%2C%22--start-date%22%3A%222025-05-15%22%2C%22--end-date%22%3A%22today%22%2C%22--custom-download-folder%22%3A%22%22%7D%7D%5D%7D%5D&post_run_steps=%5B%5D
+2026-08-03T07:29:40.161754Z  INFO ThreadId(05) crm_tool::runner::engine::dispatcher: Task Created task_id=my_test_task_e2e_final task_name=My Test Task Final schedules=[Interval { enabled: true, every_seconds: 3600, next_run_at: "2026-08-03T08:29:40.158058359+00:00", working_hours: None, start_time: None }, Interval { enabled: true, every_seconds: 3600, next_run_at: "2026-08-03T08:29:40.158079870+00:00", working_hours: None, start_time: None }] enabled=true created_time=2026-08-03T07:29:40.158086460+00:00
+2026-08-03T07:29:40.258134Z  INFO ThreadId(04) crm_tool::runner::gui: HTTP Request: GET /?toast=Task%20created
+Headers:
+GET /?toast=Task%20created HTTP/1.1
+Host: localhost:8787
+Connection: keep-alive
+sec-ch-ua: "Not:A-Brand";v="99", "HeadlessChrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Linux"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: navigate
+Sec-Fetch-Dest: document
+Referer: http://localhost:8787/create
+Accept-Encoding: gzip, deflate, br, zstd
+Body:
+
+2026-08-03T07:30:04.357160Z  INFO ThreadId(04) crm_tool::runner::engine::dispatcher: Config file changed

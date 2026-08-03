@@ -674,8 +674,8 @@
                        <label class="text-xs flex items-center gap-1"><input type="radio" name="mode_${id}" value="fixed" ${!isVar ? 'checked' : ''} onchange="document.getElementById('fixed_${id}').style.display='block'; document.getElementById('var_${id}').style.display='none';"> Fixed Date</label>
                        <label class="text-xs flex items-center gap-1"><input type="radio" name="mode_${id}" value="var" ${isVar ? 'checked' : ''} onchange="document.getElementById('fixed_${id}').style.display='none'; document.getElementById('var_${id}').style.display='block';"> Dynamic</label>
                    </div>
-                   <input type="date" id="fixed_${id}" data-arg-name="${arg.name}" data-arg-type="datevar" data-group="datevar" class="block w-full rounded border border-gray-300 px-3 py-2 text-sm" value="${dateVal}" style="display: ${!isVar ? 'block' : 'none'}">
-                   <select id="var_${id}" data-arg-name="${arg.name}" data-arg-type="datevar" data-group="datevar" class="block w-full rounded border border-gray-300 px-3 py-2 text-sm" style="display: ${isVar ? 'block' : 'none'}">
+                   <input type="date" id="fixed_${id}" data-arg-name="${arg.name}" data-arg-type="date_var" data-group="datevar" class="block w-full rounded border border-gray-300 px-3 py-2 text-sm" value="${dateVal}" style="display: ${!isVar ? 'block' : 'none'}">
+                   <select id="var_${id}" data-arg-name="${arg.name}" data-arg-type="date_var" data-group="datevar" class="block w-full rounded border border-gray-300 px-3 py-2 text-sm" style="display: ${isVar ? 'block' : 'none'}">
                       <option value="today" ${varVal === 'today' ? 'selected' : ''}>Today</option>
                       <option value="yesterday" ${varVal === 'yesterday' ? 'selected' : ''}>Yesterday</option>
                       <option value="tomorrow" ${varVal === 'tomorrow' ? 'selected' : ''}>Tomorrow</option>

@@ -84,7 +84,7 @@ async def run_e2e_test():
             print("Filling out date variables...")
             # Note: playright needs the element to be visible. The radio buttons don't have data-arg-name, they just have name starting with mode_
             await page.fill("input[data-arg-name='--start-date'][type='date']", "2025-05-15")
-            await page.locator("input[type='radio'][value='var']").nth(1).click(force=True)
+            await page.click("input[type='radio'][value='var']")
             await page.select_option("select[data-arg-name='--end-date']", "today")
 
             page.on("dialog", lambda dialog: asyncio.create_task(dialog.accept()))
