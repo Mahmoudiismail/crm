@@ -57,3 +57,4 @@ By extracting discrete functions (like `login::execute_login` and `download::wai
 ## Future Recommendations
 - Move the raw Javascript strings out of `reports.rs` and into dedicated `.js` files using `include_str!()` to enable standard JS formatting and linting.
 - Consider adopting Playwright if more robust cross-frame selector waits are needed in the future, as `headless_chrome` requires heavy manual JS injection for nested iframes.
+- Fixed bug in Yasweb automation where the XLSX export button was not found because the UI framework attached the dropdown menu to the main document body, outside the iframe where the original click originated.

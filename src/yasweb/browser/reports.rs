@@ -659,14 +659,33 @@ pub fn navigate_and_run_report(
                         let step6_xlsx_js = r#"
                                         (async function() {
                                             let doc = document.querySelector('iframe').contentWindow.document;
+                                            let mainDoc = document;
                                             let logs = [];
                                             let xlsxOption = null;
+
+                                            // Try iframe first
                                             let listItems = doc.querySelectorAll('.dx-list-item-content');
                                             for (let item of listItems) {
                                                 if (item.textContent.trim() === 'XLSX') { xlsxOption = item.closest('.dx-list-item'); break; }
                                             }
                                             if (!xlsxOption) {
                                                 let allSpans = doc.querySelectorAll('span, div');
+                                                for (let span of allSpans) {
+                                                    if (span.textContent.trim() === 'XLSX' && span.offsetParent !== null) {
+                                                        xlsxOption = span; break;
+                                                    }
+                                                }
+                                            }
+
+                                            // Try main doc
+                                            if (!xlsxOption) {
+                                                listItems = mainDoc.querySelectorAll('.dx-list-item-content');
+                                                for (let item of listItems) {
+                                                    if (item.textContent.trim() === 'XLSX') { xlsxOption = item.closest('.dx-list-item'); break; }
+                                                }
+                                            }
+                                            if (!xlsxOption) {
+                                                let allSpans = mainDoc.querySelectorAll('span, div');
                                                 for (let span of allSpans) {
                                                     if (span.textContent.trim() === 'XLSX' && span.offsetParent !== null) {
                                                         xlsxOption = span; break;
