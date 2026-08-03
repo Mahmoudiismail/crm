@@ -579,7 +579,7 @@ pub fn run_browser_tab(
                                     // STEP 1: Select Report Type
                                     let step1_js = format!(
                                         r#"
-                                        return await (async function(reportType) {{
+                                        (async function(reportType) {{
                                             function sleep(ms) {{ return new Promise(r => setTimeout(r, ms)); }}
                                             let logs = [];
                                             let iframe = document.querySelector('iframe');
@@ -687,7 +687,7 @@ pub fn run_browser_tab(
                                     // STEP 2: Wait for list & search report
                                     let step2_js = format!(
                                         r#"
-                                        return await (async function(reportType, reportName) {{
+                                        (async function(reportType, reportName) {{
                                             function sleep(ms) {{ return new Promise(r => setTimeout(r, ms)); }}
                                             let logs = [];
                                             let iframe = document.querySelector('iframe');
@@ -798,7 +798,7 @@ pub fn run_browser_tab(
                                     // STEP 3: Wait for Binding
                                     let step3_js = format!(
                                         r#"
-                                        return await (async function(reportName) {{
+                                        (async function(reportName) {{
                                             function sleep(ms) {{ return new Promise(r => setTimeout(r, ms)); }}
                                             let logs = [];
                                             let doc = document.querySelector('iframe').contentWindow.document;
@@ -868,7 +868,7 @@ pub fn run_browser_tab(
 
                                     let step4_fill_js = format!(
                                         r#"
-                                        return await (async function(filters) {{
+                                        (async function(filters) {{
                                             function sleep(ms) {{ return new Promise(r => setTimeout(r, ms)); }}
                                             let logs = [];
                                             async function simulateTyping(inputElem, text) {{
@@ -1022,7 +1022,7 @@ pub fn run_browser_tab(
                                     step_num += 1;
 
                                     let step4_search_js = r#"
-                                        return await (async function() {
+                                        (async function() {
                                             function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
                                             let logs = [];
                                             let doc = document.querySelector('iframe').contentWindow.document;
@@ -1118,7 +1118,7 @@ pub fn run_browser_tab(
                                     );
                                     let mut loader_found_at_least_once = false;
                                     let check_loader_js = r#"
-                                        return (function() {
+                                        (function() {
                                             let hasLoader = false;
 
                                             // Check main document
@@ -1188,7 +1188,7 @@ pub fn run_browser_tab(
 
                                     // STEP 6: Export & XLSX
                                     let step6_export_js = r#"
-                                        return await (async function() {
+                                        (async function() {
                                             let doc = document.querySelector('iframe').contentWindow.document;
                                             let logs = [];
 
@@ -1271,7 +1271,7 @@ pub fn run_browser_tab(
                                     step_num += 1;
 
                                     let step6_xlsx_js = r#"
-                                        return await (async function() {
+                                        (async function() {
                                             let doc = document.querySelector('iframe').contentWindow.document;
                                             let logs = [];
                                             let xlsxOption = null;
