@@ -81,6 +81,12 @@ async def run_e2e_test():
             await page.fill("input[name='id']", "my_test_task_e2e_final")
             await page.fill("input[name='name']", "My Test Task Final")
 
+            print("Filling out date variables...")
+            # Note: playright needs the element to be visible. The radio buttons don't have data-arg-name, they just have name starting with mode_
+            await page.fill("input[data-arg-name='--start-date'][type='date']", "2025-05-15")
+            await page.locator("input[type='radio'][value='var']").nth(1).click(force=True)
+            await page.select_option("select[data-arg-name='--end-date']", "today")
+
             page.on("dialog", lambda dialog: asyncio.create_task(dialog.accept()))
 
             await page.click("button[type='submit']")
@@ -105,6 +111,17 @@ async def run_e2e_test():
                     else:
                         print("FAILED: Interval was parsed incorrectly:", schedule.get("every_seconds"))
                         return False
+
+                    steps = task.get("steps", [])
+                    if len(steps) > 0:
+                        actions = steps[0].get("actions", [])
+                        if len(actions) > 0:
+                            args = actions[0].get("args", {})
+                            if args.get("--start-date") == "2025-05-15" and args.get("--end-date") == "today":
+                                print("SUCCESS: Date variables serialized correctly.")
+                            else:
+                                print(f"FAILED: Date variables serialized incorrectly. Expected start 2025-05-15, end today, got start {args.get('--start-date')}, end {args.get('--end-date')}")
+                                return False
                 else:
                     print("FAILED: Task not found in config.")
                     return False
