@@ -12,17 +12,17 @@ pub fn navigate_and_run_report(
     active_report_name: &str,
     active_report_type: &str,
     active_filters: &HashMap<String, String>,
-    timeout_minutes: u64,
+    _timeout_minutes: u64,
     step_num: &mut u32,
 ) -> Result<Vec<String>> {
     let mut discovered_filters = Vec::new();
 
     // Replicate navigation block to find "MIS" and run steps
     info!("Waiting for #menuPinnedBtn...");
-    match tab.wait_for_element("#menuPinnedBtn") {
+    match tab.wait_for_element("#menuPinnedBtn:not(.d-none), #pinButton:not(.d-none)") {
         Ok(menu_btn) => {
             let mut mis_found = false;
-            let mis_selector = "#misFocus";
+            let mis_selector = ".all-modules .misManagement";
 
             for attempt in 1..=3 {
                 let mut sidebar_toggled = false;
@@ -161,28 +161,29 @@ pub fn navigate_and_run_report(
 
                         let filters_json = serde_json::to_string(active_filters)
                             .unwrap_or_else(|_| "{}".to_string());
-                        let timeout_loops = (timeout_minutes * 60) / 10;
+                        // let timeout_loops = (timeout_minutes * 60) / 10;
 
-                        // STEP 1
+                        // STEP 1: Select Report Type
                         let step1_js = format!(
                             r#"
                                         (async function(reportType) {{
                                             function sleep(ms) {{ return new Promise(r => setTimeout(r, ms)); }}
                                             let logs = [];
                                             let iframe = document.querySelector('iframe');
-                                            if (!iframe) return JSON.stringify({{ status: "ERROR", msg: "No iframe found." }});
-                                            let doc;
-                                            try {{
-                                                doc = iframe.contentWindow.document;
-                                            }} catch (e) {{
-                                                return JSON.stringify({{ status: "ERROR", msg: "Cross origin blocked." }});
-                                            }}
+                                            if (!iframe) return JSON.stringify({{ status: "ERROR", msg: "No iframe found.", logs }});
+                                            let doc = iframe.contentWindow.document;
 
                                             let clickedType = false;
                                             logs.push("Searching for reportType: " + reportType);
 
+                                            // Ensure the iframe has actually loaded some content
+                                            for(let i=0; i<30; i++) {{
+                                                if (doc.body && doc.body.innerHTML.trim().length > 0) break;
+                                                await sleep(500);
+                                            }}
+
                                             for (let i = 0; i < 20; i++) {{
-                                                let xpathType = `//*[contains(text(), '${{reportType}}')]/ancestor-or-self::mat-radio-button`;
+                                                let xpathType = `//*[contains(normalize-space(.), '${{reportType}}')]/ancestor-or-self::mat-radio-button`;
                                                 let resultType = doc.evaluate(xpathType, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
                                                 let matRadioButton = resultType.singleNodeValue;
 
@@ -200,7 +201,7 @@ pub fn navigate_and_run_report(
                                                         logs.push("Clicked matRadioButton");
                                                     }}
                                                 }} else {{
-                                                    let fallbackXpath = `//label[contains(text(), '${{reportType}}')]`;
+                                                    let fallbackXpath = `//label[contains(normalize-space(.), '${{reportType}}')]`;
                                                     let fallbackResult = doc.evaluate(fallbackXpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
                                                     let labelNode = fallbackResult.singleNodeValue;
                                                     if (labelNode) {{
@@ -229,7 +230,6 @@ pub fn navigate_and_run_report(
                         );
                         *step_num += 1;
                         info!("Selecting Report Type: {}", active_report_type);
-                        info!("Selecting Report Type...");
                         javascript::evaluate_automation_step(
                             tab,
                             &step1_js,
@@ -243,49 +243,50 @@ pub fn navigate_and_run_report(
                         );
                         *step_num += 1;
 
-                        // STEP 2
+                        // STEP 1.5 & 2: Wait for List, Search, and Select Report
                         let step2_js = format!(
                             r#"
                                         (async function(reportType, reportName) {{
                                             function sleep(ms) {{ return new Promise(r => setTimeout(r, ms)); }}
                                             let logs = [];
                                             let iframe = document.querySelector('iframe');
-                                            if (!iframe) return JSON.stringify({{ status: "ERROR", msg: "No iframe found." }});
+                                            if (!iframe) return JSON.stringify({{ status: "ERROR", msg: "No iframe found.", logs }});
                                             let doc = iframe.contentWindow.document;
 
                                             let listLoaded = false;
-                                            logs.push("Waiting for report list to load...");
-                                            for (let i = 0; i < 20; i++) {{
-                                                let divs = doc.querySelectorAll('div.fw-semibold');
-                                                for (let d of divs) {{
-                                                    let textLower = d.textContent.toLowerCase();
-                                                    if (textLower.includes('report manager') || textLower.includes('report manger') || textLower.includes(reportType.toLowerCase()) || textLower.includes('enquiry') || textLower.includes('Standard Report'.toLowerCase())) {{
-                                                        listLoaded = true; break;
-                                                    }}
+                                            logs.push("Waiting for report list to load (fw-semibold elements)...");
+                                            for (let i = 0; i < 30; i++) {{
+                                                if (doc.querySelectorAll('.fw-semibold').length > 0) {{
+                                                    listLoaded = true; break;
                                                 }}
-                                                if (listLoaded) break;
                                                 await sleep(500);
                                             }}
                                             if (!listLoaded) return JSON.stringify({{ status: "ERROR", msg: "Report list timeout.", logs }});
                                             logs.push("Report list loaded.");
-
                                             await sleep(1000);
+
+                                            logs.push("Typing in search input...");
                                             let searchInputList = doc.querySelector('input[formcontrolname="searchInput"], input[placeholder="Search"]');
                                             if (searchInputList) {{
-                                                logs.push("Found searchInputList");
                                                 searchInputList.focus();
-                                                searchInputList.value = reportName;
-                                                searchInputList.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                                                searchInputList.value = '';
+                                                for (let i = 0; i < reportName.length; i++) {{
+                                                    searchInputList.value += reportName[i];
+                                                    searchInputList.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                                                    await sleep(5);
+                                                }}
                                                 searchInputList.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                                                searchInputList.dispatchEvent(new KeyboardEvent('keyup', {{ key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }}));
+                                                searchInputList.blur();
+                                                searchInputList.dispatchEvent(new Event('blur', {{ bubbles: true }}));
+                                                logs.push("Typed search input using simulation");
                                             }} else {{
                                                 logs.push("Warning: searchInputList not found.");
                                             }}
 
                                             let reportFound = false;
                                             logs.push("Waiting for report span in list: " + reportName);
-                                            for (let i = 0; i < 20; i++) {{
-                                                let itemXpath = `//li[contains(@class, 'sub-list-items')]//span[contains(text(), '${{reportName}}')]`;
+                                            for (let i = 0; i < 30; i++) {{
+                                                let itemXpath = `//li[contains(@class, 'sub-list-items')]//span[contains(normalize-space(.), '${{reportName}}')]`;
                                                 let itemResult = doc.evaluate(itemXpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
                                                 let reportSpan = itemResult.singleNodeValue;
                                                 if (reportSpan) {{
@@ -301,7 +302,7 @@ pub fn navigate_and_run_report(
                                                     reportFound = true;
                                                     break;
                                                 }}
-                                                await sleep(1500);
+                                                await sleep(1000);
                                             }}
                                             if (!reportFound) return JSON.stringify({{ status: "ERROR", msg: "Report name not found: " + reportName, logs }});
                                             return JSON.stringify({{ status: "SUCCESS", logs }});
@@ -312,8 +313,11 @@ pub fn navigate_and_run_report(
                         );
 
                         info!("Searching & Selecting Report: {}", active_report_name);
-                        info!("Selecting Report from List...");
-                        javascript::evaluate_automation_step(tab, &step2_js, "Step 2")?;
+                        javascript::evaluate_automation_step(
+                            tab,
+                            &step2_js,
+                            "Step 2 (Select Report)",
+                        )?;
                         debug::save_html_state(
                             tab,
                             active_report_name,
@@ -322,7 +326,7 @@ pub fn navigate_and_run_report(
                         );
                         *step_num += 1;
 
-                        // STEP 3
+                        // STEP 3: Wait for binding
                         let step3_js = format!(
                             r#"
                                         (async function(reportName) {{
@@ -338,8 +342,16 @@ pub fn navigate_and_run_report(
                                                         reportBound = true; break;
                                                     }}
                                                 }}
+                                                if (!reportBound) {{
+                                                    let headers = doc.querySelectorAll('.fw-semibold, .fw-bold');
+                                                    for (let h of headers) {{
+                                                        if (h.innerText.includes(reportName) || h.textContent.includes(reportName)) {{
+                                                            reportBound = true; break;
+                                                        }}
+                                                    }}
+                                                }}
                                                 if (reportBound) break;
-                                                await sleep(1500);
+                                                await sleep(1000);
                                             }}
                                             if (!reportBound) return JSON.stringify({{ status: "ERROR", msg: "Binding timeout.", logs }});
                                             return JSON.stringify({{ status: "SUCCESS", logs }});
@@ -349,7 +361,7 @@ pub fn navigate_and_run_report(
                         );
 
                         info!("Waiting for Report Binding...");
-                        javascript::evaluate_automation_step(tab, &step3_js, "Step 3")?;
+                        javascript::evaluate_automation_step(tab, &step3_js, "Step 3 (Binding)")?;
                         debug::save_html_state(
                             tab,
                             active_report_name,
@@ -358,12 +370,34 @@ pub fn navigate_and_run_report(
                         );
                         *step_num += 1;
 
-                        // STEP 4
+                        // STEP 3.5 & 4: Wait for Loader to disappear, then fill filters
                         let step4_fill_js = format!(
                             r#"
                                         (async function(filters) {{
                                             function sleep(ms) {{ return new Promise(r => setTimeout(r, ms)); }}
                                             let logs = [];
+                                            let iframe = document.querySelector('iframe');
+                                            let doc = iframe.contentWindow.document;
+
+                                            logs.push("Waiting for loader to disappear...");
+                                            let loaderGone = false;
+                                            for(let i=0; i<50; i++) {{
+                                                let loader = document.querySelector('.loading-screen-wrapper') || doc.querySelector('.loading-screen-wrapper');
+                                                let isLoaderVisible = false;
+                                                if (loader) {{
+                                                    let style = window.getComputedStyle(loader);
+                                                    if (style.display !== 'none' && style.opacity !== '0' && style.visibility !== 'hidden') {{
+                                                        isLoaderVisible = true;
+                                                    }}
+                                                }}
+                                                if (!isLoaderVisible && doc.querySelectorAll('mat-label').length > 0) {{
+                                                    loaderGone = true;
+                                                    break;
+                                                }}
+                                                await sleep(500);
+                                            }}
+                                            if (!loaderGone) logs.push("Warning: Loader timeout or labels never appeared.");
+
                                             async function simulateTyping(inputElem, text) {{
                                                 inputElem.focus();
                                                 inputElem.value = '';
@@ -373,13 +407,9 @@ pub fn navigate_and_run_report(
                                                     await sleep(10);
                                                 }}
                                                 inputElem.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                                                inputElem.dispatchEvent(new KeyboardEvent('keydown', {{ key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }}));
-                                                inputElem.dispatchEvent(new KeyboardEvent('keyup', {{ key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }}));
                                                 inputElem.blur();
                                                 inputElem.dispatchEvent(new Event('blur', {{ bubbles: true }}));
                                             }}
-
-                                            let doc = document.querySelector('iframe').contentWindow.document;
 
                                             let labels = doc.querySelectorAll('mat-label');
                                             let discoveredFilters = [];
@@ -390,8 +420,12 @@ pub fn navigate_and_run_report(
 
                                             for (const [key, value] of Object.entries(filters)) {{
                                                 logs.push("Applying filter: " + key + " = " + value);
+                                                let normalizedKey = key.toLowerCase().replace(/_/g, ' ');
+                                                let filterFilled = false;
+
                                                 for (let lbl of labels) {{
-                                                    if (lbl.innerText.trim().toLowerCase() === key.toLowerCase()) {{
+                                                    let labelText = lbl.innerText.trim().toLowerCase().replace(/_/g, ' ');
+                                                    if (labelText === normalizedKey) {{
                                                         let labelParent = lbl.closest('label');
                                                         if (labelParent && labelParent.hasAttribute('for')) {{
                                                             let inputId = labelParent.getAttribute('for');
@@ -402,14 +436,12 @@ pub fn navigate_and_run_report(
                                                                     if (key.toLowerCase().includes('date') && v.includes('-')) {{
                                                                         let parts = v.split(' ')[0].split('-');
                                                                         if (parts.length === 3) {{
-                                                                            let d = parts[0].padStart(2, '0');
-                                                                            let m = parts[1].padStart(2, '0');
-                                                                            let y = parts[2];
-                                                                            v = d + "-" + m + "-" + y + (v.includes(' ') ? ' ' + v.split(' ').slice(1).join(' ') : '');
+                                                                            v = parts[0].padStart(2, '0') + "-" + parts[1].padStart(2, '0') + "-" + parts[2] + (v.includes(' ') ? ' ' + v.split(' ').slice(1).join(' ') : '');
                                                                         }}
                                                                     }}
                                                                     await simulateTyping(input, v);
                                                                     logs.push("Typed into INPUT for " + key);
+                                                                    filterFilled = true;
                                                                     break;
                                                                 }} else if (input.tagName === 'MAT-SELECT') {{
                                                                     input.click();
@@ -440,20 +472,21 @@ pub fn navigate_and_run_report(
                                                                     }}
 
                                                                     await sleep(500);
+                                                                    filterFilled = true;
                                                                     break;
                                                                 }}
                                                             }}
                                                         }}
                                                     }}
                                                 }}
+                                                if (!filterFilled) logs.push("Failed to fill filter: " + key);
                                             }}
-                                            return JSON.stringify({{ status: "SUCCESS", discovered: discoveredFilters, logs }});
+                                            return JSON.stringify({{ status: "SUCCESS", discovered_filters: discoveredFilters, logs }});
                                         }})({});
                                         "#,
                             filters_json
                         );
 
-                        info!("Filling filters...");
                         info!("Applying Filters...");
                         let step4_res = javascript::evaluate_automation_step(
                             tab,
@@ -481,7 +514,8 @@ pub fn navigate_and_run_report(
 
                         std::thread::sleep(Duration::from_secs(1));
 
-                        let step4_search_js = r#"
+                        // STEP 5: Search Click
+                        let step5_search_js = r#"
                                         (async function() {
                                             function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
                                             let logs = [];
@@ -491,7 +525,6 @@ pub fn navigate_and_run_report(
                                             let clickedSearch = false;
 
                                             for (let i = 0; i < 20; i++) {
-                                                // Try mattooltip="Search"
                                                 let btn = doc.querySelector('button[mattooltip="Search"]');
                                                 if (btn && btn.offsetParent !== null) {
                                                     btn.click();
@@ -500,7 +533,6 @@ pub fn navigate_and_run_report(
                                                     break;
                                                 }
 
-                                                // Try bi-search icon
                                                 let searchBtnIcon = doc.querySelector('i.bi-search');
                                                 if (searchBtnIcon && searchBtnIcon.offsetParent !== null) {
                                                     let parentBtn = searchBtnIcon.closest('button');
@@ -511,23 +543,23 @@ pub fn navigate_and_run_report(
                                                         break;
                                                     }
                                                 }
-
                                                 await sleep(1000);
                                             }
 
                                             if (!clickedSearch) {
                                                 return JSON.stringify({ status: "ERROR", msg: "Search button not found.", logs });
                                             }
-
                                             return JSON.stringify({ status: "SUCCESS", logs });
                                         })();
                                     "#;
+
                         info!("Clicking Search...");
                         javascript::evaluate_automation_step(
                             tab,
-                            step4_search_js,
-                            "Step 4 (Search Click)",
+                            step5_search_js,
+                            "Step 5 (Search Click)",
                         )?;
+
                         debug::save_html_state(
                             tab,
                             active_report_name,
@@ -536,104 +568,76 @@ pub fn navigate_and_run_report(
                         );
                         *step_num += 1;
 
-                        // STEP 5: Wait for Loader
-                        info!("Waiting for Report Loader to disappear... this may take a while depending on date range.");
-                        let check_loader_js = r#"
-                            (function() {
-                                let doc = document.querySelector('iframe').contentWindow.document;
-                                let loader = doc.querySelector('.dx-loadpanel');
-                                if (loader) {
-                                    let style = window.getComputedStyle(loader);
-                                    if (style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0') {
-                                        return true; // Still loading
-                                    }
-                                }
-                                return false; // Not loading
-                            })();
-                        "#;
-                        let mut was_loading = false;
-                        for i in 0..timeout_loops {
-                            std::thread::sleep(Duration::from_secs(10));
-                            if let Ok(res) = tab.evaluate(check_loader_js, true) {
-                                if let Some(val) = res.value {
-                                    let is_loading = val.as_bool().unwrap_or(false);
-                                    if is_loading {
-                                        was_loading = true;
-                                        if i % 6 == 0 {
-                                            info!(
-                                                "Report still loading... ({} min elapsed)",
-                                                (i * 10) / 60
-                                            );
-                                        }
-                                    } else {
-                                        std::thread::sleep(Duration::from_secs(3));
-                                        if let Ok(res_confirm) = tab.evaluate(check_loader_js, true)
-                                        {
-                                            if let Some(val_confirm) = res_confirm.value {
-                                                if !val_confirm.as_bool().unwrap_or(false) {
-                                                    if was_loading {
-                                                        info!("Loader successfully disappeared.");
-                                                    } else {
-                                                        info!("Loader was never detected, assuming fast load or immediate result.");
-                                                    }
-                                                    break;
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        debug::save_html_state(
-                            tab,
-                            active_report_name,
-                            *step_num,
-                            "After Loader Disappears",
-                        );
-                        *step_num += 1;
-
-                        // STEP 6: Export
+                        // STEP 6: Wait for Loader and Click Export
                         let step6_export_js = r#"
                                         (async function() {
-                                            let doc = document.querySelector('iframe').contentWindow.document;
+                                            function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
                                             let logs = [];
+                                            let doc = document.querySelector('iframe').contentWindow.document;
 
-                                            let exportBtn = doc.querySelector('div[aria-label="Export"]');
-                                            if (exportBtn && exportBtn.offsetParent !== null) {
-                                                exportBtn.click();
-                                                logs.push("Clicked div[aria-label='Export']");
-                                                return JSON.stringify({ status: "SUCCESS", logs });
-                                            }
-
-                                            let dxButtons = doc.querySelectorAll('.dx-button-text');
-                                            for (let btn of dxButtons) {
-                                                if (btn.textContent.trim() === 'Export') { exportBtn = btn.closest('div[role="button"]'); break; }
-                                            }
-                                            if (!exportBtn) {
-                                                let allButtons = doc.querySelectorAll('button, div[role="button"], span');
-                                                for (let btn of allButtons) {
-                                                    if (btn.textContent.trim() === 'Export' && btn.offsetParent !== null) {
-                                                        exportBtn = btn; break;
+                                            logs.push("Waiting for report generation loader to finish...");
+                                            let reportGenerated = false;
+                                            for(let i=0; i<120; i++) {
+                                                let loader = document.querySelector('.loading-screen-wrapper') || doc.querySelector('.loading-screen-wrapper');
+                                                let isLoaderVisible = false;
+                                                if (loader) {
+                                                    let style = window.getComputedStyle(loader);
+                                                    if (style.display !== 'none' && style.opacity !== '0' && style.visibility !== 'hidden') {
+                                                        isLoaderVisible = true;
                                                     }
                                                 }
+                                                if (!isLoaderVisible) {
+                                                    reportGenerated = true;
+                                                    break;
+                                                }
+                                                await sleep(1000);
+                                                if (i % 5 === 0) logs.push("Still loading... " + (i*1) + "s elapsed");
+                                            }
+                                            if (!reportGenerated) return JSON.stringify({ status: "ERROR", msg: "Report generation timeout.", logs });
+
+                                            await sleep(1500); // UI breathing room
+
+                                            logs.push("Looking for Export button...");
+                                            let exportBtn = null;
+                                            for(let i=0; i<15; i++) {
+                                                exportBtn = doc.querySelector('div[aria-label="Export"]');
+                                                if (exportBtn && exportBtn.offsetParent !== null) break;
+
+                                                let dxButtons = doc.querySelectorAll('.dx-button-text');
+                                                for (let b of dxButtons) {
+                                                    if (b.textContent.trim() === 'Export') {
+                                                        exportBtn = b.closest('div[role="button"]');
+                                                        break;
+                                                    }
+                                                }
+                                                if (exportBtn && exportBtn.offsetParent !== null) break;
+
+                                                let allButtons = doc.querySelectorAll('button, div[role="button"], span');
+                                                for (let b of allButtons) {
+                                                    if (b.textContent.trim() === 'Export' && b.offsetParent !== null) {
+                                                        exportBtn = b;
+                                                        break;
+                                                    }
+                                                }
+                                                if (exportBtn && exportBtn.offsetParent !== null) break;
+                                                await sleep(1000);
                                             }
 
                                             if (!exportBtn) return JSON.stringify({ status: "ERROR", msg: "Export button not found.", logs });
 
                                             exportBtn.click();
-                                            logs.push("Clicked Export button via fallback");
+                                            logs.push("Clicked Export button");
                                             return JSON.stringify({ status: "SUCCESS", logs });
                                         })();
                                     "#;
 
-                        info!("Clicking Export...");
+                        info!("Waiting for generation & clicking Export...");
                         javascript::evaluate_automation_step(
                             tab,
                             step6_export_js,
-                            "Step 6 (Export)",
+                            "Step 6 (Wait & Export)",
                         )?;
-                        std::thread::sleep(Duration::from_secs(1));
+
                         debug::save_html_state(
                             tab,
                             active_report_name,
@@ -642,41 +646,46 @@ pub fn navigate_and_run_report(
                         );
                         *step_num += 1;
 
-                        let step6_xlsx_js = r#"
+                        // STEP 7: Click XLSX
+                        let step7_xlsx_js = r#"
                                         (async function() {
+                                            function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
                                             let doc = document.querySelector('iframe').contentWindow.document;
                                             let mainDoc = document;
                                             let logs = [];
                                             let xlsxOption = null;
 
-                                            // Try iframe first
-                                            let listItems = doc.querySelectorAll('.dx-list-item-content');
-                                            for (let item of listItems) {
-                                                if (item.textContent.trim() === 'XLSX') { xlsxOption = item.closest('.dx-list-item'); break; }
-                                            }
-                                            if (!xlsxOption) {
-                                                let allSpans = doc.querySelectorAll('span, div');
-                                                for (let span of allSpans) {
-                                                    if (span.textContent.trim() === 'XLSX' && span.offsetParent !== null) {
-                                                        xlsxOption = span; break;
-                                                    }
-                                                }
-                                            }
-
-                                            // Try main doc
-                                            if (!xlsxOption) {
-                                                listItems = mainDoc.querySelectorAll('.dx-list-item-content');
+                                            for(let i=0; i<15; i++) {
+                                                let listItems = doc.querySelectorAll('.dx-list-item-content');
                                                 for (let item of listItems) {
                                                     if (item.textContent.trim() === 'XLSX') { xlsxOption = item.closest('.dx-list-item'); break; }
                                                 }
-                                            }
-                                            if (!xlsxOption) {
-                                                let allSpans = mainDoc.querySelectorAll('span, div');
-                                                for (let span of allSpans) {
-                                                    if (span.textContent.trim() === 'XLSX' && span.offsetParent !== null) {
-                                                        xlsxOption = span; break;
+                                                if (!xlsxOption) {
+                                                    let allSpans = doc.querySelectorAll('span, div');
+                                                    for (let span of allSpans) {
+                                                        if (span.textContent.trim() === 'XLSX' && span.offsetParent !== null) {
+                                                            xlsxOption = span; break;
+                                                        }
                                                     }
                                                 }
+
+                                                if (!xlsxOption) {
+                                                    listItems = mainDoc.querySelectorAll('.dx-list-item-content');
+                                                    for (let item of listItems) {
+                                                        if (item.textContent.trim() === 'XLSX') { xlsxOption = item.closest('.dx-list-item'); break; }
+                                                    }
+                                                }
+                                                if (!xlsxOption) {
+                                                    let allSpans = mainDoc.querySelectorAll('span, div');
+                                                    for (let span of allSpans) {
+                                                        if (span.textContent.trim() === 'XLSX' && span.offsetParent !== null) {
+                                                            xlsxOption = span; break;
+                                                        }
+                                                    }
+                                                }
+
+                                                if (xlsxOption) break;
+                                                await sleep(1000);
                                             }
 
                                             if (!xlsxOption) return JSON.stringify({ status: "ERROR", msg: "XLSX option not found.", logs });
@@ -687,7 +696,7 @@ pub fn navigate_and_run_report(
                                     "#;
 
                         info!("Clicking XLSX...");
-                        javascript::evaluate_automation_step(tab, step6_xlsx_js, "Step 6 (XLSX)")?;
+                        javascript::evaluate_automation_step(tab, step7_xlsx_js, "Step 7 (XLSX)")?;
                         info!("JS Automation Sequence Completed Successfully!");
 
                         debug::save_html_state(
