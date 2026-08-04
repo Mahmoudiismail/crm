@@ -23,9 +23,10 @@ pub fn navigate_and_run_report(
         Ok(menu_btn) => {
             let mut mis_found = false;
             let mis_selector = "#misFocus";
-            let mut sidebar_toggled = false;
 
             for attempt in 1..=3 {
+                let mut sidebar_toggled = false;
+
                 info!("Clicking #menuPinnedBtn (Attempt {})...", attempt);
                 if let Err(e) = menu_btn.click() {
                     error!("Failed to click menu button: {:?}", e);
@@ -33,21 +34,6 @@ pub fn navigate_and_run_report(
                         error!("Page HTML after failed menu click:\n{}", html);
                     }
                 } else {
-                    let js_click_menu = r#"
-                        (function() {
-                            let menuBtn = document.querySelector('#menuPinnedBtn');
-                            if (menuBtn) { menuBtn.click(); return "CLICKED_VIA_JS"; }
-                            return "NOT_FOUND";
-                        })();
-                    "#;
-                    if let Ok(eval_result) = tab.evaluate(js_click_menu, true) {
-                        if let Some(val) = eval_result.value {
-                            if let Some(res_str) = val.as_str() {
-                                info!("JS #menuPinnedBtn Click Result: {}", res_str);
-                            }
-                        }
-                    }
-
                     for _ in 0..10 {
                         let check_js = "document.querySelector('.menuModules') ? document.querySelector('.menuModules').classList.contains('show-modules') : false";
                         if let Ok(eval_result) = tab.evaluate(check_js, true) {
