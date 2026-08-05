@@ -12,3 +12,9 @@ wcxx.log
 GibsonSpewing
 *.local.json
 .claude/settings.local.json
+*.txt
+*.log
+*.zip
+greek/
+delayed/
+swim/

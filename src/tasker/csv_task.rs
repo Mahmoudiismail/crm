@@ -1,6 +1,6 @@
 use crate::tasker::config::CsvAnalysisConfig;
 use anyhow::{Context, Result};
-use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime};
+use chrono::{Datelike, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime};
 use csv::{StringRecord, WriterBuilder};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
@@ -270,8 +270,12 @@ pub fn generate_csv(params: &CsvAnalysisParams<'_>) -> Result<Option<std::path::
         download_dir_path.display(),
         params.minutes_ago
     );
-    let now = Local::now().naive_local();
-    let threshold = now - Duration::minutes(params.minutes_ago);
+    let now = std::time::SystemTime::now();
+    let threshold = now
+        .checked_sub(std::time::Duration::from_secs(
+            (params.minutes_ago * 60) as u64,
+        ))
+        .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
     let mut target_files = Vec::new();
 
     for entry in WalkDir::new(&download_dir_path)
@@ -284,8 +288,7 @@ pub fn generate_csv(params: &CsvAnalysisParams<'_>) -> Result<Option<std::path::
                 if name.starts_with("ticket_report") && name.ends_with(".csv") {
                     if let Ok(metadata) = entry.metadata() {
                         if let Ok(modified) = metadata.modified() {
-                            let mod_time: DateTime<Local> = modified.into();
-                            if mod_time.naive_local() >= threshold {
+                            if modified >= threshold {
                                 target_files.push(path.to_path_buf());
                             }
                         }
