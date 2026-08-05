@@ -272,7 +272,9 @@ pub fn generate_csv(params: &CsvAnalysisParams<'_>) -> Result<Option<std::path::
     );
     let now = std::time::SystemTime::now();
     let threshold = now
-        .checked_sub(std::time::Duration::from_secs((params.minutes_ago * 60) as u64))
+        .checked_sub(std::time::Duration::from_secs(
+            (params.minutes_ago * 60) as u64,
+        ))
         .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
     let mut target_files = Vec::new();
 
