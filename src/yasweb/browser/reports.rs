@@ -22,7 +22,7 @@ pub fn navigate_and_run_report(
     match tab.wait_for_element("#menuPinnedBtn:not(.d-none), #pinButton:not(.d-none)") {
         Ok(menu_btn) => {
             let mut mis_found = false;
-            let mis_selector = ".all-modules .misManagement";
+            let mis_selector = ".misManagement";
 
             for attempt in 1..=3 {
                 let mut sidebar_toggled = false;
@@ -86,7 +86,10 @@ pub fn navigate_and_run_report(
             }
 
             if !mis_found {
-                error!("MIS module not found after all attempts.");
+                error!(
+                    "MIS module ('{}') not found after all attempts.",
+                    mis_selector
+                );
                 if let Ok(html) = tab.get_content() {
                     error!("Page HTML at MIS module wait timeout:\n{}", html);
                 }
@@ -103,6 +106,7 @@ pub fn navigate_and_run_report(
                         }
                     } else {
                         info!("Clicked MIS successfully. Waiting for MIS Reports button...");
+                        tracing::debug!("Waiting for MIS Reports button...");
                         if let Ok(html) = tab.get_content() {
                             tracing::trace!(
                                 "Page HTML immediately after clicking MIS module:\n{}",
@@ -164,6 +168,10 @@ pub fn navigate_and_run_report(
                         // let timeout_loops = (timeout_minutes * 60) / 10;
 
                         // STEP 1: Select Report Type
+                        tracing::debug!(
+                            "Executing JavaScript to select report type: {}",
+                            active_report_type
+                        );
                         let step1_js = format!(
                             r#"
                                         (async function(reportType) {{
@@ -244,6 +252,10 @@ pub fn navigate_and_run_report(
                         *step_num += 1;
 
                         // STEP 1.5 & 2: Wait for List, Search, and Select Report
+                        tracing::debug!(
+                            "Executing JavaScript to search & select report: {}",
+                            active_report_name
+                        );
                         let step2_js = format!(
                             r#"
                                         (async function(reportType, reportName) {{
@@ -327,6 +339,7 @@ pub fn navigate_and_run_report(
                         *step_num += 1;
 
                         // STEP 3: Wait for binding
+                        tracing::debug!("Executing JavaScript to wait for binding...");
                         let step3_js = format!(
                             r#"
                                         (async function(reportName) {{
@@ -371,6 +384,7 @@ pub fn navigate_and_run_report(
                         *step_num += 1;
 
                         // STEP 3.5 & 4: Wait for Loader to disappear, then fill filters
+                        tracing::debug!("Executing JavaScript to apply filters...");
                         let step4_fill_js = format!(
                             r#"
                                         (async function(filters) {{
@@ -515,6 +529,7 @@ pub fn navigate_and_run_report(
                         std::thread::sleep(Duration::from_secs(1));
 
                         // STEP 5: Search Click
+                        tracing::debug!("Executing JavaScript to click search...");
                         let step5_search_js = r#"
                                         (async function() {
                                             function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -569,6 +584,7 @@ pub fn navigate_and_run_report(
                         *step_num += 1;
 
                         // STEP 6: Wait for Loader and Click Export
+                        tracing::debug!("Executing JavaScript to wait for export generation...");
                         let step6_export_js = r#"
                                         (async function() {
                                             function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -647,6 +663,7 @@ pub fn navigate_and_run_report(
                         *step_num += 1;
 
                         // STEP 7: Click XLSX
+                        tracing::debug!("Executing JavaScript to click XLSX export option...");
                         let step7_xlsx_js = r#"
                                         (async function() {
                                             function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
