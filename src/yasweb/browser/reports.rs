@@ -265,10 +265,26 @@ pub fn navigate_and_run_report(
                                             if (!iframe) return JSON.stringify({{ status: "ERROR", msg: "No iframe found.", logs }});
                                             let doc = iframe.contentWindow.document;
 
+                                            logs.push("Waiting for loader to disappear before typing...");
+                                            for(let i=0; i<30; i++) {{
+                                                let loader = document.querySelector('.loading-screen-wrapper') || doc.querySelector('.loading-screen-wrapper');
+                                                let isLoaderVisible = false;
+                                                if (loader) {{
+                                                    let style = loader.ownerDocument.defaultView.getComputedStyle(loader);
+                                                    if (style.display !== 'none' && style.opacity !== '0' && style.visibility !== 'hidden') {{
+                                                        isLoaderVisible = true;
+                                                    }}
+                                                }}
+                                                if (!isLoaderVisible) {{
+                                                    break;
+                                                }}
+                                                await sleep(500);
+                                            }}
+
                                             let listLoaded = false;
-                                            logs.push("Waiting for report list to load (fw-semibold elements)...");
+                                            logs.push("Waiting for report list to load (sub-list-items)...");
                                             for (let i = 0; i < 30; i++) {{
-                                                if (doc.querySelectorAll('.fw-semibold').length > 0) {{
+                                                if (doc.querySelectorAll('.sub-list-items').length > 0) {{
                                                     listLoaded = true; break;
                                                 }}
                                                 await sleep(500);
@@ -291,6 +307,7 @@ pub fn navigate_and_run_report(
                                                 searchInputList.blur();
                                                 searchInputList.dispatchEvent(new Event('blur', {{ bubbles: true }}));
                                                 logs.push("Typed search input using simulation");
+                                                await sleep(500); // Wait after typing
                                             }} else {{
                                                 logs.push("Warning: searchInputList not found.");
                                             }}
