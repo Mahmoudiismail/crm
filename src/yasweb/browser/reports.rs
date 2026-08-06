@@ -282,9 +282,9 @@ pub fn navigate_and_run_report(
                                             }}
 
                                             let listLoaded = false;
-                                            logs.push("Waiting for report list to load (sub-list-items)...");
+                                            logs.push("Waiting for report list to load (tree-view)...");
                                             for (let i = 0; i < 30; i++) {{
-                                                if (doc.querySelectorAll('.sub-list-items').length > 0) {{
+                                                if (doc.querySelectorAll('.tree-view').length > 0) {{
                                                     listLoaded = true; break;
                                                 }}
                                                 await sleep(500);
@@ -315,15 +315,15 @@ pub fn navigate_and_run_report(
                                             let reportFound = false;
                                             logs.push("Waiting for report span in list: " + reportName);
                                             for (let i = 0; i < 30; i++) {{
-                                                let itemXpath = `//li[contains(@class, 'sub-list-items')]//span[contains(normalize-space(.), '${{reportName}}')]`;
+                                                let itemXpath = `//div[contains(@class, 'tree-view')]//span[contains(normalize-space(.), '${{reportName}}')]`;
                                                 let itemResult = doc.evaluate(itemXpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
                                                 let reportSpan = itemResult.singleNodeValue;
                                                 if (reportSpan) {{
                                                     logs.push("Found reportSpan");
-                                                    let liElement = reportSpan.closest('li.sub-list-items');
-                                                    if (liElement) {{
-                                                        liElement.click();
-                                                        logs.push("Clicked liElement");
+                                                    let treeViewElement = reportSpan.closest('.tree-view');
+                                                    if (treeViewElement) {{
+                                                        treeViewElement.click();
+                                                        logs.push("Clicked treeViewElement");
                                                     }} else {{
                                                         reportSpan.click();
                                                         logs.push("Clicked reportSpan");
