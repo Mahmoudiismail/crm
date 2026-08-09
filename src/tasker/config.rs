@@ -36,6 +36,8 @@ pub enum TaskConfig {
     DashboardUpdater(DashboardUpdaterConfig),
     #[serde(rename = "crm_open_sohail")]
     CrmOpenSohail(CrmOpenSohailConfig),
+    #[serde(rename = "department_split")]
+    DepartmentSplit(DepartmentSplitConfig),
 }
 
 /// Outlines email templating, routing, and distribution rules.
@@ -121,6 +123,13 @@ pub struct DashboardUpdaterConfig {
 
     pub save_email_as_html: Option<bool>,
     pub indentation_spaces: Option<u32>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct DepartmentSplitConfig {
+    pub dashboard_file: String,
+    pub chair_file: String,
+    pub output_dir: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

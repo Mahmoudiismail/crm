@@ -160,6 +160,30 @@ This task is similar to `csv_analysis`, in that it processes raw ticket CSVs to 
     - Generates a heavily styled HTML Pivot Table counting occurrences by dynamically resolved Status per Subtype/Category.
     - Executes a background PowerShell script to automate Microsoft Outlook (`New-Object -ComObject Outlook.Application`), appending the Excel attachment and drafting/sending the result.
 
+### `department_split` Task
+
+The `department_split` task takes a master macro-enabled Excel dashboard and automatically splits it into individual departmental copies based on a target mapping file, while fully preserving all formatting, sheets, and VBA macro modules.
+
+#### Example Configuration
+```json
+{
+  "tasks": [
+    {
+      "type": "department_split",
+      "dashboard_file": "./7-OPD Dashboard July 2026 .xlsm",
+      "chair_file": "./Chair.xlsx",
+      "output_dir": "./Department_Files"
+    }
+  ]
+}
+```
+
+#### Processing Logic
+1. **Mapping:** Opens `chair_file` using the `calamine` library to build a fast memory lookup mapping from raw `Dep` names to target `Chir` groups.
+2. **Execution:** Automatically generates and executes a PowerShell COM interop script targeting the master `dashboard_file`.
+3. **Filtering:** The PowerShell script opens copies of the workbook for every identified unique target Chair. In each file, it backward iterates over the `OPD Report` sheet to safely delete any row that does not map to the current file's target.
+4. **Preservation:** Because this runs via Excel COM interacting with the native application, all external sheets, visual charts, and embedded VBA macros remain perfectly intact.
+
 ## Logging
 
 `tasker` includes detailed logging for auditing and debugging. It leverages the `tracing` framework to output logs both to STDOUT and to a rolling log file `task_csv_analysis.log` situated in the same folder as the executable. Every step (config parsing, file reading, row counting, filtering, pivot creation, and Outlook automation) is rigorously tracked in this file.
