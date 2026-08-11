@@ -564,8 +564,7 @@ try {{
             if let Some(idx) = created_at_idx {
                 for record in output_rdr.records().flatten() {
                     if let Some(created_val) = record.get(idx) {
-                        if let Some(dt) = crate::tasker::csv_task::parse_created_at(created_val)
-                        {
+                        if let Some(dt) = crate::tasker::csv_task::parse_created_at(created_val) {
                             if min_date.is_none_or(|m| dt < m) {
                                 min_date = Some(dt);
                             }
