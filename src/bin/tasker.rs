@@ -180,6 +180,14 @@ pub fn run_app(options: TaskerCliOptions) -> Result<()> {
                 }
                 tracing::trace!("CrmOpenSohail for task #{} finished.", task_idx);
             }
+            TaskConfig::DepartmentSplit(split_config) => {
+                tracing::trace!("Executing DepartmentSplit for task #{}.", task_idx);
+                if let Err(e) = crm_tool::tasker::department_split::run(split_config) {
+                    error!("Error running DepartmentSplit task #{}: {:?}", task_idx, e);
+                    anyhow::bail!("DepartmentSplit task {} failed: {}", task_idx, e);
+                }
+                tracing::trace!("DepartmentSplit for task #{} finished.", task_idx);
+            }
         }
     }
 
@@ -199,6 +207,7 @@ fn get_manifest() -> AppManifest {
                 "1".to_string(),
                 "2".to_string(),
                 "3".to_string(),
+                "4".to_string(),
             ]),
             AppArg::new("--only-call-center", ArgType::Boolean).depends_on(
                 std::collections::HashMap::from([("--task".to_string(), vec!["1".to_string()])]),

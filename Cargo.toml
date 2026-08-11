@@ -49,6 +49,7 @@ lazy_static = "1.5.0"
 tempfile = "3.10.1"
 zip = { version = "7.2.0", features = ["aes-crypto", "deflate"] }
 winsafe = { version = "0.0.28", features = ["oleaut"] }
+calamine = "0.36.1"
 
 
 [profile.release]
