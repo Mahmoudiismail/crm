@@ -2,7 +2,7 @@ use std::fs;
 use std::io::Write;
 use std::sync::Arc;
 
-use chrono::Utc;
+use chrono::Local;
 use tokio::sync::Mutex;
 use tracing::{debug, error};
 
@@ -37,7 +37,7 @@ struct TaskLoggerInner {
 
 impl TaskLoggerInner {
     fn new(task_id: &str, task_name: &str) -> Self {
-        let now = Utc::now();
+        let now = Local::now();
         let timestamp = now.format("%Y%m%d_%H%M%S").to_string();
         let safe_task_name = task_name.replace(|c: char| !c.is_alphanumeric(), "_");
         let filename = format!("{}_{}_{}.log", timestamp, safe_task_name, task_id);
@@ -86,7 +86,7 @@ impl TaskLoggerInner {
     }
 
     fn log(&mut self, message: &str) {
-        let now = Utc::now().to_rfc3339();
+        let now = Local::now().to_rfc3339();
         let line = format!("[{}] {}\n", now, message);
         if let Some(ref mut f) = self.file {
             let _ = f.write_all(line.as_bytes());
@@ -124,7 +124,7 @@ pub async fn cleanup_old_logs(log_retention_days: u64) {
         return;
     }
 
-    let threshold = chrono::Utc::now()
+    let threshold = chrono::Local::now()
         - chrono::Duration::try_days(log_retention_days as i64).unwrap_or(chrono::Duration::zero());
 
     let mut walk_dir = walkdir::WalkDir::new(&log_dir).into_iter();
@@ -134,13 +134,19 @@ pub async fn cleanup_old_logs(log_retention_days: u64) {
                 if ext == "log" {
                     if let Ok(metadata) = entry.metadata() {
                         if let Ok(modified) = metadata.modified() {
-                            let modified_time: chrono::DateTime<chrono::Utc> = modified.into();
+                            let modified_time: chrono::DateTime<chrono::Local> = modified.into();
                             if modified_time < threshold {
                                 tracing::info!(
                                     "Cleaning up old log file: {}",
                                     entry.path().display()
                                 );
-                                let _ = std::fs::remove_file(entry.path());
+                                if let Err(e) = std::fs::remove_file(entry.path()) {
+                                    tracing::warn!(
+                                        "Failed to remove old log file {}: {}",
+                                        entry.path().display(),
+                                        e
+                                    );
+                                }
                             }
                         }
                     }
