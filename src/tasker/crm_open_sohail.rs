@@ -550,10 +550,54 @@ try {{
 
     info!("Successfully extracted pivot data to {}", json_path_str);
 
+    // Calculate accurate date range from CSV
+    let mut min_date: Option<chrono::NaiveDateTime> = None;
+    let mut max_date: Option<chrono::NaiveDateTime> = None;
+
+    let output_file_path =
+        crate::tasker::csv_task::resolve_relative_to_exe_dir(&config.dashboard_config.output_file);
+    if let Ok(mut output_rdr) = csv::ReaderBuilder::new().from_path(&output_file_path) {
+        if let Ok(headers) = output_rdr.headers() {
+            let created_at_idx = headers
+                .iter()
+                .position(|h| h.trim().eq_ignore_ascii_case("Created At"));
+            if let Some(idx) = created_at_idx {
+                for record in output_rdr.records().flatten() {
+                    if let Some(created_val) = record.get(idx) {
+                        if let Some(dt) = crate::tasker::csv_task::parse_created_at(created_val)
+                        {
+                            if min_date.is_none_or(|m| dt < m) {
+                                min_date = Some(dt);
+                            }
+                            if max_date.is_none_or(|m| dt > m) {
+                                max_date = Some(dt);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let current_month_dt = chrono::Local::now().format("%b-%Y").to_string();
+    let computed_month_range = if let (Some(min), Some(max)) = (min_date, max_date) {
+        let min_month = min.format("%b").to_string();
+        let max_month = max.format("%b-%Y").to_string();
+
+        // If they are exactly the same month and year, just use that month
+        if min.format("%b-%Y").to_string() == max.format("%b-%Y").to_string() {
+            min.format("%b-%Y").to_string()
+        } else {
+            format!("({} to {})", min_month, max_month)
+        }
+    } else {
+        "(Unknown to Unknown)".to_string()
+    };
+
     // Read the output
     let json_content = std::fs::read_to_string(&json_output_path)?;
     let clean_json = json_content.trim_start_matches('\u{FEFF}');
-    let extracted_data: Vec<ExtractedSlicerDataset> = match serde_json::from_str(clean_json) {
+    let mut extracted_data: Vec<ExtractedSlicerDataset> = match serde_json::from_str(clean_json) {
         Ok(data) => data,
         Err(e) => {
             error!(
@@ -568,6 +612,24 @@ try {{
         "Extracted {} combinations of branch/month.",
         extracted_data.len()
     );
+
+    // Apply the accurate CSV date range
+    for dataset in &mut extracted_data {
+        let is_main_branch = dataset
+            .branch
+            .trim()
+            .eq_ignore_ascii_case("Dr. Soliman Fakeeh Hospital Jeddah")
+            || dataset.branch.trim().eq_ignore_ascii_case("DSFH")
+            || dataset
+                .branch
+                .trim()
+                .to_lowercase()
+                .contains("soliman fakeeh hospital");
+
+        if is_main_branch && dataset.month.contains("from (") && dataset.month != current_month_dt {
+            dataset.month = computed_month_range.clone();
+        }
+    }
 
     // Step 5: Process Data & Enrich OUL Column
     let team_mapping_path =
@@ -714,7 +776,7 @@ try {{
             let team_lower = row.team.trim().to_lowercase();
             let team_info = team_to_info.get(&team_lower);
 
-            let oul = match team_info {
+            let mut oul = match team_info {
                 Some(info) => {
                     if info.is_shared || is_main_branch {
                         match (&info.owner_name, &info.owner_email) {
@@ -735,6 +797,10 @@ try {{
                     fallback_oul_text.clone()
                 }
             };
+
+            if row.open == 0.0 {
+                oul = String::new();
+            }
 
             enriched_rows.push(EnrichedRow {
                 team: row.team,
@@ -822,6 +888,32 @@ try {{
             ds_open_total += row.open;
             ds_grand_total += row.grand_total;
 
+            let closed_str = if row.closed == 0.0 {
+                String::new()
+            } else {
+                row.closed.to_string()
+            };
+            let open_str = if row.open == 0.0 {
+                String::new()
+            } else {
+                row.open.to_string()
+            };
+            let perc_closed_str = if row.perc_closed == "0%" || row.perc_closed == "0.00%" {
+                String::new()
+            } else {
+                row.perc_closed.clone()
+            };
+            let perc_open_str = if row.perc_open == "0%" || row.perc_open == "0.00%" {
+                String::new()
+            } else {
+                row.perc_open.clone()
+            };
+            let grand_total_str = if row.grand_total == 0.0 {
+                String::new()
+            } else {
+                row.grand_total.to_string()
+            };
+
             sections_html.push_str(&format!(
                 "<tr style=\"color: black;\">
                     <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
@@ -832,7 +924,7 @@ try {{
                     <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
                     <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
                 </tr>",
-                row.team, row.closed, row.open, row.perc_closed, row.perc_open, row.grand_total, row.oul
+                row.team, closed_str, open_str, perc_closed_str, perc_open_str, grand_total_str, row.oul
             ));
         }
 
@@ -848,6 +940,32 @@ try {{
             "0.00%".to_string()
         };
 
+        let total_closed_str = if ds_closed_total == 0.0 {
+            String::new()
+        } else {
+            ds_closed_total.to_string()
+        };
+        let total_open_str = if ds_open_total == 0.0 {
+            String::new()
+        } else {
+            ds_open_total.to_string()
+        };
+        let total_perc_closed_str = if perc_closed_total == "0%" || perc_closed_total == "0.00%" {
+            String::new()
+        } else {
+            perc_closed_total
+        };
+        let total_perc_open_str = if perc_open_total == "0%" || perc_open_total == "0.00%" {
+            String::new()
+        } else {
+            perc_open_total
+        };
+        let total_grand_str = if ds_grand_total == 0.0 {
+            String::new()
+        } else {
+            ds_grand_total.to_string()
+        };
+
         sections_html.push_str(&format!(
             "<tr style=\"background-color: #C00000; color: white; font-weight: bold;\">
                 <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">Grand Total</td>
@@ -858,7 +976,7 @@ try {{
                 <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
                 <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\"></td>
             </tr>",
-            ds_closed_total, ds_open_total, perc_closed_total, perc_open_total, ds_grand_total
+            total_closed_str, total_open_str, total_perc_closed_str, total_perc_open_str, total_grand_str
         ));
 
         sections_html.push_str("</table><br/>");
