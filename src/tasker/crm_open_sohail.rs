@@ -550,9 +550,13 @@ try {{
 
     info!("Successfully extracted pivot data to {}", json_path_str);
 
-    // Calculate accurate date range from CSV
-    let mut min_date: Option<chrono::NaiveDateTime> = None;
-    let mut max_date: Option<chrono::NaiveDateTime> = None;
+    let current_month_dt = chrono::Local::now().format("%b-%Y").to_string();
+
+    // Calculate accurate date range per branch from CSV
+    let mut branch_date_ranges: std::collections::HashMap<
+        String,
+        (Option<chrono::NaiveDateTime>, Option<chrono::NaiveDateTime>),
+    > = std::collections::HashMap::new();
 
     let output_file_path =
         crate::tasker::csv_task::resolve_relative_to_exe_dir(&config.dashboard_config.output_file);
@@ -561,15 +565,28 @@ try {{
             let created_at_idx = headers
                 .iter()
                 .position(|h| h.trim().eq_ignore_ascii_case("Created At"));
-            if let Some(idx) = created_at_idx {
+            let branch_idx = headers
+                .iter()
+                .position(|h| h.trim().eq_ignore_ascii_case("Branch"));
+
+            if let (Some(c_idx), Some(b_idx)) = (created_at_idx, branch_idx) {
                 for record in output_rdr.records().flatten() {
-                    if let Some(created_val) = record.get(idx) {
+                    if let (Some(created_val), Some(branch_val)) =
+                        (record.get(c_idx), record.get(b_idx))
+                    {
                         if let Some(dt) = crate::tasker::csv_task::parse_created_at(created_val) {
-                            if min_date.is_none_or(|m| dt < m) {
-                                min_date = Some(dt);
-                            }
-                            if max_date.is_none_or(|m| dt > m) {
-                                max_date = Some(dt);
+                            // Only include this date if it is not in the current month
+                            if dt.format("%b-%Y").to_string() != current_month_dt {
+                                let branch = branch_val.trim().to_string();
+                                let entry = branch_date_ranges
+                                    .entry(branch)
+                                    .or_insert((None, None));
+                                if entry.0.is_none_or(|m| dt < m) {
+                                    entry.0 = Some(dt);
+                                }
+                                if entry.1.is_none_or(|m| dt > m) {
+                                    entry.1 = Some(dt);
+                                }
                             }
                         }
                     }
@@ -577,21 +594,6 @@ try {{
             }
         }
     }
-
-    let current_month_dt = chrono::Local::now().format("%b-%Y").to_string();
-    let computed_month_range = if let (Some(min), Some(max)) = (min_date, max_date) {
-        let min_month = min.format("%b").to_string();
-        let max_month = max.format("%b-%Y").to_string();
-
-        // If they are exactly the same month and year, just use that month
-        if min.format("%b-%Y").to_string() == max.format("%b-%Y").to_string() {
-            min.format("%b-%Y").to_string()
-        } else {
-            format!("({} to {})", min_month, max_month)
-        }
-    } else {
-        "(Unknown to Unknown)".to_string()
-    };
 
     // Read the output
     let json_content = std::fs::read_to_string(&json_output_path)?;
@@ -612,21 +614,31 @@ try {{
         extracted_data.len()
     );
 
-    // Apply the accurate CSV date range
+    // Apply the accurate CSV date range per branch
     for dataset in &mut extracted_data {
-        let is_main_branch = dataset
-            .branch
-            .trim()
-            .eq_ignore_ascii_case("Dr. Soliman Fakeeh Hospital Jeddah")
-            || dataset.branch.trim().eq_ignore_ascii_case("DSFH")
-            || dataset
-                .branch
-                .trim()
-                .to_lowercase()
-                .contains("soliman fakeeh hospital");
+        // Any branch with a combined date range (starting with "from (") should be overridden
+        // except if it happens to be explicitly the current month dt.
+        if dataset.month.contains("from (") && dataset.month != current_month_dt {
+            let mut matching_branch_range = None;
+            // The CSV might contain variations of the branch name. Let's do a case-insensitive check.
+            for (csv_branch, (min_date, max_date)) in &branch_date_ranges {
+                if csv_branch.eq_ignore_ascii_case(dataset.branch.trim()) {
+                    matching_branch_range = Some((*min_date, *max_date));
+                    break;
+                }
+            }
 
-        if is_main_branch && dataset.month.contains("from (") && dataset.month != current_month_dt {
-            dataset.month = computed_month_range.clone();
+            if let Some((Some(min), Some(max))) = matching_branch_range {
+                let min_month = min.format("%b").to_string();
+                let max_month = max.format("%b-%Y").to_string();
+
+                let computed_month_range = if min.format("%b-%Y").to_string() == max.format("%b-%Y").to_string() {
+                    min.format("%b-%Y").to_string()
+                } else {
+                    format!("{} to {}", min_month, max_month)
+                };
+                dataset.month = computed_month_range;
+            }
         }
     }
 
@@ -780,10 +792,10 @@ try {{
                     if info.is_shared || is_main_branch {
                         match (&info.owner_name, &info.owner_email) {
                             (o, e) if !o.is_empty() && !e.is_empty() => {
-                                format!("<a href=\"mailto:{}\">@{}</a>", e, o)
+                                format!("<a href=\"mailto:{}\">{}</a>", e, o)
                             }
                             (o, _) if !o.is_empty() => {
-                                format!("@{}", o)
+                                o.to_string()
                             }
                             _ => fallback_oul_text.clone(),
                         }
@@ -832,9 +844,17 @@ try {{
 
     for dataset in &final_datasets {
         // Table Title
+        let is_executive = dataset.branch.trim().eq_ignore_ascii_case("executive clinic");
+        let title = if is_executive {
+            "Executive clinic".to_string()
+        } else {
+            // dataset.month already is either "Jan-2026" or "Jan to Jul-2026", so we wrap it once
+            format!("{} ({})", dataset.branch, dataset.month.trim_matches(|c| c == '(' || c == ')'))
+        };
+
         sections_html.push_str(&format!(
-            "<div style=\"font-family: Calibri, sans-serif; font-size: 14px; font-weight: bold; color: #44546A;\">{} ({})</div>",
-            dataset.branch, dataset.month
+            "<div style=\"font-family: Calibri, sans-serif; font-size: 14px; font-weight: bold; color: #44546A;\">{}</div>",
+            title
         ));
 
         // Start Table
@@ -1122,7 +1142,7 @@ mod tests {
             subject_template: Some("Test Subject".to_string()),
             branch_filter: None,
             month_filter: None,
-            fallback_oul: Some("N/A".to_string()),
+            fallback_oul: Some("".to_string()),
             dashboard_sheet_name: None,
             dashboard_pivot_name: None,
             table_column_widths: None,
@@ -1201,7 +1221,7 @@ mod tests {
             subject_template: Some("Test Subject".to_string()),
             branch_filter: None,
             month_filter: None,
-            fallback_oul: Some("N/A".to_string()),
+            fallback_oul: Some("".to_string()),
             dashboard_sheet_name: None,
             dashboard_pivot_name: None,
             table_column_widths: None,
@@ -1300,7 +1320,7 @@ mod tests {
             subject_template: Some("Test Subject".to_string()),
             branch_filter: Some(vec!["Dr. Soliman Fakeeh Hospital Jeddah".to_string()]),
             month_filter: None,
-            fallback_oul: Some("N/A".to_string()),
+            fallback_oul: Some("".to_string()),
             dashboard_sheet_name: None,
             dashboard_pivot_name: None,
             table_column_widths: None,

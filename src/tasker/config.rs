@@ -250,7 +250,7 @@ mod tests {
               "email_to": "sohail@example.com",
               "email_cc": "cc@example.com",
               "team_mapping_file": "./teams.csv",
-              "fallback_oul": "N/A"
+              "fallback_oul": ""
             }
           ]
         }"#;
@@ -262,7 +262,7 @@ mod tests {
             TaskConfig::CrmOpenSohail(task) => {
                 assert_eq!(task.dashboard_config.dashboard_file, "./dashboard.xlsx");
                 assert_eq!(task.team_mapping_file, "./teams.csv");
-                assert_eq!(task.fallback_oul.as_deref(), Some("N/A"));
+                assert_eq!(task.fallback_oul.as_deref(), Some(""));
             }
             _ => panic!("Expected CrmOpenSohail task"),
         }
