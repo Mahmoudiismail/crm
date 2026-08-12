@@ -578,9 +578,8 @@ try {{
                             // Only include this date if it is not in the current month
                             if dt.format("%b-%Y").to_string() != current_month_dt {
                                 let branch = branch_val.trim().to_string();
-                                let entry = branch_date_ranges
-                                    .entry(branch)
-                                    .or_insert((None, None));
+                                let entry =
+                                    branch_date_ranges.entry(branch).or_insert((None, None));
                                 if entry.0.is_none_or(|m| dt < m) {
                                     entry.0 = Some(dt);
                                 }
@@ -632,11 +631,12 @@ try {{
                 let min_month = min.format("%b").to_string();
                 let max_month = max.format("%b-%Y").to_string();
 
-                let computed_month_range = if min.format("%b-%Y").to_string() == max.format("%b-%Y").to_string() {
-                    min.format("%b-%Y").to_string()
-                } else {
-                    format!("{} to {}", min_month, max_month)
-                };
+                let computed_month_range =
+                    if min.format("%b-%Y").to_string() == max.format("%b-%Y").to_string() {
+                        min.format("%b-%Y").to_string()
+                    } else {
+                        format!("{} to {}", min_month, max_month)
+                    };
                 dataset.month = computed_month_range;
             }
         }
@@ -794,9 +794,7 @@ try {{
                             (o, e) if !o.is_empty() && !e.is_empty() => {
                                 format!("<a href=\"mailto:{}\">{}</a>", e, o)
                             }
-                            (o, _) if !o.is_empty() => {
-                                o.to_string()
-                            }
+                            (o, _) if !o.is_empty() => o.to_string(),
                             _ => fallback_oul_text.clone(),
                         }
                     } else {
@@ -844,12 +842,19 @@ try {{
 
     for dataset in &final_datasets {
         // Table Title
-        let is_executive = dataset.branch.trim().eq_ignore_ascii_case("executive clinic");
+        let is_executive = dataset
+            .branch
+            .trim()
+            .eq_ignore_ascii_case("executive clinic");
         let title = if is_executive {
             "Executive clinic".to_string()
         } else {
             // dataset.month already is either "Jan-2026" or "Jan to Jul-2026", so we wrap it once
-            format!("{} ({})", dataset.branch, dataset.month.trim_matches(|c| c == '(' || c == ')'))
+            format!(
+                "{} ({})",
+                dataset.branch,
+                dataset.month.trim_matches(|c| c == '(' || c == ')')
+            )
         };
 
         sections_html.push_str(&format!(
