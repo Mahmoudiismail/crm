@@ -304,9 +304,14 @@ pub fn navigate_and_run_report(
                                                     await sleep(5);
                                                 }}
                                                 searchInputList.dispatchEvent(new Event('change', {{ bubbles: true }}));
+
+                                                // Trigger the 'Enter' key to execute the search
+                                                searchInputList.dispatchEvent(new KeyboardEvent('keydown', {{ bubbles: true, cancelable: true, key: 'Enter', code: 'Enter', keyCode: 13 }}));
+                                                searchInputList.dispatchEvent(new KeyboardEvent('keyup', {{ bubbles: true, cancelable: true, key: 'Enter', code: 'Enter', keyCode: 13 }}));
+
                                                 searchInputList.blur();
                                                 searchInputList.dispatchEvent(new Event('blur', {{ bubbles: true }}));
-                                                logs.push("Typed search input using simulation");
+                                                logs.push("Typed search input using simulation and triggered Enter");
                                                 await sleep(500); // Wait after typing
                                             }} else {{
                                                 logs.push("Warning: searchInputList not found.");
