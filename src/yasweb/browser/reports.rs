@@ -325,10 +325,10 @@ pub fn navigate_and_run_report(
                                                 let reportSpan = itemResult.singleNodeValue;
                                                 if (reportSpan) {{
                                                     logs.push("Found reportSpan");
-                                                    let treeViewElement = reportSpan.closest('.tree-view');
-                                                    if (treeViewElement) {{
-                                                        treeViewElement.click();
-                                                        logs.push("Clicked treeViewElement");
+                                                    let listItemElement = reportSpan.closest('.sub-list-items');
+                                                    if (listItemElement) {{
+                                                        listItemElement.click();
+                                                        logs.push("Clicked sub-list-items");
                                                     }} else {{
                                                         reportSpan.click();
                                                         logs.push("Clicked reportSpan");
