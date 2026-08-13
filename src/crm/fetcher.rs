@@ -36,13 +36,33 @@ struct BulkTicketPayload<'a> {
 // Fetch Context Context
 // ──────────────────────────────────────────────────────────────
 
+use tokio::sync::Mutex;
+
 struct FetchContext {
-    token: String,
-    base_url: String,
-    email: String,
-    account_id: String,
-    application_id: String,
-    tz: String,
+    config: Arc<Mutex<AppConfig>>,
+}
+
+impl FetchContext {
+    async fn get_valid_token_or_refresh(
+        &self,
+        client: &reqwest::Client,
+        current_invalid_token: &str,
+    ) -> Result<String> {
+        let mut cfg = self.config.lock().await;
+        let token_in_cfg = if !cfg.id_token.is_empty() {
+            cfg.id_token.clone()
+        } else {
+            cfg.access_token.clone()
+        };
+        if !token_in_cfg.is_empty() && token_in_cfg != current_invalid_token {
+            return Ok(token_in_cfg);
+        }
+        tracing::info!("Token expired (401), performing Cognito SRP authentication...");
+        let new_token = crate::crm::auth::ensure_authenticated(&mut cfg, client, false)
+            .await
+            .context("Failed to refresh token after 401 Unauthorized")?;
+        Ok(new_token)
+    }
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -102,9 +122,8 @@ fn report_defs() -> &'static [ReportDef] {
 /// # Returns
 /// A JSON structure containing diagnostic results and the downloaded file paths.
 pub async fn fetch_reports(
-    config: &AppConfig,
+    config_mutex: Arc<tokio::sync::Mutex<AppConfig>>,
     client: &reqwest::Client,
-    token: &str,
     report_type: Vec<String>,
     download_dir: &Path,
 ) -> Result<Value> {
@@ -145,13 +164,43 @@ pub async fn fetch_reports(
     let mut futures = Vec::new();
 
     let context = Arc::new(FetchContext {
-        token: token.to_string(),
-        base_url: config.base_url.clone(),
-        email: config.email.clone(),
-        account_id: config.account_id.clone(),
-        application_id: config.application_id.clone(),
-        tz: config.app_timezone_plus_minutes.clone(),
+        config: config_mutex.clone(),
     });
+
+    let (
+        base_url,
+        email,
+        account_id,
+        application_id,
+        tz,
+        calls_from_date,
+        to_date,
+        from_date,
+        download_csv,
+        incomplete_reservation_limit,
+        initial_token,
+    ) = {
+        let cfg = config_mutex.lock().await;
+        let t = if !cfg.id_token.is_empty() {
+            cfg.id_token.clone()
+        } else {
+            cfg.access_token.clone()
+        };
+        (
+            cfg.base_url.clone(),
+            cfg.email.clone(),
+            cfg.account_id.clone(),
+            cfg.application_id.clone(),
+            cfg.app_timezone_plus_minutes.clone(),
+            cfg.calls_from_date.clone(),
+            cfg.to_date.clone(),
+            cfg.from_date.clone(),
+            cfg.download_csv,
+            cfg.incomplete_reservation_limit,
+            t,
+        )
+    };
+    let token = initial_token;
 
     for def in defs {
         trace!("Checking report definition: {}", def.key);
@@ -182,18 +231,24 @@ pub async fn fetch_reports(
 
         if def.key == "calls" {
             // Call logs: split into monthly batches
-            let batches = split_monthly(&config.calls_from_date, &config.to_date)?;
+            let batches = split_monthly(&calls_from_date, &to_date)?;
             info!(
                 "Call logs: {} monthly batches from {} to {}",
                 batches.len(),
-                config.calls_from_date,
-                config.to_date
+                calls_from_date,
+                to_date
             );
 
             for (batch_from, batch_to) in batches {
                 let client = client.clone();
                 let context = Arc::clone(&context);
-                let download_csv = config.download_csv;
+                let base_url = base_url.clone();
+                let _email = email.clone();
+                let account_id = account_id.clone();
+                let application_id = application_id.clone();
+                let tz = tz.clone();
+                let token = token.clone();
+                let download_csv = download_csv;
                 let download_dir = download_dir.to_path_buf();
                 let download_tx = download_tx.clone();
 
@@ -201,16 +256,16 @@ pub async fn fetch_reports(
                     async move {
                         let key = format!("calls_{}_{}", batch_from, batch_to);
                         let params = FetchParams {
-                            base_url: &context.base_url,
-                            email: &context.email,
-                            account_id: &context.account_id,
-                            application_id: &context.application_id,
-                            tz: &context.tz,
+                            base_url: &base_url,
+                            email: &_email,
+                            account_id: &account_id,
+                            application_id: &application_id,
+                            tz: &tz,
                             extra_params: extra,
                         };
                         let v = fetch_with_signed_url_split(
                             &client,
-                            &context.token,
+                            &token,
                             endpoint,
                             &batch_from,
                             &batch_to,
@@ -219,6 +274,7 @@ pub async fn fetch_reports(
                             Some(&download_dir),
                             &key,
                             download_tx,
+                            Some(context.clone()),
                         )
                         .await
                         .unwrap_or_else(|e| {
@@ -235,27 +291,39 @@ pub async fn fetch_reports(
             // Users report: direct GET request, no dates, returns Base64 CSV
             let client = client.clone();
             let context = Arc::clone(&context);
+            let base_url = base_url.clone();
+            let _email = email.clone();
+            let account_id = account_id.clone();
+            let application_id = application_id.clone();
+            let tz = tz.clone();
+            let token = token.clone();
             let key = def.key.to_string();
-            let download_csv = config.download_csv;
+            let download_csv = download_csv;
             let download_dir = download_dir.to_path_buf();
 
             futures.push(
                 async move {
                     let params = FetchParams {
-                        base_url: &context.base_url,
-                        email: &context.email,
-                        account_id: &context.account_id,
-                        application_id: &context.application_id,
-                        tz: &context.tz,
+                        base_url: &base_url,
+                        email: &_email,
+                        account_id: &account_id,
+                        application_id: &application_id,
+                        tz: &tz,
                         extra_params: extra,
                     };
 
-                    let v = fetch_users_report(&client, &context.token, endpoint, &params)
-                        .await
-                        .unwrap_or_else(|e| {
-                            error!("Report '{}' failed: {}", endpoint, e);
-                            serde_json::json!({"error": format!("{}", e)})
-                        });
+                    let v = fetch_users_report(
+                        &client,
+                        &token,
+                        endpoint,
+                        &params,
+                        Some(context.clone()),
+                    )
+                    .await
+                    .unwrap_or_else(|e| {
+                        error!("Report '{}' failed: {}", endpoint, e);
+                        serde_json::json!({"error": format!("{}", e)})
+                    });
 
                     if download_csv {
                         if let Some(base64_val) = v.get("base64_data").and_then(|b| b.as_str()) {
@@ -279,16 +347,26 @@ pub async fn fetch_reports(
             // Incomplete Reservation task: fetches tickets and bulk-updates them
             let client = client.clone();
             let context = Arc::clone(&context);
+            let base_url = base_url.clone();
+            let _email = email.clone();
+            let account_id = account_id.clone();
+            let application_id = application_id.clone();
+            let tz = tz.clone();
+            let token = token.clone();
             let key = def.key.to_string();
-            let limit = config.incomplete_reservation_limit;
+            let limit = incomplete_reservation_limit;
 
             futures.push(
                 async move {
                     let v = fetch_and_update_incomplete_reservations(
                         &client,
-                        &context.token,
-                        &context,
+                        &token,
+                        &base_url,
+                        &account_id,
+                        &application_id,
+                        &tz,
                         limit,
+                        Some(context.clone()),
                     )
                     .await
                     .unwrap_or_else(|e| {
@@ -304,26 +382,32 @@ pub async fn fetch_reports(
             // backend refuses to generate a signed URL for a large file.
             let client = client.clone();
             let context = Arc::clone(&context);
-            let from_date = config.from_date.clone();
-            let to_date = config.to_date.clone();
+            let base_url = base_url.clone();
+            let _email = email.clone();
+            let account_id = account_id.clone();
+            let application_id = application_id.clone();
+            let tz = tz.clone();
+            let token = token.clone();
+            let from_date = from_date.clone();
+            let to_date = to_date.clone();
             let key = def.key.to_string();
-            let download_csv = config.download_csv;
+            let download_csv = download_csv;
             let download_dir = download_dir.to_path_buf();
             let download_tx = download_tx.clone();
 
             futures.push(
                 async move {
                     let params = FetchParams {
-                        base_url: &context.base_url,
-                        email: &context.email,
-                        account_id: &context.account_id,
-                        application_id: &context.application_id,
-                        tz: &context.tz,
+                        base_url: &base_url,
+                        email: &_email,
+                        account_id: &account_id,
+                        application_id: &application_id,
+                        tz: &tz,
                         extra_params: extra,
                     };
                     let v = fetch_with_signed_url_split(
                         &client,
-                        &context.token,
+                        &token,
                         endpoint,
                         &from_date,
                         &to_date,
@@ -332,6 +416,7 @@ pub async fn fetch_reports(
                         Some(&download_dir),
                         &key,
                         download_tx,
+                        Some(context.clone()),
                     )
                     .await
                     .unwrap_or_else(|e| {
@@ -381,25 +466,47 @@ async fn fetch_users_report(
     token: &str,
     endpoint: &str,
     params: &FetchParams<'_>,
+    context_opt: Option<Arc<FetchContext>>,
 ) -> Result<Value> {
     let url = format!("{}/{}", params.base_url.trim_end_matches('/'), endpoint);
 
     info!("Fetching {} ...", endpoint);
     let start_time = std::time::Instant::now();
 
-    let resp = client
+    let mut current_token = token.to_string();
+    let mut resp = client
         .get(&url)
         .header("account_id", params.account_id)
         .header("app-timezone-plus-minutes", params.tz)
         .header("application_id", params.application_id)
         .header("auth-type", "cognito")
-        .header("authorization", format!("Bearer {}", token))
+        .header("authorization", format!("Bearer {}", current_token))
         .header("content-type", "application/json")
         .header("accept", "*/*")
         .send()
         .await
         .with_context(|| format!("HTTP request to {} failed", endpoint))?;
 
+    if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
+        if let Some(ctx) = context_opt.as_ref() {
+            let new_token = ctx
+                .get_valid_token_or_refresh(client, &current_token)
+                .await?;
+            current_token = new_token;
+            resp = client
+                .get(&url)
+                .header("account_id", params.account_id)
+                .header("app-timezone-plus-minutes", params.tz)
+                .header("application_id", params.application_id)
+                .header("auth-type", "cognito")
+                .header("authorization", format!("Bearer {}", current_token))
+                .header("content-type", "application/json")
+                .header("accept", "*/*")
+                .send()
+                .await
+                .with_context(|| format!("Retry HTTP request to {} failed", endpoint))?;
+        }
+    }
     let status = resp.status();
     let body = resp
         .text()
@@ -426,8 +533,12 @@ async fn fetch_users_report(
 async fn fetch_and_update_incomplete_reservations(
     client: &reqwest::Client,
     token: &str,
-    context: &FetchContext,
+    base_url: &str,
+    account_id: &str,
+    application_id: &str,
+    tz: &str,
     limit: u32,
+    context_opt: Option<Arc<FetchContext>>,
 ) -> Result<Value> {
     let mut all_ids = Vec::new();
     let status_ids = vec![
@@ -439,7 +550,7 @@ async fn fetch_and_update_incomplete_reservations(
         let endpoint = "task/ticket";
         let mut url = format!(
             "{}{}?offset=0&limit={}&status_id={}&event_name=cc_booking_incomplete_reservation",
-            context.base_url, endpoint, limit, status_id
+            base_url, endpoint, limit, status_id
         );
         if status_id == "f38fafc3-bd3f-4dd0-ac6a-09dd7d51b6a0" {
             url.push_str("&sort_column=follow_up_date&sort_val=ASC");
@@ -449,15 +560,15 @@ async fn fetch_and_update_incomplete_reservations(
         headers.insert("accept", reqwest::header::HeaderValue::from_static("*/*"));
         headers.insert(
             "account_id",
-            reqwest::header::HeaderValue::from_str(&context.account_id)?,
+            reqwest::header::HeaderValue::from_str(account_id)?,
         );
         headers.insert(
             "application_id",
-            reqwest::header::HeaderValue::from_str(&context.application_id)?,
+            reqwest::header::HeaderValue::from_str(application_id)?,
         );
         headers.insert(
             "app-timezone-plus-minutes",
-            reqwest::header::HeaderValue::from_str(&context.tz)?,
+            reqwest::header::HeaderValue::from_str(tz)?,
         );
         headers.insert(
             "auth-type",
@@ -478,7 +589,23 @@ async fn fetch_and_update_incomplete_reservations(
             format_redacted_headers(&headers)
         );
 
-        let res = client.get(&url).headers(headers.clone()).send().await?;
+        let mut current_token = token.to_string();
+        let mut res = client.get(&url).headers(headers.clone()).send().await?;
+
+        if res.status() == reqwest::StatusCode::UNAUTHORIZED {
+            if let Some(ctx) = context_opt.as_ref() {
+                let new_token = ctx
+                    .get_valid_token_or_refresh(client, &current_token)
+                    .await?;
+                current_token = new_token;
+                let mut retry_headers = headers.clone();
+                retry_headers.insert(
+                    reqwest::header::AUTHORIZATION,
+                    reqwest::header::HeaderValue::from_str(&format!("Bearer {}", current_token))?,
+                );
+                res = client.get(&url).headers(retry_headers).send().await?;
+            }
+        }
 
         if !res.status().is_success() {
             let status = res.status();
@@ -486,7 +613,7 @@ async fn fetch_and_update_incomplete_reservations(
             anyhow::bail!("GET {} failed with status {}: {}", url, status, body);
         }
 
-        let text = res.text().await?;
+        let text: String = res.text().await.unwrap_or_default();
         let parsed: IncompleteReservationResponse = serde_json::from_str(&text)
             .with_context(|| format!("Failed to parse response: {}", text))?;
 
@@ -506,21 +633,21 @@ async fn fetch_and_update_incomplete_reservations(
     info!("Found {} incomplete reservations to update.", all_ids.len());
 
     let patch_endpoint = "task/bulk-ticket";
-    let patch_url = format!("{}{}", context.base_url, patch_endpoint);
+    let patch_url = format!("{}{}", base_url, patch_endpoint);
 
     let mut headers = reqwest::header::HeaderMap::new();
     headers.insert("accept", reqwest::header::HeaderValue::from_static("*/*"));
     headers.insert(
         "account_id",
-        reqwest::header::HeaderValue::from_str(&context.account_id)?,
+        reqwest::header::HeaderValue::from_str(account_id)?,
     );
     headers.insert(
         "application_id",
-        reqwest::header::HeaderValue::from_str(&context.application_id)?,
+        reqwest::header::HeaderValue::from_str(application_id)?,
     );
     headers.insert(
         "app-timezone-plus-minutes",
-        reqwest::header::HeaderValue::from_str(&context.tz)?,
+        reqwest::header::HeaderValue::from_str(tz)?,
     );
     headers.insert(
         "auth-type",
@@ -549,12 +676,30 @@ async fn fetch_and_update_incomplete_reservations(
         payload_str
     );
 
-    let res = client
+    let mut res = client
         .patch(&patch_url)
-        .headers(headers)
-        .body(payload_str)
+        .headers(headers.clone())
+        .body(payload_str.clone())
         .send()
         .await?;
+
+    if res.status() == reqwest::StatusCode::UNAUTHORIZED {
+        if let Some(ctx) = context_opt.as_ref() {
+            let new_token = ctx.get_valid_token_or_refresh(client, token).await?;
+            let current_token = new_token;
+            let mut retry_headers = headers.clone();
+            retry_headers.insert(
+                reqwest::header::AUTHORIZATION,
+                reqwest::header::HeaderValue::from_str(&format!("Bearer {}", current_token))?,
+            );
+            res = client
+                .patch(&patch_url)
+                .headers(retry_headers)
+                .body(payload_str)
+                .send()
+                .await?;
+        }
+    }
 
     if !res.status().is_success() {
         let status = res.status();
@@ -608,6 +753,7 @@ async fn fetch_with_signed_url_split(
         String,
         std::path::PathBuf,
     )>,
+    context_opt: Option<Arc<FetchContext>>,
 ) -> Result<Value> {
     let mut completed = fetch_recursive(
         client.clone(),
@@ -629,6 +775,7 @@ async fn fetch_with_signed_url_split(
         download_dir.map(|d| d.to_path_buf()),
         key_prefix.to_string(),
         download_tx,
+        context_opt.clone(),
     )
     .await?;
 
@@ -668,6 +815,7 @@ fn fetch_recursive(
         String,
         std::path::PathBuf,
     )>,
+    context_opt: Option<Arc<FetchContext>>,
 ) -> BoxFuture<'static, Result<Vec<(String, String, Value)>>> {
     async move {
         let ep_refs: Vec<(&str, &str)> = extra_params.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
@@ -680,7 +828,7 @@ fn fetch_recursive(
             extra_params: &ep_refs,
         };
 
-        let result = fetch_single(&client, &token, &endpoint, &from_date, &to_date, &params).await;
+        let result = fetch_single(&client, &token, &endpoint, &from_date, &to_date, &params, context_opt.clone()).await;
 
         match result {
             Ok(value) => {
@@ -719,6 +867,7 @@ fn fetch_recursive(
                         download_dir.clone(),
                         key_prefix.clone(),
                         download_tx.clone(),
+                        context_opt.clone(),
                     );
 
                     let right_fut = fetch_recursive(
@@ -737,6 +886,7 @@ fn fetch_recursive(
                         download_dir,
                         key_prefix,
                         download_tx,
+                        context_opt.clone(),
                     );
 
                     // Concurrently fetch both halves using tokio::spawn for true parallel execution
@@ -771,6 +921,7 @@ async fn fetch_single(
     from_date: &str,
     to_date: &str,
     params: &FetchParams<'_>,
+    context_opt: Option<Arc<FetchContext>>,
 ) -> Result<Value> {
     let url = format!("{}/{}", params.base_url.trim_end_matches('/'), endpoint);
 
@@ -785,20 +936,42 @@ async fn fetch_single(
 
     info!("Fetching {} [{} to {}]...", endpoint, from_date, to_date);
 
-    let resp = client
+    let mut current_token = token.to_string();
+    let mut resp = client
         .get(&url)
         .query(&query)
         .header("account_id", params.account_id)
         .header("app-timezone-plus-minutes", params.tz)
         .header("application_id", params.application_id)
         .header("auth-type", "cognito")
-        .header("authorization", format!("Bearer {}", token))
+        .header("authorization", format!("Bearer {}", current_token))
         .header("content-type", "application/json")
         .header("accept", "*/*")
         .send()
         .await
         .with_context(|| format!("HTTP request to {} failed", endpoint))?;
 
+    if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
+        if let Some(ctx) = context_opt.as_ref() {
+            let new_token = ctx
+                .get_valid_token_or_refresh(client, &current_token)
+                .await?;
+            current_token = new_token;
+            resp = client
+                .get(&url)
+                .query(&query)
+                .header("account_id", params.account_id)
+                .header("app-timezone-plus-minutes", params.tz)
+                .header("application_id", params.application_id)
+                .header("auth-type", "cognito")
+                .header("authorization", format!("Bearer {}", current_token))
+                .header("content-type", "application/json")
+                .header("accept", "*/*")
+                .send()
+                .await
+                .with_context(|| format!("Retry HTTP request to {} failed", endpoint))?;
+        }
+    }
     let status = resp.status();
     let headers = format_redacted_headers(resp.headers());
     let body = resp
@@ -813,8 +986,14 @@ async fn fetch_single(
     debug!("Response body from {}: {}", endpoint, body);
 
     if !status.is_success() {
-        error!("{} failed with HTTP {}: {}", endpoint, status, body);
-        anyhow::bail!("{} returned HTTP {}: {}", endpoint, status, body);
+        let err_msg = format!("{} returned HTTP {}: {}", endpoint, status, body);
+        let err = anyhow::anyhow!("{}", err_msg);
+        if is_signed_url_generation_failure(&err) {
+            info!("{} failed with HTTP {}: {}", endpoint, status, body);
+        } else {
+            error!("{} failed with HTTP {}: {}", endpoint, status, body);
+        }
+        return Err(err);
     }
 
     trace!("Parsing JSON response from {}...", endpoint);
