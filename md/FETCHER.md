@@ -12,6 +12,7 @@ Fetcher retrieves report metadata JSON from CRM endpoints using the Cognito bear
 - `calls` -> endpoint `task/download-call-log-data`
 - `leads` -> endpoint `task/download-lead-data` + `type=lead_report`
 - `users` -> endpoint `users/download-user-data` (Direct Base64 response)
+- `incomplete_reservation` -> endpoint `task/bulk-ticket` (Executes bulk patch operation instead of downloading file)
 
 ## Selection Logic
 
