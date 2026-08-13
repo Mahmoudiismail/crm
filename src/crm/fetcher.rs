@@ -248,7 +248,7 @@ pub async fn fetch_reports(
                 let application_id = application_id.clone();
                 let tz = tz.clone();
                 let token = token.clone();
-                let download_csv = download_csv;
+
                 let download_dir = download_dir.to_path_buf();
                 let download_tx = download_tx.clone();
 
@@ -298,7 +298,7 @@ pub async fn fetch_reports(
             let tz = tz.clone();
             let token = token.clone();
             let key = def.key.to_string();
-            let download_csv = download_csv;
+
             let download_dir = download_dir.to_path_buf();
 
             futures.push(
@@ -391,7 +391,7 @@ pub async fn fetch_reports(
             let from_date = from_date.clone();
             let to_date = to_date.clone();
             let key = def.key.to_string();
-            let download_csv = download_csv;
+
             let download_dir = download_dir.to_path_buf();
             let download_tx = download_tx.clone();
 
@@ -530,6 +530,7 @@ async fn fetch_users_report(
     }))
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn fetch_and_update_incomplete_reservations(
     client: &reqwest::Client,
     token: &str,
