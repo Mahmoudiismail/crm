@@ -40,7 +40,7 @@ pub async fn run_once(
     let client = build_client(config).context("Failed to build HTTP client")?;
 
     tracing::info!("Ensuring authentication...");
-    let token = auth::ensure_authenticated(config, &client, false)
+    let _token = auth::ensure_authenticated(config, &client, false)
         .await
         .context("Failed during authentication process")?;
     tracing::trace!("Authentication successful.");
@@ -77,10 +77,19 @@ pub async fn run_once(
     }
 
     tracing::info!("Fetching reports for type: {:?}", report);
-    let _results = fetcher::fetch_reports(config, &client, &token, report.to_vec(), &download_dir)
-        .await
-        .context("Failed to fetch CRM reports")?;
+
+    let config_arc = std::sync::Arc::new(tokio::sync::Mutex::new(config.clone()));
+
+    let _results =
+        fetcher::fetch_reports(config_arc.clone(), &client, report.to_vec(), &download_dir)
+            .await
+            .context("Failed to fetch CRM reports")?;
     tracing::trace!("Fetch reports results received.");
+
+    {
+        let final_cfg = config_arc.lock().await;
+        *config = final_cfg.clone();
+    }
 
     config
         .save(&path_str)
