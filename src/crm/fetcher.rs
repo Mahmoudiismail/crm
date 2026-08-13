@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use chrono::{Datelike, Duration as ChronoDuration, NaiveDate};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fmt::Write;
 use std::path::Path;
@@ -9,6 +10,27 @@ use tokio::fs;
 use tracing::{debug, error, info, trace};
 
 use crate::crm::config::AppConfig;
+
+#[derive(Debug, Deserialize)]
+struct IncompleteReservationItem {
+    id: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct IncompleteReservationData {
+    items: Vec<IncompleteReservationItem>,
+}
+
+#[derive(Debug, Deserialize)]
+struct IncompleteReservationResponse {
+    data: IncompleteReservationData,
+}
+
+#[derive(Debug, Serialize)]
+struct BulkTicketPayload<'a> {
+    status_id: &'a str,
+    ids: Vec<String>,
+}
 
 // ──────────────────────────────────────────────────────────────
 // Fetch Context Context
@@ -53,6 +75,11 @@ fn report_defs() -> &'static [ReportDef] {
         ReportDef {
             key: "users",
             endpoint: "users/download-user-data",
+            extra_params: &[],
+        },
+        ReportDef {
+            key: "incomplete_reservation",
+            endpoint: "task/bulk-ticket",
             extra_params: &[],
         },
     ]
@@ -248,6 +275,30 @@ pub async fn fetch_reports(
                 }
                 .boxed(),
             );
+        } else if def.key == "incomplete_reservation" {
+            // Incomplete Reservation task: fetches tickets and bulk-updates them
+            let client = client.clone();
+            let context = Arc::clone(&context);
+            let key = def.key.to_string();
+            let limit = config.incomplete_reservation_limit;
+
+            futures.push(
+                async move {
+                    let v = fetch_and_update_incomplete_reservations(
+                        &client,
+                        &context.token,
+                        &context,
+                        limit,
+                    )
+                    .await
+                    .unwrap_or_else(|e| {
+                        error!("Report '{}' failed: {}", key, e);
+                        serde_json::json!({"error": format!("{}", e)})
+                    });
+                    (key, v)
+                }
+                .boxed(),
+            );
         } else {
             // Tickets / Leads: try the full range first, then split if the
             // backend refuses to generate a signed URL for a large file.
@@ -370,6 +421,157 @@ async fn fetch_users_report(
     Ok(serde_json::json!({
         "base64_data": body
     }))
+}
+
+async fn fetch_and_update_incomplete_reservations(
+    client: &reqwest::Client,
+    token: &str,
+    context: &FetchContext,
+    limit: u32,
+) -> Result<Value> {
+    let mut all_ids = Vec::new();
+    let status_ids = vec![
+        "f38fafc3-bd3f-4dd0-ac6a-09dd7d51b6a0",
+        "275688a4-df41-4725-ae56-fd2deab9c1c9",
+    ];
+
+    for status_id in status_ids {
+        let endpoint = "task/ticket";
+        let mut url = format!(
+            "{}{}?offset=0&limit={}&status_id={}&event_name=cc_booking_incomplete_reservation",
+            context.base_url, endpoint, limit, status_id
+        );
+        if status_id == "f38fafc3-bd3f-4dd0-ac6a-09dd7d51b6a0" {
+            url.push_str("&sort_column=follow_up_date&sort_val=ASC");
+        }
+
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert("accept", reqwest::header::HeaderValue::from_static("*/*"));
+        headers.insert(
+            "account_id",
+            reqwest::header::HeaderValue::from_str(&context.account_id)?,
+        );
+        headers.insert(
+            "application_id",
+            reqwest::header::HeaderValue::from_str(&context.application_id)?,
+        );
+        headers.insert(
+            "app-timezone-plus-minutes",
+            reqwest::header::HeaderValue::from_str(&context.tz)?,
+        );
+        headers.insert(
+            "auth-type",
+            reqwest::header::HeaderValue::from_static("cognito"),
+        );
+        headers.insert(
+            reqwest::header::AUTHORIZATION,
+            reqwest::header::HeaderValue::from_str(&format!("Bearer {}", token))?,
+        );
+        headers.insert(
+            reqwest::header::CONTENT_TYPE,
+            reqwest::header::HeaderValue::from_static("application/json"),
+        );
+
+        debug!(
+            "GET {} - headers: {}",
+            url,
+            format_redacted_headers(&headers)
+        );
+
+        let res = client.get(&url).headers(headers.clone()).send().await?;
+
+        if !res.status().is_success() {
+            let status = res.status();
+            let body = res.text().await.unwrap_or_default();
+            anyhow::bail!("GET {} failed with status {}: {}", url, status, body);
+        }
+
+        let text = res.text().await?;
+        let parsed: IncompleteReservationResponse = serde_json::from_str(&text)
+            .with_context(|| format!("Failed to parse response: {}", text))?;
+
+        for item in parsed.data.items {
+            all_ids.push(item.id);
+        }
+    }
+
+    if all_ids.is_empty() {
+        info!("No incomplete reservations found. Skipping PATCH request.");
+        return Ok(serde_json::json!({
+            "statusCode": 200,
+            "message": "success - no items to update"
+        }));
+    }
+
+    info!("Found {} incomplete reservations to update.", all_ids.len());
+
+    let patch_endpoint = "task/bulk-ticket";
+    let patch_url = format!("{}{}", context.base_url, patch_endpoint);
+
+    let mut headers = reqwest::header::HeaderMap::new();
+    headers.insert("accept", reqwest::header::HeaderValue::from_static("*/*"));
+    headers.insert(
+        "account_id",
+        reqwest::header::HeaderValue::from_str(&context.account_id)?,
+    );
+    headers.insert(
+        "application_id",
+        reqwest::header::HeaderValue::from_str(&context.application_id)?,
+    );
+    headers.insert(
+        "app-timezone-plus-minutes",
+        reqwest::header::HeaderValue::from_str(&context.tz)?,
+    );
+    headers.insert(
+        "auth-type",
+        reqwest::header::HeaderValue::from_static("cognito"),
+    );
+    headers.insert(
+        reqwest::header::AUTHORIZATION,
+        reqwest::header::HeaderValue::from_str(&format!("Bearer {}", token))?,
+    );
+    headers.insert(
+        reqwest::header::CONTENT_TYPE,
+        reqwest::header::HeaderValue::from_static("application/json"),
+    );
+
+    let payload = BulkTicketPayload {
+        status_id: "46282444-7951-42eb-a27e-b2bc65c53727",
+        ids: all_ids,
+    };
+
+    let payload_str = serde_json::to_string(&payload)?;
+
+    debug!(
+        "PATCH {} - headers: {}, body: {}",
+        patch_url,
+        format_redacted_headers(&headers),
+        payload_str
+    );
+
+    let res = client
+        .patch(&patch_url)
+        .headers(headers)
+        .body(payload_str)
+        .send()
+        .await?;
+
+    if !res.status().is_success() {
+        let status = res.status();
+        let body = res.text().await.unwrap_or_default();
+        anyhow::bail!(
+            "PATCH {} failed with status {}: {}",
+            patch_url,
+            status,
+            body
+        );
+    }
+
+    let text = res.text().await?;
+    let parsed: Value = serde_json::from_str(&text)
+        .with_context(|| format!("Failed to parse response: {}", text))?;
+
+    Ok(parsed)
 }
 
 // ──────────────────────────────────────────────────────────────

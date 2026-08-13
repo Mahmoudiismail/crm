@@ -107,7 +107,15 @@ fn get_manifest() -> AppManifest {
         arguments: vec![
             AppArg::new("--report", ArgType::MultiList)
                 .default_value("tickets")
-                .options(vec!["all", "tickets", "calls", "leads", "users", "none"]),
+                .options(vec![
+                    "all",
+                    "tickets",
+                    "calls",
+                    "leads",
+                    "users",
+                    "incomplete_reservation",
+                    "none",
+                ]),
             AppArg::new("--config", ArgType::String),
             AppArg::new("--start-date", ArgType::DateVar),
             AppArg::new("--end-date", ArgType::DateVar),

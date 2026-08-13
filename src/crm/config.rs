@@ -39,6 +39,8 @@ pub struct AppConfig {
     pub download_csv: bool,
     #[serde(default)]
     pub account_id: String,
+    #[serde(default = "default_incomplete_reservation_limit")]
+    pub incomplete_reservation_limit: u32,
     #[serde(default)]
     pub application_id: String,
     #[serde(default)]
@@ -86,6 +88,10 @@ fn default_true() -> bool {
     true
 }
 
+fn default_incomplete_reservation_limit() -> u32 {
+    10000
+}
+
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
@@ -102,6 +108,7 @@ impl Default for AppConfig {
             to_date: String::new(),
             download_csv: true,
             account_id: "233b5ff5-8aff-4445-815b-39d7916a1d46".into(),
+            incomplete_reservation_limit: 10000,
             application_id: "83921976-97dd-4679-9b36-ee936ecf50d1".into(),
             app_timezone_plus_minutes: "180".into(),
             base_url: "https://crm.fakeeh.care/medi-crm/vault/v1/".into(),
