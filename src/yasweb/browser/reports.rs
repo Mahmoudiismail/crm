@@ -267,7 +267,7 @@ pub fn navigate_and_run_report(
 
                                             logs.push("Waiting for loader to disappear before typing...");
                                             for(let i=0; i<30; i++) {{
-                                                let loader = document.querySelector('.loading-screen-wrapper') || doc.querySelector('.loading-screen-wrapper');
+                                                let loader = document.querySelector('.loading-screen-wrapper, mat-progress-bar, .dx-loadpanel') || doc.querySelector('.loading-screen-wrapper, mat-progress-bar, .dx-loadpanel');
                                                 let isLoaderVisible = false;
                                                 if (loader) {{
                                                     let style = loader.ownerDocument.defaultView.getComputedStyle(loader);
@@ -438,10 +438,10 @@ pub fn navigate_and_run_report(
                                             logs.push("Waiting for loader to disappear...");
                                             let loaderGone = false;
                                             for(let i=0; i<50; i++) {{
-                                                let loader = document.querySelector('.loading-screen-wrapper') || doc.querySelector('.loading-screen-wrapper');
+                                                let loader = document.querySelector('.loading-screen-wrapper, mat-progress-bar, .dx-loadpanel') || doc.querySelector('.loading-screen-wrapper, mat-progress-bar, .dx-loadpanel');
                                                 let isLoaderVisible = false;
                                                 if (loader) {{
-                                                    let style = window.getComputedStyle(loader);
+                                                    let style = loader.ownerDocument.defaultView.getComputedStyle(loader);
                                                     if (style.display !== 'none' && style.opacity !== '0' && style.visibility !== 'hidden') {{
                                                         isLoaderVisible = true;
                                                     }}
@@ -640,10 +640,10 @@ pub fn navigate_and_run_report(
                                             logs.push("Waiting for report generation loader to finish...");
                                             let reportGenerated = false;
                                             for(let i=0; i<120; i++) {
-                                                let loader = document.querySelector('.loading-screen-wrapper') || doc.querySelector('.loading-screen-wrapper');
+                                                let loader = document.querySelector('.loading-screen-wrapper, mat-progress-bar, .dx-loadpanel') || doc.querySelector('.loading-screen-wrapper, mat-progress-bar, .dx-loadpanel');
                                                 let isLoaderVisible = false;
                                                 if (loader) {
-                                                    let style = window.getComputedStyle(loader);
+                                                    let style = loader.ownerDocument.defaultView.getComputedStyle(loader);
                                                     if (style.display !== 'none' && style.opacity !== '0' && style.visibility !== 'hidden') {
                                                         isLoaderVisible = true;
                                                     }
