@@ -34,6 +34,8 @@ pub struct YaswebCliOptions {
     end_date: Option<String>,
     #[arg(long, action = clap::ArgAction::SetTrue)]
     add_time_to_file: bool,
+    #[arg(long)]
+    download_path: Option<String>,
     #[arg(long, hide = true)]
     manifest: bool,
 }
@@ -129,6 +131,7 @@ fn get_manifest(config_path: Option<PathBuf>) -> AppManifest {
         AppArg::new("--start-date", ArgType::DateVar),
         AppArg::new("--end-date", ArgType::DateVar),
         AppArg::new("--add-time-to-file", ArgType::Boolean),
+        AppArg::new("--download-path", ArgType::String),
     ];
 
     let mut sorted_filters: Vec<_> = filter_dependencies.into_iter().collect();
@@ -257,6 +260,7 @@ async fn main() -> Result<()> {
     let start_date_str_global = options.start_date;
     let end_date_str_global = options.end_date;
     let add_time_to_file = options.add_time_to_file;
+    let cli_download_path = options.download_path;
 
     if active_report_names.is_empty() {
         error!("Validation failed: --name is required.");
@@ -282,14 +286,15 @@ async fn main() -> Result<()> {
     let mut config_updated_global = config_updated;
     for active_report_name in &active_report_names {
         if !active_report_type_global.is_empty() || !active_filters_global.is_empty() {
-            let (existing_start_key, existing_end_key) =
+            let (existing_start_key, existing_end_key, existing_download_path) =
                 if let Some(existing) = config.reports.get(active_report_name) {
                     (
                         existing.start_date_key.clone(),
                         existing.end_date_key.clone(),
+                        existing.download_path.clone(),
                     )
                 } else {
-                    (None, None)
+                    (None, None, None)
                 };
 
             let report_conf = ReportConfig {
@@ -297,6 +302,7 @@ async fn main() -> Result<()> {
                 filters: active_filters_global.clone(),
                 start_date_key: existing_start_key,
                 end_date_key: existing_end_key,
+                download_path: existing_download_path,
             };
             config
                 .reports
@@ -331,6 +337,7 @@ async fn main() -> Result<()> {
         let active_filters = active_filters_global.clone();
         let start_date_str = start_date_str_global.clone();
         let end_date_str = end_date_str_global.clone();
+        let cli_download_path = cli_download_path.clone();
 
         let config = config.clone();
         let config_path_clone = config_path.clone();
@@ -462,6 +469,7 @@ async fn main() -> Result<()> {
 
             let config_clone = config.clone();
             let active_report_name_clone = active_report_name.clone();
+            let cli_download_path_clone = cli_download_path.clone();
 
             // Launch browser once
             let concurrency = if config.concurrency == 0 {
@@ -651,8 +659,32 @@ async fn main() -> Result<()> {
                 let results = futures_util::future::join_all(tasks).await;
 
                 for (discovered_filters, temp_dl_dir, final_filename) in results.into_iter().flatten() {
-                    let mut final_out_dir = executable_dir()?;
-                    final_out_dir.push("downloads");
+                    let final_out_dir = if let Some(ref path) = cli_download_path_clone {
+                        PathBuf::from(path)
+                    } else if let Some(report) = config_clone.reports.get(&active_report_name_clone) {
+                        if let Some(ref path) = report.download_path {
+                            PathBuf::from(path)
+                        } else if let Some(ref path) = config_clone.download_path {
+                            PathBuf::from(path)
+                        } else {
+                            let mut dir = executable_dir()?;
+                            dir.push("downloads");
+                            dir
+                        }
+                    } else if let Some(ref path) = config_clone.download_path {
+                        PathBuf::from(path)
+                    } else {
+                        let mut dir = executable_dir()?;
+                        dir.push("downloads");
+                        dir
+                    };
+
+                    if !final_out_dir.exists() {
+                        if let Err(e) = std::fs::create_dir_all(&final_out_dir) {
+                            error!("Failed to create download directory {:?}: {:?}", final_out_dir, e);
+                        }
+                    }
+
                     let _ = finalize_download(&temp_dl_dir, &final_out_dir, &final_filename);
 
                     if !discovered_filters.is_empty() {
