@@ -80,6 +80,8 @@ pub struct ReportConfig {
     pub start_date_key: Option<DateKeyConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub end_date_key: Option<DateKeyConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub download_path: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -102,6 +104,8 @@ pub struct YaswebConfig {
     pub log_stdout_level: String,
     #[serde(default = "default_file_log_level")]
     pub log_file_level: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub download_path: Option<String>,
 }
 
 fn default_timeout_minutes() -> u64 {
@@ -133,6 +137,7 @@ impl Default for YaswebConfig {
             reports: HashMap::new(),
             log_stdout_level: "DEBUG".to_string(),
             log_file_level: "TRACE".to_string(),
+            download_path: None,
         }
     }
 }
@@ -153,6 +158,7 @@ impl std::fmt::Debug for YaswebConfig {
             .field("reports", &self.reports)
             .field("log_stdout_level", &self.log_stdout_level)
             .field("log_file_level", &self.log_file_level)
+            .field("download_path", &self.download_path)
             .finish()
     }
 }
