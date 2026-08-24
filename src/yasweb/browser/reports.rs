@@ -475,6 +475,10 @@ pub fn navigate_and_run_report(
                                             logs.push("Discovered filters count: " + discoveredFilters.length);
 
                                             for (const [key, value] of Object.entries(filters)) {{
+                                                if (!value || value.trim() === '') {{
+                                                    logs.push("Skipping empty filter: " + key);
+                                                    continue;
+                                                }}
                                                 logs.push("Applying filter: " + key + " = " + value);
                                                 let normalizedKey = key.toLowerCase().replace(/_/g, ' ');
                                                 let filterFilled = false;
