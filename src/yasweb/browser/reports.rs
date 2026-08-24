@@ -320,17 +320,37 @@ pub fn navigate_and_run_report(
                                             let reportFound = false;
                                             logs.push("Waiting for report span in list: " + reportName);
                                             for (let i = 0; i < 30; i++) {{
-                                                let itemXpath = `//div[contains(@class, 'tree-view')]//span[contains(normalize-space(.), '${{reportName}}')]`;
-                                                let itemResult = doc.evaluate(itemXpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-                                                let reportSpan = itemResult.singleNodeValue;
-                                                if (reportSpan) {{
-                                                    logs.push("Found reportSpan");
-                                                    let listItemElement = reportSpan.closest('.sub-list-items');
+                                                let exactMatchSpan = null;
+                                                let partialMatchSpan = null;
+
+                                                let spans = doc.querySelectorAll('.tree-view span');
+                                                let searchName = reportName.trim().toLowerCase();
+
+                                                for (let span of spans) {{
+                                                    let spanText = span.textContent.trim().toLowerCase();
+                                                    if (spanText === searchName) {{
+                                                        exactMatchSpan = span;
+                                                        break;
+                                                    }} else if (!partialMatchSpan && spanText.includes(searchName)) {{
+                                                        partialMatchSpan = span;
+                                                    }}
+                                                }}
+
+                                                let bestMatchSpan = exactMatchSpan || partialMatchSpan;
+
+                                                if (bestMatchSpan) {{
+                                                    if (exactMatchSpan) {{
+                                                        logs.push("Found exact match reportSpan");
+                                                    }} else {{
+                                                        logs.push("Found partial match reportSpan");
+                                                    }}
+
+                                                    let listItemElement = bestMatchSpan.closest('.sub-list-items');
                                                     if (listItemElement) {{
                                                         listItemElement.click();
                                                         logs.push("Clicked sub-list-items");
                                                     }} else {{
-                                                        reportSpan.click();
+                                                        bestMatchSpan.click();
                                                         logs.push("Clicked reportSpan");
                                                     }}
                                                     reportFound = true;
