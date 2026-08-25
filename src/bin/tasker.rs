@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use crm_tool::manifest::{AppArg, AppManifest, ArgType};
 use crm_tool::tasker::config::{TaskConfig, TaskerConfig};
-use crm_tool::tasker::{csv_task, dashboard_updater};
+use crm_tool::tasker::{csv_task, dashboard_updater, opd_task};
 use crm_tool::utils::{
     executable_dir, intercept_manifest, parse_log_level, setup_logging_with_levels, InterceptResult,
 };
@@ -188,6 +188,14 @@ pub fn run_app(options: TaskerCliOptions) -> Result<()> {
                 }
                 tracing::trace!("DepartmentSplit for task #{} finished.", task_idx);
             }
+            TaskConfig::OpdAnalysis(opd_config) => {
+                tracing::trace!("Executing OpdAnalysis for task #{}.", task_idx);
+                if let Err(e) = opd_task::run(opd_config) {
+                    error!("Error running OpdAnalysis task #{}: {:?}", task_idx, e);
+                    anyhow::bail!("OpdAnalysis task {} failed: {}", task_idx, e);
+                }
+                tracing::trace!("OpdAnalysis for task #{} finished.", task_idx);
+            }
         }
     }
 
@@ -208,6 +216,7 @@ fn get_manifest() -> AppManifest {
                 "2".to_string(),
                 "3".to_string(),
                 "4".to_string(),
+                "5".to_string(),
             ]),
             AppArg::new("--only-call-center", ArgType::Boolean).depends_on(
                 std::collections::HashMap::from([("--task".to_string(), vec!["1".to_string()])]),

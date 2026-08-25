@@ -38,6 +38,8 @@ pub enum TaskConfig {
     CrmOpenSohail(CrmOpenSohailConfig),
     #[serde(rename = "department_split")]
     DepartmentSplit(DepartmentSplitConfig),
+    #[serde(rename = "opd_analysis")]
+    OpdAnalysis(OpdAnalysisConfig),
 }
 
 /// Outlines email templating, routing, and distribution rules.
@@ -130,6 +132,12 @@ pub struct DepartmentSplitConfig {
     pub dashboard_file: String,
     pub chair_file: String,
     pub output_dir: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct OpdAnalysisConfig {
+    pub download_path: String,
+    pub cus_file: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
