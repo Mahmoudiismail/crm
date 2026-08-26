@@ -8,7 +8,8 @@ use tracing::{info, warn};
 use walkdir::WalkDir;
 
 pub fn run(config: &OpdAnalysisConfig) -> Result<()> {
-    let download_dir_path = crate::tasker::csv_task::resolve_relative_to_exe_dir(&config.download_path);
+    let download_dir_path =
+        crate::tasker::csv_task::resolve_relative_to_exe_dir(&config.download_path);
     let cus_input_path = crate::tasker::csv_task::resolve_relative_to_exe_dir(&config.cus_input);
     let cus_file_path = crate::tasker::csv_task::resolve_relative_to_exe_dir(&config.cus_file);
 
