@@ -76,7 +76,6 @@ pub fn run(config: &OpdAnalysisConfig) -> Result<()> {
         dt: NaiveDateTime,
     }
     let mut new_files = Vec::new();
-    let prefix = "OPD- Average Patients seen No of Schedule_";
 
     for entry in WalkDir::new(&config.download_path)
         .into_iter()
@@ -89,7 +88,7 @@ pub fn run(config: &OpdAnalysisConfig) -> Result<()> {
         if fname.starts_with("~$") {
             continue;
         }
-        if !fname.to_lowercase().starts_with(&prefix.to_lowercase()) {
+        if !fname.to_lowercase().contains("average patients seen") {
             continue;
         }
         let ext = entry
