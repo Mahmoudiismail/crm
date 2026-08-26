@@ -16,10 +16,10 @@ pub fn run(config: &OpdAnalysisConfig) -> Result<()> {
     let mut latest_archived_dt: Option<NaiveDateTime> = None;
     let mut hour_columns: Vec<String> = Vec::new();
 
-    if std::path::Path::new(&config.cus_file).exists() {
+    if std::path::Path::new(&config.cus_input).exists() {
         let mut rdr = ReaderBuilder::new()
             .has_headers(true)
-            .from_path(&config.cus_file)?;
+            .from_path(&config.cus_input)?;
 
         cus_headers = rdr.headers()?.clone();
         for h in cus_headers.iter() {
@@ -86,10 +86,10 @@ pub fn run(config: &OpdAnalysisConfig) -> Result<()> {
             continue;
         }
         let fname = entry.file_name().to_string_lossy().to_string();
-        if !fname.to_lowercase().starts_with(&prefix.to_lowercase()) {
+        if fname.starts_with("~$") {
             continue;
         }
-        if fname.starts_with("~$") {
+        if !fname.to_lowercase().starts_with(&prefix.to_lowercase()) {
             continue;
         }
         let ext = entry
@@ -102,13 +102,18 @@ pub fn run(config: &OpdAnalysisConfig) -> Result<()> {
             continue;
         }
 
-        // extract date time from name: DD-MM-YYYY_HHMMSS
-        let base = fname.strip_suffix(&format!(".{}", ext)).unwrap_or(&fname);
-        let stamp = base.strip_prefix(prefix).unwrap_or(base);
-        let parts: Vec<&str> = stamp.split('_').collect();
+        // Extract date time from name: DD-MM-YYYY_HHMMSS
+        // Strip extension safely
+        let base = if let Some(idx) = fname.rfind('.') {
+            &fname[..idx]
+        } else {
+            &fname
+        };
+
+        let parts: Vec<&str> = base.split('_').collect();
         if parts.len() >= 2 {
-            let date_str = parts[0];
-            let time_str = parts[1]
+            let date_str = parts[parts.len() - 2];
+            let time_str = parts[parts.len() - 1]
                 .chars()
                 .filter(|c| c.is_ascii_digit())
                 .collect::<String>();

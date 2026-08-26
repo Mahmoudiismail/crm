@@ -137,6 +137,7 @@ pub struct DepartmentSplitConfig {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct OpdAnalysisConfig {
     pub download_path: String,
+    pub cus_input: String,
     pub cus_file: String,
 }
 
