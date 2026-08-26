@@ -42,15 +42,16 @@ pub fn run(config: &OpdAnalysisConfig) -> Result<()> {
 
         cus_headers = rdr.headers()?.clone();
         for h in cus_headers.iter() {
-            if h != "KSA Time" && h != "D"
+            if h != "KSA Time"
+                && h != "D"
                 && (NaiveTime::parse_from_str(h, "%H:%M").is_ok()
                     || NaiveTime::parse_from_str(h, "%-H:%M").is_ok())
-                {
-                    let nt = NaiveTime::parse_from_str(h, "%H:%M")
-                        .or_else(|_| NaiveTime::parse_from_str(h, "%-H:%M"))
-                        .unwrap();
-                    hour_columns.push(nt.format("%H:00").to_string());
-                }
+            {
+                let nt = NaiveTime::parse_from_str(h, "%H:%M")
+                    .or_else(|_| NaiveTime::parse_from_str(h, "%-H:%M"))
+                    .unwrap();
+                hour_columns.push(nt.format("%H:00").to_string());
+            }
         }
 
         for result in rdr.records() {
@@ -333,10 +334,9 @@ pub fn run(config: &OpdAnalysisConfig) -> Result<()> {
                         .or_else(|_| NaiveTime::parse_from_str(h, "%-H:%M"))
                     {
                         let normalized_h = nt.format("%H:00").to_string();
-                        if all_hours.contains(&normalized_h)
-                            && !val.is_empty() {
-                                row.times.insert(normalized_h, val);
-                            }
+                        if all_hours.contains(&normalized_h) && !val.is_empty() {
+                            row.times.insert(normalized_h, val);
+                        }
                     } else {
                         row.others.insert(h.to_string(), val);
                     }
