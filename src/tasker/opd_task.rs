@@ -21,6 +21,20 @@ pub fn run(config: &OpdAnalysisConfig) -> Result<()> {
     let mut latest_archived_dt: Option<NaiveDateTime> = None;
     let mut hour_columns: Vec<String> = Vec::new();
 
+    // Helper to parse dates in multiple formats
+    let parse_ksa_date = |date_str: &str| -> Option<NaiveDate> {
+        if let Ok(d) = NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
+            return Some(d);
+        }
+        if let Ok(d) = NaiveDate::parse_from_str(date_str, "%m/%d/%Y") {
+            return Some(d);
+        }
+        if let Ok(d) = NaiveDate::parse_from_str(date_str, "%d/%m/%Y") {
+            return Some(d);
+        }
+        None
+    };
+
     if cus_input_path.exists() {
         let mut rdr = ReaderBuilder::new()
             .has_headers(true)
@@ -28,8 +42,15 @@ pub fn run(config: &OpdAnalysisConfig) -> Result<()> {
 
         cus_headers = rdr.headers()?.clone();
         for h in cus_headers.iter() {
-            if h != "KSA Time" && h != "D" && NaiveTime::parse_from_str(h, "%H:%M").is_ok() {
-                hour_columns.push(h.to_string());
+            if h != "KSA Time"
+                && h != "D"
+                && (NaiveTime::parse_from_str(h, "%H:%M").is_ok()
+                    || NaiveTime::parse_from_str(h, "%-H:%M").is_ok())
+            {
+                let nt = NaiveTime::parse_from_str(h, "%H:%M")
+                    .or_else(|_| NaiveTime::parse_from_str(h, "%-H:%M"))
+                    .unwrap();
+                hour_columns.push(nt.format("%H:00").to_string());
             }
         }
 
@@ -40,12 +61,14 @@ pub fn run(config: &OpdAnalysisConfig) -> Result<()> {
             // Find KSA Time
             if let Some(ksa_idx) = cus_headers.iter().position(|h| h == "KSA Time") {
                 if let Some(ksa_str) = rec.get(ksa_idx) {
-                    if let Ok(ksa_date) = NaiveDate::parse_from_str(ksa_str, "%Y-%m-%d") {
-                        for hr_col in &hour_columns {
-                            if let Some(hr_idx) = cus_headers.iter().position(|h| h == hr_col) {
-                                if let Some(hr_val) = rec.get(hr_idx) {
-                                    if !hr_val.is_empty() {
-                                        if let Ok(nt) = NaiveTime::parse_from_str(hr_col, "%H:%M") {
+                    if let Some(ksa_date) = parse_ksa_date(ksa_str) {
+                        for (i, h) in cus_headers.iter().enumerate() {
+                            if h != "KSA Time" && h != "D" {
+                                if let Ok(nt) = NaiveTime::parse_from_str(h, "%H:%M")
+                                    .or_else(|_| NaiveTime::parse_from_str(h, "%-H:%M"))
+                                {
+                                    if let Some(hr_val) = rec.get(i) {
+                                        if !hr_val.is_empty() {
                                             let dt = ksa_date.and_time(nt);
                                             match latest_archived_dt {
                                                 None => latest_archived_dt = Some(dt),
@@ -294,7 +317,7 @@ pub fn run(config: &OpdAnalysisConfig) -> Result<()> {
     let mut current_rows = Vec::new();
     for rec in cus_records {
         if let Some(ksa_str) = rec.get(ksa_idx) {
-            if let Ok(ksa_date) = NaiveDate::parse_from_str(ksa_str, "%Y-%m-%d") {
+            if let Some(ksa_date) = parse_ksa_date(ksa_str) {
                 let mut row = CusRow {
                     ksa_time: ksa_date,
                     day: "".to_string(),
@@ -307,9 +330,12 @@ pub fn run(config: &OpdAnalysisConfig) -> Result<()> {
                         row.day = val;
                     } else if h == "KSA Time" {
                         // handled
-                    } else if all_hours.contains(&h.to_string()) {
-                        if !val.is_empty() {
-                            row.times.insert(h.to_string(), val);
+                    } else if let Ok(nt) = NaiveTime::parse_from_str(h, "%H:%M")
+                        .or_else(|_| NaiveTime::parse_from_str(h, "%-H:%M"))
+                    {
+                        let normalized_h = nt.format("%H:00").to_string();
+                        if all_hours.contains(&normalized_h) && !val.is_empty() {
+                            row.times.insert(normalized_h, val);
                         }
                     } else {
                         row.others.insert(h.to_string(), val);
