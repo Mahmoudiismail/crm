@@ -111,7 +111,7 @@ pub fn run(config: &OpdAnalysisConfig) -> Result<()> {
 
         let parts: Vec<&str> = base.split('_').collect();
         if parts.len() >= 2 {
-            let date_str = parts[parts.len() - 2];
+            let date_str = parts[parts.len() - 2].trim();
             let time_str = parts[parts.len() - 1]
                 .chars()
                 .filter(|c| c.is_ascii_digit())
