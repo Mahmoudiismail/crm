@@ -8,7 +8,12 @@ use tracing::{info, warn};
 use walkdir::WalkDir;
 
 pub fn run(config: &OpdAnalysisConfig) -> Result<()> {
-    info!("Running OpdAnalysis for folder: {}", config.download_path);
+    let download_dir_path =
+        crate::tasker::csv_task::resolve_relative_to_exe_dir(&config.download_path);
+    let cus_input_path = crate::tasker::csv_task::resolve_relative_to_exe_dir(&config.cus_input);
+    let cus_file_path = crate::tasker::csv_task::resolve_relative_to_exe_dir(&config.cus_file);
+
+    info!("Running OpdAnalysis for folder: {:?}", download_dir_path);
 
     // 1. Read existing CUS and find latest hour
     let mut cus_records = Vec::new();
@@ -16,10 +21,10 @@ pub fn run(config: &OpdAnalysisConfig) -> Result<()> {
     let mut latest_archived_dt: Option<NaiveDateTime> = None;
     let mut hour_columns: Vec<String> = Vec::new();
 
-    if std::path::Path::new(&config.cus_input).exists() {
+    if cus_input_path.exists() {
         let mut rdr = ReaderBuilder::new()
             .has_headers(true)
-            .from_path(&config.cus_input)?;
+            .from_path(&cus_input_path)?;
 
         cus_headers = rdr.headers()?.clone();
         for h in cus_headers.iter() {
@@ -77,7 +82,7 @@ pub fn run(config: &OpdAnalysisConfig) -> Result<()> {
     }
     let mut new_files = Vec::new();
 
-    for entry in WalkDir::new(&config.download_path)
+    for entry in WalkDir::new(&download_dir_path)
         .into_iter()
         .filter_map(|e| e.ok())
     {
@@ -381,7 +386,7 @@ pub fn run(config: &OpdAnalysisConfig) -> Result<()> {
     final_rows.sort_by_key(|r| r.ksa_time);
 
     // 5. Write out
-    let mut wtr = WriterBuilder::new().from_path(&config.cus_file)?;
+    let mut wtr = WriterBuilder::new().from_path(&cus_file_path)?;
 
     // headers: KSA Time | time columns | D | other columns
     let mut final_headers = vec!["KSA Time".to_string()];
