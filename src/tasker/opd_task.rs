@@ -43,8 +43,12 @@ pub fn run(config: &OpdAnalysisConfig) -> Result<()> {
         cus_headers = rdr.headers()?.clone();
         for h in cus_headers.iter() {
             if h != "KSA Time" && h != "D" {
-                if NaiveTime::parse_from_str(h, "%H:%M").is_ok() || NaiveTime::parse_from_str(h, "%-H:%M").is_ok() {
-                    let nt = NaiveTime::parse_from_str(h, "%H:%M").or_else(|_| NaiveTime::parse_from_str(h, "%-H:%M")).unwrap();
+                if NaiveTime::parse_from_str(h, "%H:%M").is_ok()
+                    || NaiveTime::parse_from_str(h, "%-H:%M").is_ok()
+                {
+                    let nt = NaiveTime::parse_from_str(h, "%H:%M")
+                        .or_else(|_| NaiveTime::parse_from_str(h, "%-H:%M"))
+                        .unwrap();
                     hour_columns.push(nt.format("%H:00").to_string());
                 }
             }
@@ -60,7 +64,9 @@ pub fn run(config: &OpdAnalysisConfig) -> Result<()> {
                     if let Some(ksa_date) = parse_ksa_date(ksa_str) {
                         for (i, h) in cus_headers.iter().enumerate() {
                             if h != "KSA Time" && h != "D" {
-                                if let Ok(nt) = NaiveTime::parse_from_str(h, "%H:%M").or_else(|_| NaiveTime::parse_from_str(h, "%-H:%M")) {
+                                if let Ok(nt) = NaiveTime::parse_from_str(h, "%H:%M")
+                                    .or_else(|_| NaiveTime::parse_from_str(h, "%-H:%M"))
+                                {
                                     if let Some(hr_val) = rec.get(i) {
                                         if !hr_val.is_empty() {
                                             let dt = ksa_date.and_time(nt);
@@ -324,7 +330,9 @@ pub fn run(config: &OpdAnalysisConfig) -> Result<()> {
                         row.day = val;
                     } else if h == "KSA Time" {
                         // handled
-                    } else if let Ok(nt) = NaiveTime::parse_from_str(h, "%H:%M").or_else(|_| NaiveTime::parse_from_str(h, "%-H:%M")) {
+                    } else if let Ok(nt) = NaiveTime::parse_from_str(h, "%H:%M")
+                        .or_else(|_| NaiveTime::parse_from_str(h, "%-H:%M"))
+                    {
                         let normalized_h = nt.format("%H:00").to_string();
                         if all_hours.contains(&normalized_h) {
                             if !val.is_empty() {
