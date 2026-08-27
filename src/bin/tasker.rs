@@ -456,16 +456,18 @@ mod tests {
             "Merge should mark config as changed because of new_field"
         );
 
-        // Note: We updated merge_json to specifically recursively merge elements of the "tasks" array.
+        // Note: arrays are treated as atomic with merge_json.
+        // Thus, if "tasks" already exists in user_config, it is preserved exactly as is!
+        // It does not merge array elements recursively anymore.
         let merged_task = &user_config["tasks"][0];
         assert_eq!(
             merged_task["minutes_ago"],
-            15,
-            "Because tasks are now recursively merged, minutes_ago gets populated from default"
+            serde_json::Value::Null,
+            "Because arrays are atomic, the existing array is preserved without merging elements"
         );
         assert_eq!(
             merged_task["email_config"]["send_emails"], true,
-            "Original array content preserved but merged with defaults"
+            "Original array content preserved"
         );
         assert_eq!(user_config["new_field"], "default_value");
     }
