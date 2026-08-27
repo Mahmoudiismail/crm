@@ -159,6 +159,24 @@ pub fn merge_json(current: &mut serde_json::Value, default: &serde_json::Value) 
                 curr_map.insert(k.clone(), v.clone());
                 changed = true;
             } else {
+                // Task autoheal requirement: if we're merging "tasks" array, elements that are empty objects `{}`
+                // get replaced completely by the default at that index, and otherwise recursively merged.
+                if k == "tasks" {
+                    if let (Some(curr_arr), Some(def_arr)) = (curr_map.get_mut(k).and_then(|val| val.as_array_mut()), v.as_array()) {
+                        for (i, def_item) in def_arr.iter().enumerate() {
+                            if i < curr_arr.len() {
+                                if curr_arr[i].is_object() && curr_arr[i].as_object().unwrap().is_empty() {
+                                    curr_arr[i] = def_item.clone();
+                                    changed = true;
+                                } else {
+                                    changed |= merge_json(&mut curr_arr[i], def_item);
+                                }
+                            }
+                        }
+                        continue;
+                    }
+                }
+
                 if let Some(mut_val) = curr_map.get_mut(k) {
                     changed |= merge_json(mut_val, v);
                 }
@@ -549,6 +567,31 @@ mod tests {
         assert!(changed);
         assert_eq!(current["a"], 1);
         assert_eq!(current["b"], "default_value");
+    }
+
+    #[test]
+    fn test_merge_json_task_autoheal() {
+        let mut current = serde_json::json!({
+            "tasks": [
+                { "type": "task1", "a": 1 },
+                {}
+            ]
+        });
+        let default = serde_json::json!({
+            "tasks": [
+                { "type": "task1", "a": 2, "b": 2 },
+                { "type": "task2", "c": 3 }
+            ]
+        });
+        let changed = super::merge_json(&mut current, &default);
+        assert!(changed);
+        let curr_arr = current["tasks"].as_array().unwrap();
+        assert_eq!(curr_arr.len(), 2);
+        assert_eq!(curr_arr[0]["type"], "task1");
+        assert_eq!(curr_arr[0]["a"], 1); // user override
+        assert_eq!(curr_arr[0]["b"], 2); // default merge
+        assert_eq!(curr_arr[1]["type"], "task2"); // full replace of {}
+        assert_eq!(curr_arr[1]["c"], 3);
     }
 
     #[test]
