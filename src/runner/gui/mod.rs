@@ -297,9 +297,7 @@ mod tests {
 
     #[test]
     fn parses_schedule_text() {
-        let schedules = parse_schedules_text(
-            "interval: every 1h\ndaily: 09:00, 13:00\nonce: 2026-04-15T09:30:00-05:00",
-        )
+        let schedules = parse_schedules_text("interval: every 1h\ndaily: 09:00, 13:00\nonce: 2026-04-15T09:30:00-05:00", &std::collections::HashMap::new(), &[])
         .unwrap();
         assert_eq!(schedules.len(), 3);
         match schedules.first().expect("No schedule") {
@@ -318,7 +316,7 @@ mod tests {
     #[test]
     fn parses_schedule_text_with_working_hours() {
         let schedules =
-            parse_schedules_text("interval: every 2h; wh: Monday=09:00-17:00,Friday=10:00-15:00\n")
+            parse_schedules_text("interval: every 2h; wh: Monday=09:00-17:00,Friday=10:00-15:00\n", &std::collections::HashMap::new(), &[])
                 .unwrap();
         assert_eq!(schedules.len(), 1);
         match schedules.first().expect("No schedule") {
@@ -342,7 +340,7 @@ mod tests {
     #[test]
     fn parses_schedule_text_weekly_monthly_with_start_time() {
         let schedules =
-            parse_schedules_text("weekly: Monday; st: 14:00\nmonthly: day 15; st: 10:30").unwrap();
+            parse_schedules_text("weekly: Monday; st: 14:00\nmonthly: day 15; st: 10:30", &std::collections::HashMap::new(), &[]).unwrap();
         assert_eq!(schedules.len(), 2);
         match &schedules[0] {
             TaskSchedule::Weekly { at_time, .. } => assert_eq!(at_time, "14:00"),

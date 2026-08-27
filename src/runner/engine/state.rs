@@ -7,6 +7,9 @@ pub enum RunnerCommand {
     RunAllNow { is_manual: bool },
     RunTaskNow { task_id: String, is_manual: bool },
     SetTaskEnabled { task_id: String, enabled: bool },
+    CreateWorkingHoursProfile { profile: crate::runner::config::WorkingHoursProfile },
+    UpdateWorkingHoursProfile { profile: crate::runner::config::WorkingHoursProfile },
+    DeleteWorkingHoursProfile { profile_id: String },
     Shutdown,
 }
 

@@ -12,6 +12,7 @@ use tracing::{error, info};
 pub(crate) fn build_task_from_values(
     values: &HashMap<String, String>,
     fallback_id: Option<String>,
+    profiles: &[crate::runner::config::WorkingHoursProfile],
 ) -> Result<RunnerTask> {
     let id = values
         .get("id")
@@ -32,7 +33,7 @@ pub(crate) fn build_task_from_values(
 
     let schedules = values
         .get("schedules")
-        .map(|value| parse_schedules_text(value))
+        .map(|value| parse_schedules_text(value, values, profiles))
         .transpose()?
         .unwrap_or_default();
     let (repetition, frequency_seconds, next_run_at) = if values.contains_key("schedules") {
@@ -114,13 +115,22 @@ pub(crate) fn legacy_fields_from_values(
     (repetition, frequency_seconds, next_run_at)
 }
 
-pub(crate) fn parse_schedules_text(value: &str) -> Result<Vec<TaskSchedule>> {
+pub(crate) fn parse_schedules_text(value: &str, values: &HashMap<String, String>, profiles: &[crate::runner::config::WorkingHoursProfile]) -> Result<Vec<TaskSchedule>> {
     let mut schedules = Vec::new();
-    for raw_line in value.lines() {
+    for (index, raw_line) in value.lines().filter(|l| !l.trim().is_empty() && !l.trim().starts_with('#')).enumerate() {
         let line = raw_line.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
+
+                let mut working_hours_profile_id = None;
+        let mut _working_hours = None;
+        if let Some(profile_id) = values.get(&format!("schedule_wh_profile_{}", index)) {
+            if !profile_id.is_empty() {
+                working_hours_profile_id = Some(profile_id.clone());
+                if let Some(profile) = profiles.iter().find(|p| p.id == *profile_id) {
+                    _working_hours = Some(profile.days.clone());
+                }
+            }
         }
+
         let (kind, rest) = line
             .split_once(':')
             .with_context(|| format!("Invalid schedule '{}'. Use kind: value", line))?;
@@ -147,9 +157,7 @@ pub(crate) fn parse_schedules_text(value: &str) -> Result<Vec<TaskSchedule>> {
                             }
                         }
                     }
-                    if !wh_map.is_empty() {
-                        working_hours = Some(wh_map);
-                    }
+                    if !wh_map.is_empty() && working_hours_profile_id.is_none() { working_hours = Some(wh_map); }
                 }
 
                 let mut base_str = every_str;
@@ -167,6 +175,7 @@ pub(crate) fn parse_schedules_text(value: &str) -> Result<Vec<TaskSchedule>> {
                     enabled: true,
                     every_seconds: parse_duration_text(base_str)?,
                     next_run_at: String::new(),
+                    working_hours_profile_id,
                     working_hours,
                     start_time,
                 });
@@ -190,9 +199,7 @@ pub(crate) fn parse_schedules_text(value: &str) -> Result<Vec<TaskSchedule>> {
                             }
                         }
                     }
-                    if !wh_map.is_empty() {
-                        working_hours = Some(wh_map);
-                    }
+                    if !wh_map.is_empty() && working_hours_profile_id.is_none() { working_hours = Some(wh_map); }
                 }
 
                 let times = times_str
@@ -205,6 +212,7 @@ pub(crate) fn parse_schedules_text(value: &str) -> Result<Vec<TaskSchedule>> {
                     enabled: true,
                     times,
                     next_run_at,
+                    working_hours_profile_id,
                     working_hours,
                 });
             }
@@ -227,9 +235,7 @@ pub(crate) fn parse_schedules_text(value: &str) -> Result<Vec<TaskSchedule>> {
                             }
                         }
                     }
-                    if !wh_map.is_empty() {
-                        working_hours = Some(wh_map);
-                    }
+                    if !wh_map.is_empty() && working_hours_profile_id.is_none() { working_hours = Some(wh_map); }
                 }
 
                 let mut at_time = "09:00".to_string();
@@ -246,6 +252,7 @@ pub(crate) fn parse_schedules_text(value: &str) -> Result<Vec<TaskSchedule>> {
                     day_of_week: rest_str.to_string(),
                     at_time,
                     next_run_at: Utc::now().to_rfc3339(),
+                    working_hours_profile_id,
                     working_hours,
                 });
             }
@@ -268,9 +275,7 @@ pub(crate) fn parse_schedules_text(value: &str) -> Result<Vec<TaskSchedule>> {
                             }
                         }
                     }
-                    if !wh_map.is_empty() {
-                        working_hours = Some(wh_map);
-                    }
+                    if !wh_map.is_empty() && working_hours_profile_id.is_none() { working_hours = Some(wh_map); }
                 }
 
                 let mut at_time = "09:00".to_string();
@@ -293,6 +298,7 @@ pub(crate) fn parse_schedules_text(value: &str) -> Result<Vec<TaskSchedule>> {
                     day_of_month: day_str.clamp(1, 31),
                     at_time,
                     next_run_at: Utc::now().to_rfc3339(),
+                    working_hours_profile_id,
                     working_hours,
                 });
             }

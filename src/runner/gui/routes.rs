@@ -29,7 +29,7 @@ pub(crate) async fn route_request(
         return handle_tasks_api(handle).await;
     }
     if request.method == "GET" && route_path == "/new-task" {
-        return handle_new_task_page().await;
+        return handle_new_task_page(handle).await;
     }
     if request.method == "GET" && route_path.starts_with("/edit/") {
         let task_id = route_path.trim_start_matches("/edit/");
@@ -72,6 +72,30 @@ pub(crate) async fn route_request(
     }
     if request.method == "GET" && route_path == "/reload" {
         return handle_reload(handle).await;
+    }
+
+    if request.method == "GET" && route_path == "/working-hours" {
+        return handle_wh_page(handle).await;
+    }
+    if request.method == "GET" && route_path == "/working-hours/new" {
+        return handle_wh_new_page(handle).await;
+    }
+    if request.method == "GET" && route_path.starts_with("/working-hours/edit/") {
+        let id = route_path.trim_start_matches("/working-hours/edit/");
+        return handle_wh_edit_page(handle, id).await;
+    }
+    if request.method == "POST" && route_path == "/working-hours/create" {
+        let values = parse_query_string(&request.body);
+        return handle_wh_create(handle, &values).await;
+    }
+    if request.method == "POST" && route_path.starts_with("/working-hours/update/") {
+        let id = route_path.trim_start_matches("/working-hours/update/");
+        let values = parse_query_string(&request.body);
+        return handle_wh_update(handle, id, &values).await;
+    }
+    if request.method == "GET" && route_path.starts_with("/working-hours/delete/") {
+        let id = route_path.trim_start_matches("/working-hours/delete/");
+        return handle_wh_delete(handle, id).await;
     }
     if request.method == "GET" && route_path == "/apps" {
         return handle_apps_page(handle).await;
