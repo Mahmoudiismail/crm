@@ -118,6 +118,27 @@ pub fn run_app(options: TaskerCliOptions) -> Result<()> {
       "dashboard_sheet_name": "Sheet1",
       "dashboard_pivot_name": "PivotTable2",
       "table_column_widths": ["15%", "10%", "10%", "15%", "15%", "15%", "20%"]
+    },
+    {
+      "type": "department_split",
+      "dashboard_file": "./dashboard.xlsx",
+      "chair_file": "./task4/chair.csv",
+      "output_dir": "./split_reports"
+    },
+    {
+      "type": "opd_analysis",
+      "download_path": "../crm_windows/Downloads",
+      "cus_input": "./task5/cus_input.csv",
+      "cus_file": "./cus_output.csv",
+      "exclude_specialities": ["ECG", "Laser Hair Removal"],
+      "exclude_emp_names": ["Echo Doctor 2", "Neurophysiology", "Obgyn Imaging Routine", "Pre Marital Screening Doctor"],
+      "exclude_depts": ["Khadija Attar Center for Special Needs", "Patient Education"],
+      "exclude_speciality_prefixes": ["Exe"],
+      "email_to": "dd@merrywillow.mailk.us",
+      "email_subject": "201009977888-1576573266@g.us",
+      "special_column_name": "Special",
+      "date_column_name": "KSA Time",
+      "check_current_year": true
     }
   ]
 }"#;
@@ -435,18 +456,16 @@ mod tests {
             "Merge should mark config as changed because of new_field"
         );
 
-        // Note: arrays are treated as atomic with merge_json.
-        // Thus, if "tasks" already exists in user_config, it is preserved exactly as is!
-        // It does not merge array elements recursively anymore.
+        // Note: We updated merge_json to specifically recursively merge elements of the "tasks" array.
         let merged_task = &user_config["tasks"][0];
         assert_eq!(
             merged_task["minutes_ago"],
-            serde_json::Value::Null,
-            "Because arrays are atomic, the existing array is preserved without merging elements"
+            15,
+            "Because tasks are now recursively merged, minutes_ago gets populated from default"
         );
         assert_eq!(
             merged_task["email_config"]["send_emails"], true,
-            "Original array content preserved"
+            "Original array content preserved but merged with defaults"
         );
         assert_eq!(user_config["new_field"], "default_value");
     }

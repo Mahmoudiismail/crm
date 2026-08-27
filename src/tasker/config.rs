@@ -139,6 +139,34 @@ pub struct OpdAnalysisConfig {
     pub download_path: String,
     pub cus_input: String,
     pub cus_file: String,
+    #[serde(default)]
+    pub exclude_specialities: Vec<String>,
+    #[serde(default)]
+    pub exclude_emp_names: Vec<String>,
+    #[serde(default)]
+    pub exclude_depts: Vec<String>,
+    #[serde(default)]
+    pub exclude_speciality_prefixes: Vec<String>,
+
+    pub email_to: Option<String>,
+    pub email_subject: Option<String>,
+
+    #[serde(default = "default_special_column_name")]
+    pub special_column_name: String,
+
+    #[serde(default = "default_date_column_name")]
+    pub date_column_name: String,
+
+    #[serde(default)]
+    pub check_current_year: bool,
+}
+
+fn default_special_column_name() -> String {
+    "Special".to_string()
+}
+
+fn default_date_column_name() -> String {
+    "KSA Time".to_string()
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
