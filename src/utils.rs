@@ -162,10 +162,15 @@ pub fn merge_json(current: &mut serde_json::Value, default: &serde_json::Value) 
                 // Task autoheal requirement: if we're merging "tasks" array, elements that are empty objects `{}`
                 // get replaced completely by the default at that index, and otherwise recursively merged.
                 if k == "tasks" {
-                    if let (Some(curr_arr), Some(def_arr)) = (curr_map.get_mut(k).and_then(|val| val.as_array_mut()), v.as_array()) {
+                    if let (Some(curr_arr), Some(def_arr)) = (
+                        curr_map.get_mut(k).and_then(|val| val.as_array_mut()),
+                        v.as_array(),
+                    ) {
                         for (i, def_item) in def_arr.iter().enumerate() {
                             if i < curr_arr.len() {
-                                if curr_arr[i].is_object() && curr_arr[i].as_object().unwrap().is_empty() {
+                                if curr_arr[i].is_object()
+                                    && curr_arr[i].as_object().unwrap().is_empty()
+                                {
                                     curr_arr[i] = def_item.clone();
                                     changed = true;
                                 } else {

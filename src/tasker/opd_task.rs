@@ -232,7 +232,11 @@ pub fn run(config: &OpdAnalysisConfig) -> Result<()> {
                     continue;
                 }
 
-                if config.exclude_specialities.iter().any(|s| s.eq_ignore_ascii_case(&special_val)) {
+                if config
+                    .exclude_specialities
+                    .iter()
+                    .any(|s| s.eq_ignore_ascii_case(&special_val))
+                {
                     continue;
                 }
 
@@ -240,7 +244,11 @@ pub fn run(config: &OpdAnalysisConfig) -> Result<()> {
                     .and_then(|idx| row.get(idx))
                     .unwrap_or(&Data::Empty)
                     .to_string();
-                if config.exclude_emp_names.iter().any(|e| e.eq_ignore_ascii_case(&emp_name)) {
+                if config
+                    .exclude_emp_names
+                    .iter()
+                    .any(|e| e.eq_ignore_ascii_case(&emp_name))
+                {
                     continue;
                 }
 
@@ -248,7 +256,11 @@ pub fn run(config: &OpdAnalysisConfig) -> Result<()> {
                     .and_then(|idx| row.get(idx))
                     .unwrap_or(&Data::Empty)
                     .to_string();
-                if config.exclude_depts.iter().any(|d| d.eq_ignore_ascii_case(&dept)) {
+                if config
+                    .exclude_depts
+                    .iter()
+                    .any(|d| d.eq_ignore_ascii_case(&dept))
+                {
                     continue;
                 }
 
@@ -567,12 +579,19 @@ try {{
     [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
 }}
 "#,
-            cus_file_path.canonicalize()?.to_string_lossy().replace(r"\\?\", ""),
+            cus_file_path
+                .canonicalize()?
+                .to_string_lossy()
+                .replace(r"\\?\", ""),
             email_to,
             email_subject,
             config.special_column_name,
             config.date_column_name,
-            if config.check_current_year { "$true" } else { "$false" }
+            if config.check_current_year {
+                "$true"
+            } else {
+                "$false"
+            }
         );
 
         let mut temp_file = tempfile::Builder::new()

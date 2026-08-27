@@ -460,8 +460,7 @@ mod tests {
         // (to allow auto-healing).
         let merged_task = &user_config["tasks"][0];
         assert_eq!(
-            merged_task["minutes_ago"],
-            15,
+            merged_task["minutes_ago"], 15,
             "Because tasks are now recursively merged, minutes_ago gets populated from default"
         );
         assert_eq!(
