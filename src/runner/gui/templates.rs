@@ -193,7 +193,8 @@ pub(crate) fn render_task_row(task: &RunnerTask) -> String {
     )
 }
 
-pub(crate) fn render_task_form(_profiles: &[crate::runner::config::WorkingHoursProfile],
+pub(crate) fn render_task_form(
+    _profiles: &[crate::runner::config::WorkingHoursProfile],
     title: &str,
     action: &str,
     submit_label: &str,
@@ -663,7 +664,6 @@ pub(crate) fn render_error_page(title: &str, message: &str) -> String {
     )
 }
 
-
 pub(crate) fn render_wh_page(profiles: &[crate::runner::config::WorkingHoursProfile]) -> String {
     let mut rows = String::new();
     for profile in profiles {
@@ -721,16 +721,38 @@ pub(crate) fn render_wh_page(profiles: &[crate::runner::config::WorkingHoursProf
     layout("Working Hours", &body)
 }
 
-pub(crate) fn render_wh_edit_page(profile: Option<&crate::runner::config::WorkingHoursProfile>) -> String {
+pub(crate) fn render_wh_edit_page(
+    profile: Option<&crate::runner::config::WorkingHoursProfile>,
+) -> String {
     let is_new = profile.is_none();
-    let action_url = if is_new { "/working-hours/create".to_string() } else { format!("/working-hours/update/{}", profile.unwrap().id) };
-    let title = if is_new { "Create Working Hours Profile" } else { "Edit Working Hours Profile" };
+    let action_url = if is_new {
+        "/working-hours/create".to_string()
+    } else {
+        format!("/working-hours/update/{}", profile.unwrap().id)
+    };
+    let title = if is_new {
+        "Create Working Hours Profile"
+    } else {
+        "Edit Working Hours Profile"
+    };
     let id_val = profile.map(|p| p.id.as_str()).unwrap_or("");
     let name_val = profile.map(|p| p.name.as_str()).unwrap_or("");
-    let id_readonly = if is_new { "" } else { "readonly class='bg-gray-100'" };
+    let id_readonly = if is_new {
+        ""
+    } else {
+        "readonly class='bg-gray-100'"
+    };
 
     // Add grid for 7 days
-    let days = vec!["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+    let days = vec![
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+        "Sunday",
+    ];
     let mut days_html = String::new();
 
     for day in days {

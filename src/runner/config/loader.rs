@@ -180,7 +180,7 @@ mod tests_persistence {
                     every_seconds: 86400,
                     next_run_at: Utc::now().to_rfc3339(),
                     working_hours: None,
-                working_hours_profile_id: None,
+                    working_hours_profile_id: None,
                     start_time: None,
                 }],
                 steps: Vec::new(),

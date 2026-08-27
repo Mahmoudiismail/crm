@@ -39,9 +39,18 @@ pub(crate) async fn handle_tasks_api(handle: &RunnerHandle) -> Result<(u16, &'st
     Ok((200, "application/json", body))
 }
 
-pub(crate) async fn handle_new_task_page(handle: &RunnerHandle) -> Result<(u16, &'static str, String)> {
+pub(crate) async fn handle_new_task_page(
+    handle: &RunnerHandle,
+) -> Result<(u16, &'static str, String)> {
     let cfg = RunnerConfig::load(&handle.runner_config_path).unwrap_or_default();
-    let html = render_task_form(&cfg.working_hours_profiles, "Create Task", "/create", "Create", None, None);
+    let html = render_task_form(
+        &cfg.working_hours_profiles,
+        "Create Task",
+        "/create",
+        "Create",
+        None,
+        None,
+    );
     Ok((200, "text/html; charset=utf-8", html))
 }
 
@@ -53,7 +62,14 @@ pub(crate) async fn handle_edit_task_page(
     if let Some(task) = cfg.tasks.iter().find(|t| t.id == task_id) {
         let action = format!("/update/{}", escape_html(task_id));
         let cfg = RunnerConfig::load(&handle.runner_config_path).unwrap_or_default();
-    let html = render_task_form(&cfg.working_hours_profiles, "Edit Task", &action, "Update", Some(task), None);
+        let html = render_task_form(
+            &cfg.working_hours_profiles,
+            "Edit Task",
+            &action,
+            "Update",
+            Some(task),
+            None,
+        );
         return Ok((200, "text/html; charset=utf-8", html));
     }
     Ok((
@@ -67,7 +83,6 @@ pub(crate) async fn handle_create_task(
     handle: &RunnerHandle,
     values: &HashMap<String, String>,
 ) -> Result<(u16, &'static str, String)> {
-
     let cfg = RunnerConfig::load(&handle.runner_config_path).unwrap_or_default();
     let task = build_task_from_values(values, None, &cfg.working_hours_profiles)?;
 
@@ -84,9 +99,12 @@ pub(crate) async fn handle_update_task(
     task_id: &str,
     values: &HashMap<String, String>,
 ) -> Result<(u16, &'static str, String)> {
-
     let cfg = RunnerConfig::load(&handle.runner_config_path).unwrap_or_default();
-    let task = build_task_from_values(values, Some(task_id.to_string()), &cfg.working_hours_profiles)?;
+    let task = build_task_from_values(
+        values,
+        Some(task_id.to_string()),
+        &cfg.working_hours_profiles,
+    )?;
 
     update_task(&handle.runner_config_path, task_id, task).await?;
     Ok((
@@ -149,63 +167,140 @@ pub(crate) async fn handle_enable_task(
     ))
 }
 
-
 pub(crate) async fn handle_wh_page(handle: &RunnerHandle) -> Result<(u16, &'static str, String)> {
     let cfg = RunnerConfig::load(&handle.runner_config_path)?;
-    Ok((200, "text/html; charset=utf-8", render_wh_page(&cfg.working_hours_profiles)))
+    Ok((
+        200,
+        "text/html; charset=utf-8",
+        render_wh_page(&cfg.working_hours_profiles),
+    ))
 }
 
-pub(crate) async fn handle_wh_new_page(_handle: &RunnerHandle) -> Result<(u16, &'static str, String)> {
+pub(crate) async fn handle_wh_new_page(
+    _handle: &RunnerHandle,
+) -> Result<(u16, &'static str, String)> {
     Ok((200, "text/html; charset=utf-8", render_wh_edit_page(None)))
 }
 
-pub(crate) async fn handle_wh_edit_page(handle: &RunnerHandle, id: &str) -> Result<(u16, &'static str, String)> {
+pub(crate) async fn handle_wh_edit_page(
+    handle: &RunnerHandle,
+    id: &str,
+) -> Result<(u16, &'static str, String)> {
     let cfg = RunnerConfig::load(&handle.runner_config_path)?;
     if let Some(profile) = cfg.working_hours_profiles.iter().find(|p| p.id == id) {
-        Ok((200, "text/html; charset=utf-8", render_wh_edit_page(Some(profile))))
+        Ok((
+            200,
+            "text/html; charset=utf-8",
+            render_wh_edit_page(Some(profile)),
+        ))
     } else {
-        Ok((404, "text/html; charset=utf-8", render_error_page("Not Found", "Profile not found")))
+        Ok((
+            404,
+            "text/html; charset=utf-8",
+            render_error_page("Not Found", "Profile not found"),
+        ))
     }
 }
 
-pub(crate) async fn handle_wh_create(handle: &RunnerHandle, values: &HashMap<String, String>) -> Result<(u16, &'static str, String)> {
+pub(crate) async fn handle_wh_create(
+    handle: &RunnerHandle,
+    values: &HashMap<String, String>,
+) -> Result<(u16, &'static str, String)> {
     let id = values.get("id").unwrap_or(&"".to_string()).clone();
     let name = values.get("name").unwrap_or(&"".to_string()).clone();
     let mut days = HashMap::new();
-    for day in &["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] {
-        let start = values.get(&format!("{}_start", day)).unwrap_or(&"".to_string()).clone();
-        let end = values.get(&format!("{}_end", day)).unwrap_or(&"".to_string()).clone();
+    for day in &[
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+        "Sunday",
+    ] {
+        let start = values
+            .get(&format!("{}_start", day))
+            .unwrap_or(&"".to_string())
+            .clone();
+        let end = values
+            .get(&format!("{}_end", day))
+            .unwrap_or(&"".to_string())
+            .clone();
         if !start.is_empty() && !end.is_empty() {
             days.insert(day.to_string(), WorkingHours { start, end });
         }
     }
     let profile = WorkingHoursProfile { id, name, days };
-    let _ = handle.command_tx.send(RunnerCommand::CreateWorkingHoursProfile { profile }).await;
+    let _ = handle
+        .command_tx
+        .send(RunnerCommand::CreateWorkingHoursProfile { profile })
+        .await;
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-    Ok((303, "text/html; charset=utf-8", format!("<meta http-equiv=\"refresh\" content=\"0; url=/working-hours\">")))
+    Ok((
+        303,
+        "text/html; charset=utf-8",
+        format!("<meta http-equiv=\"refresh\" content=\"0; url=/working-hours\">"),
+    ))
 }
 
-pub(crate) async fn handle_wh_update(handle: &RunnerHandle, _id: &str, values: &HashMap<String, String>) -> Result<(u16, &'static str, String)> {
+pub(crate) async fn handle_wh_update(
+    handle: &RunnerHandle,
+    _id: &str,
+    values: &HashMap<String, String>,
+) -> Result<(u16, &'static str, String)> {
     let id = values.get("id").unwrap_or(&"".to_string()).clone();
     let name = values.get("name").unwrap_or(&"".to_string()).clone();
     let mut days = HashMap::new();
-    for day in &["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] {
-        let start = values.get(&format!("{}_start", day)).unwrap_or(&"".to_string()).clone();
-        let end = values.get(&format!("{}_end", day)).unwrap_or(&"".to_string()).clone();
+    for day in &[
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+        "Sunday",
+    ] {
+        let start = values
+            .get(&format!("{}_start", day))
+            .unwrap_or(&"".to_string())
+            .clone();
+        let end = values
+            .get(&format!("{}_end", day))
+            .unwrap_or(&"".to_string())
+            .clone();
         if !start.is_empty() && !end.is_empty() {
             days.insert(day.to_string(), WorkingHours { start, end });
         }
     }
     let profile = WorkingHoursProfile { id, name, days };
-    let _ = handle.command_tx.send(RunnerCommand::UpdateWorkingHoursProfile { profile }).await;
+    let _ = handle
+        .command_tx
+        .send(RunnerCommand::UpdateWorkingHoursProfile { profile })
+        .await;
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-    Ok((303, "text/html; charset=utf-8", format!("<meta http-equiv=\"refresh\" content=\"0; url=/working-hours\">")))
+    Ok((
+        303,
+        "text/html; charset=utf-8",
+        format!("<meta http-equiv=\"refresh\" content=\"0; url=/working-hours\">"),
+    ))
 }
 
-pub(crate) async fn handle_wh_delete(handle: &RunnerHandle, id: &str) -> Result<(u16, &'static str, String)> {
-    let _ = handle.command_tx.send(RunnerCommand::DeleteWorkingHoursProfile { profile_id: id.to_string() }).await;
+pub(crate) async fn handle_wh_delete(
+    handle: &RunnerHandle,
+    id: &str,
+) -> Result<(u16, &'static str, String)> {
+    let _ = handle
+        .command_tx
+        .send(RunnerCommand::DeleteWorkingHoursProfile {
+            profile_id: id.to_string(),
+        })
+        .await;
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-    Ok((303, "text/html; charset=utf-8", format!("<meta http-equiv=\"refresh\" content=\"0; url=/working-hours\">")))
+    Ok((
+        303,
+        "text/html; charset=utf-8",
+        format!("<meta http-equiv=\"refresh\" content=\"0; url=/working-hours\">"),
+    ))
 }
 
 pub(crate) async fn handle_apps_page(handle: &RunnerHandle) -> Result<(u16, &'static str, String)> {

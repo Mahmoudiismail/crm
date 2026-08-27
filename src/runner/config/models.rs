@@ -116,7 +116,6 @@ pub enum TaskKind {
     },
 }
 
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkingHoursProfile {
     pub id: String,

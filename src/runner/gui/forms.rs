@@ -115,12 +115,20 @@ pub(crate) fn legacy_fields_from_values(
     (repetition, frequency_seconds, next_run_at)
 }
 
-pub(crate) fn parse_schedules_text(value: &str, values: &HashMap<String, String>, profiles: &[crate::runner::config::WorkingHoursProfile]) -> Result<Vec<TaskSchedule>> {
+pub(crate) fn parse_schedules_text(
+    value: &str,
+    values: &HashMap<String, String>,
+    profiles: &[crate::runner::config::WorkingHoursProfile],
+) -> Result<Vec<TaskSchedule>> {
     let mut schedules = Vec::new();
-    for (index, raw_line) in value.lines().filter(|l| !l.trim().is_empty() && !l.trim().starts_with('#')).enumerate() {
+    for (index, raw_line) in value
+        .lines()
+        .filter(|l| !l.trim().is_empty() && !l.trim().starts_with('#'))
+        .enumerate()
+    {
         let line = raw_line.trim();
 
-                let mut working_hours_profile_id = None;
+        let mut working_hours_profile_id = None;
         let mut _working_hours = None;
         if let Some(profile_id) = values.get(&format!("schedule_wh_profile_{}", index)) {
             if !profile_id.is_empty() {
@@ -157,7 +165,9 @@ pub(crate) fn parse_schedules_text(value: &str, values: &HashMap<String, String>
                             }
                         }
                     }
-                    if !wh_map.is_empty() && working_hours_profile_id.is_none() { working_hours = Some(wh_map); }
+                    if !wh_map.is_empty() && working_hours_profile_id.is_none() {
+                        working_hours = Some(wh_map);
+                    }
                 }
 
                 let mut base_str = every_str;
@@ -199,7 +209,9 @@ pub(crate) fn parse_schedules_text(value: &str, values: &HashMap<String, String>
                             }
                         }
                     }
-                    if !wh_map.is_empty() && working_hours_profile_id.is_none() { working_hours = Some(wh_map); }
+                    if !wh_map.is_empty() && working_hours_profile_id.is_none() {
+                        working_hours = Some(wh_map);
+                    }
                 }
 
                 let times = times_str
@@ -235,7 +247,9 @@ pub(crate) fn parse_schedules_text(value: &str, values: &HashMap<String, String>
                             }
                         }
                     }
-                    if !wh_map.is_empty() && working_hours_profile_id.is_none() { working_hours = Some(wh_map); }
+                    if !wh_map.is_empty() && working_hours_profile_id.is_none() {
+                        working_hours = Some(wh_map);
+                    }
                 }
 
                 let mut at_time = "09:00".to_string();
@@ -275,7 +289,9 @@ pub(crate) fn parse_schedules_text(value: &str, values: &HashMap<String, String>
                             }
                         }
                     }
-                    if !wh_map.is_empty() && working_hours_profile_id.is_none() { working_hours = Some(wh_map); }
+                    if !wh_map.is_empty() && working_hours_profile_id.is_none() {
+                        working_hours = Some(wh_map);
+                    }
                 }
 
                 let mut at_time = "09:00".to_string();
