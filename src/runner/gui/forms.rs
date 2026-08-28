@@ -179,8 +179,15 @@ pub(crate) fn parse_schedules_text(
 
                 let mut base_str = every_str;
                 let mut start_time = None;
-                if let Some((e, _)) = base_str.split_once("; wh_profile:") {
+                if let Some((e, wh_prof)) = base_str.split_once("; wh_profile:") {
                     base_str = e.trim();
+                    let prof_id = wh_prof.split(';').next().unwrap_or(wh_prof).trim();
+                    if !prof_id.is_empty() {
+                        working_hours_profile_id = Some(prof_id.to_string());
+                        if let Some(profile) = profiles.iter().find(|p| p.id == prof_id) {
+                            working_hours = Some(profile.days.clone());
+                        }
+                    }
                 }
                 if let Some((e, st_str)) = base_str.split_once("; st:") {
                     base_str = e.trim();
@@ -223,6 +230,16 @@ pub(crate) fn parse_schedules_text(
                         working_hours = Some(wh_map);
                     }
                 }
+                if let Some((r, wh_prof)) = times_str.split_once("; wh_profile:") {
+                    times_str = r.trim();
+                    let prof_id = wh_prof.split(';').next().unwrap_or(wh_prof).trim();
+                    if !prof_id.is_empty() {
+                        working_hours_profile_id = Some(prof_id.to_string());
+                        if let Some(profile) = profiles.iter().find(|p| p.id == prof_id) {
+                            working_hours = Some(profile.days.clone());
+                        }
+                    }
+                }
 
                 let times = times_str
                     .split(',')
@@ -262,8 +279,15 @@ pub(crate) fn parse_schedules_text(
                     }
                 }
 
-                if let Some((r, _)) = rest_str.split_once("; wh_profile:") {
+                if let Some((r, wh_prof)) = rest_str.split_once("; wh_profile:") {
                     rest_str = r.trim();
+                    let prof_id = wh_prof.split(';').next().unwrap_or(wh_prof).trim();
+                    if !prof_id.is_empty() {
+                        working_hours_profile_id = Some(prof_id.to_string());
+                        if let Some(profile) = profiles.iter().find(|p| p.id == prof_id) {
+                            working_hours = Some(profile.days.clone());
+                        }
+                    }
                 }
                 let mut at_time = "09:00".to_string();
                 if let Some((r, st_str)) = rest_str.split_once("; st:") {
@@ -307,8 +331,15 @@ pub(crate) fn parse_schedules_text(
                     }
                 }
 
-                if let Some((r, _)) = rest_str.split_once("; wh_profile:") {
+                if let Some((r, wh_prof)) = rest_str.split_once("; wh_profile:") {
                     rest_str = r.trim();
+                    let prof_id = wh_prof.split(';').next().unwrap_or(wh_prof).trim();
+                    if !prof_id.is_empty() {
+                        working_hours_profile_id = Some(prof_id.to_string());
+                        if let Some(profile) = profiles.iter().find(|p| p.id == prof_id) {
+                            working_hours = Some(profile.days.clone());
+                        }
+                    }
                 }
                 let mut at_time = "09:00".to_string();
                 if let Some((r, st_str)) = rest_str.split_once("; st:") {

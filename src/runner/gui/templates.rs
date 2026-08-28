@@ -606,7 +606,7 @@ pub(crate) fn schedule_row_html(
                </div>\
                <div class='mb-2'>\
                    <label class='block text-xs font-medium text-gray-700 mb-1'>Working Hours Profile</label>\
-                   <select class='schedule-wh-profile shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2 bg-white'>\
+                   <select name='schedule_wh_profile_{}' class='schedule-wh-profile shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2 bg-white'>\
                        <option value=''>Custom (Use days below)</option>\
                        {}\
                    </select>\
@@ -640,6 +640,7 @@ pub(crate) fn schedule_row_html(
         is_st_hidden,
         escape_html(&start_time_val),
         is_wh_hidden,
+        _index,
         profile_options,
         escape_html(&wh_mon),
         escape_html(&wh_tue),
@@ -746,7 +747,7 @@ pub(crate) fn render_wh_page(profiles: &[crate::runner::config::WorkingHoursProf
                 <td class='px-6 py-4 whitespace-nowrap text-right text-sm font-medium'>
                     <a href='/working-hours/edit/{}' class='text-emerald-600 hover:text-emerald-900'>Edit</a>
                     <span class='text-gray-300 mx-2'>|</span>
-                    <button type='button' onclick='if(confirm(\"Delete profile?\\\")) window.location.href=\"/working-hours/delete/{}\"' class='text-red-600 hover:text-red-900'>Delete</button>
+                    <button type='button' onclick='if(confirm(\"Delete profile?\")) window.location.href=\"/working-hours/delete/{}\"' class='text-red-600 hover:text-red-900'>Delete</button>
                 </td>
             </tr>",
             escape_html(&profile.name),

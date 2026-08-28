@@ -58,6 +58,7 @@ fn sidebar() -> String {
                 {nav_apps}
                 {nav_tasks}
                 {nav_status}
+                {nav_wh}
             </nav>
         </div>
     </div>
@@ -77,6 +78,7 @@ fn sidebar() -> String {
             {nav_apps}
             {nav_tasks}
             {nav_status}
+            {nav_wh}
         </nav>
     </div>
 </div>
@@ -101,6 +103,11 @@ fn sidebar() -> String {
             "/status",
             "System Status",
             &icon_document_text("w-5 h-5 mr-3 flex-shrink-0")
+        ),
+        nav_wh = sidebar_link(
+            "/working-hours",
+            "Working Hours",
+            &crate::runner::gui::icons::icon_clock("w-5 h-5 mr-3 flex-shrink-0")
         ),
     )
 }
