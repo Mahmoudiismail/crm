@@ -22,3 +22,28 @@ pub struct ExtractedSlicerDataset {
     pub month: String,
     pub data: Vec<ExtractedPivotRow>,
 }
+
+#[derive(Debug, Clone)]
+pub struct TeamMappingInfo {
+    pub owner_name: String,
+    pub owner_email: String,
+    pub is_shared: bool,
+}
+
+#[derive(Debug)]
+pub struct EnrichedRow {
+    pub team: String,
+    pub closed: f64,
+    pub open: f64,
+    pub perc_closed: String,
+    pub perc_open: String,
+    pub grand_total: f64,
+    pub oul: String,
+}
+
+#[derive(Debug)]
+pub struct EnrichedDataset {
+    pub branch: String,
+    pub month: String,
+    pub data: Vec<EnrichedRow>,
+}
