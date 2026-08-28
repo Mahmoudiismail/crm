@@ -147,7 +147,10 @@ fn test_csv_processing_malformed_quoting() {
     if result.is_some() && result.as_ref().unwrap().is_ok() {
         result = iter.next();
     }
-    assert!(result.is_none() || result.unwrap().is_err(), "Expected an error for unclosed quotes hiding next delimiter");
+    assert!(
+        result.is_none() || result.unwrap().is_err(),
+        "Expected an error for unclosed quotes hiding next delimiter"
+    );
 }
 
 #[test]
