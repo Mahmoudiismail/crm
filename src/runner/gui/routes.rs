@@ -62,11 +62,11 @@ pub(crate) async fn route_request(
         let task_id = route_path.trim_start_matches("/run/");
         return handle_run_task(handle, task_id).await;
     }
-    if request.method == "GET" && route_path.starts_with("/enable/") {
+    if request.method == "POST" && route_path.starts_with("/enable/") {
         let task_id = route_path.trim_start_matches("/enable/");
         return handle_enable_task(handle, task_id, true).await;
     }
-    if request.method == "GET" && route_path.starts_with("/disable/") {
+    if request.method == "POST" && route_path.starts_with("/disable/") {
         let task_id = route_path.trim_start_matches("/disable/");
         return handle_enable_task(handle, task_id, false).await;
     }
@@ -93,7 +93,7 @@ pub(crate) async fn route_request(
         let values = parse_query_string(&request.body);
         return handle_wh_update(handle, id, &values).await;
     }
-    if request.method == "GET" && route_path.starts_with("/working-hours/delete/") {
+    if request.method == "POST" && route_path.starts_with("/working-hours/delete/") {
         let id = route_path.trim_start_matches("/working-hours/delete/");
         return handle_wh_delete(handle, id).await;
     }

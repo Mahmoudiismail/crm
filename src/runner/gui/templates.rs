@@ -731,7 +731,7 @@ pub(crate) fn render_wh_page(profiles: &[crate::runner::config::WorkingHoursProf
                 <td class='px-6 py-4 whitespace-nowrap text-right text-sm font-medium'>
                     <a href='/working-hours/edit/{}' class='text-emerald-600 hover:text-emerald-900'>Edit</a>
                     <span class='text-gray-300 mx-2'>|</span>
-                    <button type='button' onclick='if(confirm(\"Delete profile?\")) window.location.href=\"/working-hours/delete/{}\"' class='text-red-600 hover:text-red-900'>Delete</button>
+                    <form action='/working-hours/delete/{}' method='POST' class='inline'><button type='submit' onclick='return confirm(\"Delete profile?\")' class='text-red-600 hover:text-red-900'>Delete</button></form>
                 </td>
             </tr>",
             escape_html(&profile.name),

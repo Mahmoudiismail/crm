@@ -323,11 +323,9 @@ async fn handle_command(
                             working_hours_profile_id,
                             working_hours,
                             ..
-                        } => {
-                            if working_hours_profile_id.as_deref() == Some(&profile_id) {
-                                *working_hours_profile_id = None;
-                                *working_hours = None;
-                            }
+                        } if working_hours_profile_id.as_deref() == Some(&profile_id) => {
+                            *working_hours_profile_id = None;
+                            *working_hours = None;
                         }
                         _ => {}
                     }
