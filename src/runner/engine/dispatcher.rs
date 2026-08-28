@@ -256,6 +256,87 @@ async fn handle_command(
         RunnerCommand::SetTaskEnabled { task_id, enabled } => {
             set_task_enabled(path, &task_id, enabled).await
         }
+        RunnerCommand::CreateWorkingHoursProfile { profile } => {
+            let path_str = path.to_string();
+            let mut cfg = tokio::task::spawn_blocking(move || RunnerConfig::load(&path_str))
+                .await
+                .context("spawn_blocking panic")??;
+            if cfg
+                .working_hours_profiles
+                .iter()
+                .any(|p| p.id == profile.id)
+            {
+                return Err(anyhow::anyhow!("Profile '{}' already exists", profile.id));
+            }
+            cfg.working_hours_profiles.push(profile);
+            let path_str = path.to_string();
+            tokio::task::spawn_blocking(move || cfg.save(&path_str))
+                .await
+                .context("spawn_blocking panic")??;
+            Ok(())
+        }
+        RunnerCommand::UpdateWorkingHoursProfile { profile } => {
+            let path_str = path.to_string();
+            let mut cfg = tokio::task::spawn_blocking(move || RunnerConfig::load(&path_str))
+                .await
+                .context("spawn_blocking panic")??;
+            if let Some(pos) = cfg
+                .working_hours_profiles
+                .iter()
+                .position(|p| p.id == profile.id)
+            {
+                cfg.working_hours_profiles[pos] = profile;
+            } else {
+                return Err(anyhow::anyhow!("Profile '{}' not found", profile.id));
+            }
+            let path_str = path.to_string();
+            tokio::task::spawn_blocking(move || cfg.save(&path_str))
+                .await
+                .context("spawn_blocking panic")??;
+            Ok(())
+        }
+        RunnerCommand::DeleteWorkingHoursProfile { profile_id } => {
+            let path_str = path.to_string();
+            let mut cfg = tokio::task::spawn_blocking(move || RunnerConfig::load(&path_str))
+                .await
+                .context("spawn_blocking panic")??;
+            cfg.working_hours_profiles.retain(|p| p.id != profile_id);
+            for task in &mut cfg.tasks {
+                for schedule in &mut task.schedules {
+                    match schedule {
+                        crate::runner::config::TaskSchedule::Interval {
+                            working_hours_profile_id,
+                            working_hours,
+                            ..
+                        }
+                        | crate::runner::config::TaskSchedule::DailyTimes {
+                            working_hours_profile_id,
+                            working_hours,
+                            ..
+                        }
+                        | crate::runner::config::TaskSchedule::Weekly {
+                            working_hours_profile_id,
+                            working_hours,
+                            ..
+                        }
+                        | crate::runner::config::TaskSchedule::Monthly {
+                            working_hours_profile_id,
+                            working_hours,
+                            ..
+                        } if working_hours_profile_id.as_deref() == Some(&profile_id) => {
+                            *working_hours_profile_id = None;
+                            *working_hours = None;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            let path_str = path.to_string();
+            tokio::task::spawn_blocking(move || cfg.save(&path_str))
+                .await
+                .context("spawn_blocking panic")??;
+            Ok(())
+        }
         RunnerCommand::Shutdown => {
             info!("Received Shutdown command in handle_command");
             Ok(())

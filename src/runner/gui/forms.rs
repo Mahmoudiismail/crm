@@ -12,13 +12,21 @@ use tracing::{error, info};
 pub(crate) fn build_task_from_values(
     values: &HashMap<String, String>,
     fallback_id: Option<String>,
+    profiles: &[crate::runner::config::WorkingHoursProfile],
 ) -> Result<RunnerTask> {
-    let id = values
+    let mut id = values
         .get("id")
         .map(|v| v.trim().to_string())
         .filter(|v| !v.is_empty())
         .or(fallback_id)
         .unwrap_or_default();
+    if id.is_empty() {
+        id = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+            .to_string();
+    }
 
     let name = values
         .get("name")
@@ -32,7 +40,7 @@ pub(crate) fn build_task_from_values(
 
     let schedules = values
         .get("schedules")
-        .map(|value| parse_schedules_text(value))
+        .map(|value| parse_schedules_text(value, values, profiles))
         .transpose()?
         .unwrap_or_default();
     let (repetition, frequency_seconds, next_run_at) = if values.contains_key("schedules") {
@@ -114,13 +122,30 @@ pub(crate) fn legacy_fields_from_values(
     (repetition, frequency_seconds, next_run_at)
 }
 
-pub(crate) fn parse_schedules_text(value: &str) -> Result<Vec<TaskSchedule>> {
+pub(crate) fn parse_schedules_text(
+    value: &str,
+    values: &HashMap<String, String>,
+    profiles: &[crate::runner::config::WorkingHoursProfile],
+) -> Result<Vec<TaskSchedule>> {
     let mut schedules = Vec::new();
-    for raw_line in value.lines() {
+    for (index, raw_line) in value
+        .lines()
+        .filter(|l| !l.trim().is_empty() && !l.trim().starts_with('#'))
+        .enumerate()
+    {
         let line = raw_line.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
+
+        let mut working_hours_profile_id = None;
+        let mut parsed_working_hours = None;
+        if let Some(profile_id) = values.get(&format!("schedule_wh_profile_{}", index)) {
+            if !profile_id.is_empty() {
+                working_hours_profile_id = Some(profile_id.clone());
+                if let Some(profile) = profiles.iter().find(|p| p.id == *profile_id) {
+                    parsed_working_hours = Some(profile.days.clone());
+                }
+            }
         }
+
         let (kind, rest) = line
             .split_once(':')
             .with_context(|| format!("Invalid schedule '{}'. Use kind: value", line))?;
@@ -130,7 +155,7 @@ pub(crate) fn parse_schedules_text(value: &str) -> Result<Vec<TaskSchedule>> {
         match kind.as_str() {
             "interval" => {
                 let mut every_str = rest;
-                let mut working_hours = None;
+                let mut working_hours = parsed_working_hours.clone();
                 if let Some((e, wh_str)) = rest.split_once("; wh:") {
                     every_str = e.trim();
                     let mut wh_map = std::collections::HashMap::new();
@@ -147,13 +172,23 @@ pub(crate) fn parse_schedules_text(value: &str) -> Result<Vec<TaskSchedule>> {
                             }
                         }
                     }
-                    if !wh_map.is_empty() {
+                    if !wh_map.is_empty() && working_hours_profile_id.is_none() {
                         working_hours = Some(wh_map);
                     }
                 }
 
                 let mut base_str = every_str;
                 let mut start_time = None;
+                if let Some((e, wh_prof)) = base_str.split_once("; wh_profile:") {
+                    base_str = e.trim();
+                    let prof_id = wh_prof.split(';').next().unwrap_or(wh_prof).trim();
+                    if !prof_id.is_empty() {
+                        working_hours_profile_id = Some(prof_id.to_string());
+                        if let Some(profile) = profiles.iter().find(|p| p.id == prof_id) {
+                            working_hours = Some(profile.days.clone());
+                        }
+                    }
+                }
                 if let Some((e, st_str)) = base_str.split_once("; st:") {
                     base_str = e.trim();
                     let st_val = st_str.trim();
@@ -167,13 +202,14 @@ pub(crate) fn parse_schedules_text(value: &str) -> Result<Vec<TaskSchedule>> {
                     enabled: true,
                     every_seconds: parse_duration_text(base_str)?,
                     next_run_at: String::new(),
+                    working_hours_profile_id,
                     working_hours,
                     start_time,
                 });
             }
             "daily" => {
                 let mut times_str = rest;
-                let mut working_hours = None;
+                let mut working_hours = parsed_working_hours.clone();
                 if let Some((t, wh_str)) = rest.split_once("; wh:") {
                     times_str = t.trim();
                     let mut wh_map = std::collections::HashMap::new();
@@ -190,8 +226,18 @@ pub(crate) fn parse_schedules_text(value: &str) -> Result<Vec<TaskSchedule>> {
                             }
                         }
                     }
-                    if !wh_map.is_empty() {
+                    if !wh_map.is_empty() && working_hours_profile_id.is_none() {
                         working_hours = Some(wh_map);
+                    }
+                }
+                if let Some((r, wh_prof)) = times_str.split_once("; wh_profile:") {
+                    times_str = r.trim();
+                    let prof_id = wh_prof.split(';').next().unwrap_or(wh_prof).trim();
+                    if !prof_id.is_empty() {
+                        working_hours_profile_id = Some(prof_id.to_string());
+                        if let Some(profile) = profiles.iter().find(|p| p.id == prof_id) {
+                            working_hours = Some(profile.days.clone());
+                        }
                     }
                 }
 
@@ -205,12 +251,13 @@ pub(crate) fn parse_schedules_text(value: &str) -> Result<Vec<TaskSchedule>> {
                     enabled: true,
                     times,
                     next_run_at,
+                    working_hours_profile_id,
                     working_hours,
                 });
             }
             "weekly" => {
                 let mut rest_str = rest;
-                let mut working_hours = None;
+                let mut working_hours = parsed_working_hours.clone();
                 if let Some((r, wh_str)) = rest_str.split_once("; wh:") {
                     rest_str = r.trim();
                     let mut wh_map = std::collections::HashMap::new();
@@ -227,11 +274,21 @@ pub(crate) fn parse_schedules_text(value: &str) -> Result<Vec<TaskSchedule>> {
                             }
                         }
                     }
-                    if !wh_map.is_empty() {
+                    if !wh_map.is_empty() && working_hours_profile_id.is_none() {
                         working_hours = Some(wh_map);
                     }
                 }
 
+                if let Some((r, wh_prof)) = rest_str.split_once("; wh_profile:") {
+                    rest_str = r.trim();
+                    let prof_id = wh_prof.split(';').next().unwrap_or(wh_prof).trim();
+                    if !prof_id.is_empty() {
+                        working_hours_profile_id = Some(prof_id.to_string());
+                        if let Some(profile) = profiles.iter().find(|p| p.id == prof_id) {
+                            working_hours = Some(profile.days.clone());
+                        }
+                    }
+                }
                 let mut at_time = "09:00".to_string();
                 if let Some((r, st_str)) = rest_str.split_once("; st:") {
                     rest_str = r.trim();
@@ -246,12 +303,13 @@ pub(crate) fn parse_schedules_text(value: &str) -> Result<Vec<TaskSchedule>> {
                     day_of_week: rest_str.to_string(),
                     at_time,
                     next_run_at: Utc::now().to_rfc3339(),
+                    working_hours_profile_id,
                     working_hours,
                 });
             }
             "monthly" => {
                 let mut rest_str = rest;
-                let mut working_hours = None;
+                let mut working_hours = parsed_working_hours.clone();
                 if let Some((r, wh_str)) = rest_str.split_once("; wh:") {
                     rest_str = r.trim();
                     let mut wh_map = std::collections::HashMap::new();
@@ -268,11 +326,21 @@ pub(crate) fn parse_schedules_text(value: &str) -> Result<Vec<TaskSchedule>> {
                             }
                         }
                     }
-                    if !wh_map.is_empty() {
+                    if !wh_map.is_empty() && working_hours_profile_id.is_none() {
                         working_hours = Some(wh_map);
                     }
                 }
 
+                if let Some((r, wh_prof)) = rest_str.split_once("; wh_profile:") {
+                    rest_str = r.trim();
+                    let prof_id = wh_prof.split(';').next().unwrap_or(wh_prof).trim();
+                    if !prof_id.is_empty() {
+                        working_hours_profile_id = Some(prof_id.to_string());
+                        if let Some(profile) = profiles.iter().find(|p| p.id == prof_id) {
+                            working_hours = Some(profile.days.clone());
+                        }
+                    }
+                }
                 let mut at_time = "09:00".to_string();
                 if let Some((r, st_str)) = rest_str.split_once("; st:") {
                     rest_str = r.trim();
@@ -293,6 +361,7 @@ pub(crate) fn parse_schedules_text(value: &str) -> Result<Vec<TaskSchedule>> {
                     day_of_month: day_str.clamp(1, 31),
                     at_time,
                     next_run_at: Utc::now().to_rfc3339(),
+                    working_hours_profile_id,
                     working_hours,
                 });
             }

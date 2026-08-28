@@ -21,6 +21,8 @@ pub struct RunnerConfig {
     #[serde(default)]
     pub tasks: Vec<RunnerTask>,
     #[serde(default)]
+    pub working_hours_profiles: Vec<WorkingHoursProfile>,
+    #[serde(default)]
     pub registered_apps: Vec<RegisteredApp>,
     #[serde(default = "default_stdout_log_level")]
     pub log_stdout_level: String,
@@ -115,6 +117,13 @@ pub enum TaskKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkingHoursProfile {
+    pub id: String,
+    pub name: String,
+    pub days: std::collections::HashMap<String, WorkingHours>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkingHours {
     pub start: String,
     pub end: String,
@@ -139,6 +148,8 @@ pub enum TaskSchedule {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         working_hours: Option<std::collections::HashMap<String, WorkingHours>>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
+        working_hours_profile_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         start_time: Option<String>,
     },
     DailyTimes {
@@ -148,6 +159,8 @@ pub enum TaskSchedule {
         times: Vec<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         working_hours: Option<std::collections::HashMap<String, WorkingHours>>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        working_hours_profile_id: Option<String>,
         #[serde(default)]
         next_run_at: String,
     },
@@ -160,6 +173,8 @@ pub enum TaskSchedule {
         at_time: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         working_hours: Option<std::collections::HashMap<String, WorkingHours>>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        working_hours_profile_id: Option<String>,
         #[serde(default)]
         next_run_at: String,
     },
@@ -172,6 +187,8 @@ pub enum TaskSchedule {
         at_time: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         working_hours: Option<std::collections::HashMap<String, WorkingHours>>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        working_hours_profile_id: Option<String>,
         #[serde(default)]
         next_run_at: String,
     },
@@ -214,6 +231,7 @@ impl Default for RunnerConfig {
             min_task_interval_seconds: default_min_task_interval(),
             registered_apps: Vec::new(),
             tasks: Vec::new(),
+            working_hours_profiles: Vec::new(),
             log_stdout_level: default_stdout_log_level(),
             log_file_level: default_file_log_level(),
             log_retention_days: default_log_retention_days(),
@@ -233,6 +251,7 @@ impl std::fmt::Debug for RunnerConfig {
             .field("post_run_timeout_seconds", &self.post_run_timeout_seconds)
             .field("min_task_interval_seconds", &self.min_task_interval_seconds)
             .field("tasks", &self.tasks)
+            .field("working_hours_profiles", &self.working_hours_profiles)
             .field("registered_apps", &self.registered_apps)
             .field("log_stdout_level", &self.log_stdout_level)
             .field("log_file_level", &self.log_file_level)

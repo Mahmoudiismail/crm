@@ -36,6 +36,8 @@
 
   function addScheduleRow() {
     const row = document.createElement("div");
+    const existingSelect = document.querySelector(".schedule-wh-profile");
+    const profileOptions = existingSelect ? existingSelect.innerHTML : "<option value=''>Custom (Use days below)</option>";
     row.className = "flex flex-col gap-3 p-4 border border-gray-200 rounded-md bg-white";
     row.innerHTML = `
       <div class='flex flex-wrap items-end gap-3 w-full'>
@@ -109,6 +111,12 @@
           </div>
       </div>
       <div class='schedule-wh w-full bg-gray-50 p-3 rounded border border-gray-200'>
+         <div class='mb-2'>
+             <label class='block text-xs font-medium text-gray-700 mb-1'>Working Hours Profile</label>
+             <select name='schedule_wh_profile_${scheduleIndex}' class='schedule-wh-profile shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2 bg-white'>
+                 ${profileOptions}
+             </select>
+         </div>
          <div class='flex items-center justify-between mb-2'>
              <span class='text-xs font-medium text-gray-700'>Working Hours (Optional, e.g. 09:00-17:00)</span>
          </div>
@@ -211,17 +219,24 @@
         schedule = `monthly:${val}`;
       }
 
+
       let whStr = "";
-      if (kind === "interval" || kind === "daily") {
-          const wh = getWorkingHours(row);
-          if (wh) {
-              const parts = [];
-              for (const [day, range] of Object.entries(wh)) {
-                  parts.push(`${day}=${range.start}-${range.end}`);
+      const profileSelect = row.querySelector(".schedule-wh-profile");
+      if (profileSelect && profileSelect.value) {
+          whStr = "; wh_profile: " + profileSelect.value;
+      } else {
+          if (kind === "interval" || kind === "daily" || kind === "weekly" || kind === "monthly") {
+              const wh = getWorkingHours(row);
+              if (wh) {
+                  const parts = [];
+                  for (const [day, range] of Object.entries(wh)) {
+                      parts.push(`${day}=${range.start}-${range.end}`);
+                  }
+                  whStr = "; wh: " + parts.join(",");
               }
-              whStr = "; wh: " + parts.join(",");
           }
       }
+
       if (stVal && (kind === "interval" || kind === "weekly" || kind === "monthly")) {
         schedule = schedule + "; st: " + stVal + whStr;
       } else {
