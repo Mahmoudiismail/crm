@@ -136,12 +136,12 @@ pub(crate) fn parse_schedules_text(
         let line = raw_line.trim();
 
         let mut working_hours_profile_id = None;
-        let mut _working_hours = None;
+        let mut parsed_working_hours = None;
         if let Some(profile_id) = values.get(&format!("schedule_wh_profile_{}", index)) {
             if !profile_id.is_empty() {
                 working_hours_profile_id = Some(profile_id.clone());
                 if let Some(profile) = profiles.iter().find(|p| p.id == *profile_id) {
-                    _working_hours = Some(profile.days.clone());
+                    parsed_working_hours = Some(profile.days.clone());
                 }
             }
         }
@@ -155,7 +155,7 @@ pub(crate) fn parse_schedules_text(
         match kind.as_str() {
             "interval" => {
                 let mut every_str = rest;
-                let mut working_hours = None;
+                let mut working_hours = parsed_working_hours.clone();
                 if let Some((e, wh_str)) = rest.split_once("; wh:") {
                     every_str = e.trim();
                     let mut wh_map = std::collections::HashMap::new();
@@ -202,7 +202,7 @@ pub(crate) fn parse_schedules_text(
             }
             "daily" => {
                 let mut times_str = rest;
-                let mut working_hours = None;
+                let mut working_hours = parsed_working_hours.clone();
                 if let Some((t, wh_str)) = rest.split_once("; wh:") {
                     times_str = t.trim();
                     let mut wh_map = std::collections::HashMap::new();
@@ -240,7 +240,7 @@ pub(crate) fn parse_schedules_text(
             }
             "weekly" => {
                 let mut rest_str = rest;
-                let mut working_hours = None;
+                let mut working_hours = parsed_working_hours.clone();
                 if let Some((r, wh_str)) = rest_str.split_once("; wh:") {
                     rest_str = r.trim();
                     let mut wh_map = std::collections::HashMap::new();
@@ -285,7 +285,7 @@ pub(crate) fn parse_schedules_text(
             }
             "monthly" => {
                 let mut rest_str = rest;
-                let mut working_hours = None;
+                let mut working_hours = parsed_working_hours.clone();
                 if let Some((r, wh_str)) = rest_str.split_once("; wh:") {
                     rest_str = r.trim();
                     let mut wh_map = std::collections::HashMap::new();

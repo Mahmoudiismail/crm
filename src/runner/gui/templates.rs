@@ -194,7 +194,7 @@ pub(crate) fn render_task_row(task: &RunnerTask) -> String {
 }
 
 pub(crate) fn render_task_form(
-    _profiles: &[crate::runner::config::WorkingHoursProfile],
+    profiles: &[crate::runner::config::WorkingHoursProfile],
     title: &str,
     action: &str,
     submit_label: &str,
@@ -278,7 +278,7 @@ pub(crate) fn render_task_form(
         name_field = input_field("Name", "name", name),
         checked_attr = if enabled { "checked" } else { "" },
         timeout_val = escape_html(&timeout_seconds_str),
-        schedule_editor = schedule_editor_html(task),
+        schedule_editor = schedule_editor_html(task, profiles),
         steps_val = escape_html(&steps_json),
         post_run_steps_val = escape_html(&post_run_steps_json),
         submit_label = escape_html(submit_label)
@@ -286,11 +286,16 @@ pub(crate) fn render_task_form(
     layout(title, &form_html)
 }
 
-pub(crate) fn schedule_editor_html(task: Option<&RunnerTask>) -> String {
+pub(crate) fn schedule_editor_html(
+    task: Option<&RunnerTask>,
+    profiles: &[crate::runner::config::WorkingHoursProfile],
+) -> String {
     let rows = if let Some(task) = task {
-        schedule_rows_html(task)
+        schedule_rows_html(task, profiles)
     } else {
-        schedule_row_html(0, "interval", "1h", "", "", "", "", None, None, None)
+        schedule_row_html(
+            0, "interval", "1h", "", "", "", "", None, None, None, profiles,
+        )
     };
 
     format!(
@@ -307,7 +312,10 @@ pub(crate) fn schedule_editor_html(task: Option<&RunnerTask>) -> String {
     )
 }
 
-pub(crate) fn schedule_rows_html(task: &RunnerTask) -> String {
+pub(crate) fn schedule_rows_html(
+    task: &RunnerTask,
+    profiles: &[crate::runner::config::WorkingHoursProfile],
+) -> String {
     let mut rows = Vec::new();
     let mut index = 0;
     for schedule in &task.schedules {
@@ -329,6 +337,7 @@ pub(crate) fn schedule_rows_html(task: &RunnerTask) -> String {
                     working_hours.as_ref(),
                     working_hours_profile_id.as_deref(),
                     Some(task),
+                    profiles,
                 ));
                 index += 1;
             }
@@ -344,6 +353,7 @@ pub(crate) fn schedule_rows_html(task: &RunnerTask) -> String {
                     None,
                     None,
                     Some(task),
+                    profiles,
                 ));
                 index += 1;
             }
@@ -364,6 +374,7 @@ pub(crate) fn schedule_rows_html(task: &RunnerTask) -> String {
                     working_hours.as_ref(),
                     working_hours_profile_id.as_deref(),
                     Some(task),
+                    profiles,
                 ));
                 index += 1;
             }
@@ -384,6 +395,7 @@ pub(crate) fn schedule_rows_html(task: &RunnerTask) -> String {
                     working_hours.as_ref(),
                     working_hours_profile_id.as_deref(),
                     Some(task),
+                    profiles,
                 ));
                 index += 1;
             }
@@ -404,6 +416,7 @@ pub(crate) fn schedule_rows_html(task: &RunnerTask) -> String {
                     working_hours.as_ref(),
                     working_hours_profile_id.as_deref(),
                     Some(task),
+                    profiles,
                 ));
                 index += 1;
             }
@@ -411,7 +424,7 @@ pub(crate) fn schedule_rows_html(task: &RunnerTask) -> String {
     }
     if rows.is_empty() {
         rows.push(schedule_row_html(
-            0, "interval", "1h", "", "", "", "", None, None, None,
+            0, "interval", "1h", "", "", "", "", None, None, None, profiles,
         ));
     }
     rows.join("")
@@ -427,8 +440,9 @@ pub(crate) fn schedule_row_html(
     weekly_value: &str,
     monthly_value: &str,
     working_hours: Option<&std::collections::HashMap<String, crate::runner::config::WorkingHours>>,
-    _working_hours_profile_id: Option<&str>,
+    working_hours_profile_id: Option<&str>,
     task: Option<&RunnerTask>,
+    profiles: &[crate::runner::config::WorkingHoursProfile],
 ) -> String {
     let interval_hidden = if kind == "interval" { "" } else { "hidden" };
     let once_hidden = if kind == "once" { "" } else { "hidden" };
@@ -491,8 +505,40 @@ pub(crate) fn schedule_row_html(
         .map(|h| format!("{}-{}", h.start, h.end))
         .unwrap_or_default();
 
+    let mut profile_options = String::new();
+    let current_profile_id = working_hours_profile_id.unwrap_or("");
+    for profile in profiles {
+        let selected = if profile.id == current_profile_id {
+            "selected"
+        } else {
+            ""
+        };
+        profile_options.push_str(&format!(
+            "<option value='{}' {}>{}</option>",
+            escape_html(&profile.id),
+            selected,
+            escape_html(&profile.name)
+        ));
+    }
+
+    let mut profile_options = String::new();
+    let current_profile_id = working_hours_profile_id.unwrap_or("");
+    for profile in profiles {
+        let selected = if profile.id == current_profile_id {
+            "selected"
+        } else {
+            ""
+        };
+        profile_options.push_str(&format!(
+            "<option value='{}' {}>{}</option>",
+            escape_html(&profile.id),
+            selected,
+            escape_html(&profile.name)
+        ));
+    }
+
     format!(
-        "<div class='flex flex-col gap-3 p-4 border border-gray-200 rounded-md bg-white'>\
+        "<div class=\'flex flex-col gap-3 p-4 border border-gray-200 rounded-md bg-white'>\
             <div class='flex flex-wrap items-end gap-3 w-full'>\
                 <div class='w-full sm:w-auto flex-1'>\
                     <label class='block text-xs font-medium text-gray-700 mb-1'>Type</label>\
@@ -558,6 +604,13 @@ pub(crate) fn schedule_row_html(
                <div class='flex items-center justify-between mb-2'>\
                    <span class='text-xs font-medium text-gray-700'>Working Hours (Optional, e.g. 09:00-17:00)</span>\
                </div>\
+               <div class='mb-2'>\
+                   <label class='block text-xs font-medium text-gray-700 mb-1'>Working Hours Profile</label>\
+                   <select class='schedule-wh-profile shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2 bg-white'>\
+                       <option value=''>Custom (Use days below)</option>\
+                       {}\
+                   </select>\
+               </div>\
                <div class='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 text-xs'>\
                    <div><label class='block text-gray-600 mb-1 font-semibold'>Monday</label><div class='flex items-center gap-1'><input type='time' class='wh-mon-start block w-full rounded border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1' title='From'><span class='text-gray-400'>-</span><input type='time' class='wh-mon-end block w-full rounded border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1' title='To'><input type='hidden' class='wh-mon' value='{}'></div></div>\
                    <div><label class='block text-gray-600 mb-1 font-semibold'>Tuesday</label><div class='flex items-center gap-1'><input type='time' class='wh-tue-start block w-full rounded border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1' title='From'><span class='text-gray-400'>-</span><input type='time' class='wh-tue-end block w-full rounded border-gray-300 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 p-1' title='To'><input type='hidden' class='wh-tue' value='{}'></div></div>\
@@ -587,6 +640,7 @@ pub(crate) fn schedule_row_html(
         is_st_hidden,
         escape_html(&start_time_val),
         is_wh_hidden,
+        profile_options,
         escape_html(&wh_mon),
         escape_html(&wh_tue),
         escape_html(&wh_wed),
