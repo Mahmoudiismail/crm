@@ -1,5 +1,5 @@
-use crm_tool::runner::config::models::*;
 use chrono::Utc;
+use crm_tool::runner::config::models::*;
 use std::fs;
 
 #[test]
