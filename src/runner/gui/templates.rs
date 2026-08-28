@@ -347,7 +347,12 @@ pub(crate) fn schedule_rows_html(task: &RunnerTask) -> String {
                 ));
                 index += 1;
             }
-            TaskSchedule::DailyTimes { times, working_hours, working_hours_profile_id, .. } => {
+            TaskSchedule::DailyTimes {
+                times,
+                working_hours,
+                working_hours_profile_id,
+                ..
+            } => {
                 rows.push(schedule_row_html(
                     index,
                     "daily",
@@ -362,7 +367,12 @@ pub(crate) fn schedule_rows_html(task: &RunnerTask) -> String {
                 ));
                 index += 1;
             }
-            TaskSchedule::Weekly { day_of_week, working_hours, working_hours_profile_id, .. } => {
+            TaskSchedule::Weekly {
+                day_of_week,
+                working_hours,
+                working_hours_profile_id,
+                ..
+            } => {
                 rows.push(schedule_row_html(
                     index,
                     "weekly",
@@ -377,7 +387,12 @@ pub(crate) fn schedule_rows_html(task: &RunnerTask) -> String {
                 ));
                 index += 1;
             }
-            TaskSchedule::Monthly { day_of_month, working_hours, working_hours_profile_id, .. } => {
+            TaskSchedule::Monthly {
+                day_of_month,
+                working_hours,
+                working_hours_profile_id,
+                ..
+            } => {
                 rows.push(schedule_row_html(
                     index,
                     "monthly",
@@ -395,7 +410,9 @@ pub(crate) fn schedule_rows_html(task: &RunnerTask) -> String {
         }
     }
     if rows.is_empty() {
-        rows.push(schedule_row_html(0, "interval", "1h", "", "", "", "", None, None, None));
+        rows.push(schedule_row_html(
+            0, "interval", "1h", "", "", "", "", None, None, None,
+        ));
     }
     rows.join("")
 }

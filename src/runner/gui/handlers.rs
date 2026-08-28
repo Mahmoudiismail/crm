@@ -208,7 +208,11 @@ pub(crate) async fn handle_wh_create(
 ) -> Result<(u16, &'static str, String)> {
     let mut id = values.get("id").unwrap_or(&"".to_string()).clone();
     if id.is_empty() {
-        id = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis().to_string();
+        id = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+            .to_string();
     }
     let name = values.get("name").unwrap_or(&"".to_string()).clone();
     let mut days = HashMap::new();
@@ -253,7 +257,11 @@ pub(crate) async fn handle_wh_update(
 ) -> Result<(u16, &'static str, String)> {
     let mut id = values.get("id").unwrap_or(&"".to_string()).clone();
     if id.is_empty() {
-        id = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis().to_string();
+        id = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+            .to_string();
     }
     let name = values.get("name").unwrap_or(&"".to_string()).clone();
     let mut days = HashMap::new();

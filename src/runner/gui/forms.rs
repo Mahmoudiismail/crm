@@ -21,7 +21,11 @@ pub(crate) fn build_task_from_values(
         .or(fallback_id)
         .unwrap_or_default();
     if id.is_empty() {
-        id = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis().to_string();
+        id = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+            .to_string();
     }
 
     let name = values
