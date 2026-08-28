@@ -206,7 +206,10 @@ pub(crate) async fn handle_wh_create(
     handle: &RunnerHandle,
     values: &HashMap<String, String>,
 ) -> Result<(u16, &'static str, String)> {
-    let id = values.get("id").unwrap_or(&"".to_string()).clone();
+    let mut id = values.get("id").unwrap_or(&"".to_string()).clone();
+    if id.is_empty() {
+        id = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis().to_string();
+    }
     let name = values.get("name").unwrap_or(&"".to_string()).clone();
     let mut days = HashMap::new();
     for day in &[
@@ -239,7 +242,7 @@ pub(crate) async fn handle_wh_create(
     Ok((
         303,
         "text/html; charset=utf-8",
-        format!("<meta http-equiv=\"refresh\" content=\"0; url=/working-hours\">"),
+        "<meta http-equiv=\"refresh\" content=\"0; url=/working-hours\">".to_string(),
     ))
 }
 
@@ -248,7 +251,10 @@ pub(crate) async fn handle_wh_update(
     _id: &str,
     values: &HashMap<String, String>,
 ) -> Result<(u16, &'static str, String)> {
-    let id = values.get("id").unwrap_or(&"".to_string()).clone();
+    let mut id = values.get("id").unwrap_or(&"".to_string()).clone();
+    if id.is_empty() {
+        id = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis().to_string();
+    }
     let name = values.get("name").unwrap_or(&"".to_string()).clone();
     let mut days = HashMap::new();
     for day in &[
@@ -281,7 +287,7 @@ pub(crate) async fn handle_wh_update(
     Ok((
         303,
         "text/html; charset=utf-8",
-        format!("<meta http-equiv=\"refresh\" content=\"0; url=/working-hours\">"),
+        "<meta http-equiv=\"refresh\" content=\"0; url=/working-hours\">".to_string(),
     ))
 }
 
@@ -299,7 +305,7 @@ pub(crate) async fn handle_wh_delete(
     Ok((
         303,
         "text/html; charset=utf-8",
-        format!("<meta http-equiv=\"refresh\" content=\"0; url=/working-hours\">"),
+        "<meta http-equiv=\"refresh\" content=\"0; url=/working-hours\">".to_string(),
     ))
 }
 

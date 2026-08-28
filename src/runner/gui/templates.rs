@@ -290,7 +290,7 @@ pub(crate) fn schedule_editor_html(task: Option<&RunnerTask>) -> String {
     let rows = if let Some(task) = task {
         schedule_rows_html(task)
     } else {
-        schedule_row_html(0, "interval", "1h", "", "", "", "", None, None)
+        schedule_row_html(0, "interval", "1h", "", "", "", "", None, None, None)
     };
 
     format!(
@@ -315,6 +315,7 @@ pub(crate) fn schedule_rows_html(task: &RunnerTask) -> String {
             TaskSchedule::Interval {
                 every_seconds,
                 working_hours,
+                working_hours_profile_id,
                 ..
             } => {
                 rows.push(schedule_row_html(
@@ -326,6 +327,7 @@ pub(crate) fn schedule_rows_html(task: &RunnerTask) -> String {
                     "",
                     "",
                     working_hours.as_ref(),
+                    working_hours_profile_id.as_deref(),
                     Some(task),
                 ));
                 index += 1;
@@ -340,15 +342,12 @@ pub(crate) fn schedule_rows_html(task: &RunnerTask) -> String {
                     "",
                     "",
                     None,
+                    None,
                     Some(task),
                 ));
                 index += 1;
             }
-            TaskSchedule::DailyTimes {
-                times,
-                working_hours,
-                ..
-            } => {
+            TaskSchedule::DailyTimes { times, working_hours, working_hours_profile_id, .. } => {
                 rows.push(schedule_row_html(
                     index,
                     "daily",
@@ -358,11 +357,12 @@ pub(crate) fn schedule_rows_html(task: &RunnerTask) -> String {
                     "",
                     "",
                     working_hours.as_ref(),
+                    working_hours_profile_id.as_deref(),
                     Some(task),
                 ));
                 index += 1;
             }
-            TaskSchedule::Weekly { day_of_week, .. } => {
+            TaskSchedule::Weekly { day_of_week, working_hours, working_hours_profile_id, .. } => {
                 rows.push(schedule_row_html(
                     index,
                     "weekly",
@@ -371,12 +371,13 @@ pub(crate) fn schedule_rows_html(task: &RunnerTask) -> String {
                     "",
                     day_of_week,
                     "",
-                    None,
+                    working_hours.as_ref(),
+                    working_hours_profile_id.as_deref(),
                     Some(task),
                 ));
                 index += 1;
             }
-            TaskSchedule::Monthly { day_of_month, .. } => {
+            TaskSchedule::Monthly { day_of_month, working_hours, working_hours_profile_id, .. } => {
                 rows.push(schedule_row_html(
                     index,
                     "monthly",
@@ -385,7 +386,8 @@ pub(crate) fn schedule_rows_html(task: &RunnerTask) -> String {
                     "",
                     "",
                     &day_of_month.to_string(),
-                    None,
+                    working_hours.as_ref(),
+                    working_hours_profile_id.as_deref(),
                     Some(task),
                 ));
                 index += 1;
@@ -393,9 +395,7 @@ pub(crate) fn schedule_rows_html(task: &RunnerTask) -> String {
         }
     }
     if rows.is_empty() {
-        rows.push(schedule_row_html(
-            0, "interval", "1h", "", "", "", "", None, None,
-        ));
+        rows.push(schedule_row_html(0, "interval", "1h", "", "", "", "", None, None, None));
     }
     rows.join("")
 }
@@ -410,6 +410,7 @@ pub(crate) fn schedule_row_html(
     weekly_value: &str,
     monthly_value: &str,
     working_hours: Option<&std::collections::HashMap<String, crate::runner::config::WorkingHours>>,
+    _working_hours_profile_id: Option<&str>,
     task: Option<&RunnerTask>,
 ) -> String {
     let interval_hidden = if kind == "interval" { "" } else { "hidden" };
@@ -674,7 +675,7 @@ pub(crate) fn render_wh_page(profiles: &[crate::runner::config::WorkingHoursProf
                 <td class='px-6 py-4 whitespace-nowrap text-right text-sm font-medium'>
                     <a href='/working-hours/edit/{}' class='text-emerald-600 hover:text-emerald-900'>Edit</a>
                     <span class='text-gray-300 mx-2'>|</span>
-                    <a href='#' onclick='if(confirm('Delete profile?')) window.location.href='/working-hours/delete/{}'' class='text-red-600 hover:text-red-900'>Delete</a>
+                    <button type='button' onclick='if(confirm(\"Delete profile?\\\")) window.location.href=\"/working-hours/delete/{}\"' class='text-red-600 hover:text-red-900'>Delete</button>
                 </td>
             </tr>",
             escape_html(&profile.name),

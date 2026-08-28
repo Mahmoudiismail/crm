@@ -14,12 +14,15 @@ pub(crate) fn build_task_from_values(
     fallback_id: Option<String>,
     profiles: &[crate::runner::config::WorkingHoursProfile],
 ) -> Result<RunnerTask> {
-    let id = values
+    let mut id = values
         .get("id")
         .map(|v| v.trim().to_string())
         .filter(|v| !v.is_empty())
         .or(fallback_id)
         .unwrap_or_default();
+    if id.is_empty() {
+        id = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis().to_string();
+    }
 
     let name = values
         .get("name")
@@ -172,6 +175,9 @@ pub(crate) fn parse_schedules_text(
 
                 let mut base_str = every_str;
                 let mut start_time = None;
+                if let Some((e, _)) = base_str.split_once("; wh_profile:") {
+                    base_str = e.trim();
+                }
                 if let Some((e, st_str)) = base_str.split_once("; st:") {
                     base_str = e.trim();
                     let st_val = st_str.trim();
@@ -252,6 +258,9 @@ pub(crate) fn parse_schedules_text(
                     }
                 }
 
+                if let Some((r, _)) = rest_str.split_once("; wh_profile:") {
+                    rest_str = r.trim();
+                }
                 let mut at_time = "09:00".to_string();
                 if let Some((r, st_str)) = rest_str.split_once("; st:") {
                     rest_str = r.trim();
@@ -294,6 +303,9 @@ pub(crate) fn parse_schedules_text(
                     }
                 }
 
+                if let Some((r, _)) = rest_str.split_once("; wh_profile:") {
+                    rest_str = r.trim();
+                }
                 let mut at_time = "09:00".to_string();
                 if let Some((r, st_str)) = rest_str.split_once("; st:") {
                     rest_str = r.trim();
