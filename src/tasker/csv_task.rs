@@ -416,9 +416,7 @@ pub fn generate_csv(params: &CsvAnalysisParams<'_>) -> Result<Option<std::path::
             fixed_csv.push('\n');
         }
 
-        let mut rdr = csv::ReaderBuilder::new()
-            .flexible(true)
-            .from_reader(fixed_csv.as_bytes());
+        let mut rdr = crate::utils::build_csv_reader_builder().from_reader(fixed_csv.as_bytes());
 
         let headers = rdr.headers()?.clone();
 
