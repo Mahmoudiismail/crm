@@ -363,64 +363,22 @@ pub fn generate_csv(params: &CsvAnalysisParams<'_>) -> Result<Option<std::path::
 
     for file_path in target_files {
         info!("Processing file: {}", file_path.display());
-        let file_content = std::fs::read_to_string(&file_path)?;
-        let mut lines = file_content.lines();
+        let file = std::fs::File::open(&file_path)?;
+        let mut rdr = crate::utils::build_csv_reader_from_reader(std::io::BufReader::new(file));
 
-        let header_line = match lines.next() {
-            Some(l) => l,
-            None => {
-                warn!("Empty file: {}", file_path.display());
+        let headers = match rdr.headers() {
+            Ok(h) => {
+                if h.is_empty() {
+                    warn!("Empty file: {}", file_path.display());
+                    continue;
+                }
+                h.clone()
+            }
+            Err(e) => {
+                warn!("Empty or invalid file: {} ({})", file_path.display(), e);
                 continue;
             }
         };
-
-        let mut fixed_csv = String::new();
-        fixed_csv.push_str(header_line);
-        fixed_csv.push('\n');
-
-        let mut buffer = String::new();
-
-        for line in lines {
-            let is_new_row_start = if buffer.is_empty() {
-                true
-            } else {
-                let trimmed = line.trim_start();
-                let mut chars = trimmed.chars();
-                let first = chars.next();
-                if let Some(c) = first {
-                    if c == '"' {
-                        chars.next().is_some_and(|n| n.is_ascii_digit())
-                    } else {
-                        c.is_ascii_digit()
-                    }
-                } else {
-                    false // Empty line continuation
-                }
-            };
-
-            if !is_new_row_start {
-                buffer.push_str("\\n");
-                buffer.push_str(line);
-            } else {
-                if !buffer.is_empty() {
-                    fixed_csv.push_str(&buffer);
-                    fixed_csv.push('\n');
-                }
-                buffer.clear();
-                buffer.push_str(line);
-            }
-        }
-
-        if !buffer.is_empty() {
-            fixed_csv.push_str(&buffer);
-            fixed_csv.push('\n');
-        }
-
-        let mut rdr = csv::ReaderBuilder::new()
-            .flexible(true)
-            .from_reader(fixed_csv.as_bytes());
-
-        let headers = rdr.headers()?.clone();
 
         let mut assignee_idx = None;
         let mut type_idx = None;
