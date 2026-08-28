@@ -432,7 +432,7 @@ pub(crate) fn schedule_rows_html(
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn schedule_row_html(
-    _index: usize,
+    index: usize,
     kind: &str,
     interval_value: &str,
     once_value: &str,
@@ -504,22 +504,6 @@ pub(crate) fn schedule_row_html(
         .and_then(|wh| wh.get("Sunday"))
         .map(|h| format!("{}-{}", h.start, h.end))
         .unwrap_or_default();
-
-    let mut profile_options = String::new();
-    let current_profile_id = working_hours_profile_id.unwrap_or("");
-    for profile in profiles {
-        let selected = if profile.id == current_profile_id {
-            "selected"
-        } else {
-            ""
-        };
-        profile_options.push_str(&format!(
-            "<option value='{}' {}>{}</option>",
-            escape_html(&profile.id),
-            selected,
-            escape_html(&profile.name)
-        ));
-    }
 
     let mut profile_options = String::new();
     let current_profile_id = working_hours_profile_id.unwrap_or("");
@@ -640,7 +624,7 @@ pub(crate) fn schedule_row_html(
         is_st_hidden,
         escape_html(&start_time_val),
         is_wh_hidden,
-        _index,
+        index,
         profile_options,
         escape_html(&wh_mon),
         escape_html(&wh_tue),

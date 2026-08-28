@@ -113,7 +113,7 @@
       <div class='schedule-wh w-full bg-gray-50 p-3 rounded border border-gray-200'>
          <div class='mb-2'>
              <label class='block text-xs font-medium text-gray-700 mb-1'>Working Hours Profile</label>
-             <select class='schedule-wh-profile shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2 bg-white'>
+             <select name='schedule_wh_profile_${scheduleIndex}' class='schedule-wh-profile shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2 bg-white'>
                  ${profileOptions}
              </select>
          </div>
