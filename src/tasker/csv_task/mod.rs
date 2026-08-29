@@ -4,10 +4,12 @@ pub mod reader;
 use crate::tasker::config::CsvAnalysisConfig;
 use anyhow::{Context, Result};
 use chrono::{Datelike, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime};
-use csv::{StringRecord, WriterBuilder};
 pub use reader::*;
 
-use std::collections::{HashMap, HashSet};
+mod processing;
+mod writer;
+
+use std::collections::HashMap;
 use tracing::{error, info, warn};
 use walkdir::WalkDir;
 
@@ -260,295 +262,27 @@ pub fn generate_csv(params: &CsvAnalysisParams<'_>) -> Result<Option<std::path::
 
     info!("Found {} target ticket files.", target_files.len());
 
-    // Prepare exclusion filters
-    let exclude_branches: HashSet<String> = params
-        .exclude_branches
-        .iter()
-        .map(|s| s.trim().to_lowercase())
-        .collect();
-    let exclude_categories: HashSet<String> = params
-        .exclude_categories
-        .iter()
-        .map(|s| s.trim().to_lowercase())
-        .collect();
-
-    // Parse start_date if provided
-    let parsed_start_date = if let Some(sd_str) = params.start_date {
-        crate::tasker::csv_task::parse_created_at(sd_str)
-    } else {
-        None
-    };
-
-    if let Some(sd) = &parsed_start_date {
-        info!("Filtering records with created_at >= {:?}", sd);
-    }
-
-    // Parse logic
-    let filter_start_date_dt = params.start_date.and_then(parse_start_date);
-
-    info!(
-        "Processing ticket files and writing to output: {}",
-        output_file_path.display()
-    );
-    let mut f = std::fs::File::create(&output_file_path)?;
-    use std::io::Write;
-    f.write_all(b"\xEF\xBB\xBF")?;
-    let mut output_writer = WriterBuilder::new().from_writer(f);
-    let mut all_records = Vec::new();
-    let mut wrote_headers = false;
-    let mut total_filtered_rows = 0;
-    let mut total_deduped_rows = 0;
-    let mut seen_tickets = HashSet::new();
-
-    for file_path in target_files {
-        info!("Processing file: {}", file_path.display());
-        let mut ticket_reader = match TicketCsvReader::new(&file_path)? {
-            Some(r) => r,
-            None => continue,
-        };
-        let headers: csv::StringRecord = ticket_reader.headers.clone();
-
-        let mut assignee_idx = None;
-        let mut type_idx = None;
-        let mut subtype_idx = None;
-        let mut cat_idx = None;
-        let mut ticket_id_idx = None;
-        let mut branch_idx = None;
-        let mut created_at_idx = None;
-
-        for (i, h) in headers.iter().enumerate() {
-            let h_trim = h.trim();
-            if h_trim == "Assignee" {
-                assignee_idx = Some(i);
-            } else if h_trim == "Ticket Type" {
-                type_idx = Some(i);
-            } else if h_trim == "Ticket Sub-Type" {
-                subtype_idx = Some(i);
-            } else if h_trim == "Ticket Category" {
-                cat_idx = Some(i);
-            } else if h_trim == "Ticket Id" {
-                ticket_id_idx = Some(i);
-            } else if h_trim == "Branch" {
-                branch_idx = Some(i);
-            } else if h_trim.eq_ignore_ascii_case("created at")
-                || h_trim.eq_ignore_ascii_case("creation date")
-            {
-                created_at_idx = Some(i);
-            }
-        }
-
-        if !wrote_headers {
-            let mut out_headers = headers.clone();
-            out_headers.push_field("Position");
-            out_headers.push_field("team");
-            out_headers.push_field("Is Exception");
-            out_headers.push_field("Month");
-            output_writer.write_record(&out_headers)?;
-            wrote_headers = true;
-        }
-
-        let mut new_record = StringRecord::new();
-        for result in ticket_reader.records() {
-            let mut record: csv::StringRecord = result?;
-            let mut is_exception_val = "No";
-
-            let mut month_val = String::new();
-            if let Some(created_idx) = created_at_idx {
-                let created_val = record.get(created_idx).unwrap_or("").trim();
-                if let Some(dt) = parse_created_at(created_val) {
-                    month_val = dt.format("%b-%Y").to_string();
-                }
-            }
-
-            // Check start_date filter
-            if let Some(start_dt) = parsed_start_date {
-                if let Some(created_idx) = created_at_idx {
-                    let created_val = record.get(created_idx).unwrap_or("").trim();
-                    if let Some(dt) = parse_created_at(created_val) {
-                        if dt < start_dt {
-                            total_filtered_rows += 1;
-                            continue;
-                        }
-                    }
-                }
-            }
-
-            // Clean
-            // We clear and reuse new_record to minimize allocations
-            new_record.clear();
-            for (i, field) in record.iter().enumerate() {
-                if Some(i) == assignee_idx {
-                    new_record.push_field(field.trim());
-                } else if Some(i) == type_idx || Some(i) == subtype_idx || Some(i) == cat_idx {
-                    if field.contains('_') {
-                        // replace allocates, but only if '_' is present
-                        new_record.push_field(&field.replace('_', " "));
-                    } else {
-                        new_record.push_field(field);
-                    }
-                } else {
-                    new_record.push_field(field);
-                }
-            }
-
-            // Swap record with new_record to avoid clone, then we can re-use the memory next iteration
-            std::mem::swap(&mut record, &mut new_record);
-
-            // Deduplicate
-            let ticket_id_val = ticket_id_idx.and_then(|idx| record.get(idx)).unwrap_or("");
-
-            // Avoid string clone if we've seen it by querying with string slice first.
-            if seen_tickets.contains(ticket_id_val) {
-                total_deduped_rows += 1;
-                continue;
-            }
-            let ticket_id_val_owned = ticket_id_val.to_string();
-            seen_tickets.insert(ticket_id_val_owned.clone());
-
-            let branch_val = branch_idx
-                .and_then(|idx| record.get(idx))
-                .unwrap_or("")
-                .trim()
-                .to_lowercase();
-
-            // Keys
-            let t_type = type_idx
-                .and_then(|idx| record.get(idx))
-                .unwrap_or("")
-                .to_uppercase();
-            let t_subtype = subtype_idx
-                .and_then(|idx| record.get(idx))
-                .unwrap_or("")
-                .to_uppercase();
-            let t_cat = cat_idx
-                .and_then(|idx| record.get(idx))
-                .unwrap_or("")
-                .to_uppercase();
-            let assignee = assignee_idx
-                .and_then(|idx| record.get(idx))
-                .unwrap_or("")
-                .to_uppercase();
-
-            let team2 = assignment_map.get(&(t_cat, t_type, t_subtype)).cloned();
-
-            let (position, mut team) = if let Some(user_info) = assignee_map.get(&assignee) {
-                let pos = if user_info.positions.is_empty() {
-                    None
-                } else if let Some(t2) = &team2 {
-                    if user_info.positions.contains(t2) {
-                        Some(t2.clone())
-                    } else {
-                        user_info.first_position.clone()
-                    }
-                } else {
-                    user_info.first_position.clone()
-                };
-
-                let tm = pos.clone().or(team2.clone());
-                (pos, tm)
-            } else {
-                (None, team2.clone())
-            };
-
-            // Filters
-            if exclude_branches.contains(&branch_val) {
-                total_filtered_rows += 1;
-                continue;
-            }
-
-            let cat_val = cat_idx
-                .and_then(|idx| record.get(idx))
-                .unwrap_or("")
-                .trim()
-                .to_lowercase();
-
-            if exclude_categories.contains(&cat_val) {
-                // Check if this matches a category exception
-                let mut matches_exception = false;
-                if let Some(exceptions) = params.category_exceptions {
-                    for exc in exceptions {
-                        if exc.category.trim().to_lowercase() == cat_val {
-                            let branch_matches = exc.branch.as_ref().is_none_or(|b| {
-                                let b_trim = b.trim().to_lowercase();
-                                b_trim.is_empty()
-                                    || b_trim == branch_val
-                                    || b_trim.contains(&branch_val)
-                                    || branch_val.contains(&b_trim)
-                            });
-
-                            if branch_matches {
-                                matches_exception = true;
-                                // Override the team based on the exception assignment
-                                if let Some(t) = exc.team.as_ref() {
-                                    if !t.trim().is_empty() {
-                                        team = Some(t.trim().to_string());
-                                    }
-                                }
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                if !matches_exception {
-                    total_filtered_rows += 1;
-                    continue;
-                }
-
-                is_exception_val = "Yes";
-            }
-
-            if let Some(start_dt) = filter_start_date_dt {
-                if let Some(created_dt) = created_at_idx
-                    .and_then(|idx| record.get(idx))
-                    .and_then(parse_created_at)
-                {
-                    if created_dt < start_dt {
-                        total_filtered_rows += 1;
-                        continue;
-                    }
-                }
-            }
-
-            record.push_field(position.as_deref().unwrap_or(""));
-            record.push_field(team.as_deref().unwrap_or(""));
-            record.push_field(is_exception_val);
-            record.push_field(&month_val);
-
-            all_records.push((ticket_id_val_owned, record));
+    // Parse start_date if provided (logging only)
+    if let Some(sd_str) = params.start_date {
+        if let Some(sd) = crate::tasker::csv_task::parse_created_at(sd_str) {
+            info!("Filtering records with created_at >= {:?}", sd);
         }
     }
 
-    // Sort by ticket id
-    all_records.sort_by(|a, b| {
-        let a_num = a.0.parse::<u64>().unwrap_or(0);
-        let b_num = b.0.parse::<u64>().unwrap_or(0);
-        if a_num > 0 && b_num > 0 {
-            a_num.cmp(&b_num)
-        } else {
-            a.0.cmp(&b.0)
-        }
-    });
+    let process_result = crate::tasker::csv_task::processing::process_files(
+        target_files,
+        params,
+        &assignee_map,
+        &assignment_map,
+    )?;
 
-    info!(
-        "Writing {} joined records to output file (deduped: {}, filtered: {}).",
-        all_records.len(),
-        total_deduped_rows,
-        total_filtered_rows
-    );
-
-    for (_, record) in &all_records {
-        output_writer.write_record(record)?;
-    }
-
-    tracing::trace!("Flushing output writer...");
-    output_writer.flush()?;
-    info!(
-        "CSV generation completed successfully. Output written to {}",
-        output_file_path.display()
-    );
-
-    Ok(Some(output_file_path))
+    crate::tasker::csv_task::writer::write_processed_records(
+        &output_file_path,
+        process_result.headers,
+        &process_result.records,
+        process_result.total_deduped_rows,
+        process_result.total_filtered_rows,
+    )
 }
 
 /// Executes the primary CSV parsing, merging, and filtering task.
