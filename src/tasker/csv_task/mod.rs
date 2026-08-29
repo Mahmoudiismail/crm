@@ -1,31 +1,15 @@
+pub mod models;
+pub use models::*;
+pub mod reader;
 use crate::tasker::config::CsvAnalysisConfig;
 use anyhow::{Context, Result};
 use chrono::{Datelike, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime};
 use csv::{StringRecord, WriterBuilder};
-use serde::Deserialize;
+pub use reader::*;
+
 use std::collections::{HashMap, HashSet};
 use tracing::{error, info, warn};
 use walkdir::WalkDir;
-
-// --- Data Models ---
-
-#[derive(Debug, Clone)]
-pub struct UserInfo {
-    pub positions: Vec<String>,
-    pub first_position: Option<String>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct AssignmentSettings {
-    #[serde(alias = "Category", alias = "category")]
-    pub category: String,
-    #[serde(alias = "Type", alias = "type", alias = "type_")]
-    pub type_: String,
-    #[serde(alias = "Subtype", alias = "subtype")]
-    pub subtype: String,
-    #[serde(alias = "Auto agent/team assignment")]
-    pub auto_agent_team_assignment: Option<String>,
-}
 
 pub fn parse_start_date(val: &str) -> Option<NaiveDateTime> {
     if let Some(dt) = crate::utils::parse_flexible_date(val) {
@@ -121,51 +105,6 @@ pub fn resolve_relative_to_exe_dir(path: &str) -> std::path::PathBuf {
         .ok()
         .and_then(|e| e.parent().map(|p| p.to_path_buf()));
     resolve_relative_to_base_dir(path, exe_dir.as_deref())
-}
-
-#[derive(Debug)]
-pub struct CsvAnalysisParams<'a> {
-    pub users_file: &'a str,
-    pub assignment_settings_file: &'a str,
-    pub download_path: &'a str,
-    pub output_file: &'a str,
-    pub minutes_ago: i64,
-    pub start_date: Option<&'a str>,
-    pub exclude_branches: &'a [String],
-    pub exclude_categories: &'a [String],
-    pub category_exceptions: Option<&'a Vec<crate::tasker::config::CategoryException>>,
-}
-
-impl<'a> From<&'a CsvAnalysisConfig> for CsvAnalysisParams<'a> {
-    fn from(config: &'a CsvAnalysisConfig) -> Self {
-        Self {
-            users_file: &config.users_file,
-            assignment_settings_file: &config.assignment_settings_file,
-            download_path: &config.download_path,
-            output_file: &config.output_file,
-            minutes_ago: config.minutes_ago,
-            start_date: config.start_date.as_deref(),
-            exclude_branches: &config.exclude_branches,
-            exclude_categories: &config.exclude_categories,
-            category_exceptions: config.category_exceptions.as_ref(),
-        }
-    }
-}
-
-impl<'a> From<&'a crate::tasker::config::DashboardUpdaterConfig> for CsvAnalysisParams<'a> {
-    fn from(config: &'a crate::tasker::config::DashboardUpdaterConfig) -> Self {
-        Self {
-            users_file: &config.users_file,
-            assignment_settings_file: &config.assignment_settings_file,
-            download_path: &config.download_path,
-            output_file: &config.output_file,
-            minutes_ago: config.minutes_ago,
-            start_date: config.start_date.as_deref(),
-            exclude_branches: &config.exclude_branches,
-            exclude_categories: &config.exclude_categories,
-            category_exceptions: config.category_exceptions.as_ref(),
-        }
-    }
 }
 
 pub fn generate_csv(params: &CsvAnalysisParams<'_>) -> Result<Option<std::path::PathBuf>> {
@@ -363,22 +302,11 @@ pub fn generate_csv(params: &CsvAnalysisParams<'_>) -> Result<Option<std::path::
 
     for file_path in target_files {
         info!("Processing file: {}", file_path.display());
-        let file = std::fs::File::open(&file_path)?;
-        let mut rdr = crate::utils::build_csv_reader_from_reader(std::io::BufReader::new(file));
-
-        let headers = match rdr.headers() {
-            Ok(h) => {
-                if h.is_empty() {
-                    warn!("Empty file: {}", file_path.display());
-                    continue;
-                }
-                h.clone()
-            }
-            Err(e) => {
-                warn!("Empty or invalid file: {} ({})", file_path.display(), e);
-                continue;
-            }
+        let mut ticket_reader = match TicketCsvReader::new(&file_path)? {
+            Some(r) => r,
+            None => continue,
         };
+        let headers: csv::StringRecord = ticket_reader.headers.clone();
 
         let mut assignee_idx = None;
         let mut type_idx = None;
@@ -420,22 +348,8 @@ pub fn generate_csv(params: &CsvAnalysisParams<'_>) -> Result<Option<std::path::
         }
 
         let mut new_record = StringRecord::new();
-        for result in rdr.records() {
-            let mut record = match result {
-                Ok(r) => r,
-                Err(e) => {
-                    let line_num = e.position().map(|p| p.line()).unwrap_or(0) as usize;
-                    let file_content = std::fs::read_to_string(&file_path).unwrap_or_default();
-                    let diagnostic_info =
-                        crate::utils::generate_csv_diagnostic_context(&file_content, line_num);
-
-                    error!(
-                        "CSV parsing error in file {:?} at line {}: {}\nDiagnostic Context (±20 lines):\n{}",
-                        file_path, line_num, e, diagnostic_info
-                    );
-                    anyhow::bail!("Failed to parse ticket report CSV: {}", e);
-                }
-            };
+        for result in ticket_reader.records() {
+            let mut record: csv::StringRecord = result?;
             let mut is_exception_val = "No";
 
             let mut month_val = String::new();
