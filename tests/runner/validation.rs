@@ -49,6 +49,7 @@ fn test_validate_config_duplicate_app_id() {
         name: "App 1".to_string(),
         executable_path: "app.exe".to_string(),
         config_path: "app_config.json".to_string(),
+        allow_concurrent_tasks: false,
     };
     config.registered_apps = vec![app.clone(), app.clone()];
 

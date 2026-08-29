@@ -932,6 +932,7 @@ pub(crate) fn render_apps_page(apps: &[crate::runner::config::RegisteredApp]) ->
                 <div class='sm:col-span-1'>{}</div>
                 <div class='sm:col-span-2'>{}</div>
                 <div class='sm:col-span-2'>{}</div>
+                <div class='sm:col-span-2'>{}</div>
             </div>
             <div class='mt-6 pt-5 border-t border-gray-200 flex justify-end'>
                 {}
@@ -941,6 +942,12 @@ pub(crate) fn render_apps_page(apps: &[crate::runner::config::RegisteredApp]) ->
         input_field("App ID", "id", ""),
         input_field("Executable Path (e.g. tasker.exe)", "executable_path", ""),
         input_field("Config Path (Optional override)", "config_path", ""),
+        crate::runner::gui::components::checkbox(
+            "allow_concurrent_tasks_new",
+            "allow_concurrent_tasks",
+            "Allow concurrent tasks (disable to prevent multiple tasks from running this app simultaneously)",
+            false,
+        ),
         primary_button("Register App", None, Some(&icon_plus("w-4 h-4 mr-2")))
     );
 
@@ -962,6 +969,7 @@ pub(crate) fn render_app_edit_page(app: &crate::runner::config::RegisteredApp) -
                 {}
                 {}
                 {}
+                {}
             </div>
             <div class='mt-8 pt-5 border-t border-gray-200 flex justify-end space-x-3'>
                 {}
@@ -972,6 +980,12 @@ pub(crate) fn render_app_edit_page(app: &crate::runner::config::RegisteredApp) -
         input_field("Name", "name", &app.name),
         input_field("Executable Path", "executable_path", &app.executable_path),
         input_field("Config Path", "config_path", &app.config_path),
+        crate::runner::gui::components::checkbox(
+            "allow_concurrent_tasks_edit",
+            "allow_concurrent_tasks",
+            "Allow concurrent tasks (disable to prevent multiple tasks from running this app simultaneously)",
+            app.allow_concurrent_tasks,
+        ),
         secondary_button("Cancel", Some("/apps"), None),
         primary_button("Update App", None, Some(&icon_check("w-4 h-4 mr-2")))
     );

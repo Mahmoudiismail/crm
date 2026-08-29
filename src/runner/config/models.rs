@@ -38,6 +38,8 @@ pub struct RegisteredApp {
     pub name: String,
     pub executable_path: String,
     pub config_path: String,
+    #[serde(default)]
+    pub allow_concurrent_tasks: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

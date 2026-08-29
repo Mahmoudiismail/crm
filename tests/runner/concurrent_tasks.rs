@@ -1,0 +1,403 @@
+use crm_tool::runner::config::{
+    ActionSpec, ExecutionMode, ExternalAppSpec, RegisteredApp, RunnerTask, ShellCommandSpec,
+    TaskStep,
+};
+use crm_tool::runner::engine::dispatcher::spawn_execution_manager;
+use crm_tool::runner::engine::state::{ExecutionManagerCommand, ExecutionPolicy, RunnerStatus};
+use std::sync::Arc;
+use std::time::Duration;
+use tempfile::NamedTempFile;
+use tokio::sync::Mutex;
+
+#[test]
+fn test_registered_app_deserialize_defaults() {
+    let json_str = r#"{
+        "id": "app_old",
+        "name": "Old App",
+        "executable_path": "path.exe",
+        "config_path": ""
+    }"#;
+
+    let app: RegisteredApp = serde_json::from_str(json_str).unwrap();
+    assert_eq!(app.id, "app_old");
+    assert!(!app.allow_concurrent_tasks);
+
+    let json_str_true = r#"{
+        "id": "app_new",
+        "name": "New App",
+        "executable_path": "path.exe",
+        "config_path": "",
+        "allow_concurrent_tasks": true
+    }"#;
+
+    let app2: RegisteredApp = serde_json::from_str(json_str_true).unwrap();
+    assert!(app2.allow_concurrent_tasks);
+
+    let json_str_false = r#"{
+        "id": "app_new_false",
+        "name": "New App False",
+        "executable_path": "path.exe",
+        "config_path": "",
+        "allow_concurrent_tasks": false
+    }"#;
+
+    let app3: RegisteredApp = serde_json::from_str(json_str_false).unwrap();
+    assert!(!app3.allow_concurrent_tasks);
+}
+
+fn create_long_task(id: &str, app_ids: Vec<&str>) -> RunnerTask {
+    let mut task = RunnerTask {
+        id: id.to_string(),
+        name: "Test Task".to_string(),
+        enabled: true,
+        repetition: Default::default(),
+        frequency_seconds: 0,
+        next_run_at: "".to_string(),
+        schedules: vec![],
+        steps: vec![],
+        post_run_steps: vec![],
+        last_run_at: "".to_string(),
+        last_status: "".to_string(),
+        timeout_seconds: 10,
+    };
+
+    // We add a shell command that sleeps for 5 seconds to hold up the execution pipeline
+    // Then we add the external apps so they register as dependencies.
+    let mut actions = vec![
+        #[cfg(target_family = "unix")]
+        ActionSpec::ShellCommand(ShellCommandSpec {
+            command: "sleep 2".to_string(),
+            continue_on_error: true,
+        }),
+        #[cfg(target_family = "windows")]
+        ActionSpec::ShellCommand(ShellCommandSpec {
+            command: "timeout /t 2 /nobreak > NUL".to_string(),
+            continue_on_error: true,
+        }),
+    ];
+
+    for app_id in app_ids {
+        actions.push(ActionSpec::ExternalApp(ExternalAppSpec {
+            app_id: app_id.to_string(),
+            args: Default::default(),
+        }));
+    }
+
+    task.steps.push(TaskStep {
+        name: None,
+        mode: ExecutionMode::Sequential,
+        actions,
+    });
+    task
+}
+
+fn create_mock_app(id: &str, concurrent: bool) -> RegisteredApp {
+    RegisteredApp {
+        id: id.to_string(),
+        name: id.to_string(),
+        executable_path: "exe".to_string(),
+        config_path: "cfg".to_string(),
+        allow_concurrent_tasks: concurrent,
+    }
+}
+
+#[tokio::test]
+async fn test_execution_manager_concurrency_policy() {
+    let status = Arc::new(Mutex::new(RunnerStatus {
+        running_tasks_count: 0,
+        queued_tasks_count: 0,
+        last_error: "".to_string(),
+        last_task_id: "".to_string(),
+        last_run_at: "".to_string(),
+    }));
+
+    let temp_file = NamedTempFile::new().unwrap();
+    let config_path = temp_file.path().to_str().unwrap().to_string();
+
+    let exec_tx = spawn_execution_manager(status.clone(), config_path.clone());
+
+    let policy = ExecutionPolicy {
+        allow_shell_tasks: true,
+        shell_timeout_seconds: 10,
+        post_run_timeout_seconds: 10,
+        min_task_interval_seconds: 1,
+        log_retention_days: 1,
+        registered_apps: vec![
+            create_mock_app("app_false", false),
+            create_mock_app("app_true", true),
+            create_mock_app("app_y", false),
+            create_mock_app("app_z", true),
+        ],
+    };
+
+    let queue_task = |task: RunnerTask| {
+        let tx = exec_tx.clone();
+        let p = policy.clone();
+        tokio::spawn(async move {
+            let _ = tx
+                .send(ExecutionManagerCommand::QueueTask {
+                    task: Box::new(task),
+                    policy: p,
+                })
+                .await;
+        })
+    };
+
+    // Helper macro to flush queue checks
+    macro_rules! reset {
+        () => {
+            let _ = exec_tx
+                .send(ExecutionManagerCommand::ShutdownExecManager)
+                .await;
+            tokio::time::sleep(Duration::from_millis(150)).await;
+            {
+                let mut st = status.lock().await;
+                st.running_tasks_count = 0;
+                st.queued_tasks_count = 0;
+            }
+        };
+    }
+
+    // TEST 5: Same task duplicate blocked
+    queue_task(create_long_task("task_1", vec!["app_true"]));
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    queue_task(create_long_task("task_1", vec!["app_true"]));
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    {
+        let st = status.lock().await;
+        assert_eq!(
+            st.running_tasks_count, 1,
+            "Duplicate task should not run concurrently"
+        );
+        assert_eq!(st.queued_tasks_count, 1, "Duplicate task should be queued");
+    }
+    reset!();
+    let exec_tx = spawn_execution_manager(status.clone(), config_path.clone());
+    let queue_task = |task: RunnerTask| {
+        let tx = exec_tx.clone();
+        let p = policy.clone();
+        tokio::spawn(async move {
+            let _ = tx
+                .send(ExecutionManagerCommand::QueueTask {
+                    task: Box::new(task),
+                    policy: p,
+                })
+                .await;
+        })
+    };
+
+    // TEST 6: Same app, false -> blocked
+    queue_task(create_long_task("t_false_1", vec!["app_false"]));
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    queue_task(create_long_task("t_false_2", vec!["app_false"]));
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    {
+        let st = status.lock().await;
+        assert_eq!(
+            st.running_tasks_count, 1,
+            "Same app_false -> 2nd task blocked"
+        );
+        assert_eq!(st.queued_tasks_count, 1, "2nd task queued");
+    }
+    reset!();
+    let exec_tx = spawn_execution_manager(status.clone(), config_path.clone());
+    let queue_task = |task: RunnerTask| {
+        let tx = exec_tx.clone();
+        let p = policy.clone();
+        tokio::spawn(async move {
+            let _ = tx
+                .send(ExecutionManagerCommand::QueueTask {
+                    task: Box::new(task),
+                    policy: p,
+                })
+                .await;
+        })
+    };
+
+    // TEST 7: Same app, true -> allowed
+    queue_task(create_long_task("t_true_1", vec!["app_true"]));
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    queue_task(create_long_task("t_true_2", vec!["app_true"]));
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    {
+        let st = status.lock().await;
+        assert_eq!(
+            st.running_tasks_count, 2,
+            "Same app_true -> 2nd task allowed"
+        );
+        assert_eq!(st.queued_tasks_count, 0, "No tasks queued");
+    }
+    reset!();
+    let exec_tx = spawn_execution_manager(status.clone(), config_path.clone());
+    let queue_task = |task: RunnerTask| {
+        let tx = exec_tx.clone();
+        let p = policy.clone();
+        tokio::spawn(async move {
+            let _ = tx
+                .send(ExecutionManagerCommand::QueueTask {
+                    task: Box::new(task),
+                    policy: p,
+                })
+                .await;
+        })
+    };
+
+    // TEST 8: Different apps -> allowed
+    queue_task(create_long_task("t_diff_1", vec!["app_false"]));
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    queue_task(create_long_task("t_diff_2", vec!["app_y"]));
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    {
+        let st = status.lock().await;
+        assert_eq!(st.running_tasks_count, 2, "Different apps -> both allowed");
+        assert_eq!(st.queued_tasks_count, 0, "No tasks queued");
+    }
+    reset!();
+    let exec_tx = spawn_execution_manager(status.clone(), config_path.clone());
+    let queue_task = |task: RunnerTask| {
+        let tx = exec_tx.clone();
+        let p = policy.clone();
+        tokio::spawn(async move {
+            let _ = tx
+                .send(ExecutionManagerCommand::QueueTask {
+                    task: Box::new(task),
+                    policy: p,
+                })
+                .await;
+        })
+    };
+
+    // TEST 9: Multiple app dependencies, false -> blocked
+    queue_task(create_long_task("t_multi_1", vec!["app_true", "app_false"]));
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    queue_task(create_long_task("t_multi_2", vec!["app_false", "app_z"]));
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    {
+        let st = status.lock().await;
+        assert_eq!(
+            st.running_tasks_count, 1,
+            "Multi app with shared false app -> blocked"
+        );
+        assert_eq!(st.queued_tasks_count, 1, "2nd task queued");
+    }
+    reset!();
+    let exec_tx = spawn_execution_manager(status.clone(), config_path.clone());
+    let queue_task = |task: RunnerTask| {
+        let tx = exec_tx.clone();
+        let p = policy.clone();
+        tokio::spawn(async move {
+            let _ = tx
+                .send(ExecutionManagerCommand::QueueTask {
+                    task: Box::new(task),
+                    policy: p,
+                })
+                .await;
+        })
+    };
+
+    // TEST 10: Multiple app dependencies, all allowed -> allowed
+    queue_task(create_long_task("t_multi_t1", vec!["app_true", "app_z"]));
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    queue_task(create_long_task("t_multi_t2", vec!["app_z", "app_true"]));
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    {
+        let st = status.lock().await;
+        assert_eq!(
+            st.running_tasks_count, 2,
+            "Multi app with all true -> allowed"
+        );
+        assert_eq!(st.queued_tasks_count, 0, "No tasks queued");
+    }
+    reset!();
+    let exec_tx = spawn_execution_manager(status.clone(), config_path.clone());
+    let queue_task = |task: RunnerTask| {
+        let tx = exec_tx.clone();
+        let p = policy.clone();
+        tokio::spawn(async move {
+            let _ = tx
+                .send(ExecutionManagerCommand::QueueTask {
+                    task: Box::new(task),
+                    policy: p,
+                })
+                .await;
+        })
+    };
+
+    // TEST 11: No ExternalApp -> existing behavior
+    queue_task(create_long_task("t_noapp_1", vec![]));
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    queue_task(create_long_task("t_noapp_2", vec![]));
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    {
+        let st = status.lock().await;
+        assert_eq!(st.running_tasks_count, 2, "No app -> allowed");
+        assert_eq!(st.queued_tasks_count, 0, "No tasks queued");
+    }
+}
+
+// TEST 12: Race condition - Deterministic test avoiding arbitrary sleep where possible.
+// Because the ExecutionManager processes the rx mpsc queue sequentially, two tasks sent sequentially
+// will be queued and evaluated by the `can_run` logic atomically relative to each other in the `queued_tasks` loop.
+// This proves that even if both are pushed into the queue at the same time, the first one that transitions to running
+// will inherently block the second one during the same cycle because `running_tasks` is updated synchronously before processing the next item.
+#[tokio::test]
+async fn test_execution_manager_race_safety() {
+    let status = Arc::new(Mutex::new(RunnerStatus {
+        running_tasks_count: 0,
+        queued_tasks_count: 0,
+        last_error: "".to_string(),
+        last_task_id: "".to_string(),
+        last_run_at: "".to_string(),
+    }));
+
+    let temp_file = NamedTempFile::new().unwrap();
+    let config_path = temp_file.path().to_str().unwrap().to_string();
+    let exec_tx = spawn_execution_manager(status.clone(), config_path.clone());
+
+    let policy = ExecutionPolicy {
+        allow_shell_tasks: true,
+        shell_timeout_seconds: 10,
+        post_run_timeout_seconds: 10,
+        min_task_interval_seconds: 1,
+        log_retention_days: 1,
+        registered_apps: vec![create_mock_app("app_false", false)],
+    };
+
+    let t1 = create_long_task("race_1", vec!["app_false"]);
+    let t2 = create_long_task("race_2", vec!["app_false"]);
+
+    // Send both tasks as fast as possible to the channel queue to simulate a race condition.
+    // The ExecutionManager channel receiver processes them in order.
+    let _ = exec_tx
+        .send(ExecutionManagerCommand::QueueTask {
+            task: Box::new(t1),
+            policy: policy.clone(),
+        })
+        .await;
+    let _ = exec_tx
+        .send(ExecutionManagerCommand::QueueTask {
+            task: Box::new(t2),
+            policy: policy.clone(),
+        })
+        .await;
+
+    // Wait slightly just to allow the single thread receiver to process the queue.
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    let st = status.lock().await;
+    assert_eq!(
+        st.running_tasks_count, 1,
+        "Only one task should acquire execution permission deterministically"
+    );
+    assert_eq!(
+        st.queued_tasks_count, 1,
+        "The second task MUST be queued safely"
+    );
+}
