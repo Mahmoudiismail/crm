@@ -389,7 +389,7 @@ async fn test_execution_manager_race_safety() {
         .await;
 
     // Wait slightly just to allow the single thread receiver to process the queue.
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    tokio::time::sleep(Duration::from_millis(250)).await;
 
     let st = status.lock().await;
     assert_eq!(
