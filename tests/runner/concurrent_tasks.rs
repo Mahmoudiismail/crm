@@ -101,6 +101,23 @@ fn create_mock_app(id: &str, concurrent: bool) -> RegisteredApp {
     }
 }
 
+async fn wait_for_state(
+    status: &Arc<Mutex<RunnerStatus>>,
+    expected_running: usize,
+    expected_queued: usize,
+) {
+    for _ in 0..1000 {
+        let done = {
+            let st = status.lock().await;
+            st.running_tasks_count == expected_running && st.queued_tasks_count == expected_queued
+        };
+        if done {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+}
+
 #[tokio::test]
 async fn test_execution_manager_concurrency_policy() {
     let status = Arc::new(Mutex::new(RunnerStatus {
@@ -149,7 +166,7 @@ async fn test_execution_manager_concurrency_policy() {
             let _ = exec_tx
                 .send(ExecutionManagerCommand::ShutdownExecManager)
                 .await;
-            tokio::time::sleep(Duration::from_millis(150)).await;
+            wait_for_state(&status, 0, 0).await;
             {
                 let mut st = status.lock().await;
                 st.running_tasks_count = 0;
@@ -160,9 +177,9 @@ async fn test_execution_manager_concurrency_policy() {
 
     // TEST 5: Same task duplicate blocked
     queue_task(create_long_task("task_1", vec!["app_true"]));
-    tokio::time::sleep(Duration::from_millis(250)).await;
+    wait_for_state(&status, 1, 0).await;
     queue_task(create_long_task("task_1", vec!["app_true"]));
-    tokio::time::sleep(Duration::from_millis(250)).await;
+    wait_for_state(&status, 1, 1).await;
 
     {
         let st = status.lock().await;
@@ -189,9 +206,9 @@ async fn test_execution_manager_concurrency_policy() {
 
     // TEST 6: Same app, false -> blocked
     queue_task(create_long_task("t_false_1", vec!["app_false"]));
-    tokio::time::sleep(Duration::from_millis(250)).await;
+    wait_for_state(&status, 1, 0).await;
     queue_task(create_long_task("t_false_2", vec!["app_false"]));
-    tokio::time::sleep(Duration::from_millis(250)).await;
+    wait_for_state(&status, 1, 1).await;
 
     {
         let st = status.lock().await;
@@ -218,9 +235,9 @@ async fn test_execution_manager_concurrency_policy() {
 
     // TEST 7: Same app, true -> allowed
     queue_task(create_long_task("t_true_1", vec!["app_true"]));
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    wait_for_state(&status, 1, 0).await;
     queue_task(create_long_task("t_true_2", vec!["app_true"]));
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    wait_for_state(&status, 2, 0).await;
 
     {
         let st = status.lock().await;
@@ -247,9 +264,9 @@ async fn test_execution_manager_concurrency_policy() {
 
     // TEST 8: Different apps -> allowed
     queue_task(create_long_task("t_diff_1", vec!["app_false"]));
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    wait_for_state(&status, 1, 0).await;
     queue_task(create_long_task("t_diff_2", vec!["app_y"]));
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    wait_for_state(&status, 2, 0).await;
 
     {
         let st = status.lock().await;
@@ -273,9 +290,9 @@ async fn test_execution_manager_concurrency_policy() {
 
     // TEST 9: Multiple app dependencies, false -> blocked
     queue_task(create_long_task("t_multi_1", vec!["app_true", "app_false"]));
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    wait_for_state(&status, 1, 0).await;
     queue_task(create_long_task("t_multi_2", vec!["app_false", "app_z"]));
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    wait_for_state(&status, 1, 1).await;
 
     {
         let st = status.lock().await;
@@ -302,9 +319,9 @@ async fn test_execution_manager_concurrency_policy() {
 
     // TEST 10: Multiple app dependencies, all allowed -> allowed
     queue_task(create_long_task("t_multi_t1", vec!["app_true", "app_z"]));
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    wait_for_state(&status, 1, 0).await;
     queue_task(create_long_task("t_multi_t2", vec!["app_z", "app_true"]));
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    wait_for_state(&status, 2, 0).await;
 
     {
         let st = status.lock().await;
@@ -331,9 +348,9 @@ async fn test_execution_manager_concurrency_policy() {
 
     // TEST 11: No ExternalApp -> existing behavior
     queue_task(create_long_task("t_noapp_1", vec![]));
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    wait_for_state(&status, 1, 0).await;
     queue_task(create_long_task("t_noapp_2", vec![]));
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    wait_for_state(&status, 2, 0).await;
 
     {
         let st = status.lock().await;
@@ -388,8 +405,17 @@ async fn test_execution_manager_race_safety() {
         })
         .await;
 
-    // Wait slightly just to allow the single thread receiver to process the queue.
-    tokio::time::sleep(Duration::from_millis(250)).await;
+    // Deterministically wait for the execution manager to process the queue
+    for _ in 0..100 {
+        let done = {
+            let st = status.lock().await;
+            st.running_tasks_count == 1 && st.queued_tasks_count == 1
+        };
+        if done {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
 
     let st = status.lock().await;
     assert_eq!(
