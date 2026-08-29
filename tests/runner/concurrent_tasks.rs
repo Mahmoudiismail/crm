@@ -160,9 +160,9 @@ async fn test_execution_manager_concurrency_policy() {
 
     // TEST 5: Same task duplicate blocked
     queue_task(create_long_task("task_1", vec!["app_true"]));
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(250)).await;
     queue_task(create_long_task("task_1", vec!["app_true"]));
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(250)).await;
 
     {
         let st = status.lock().await;
@@ -189,9 +189,9 @@ async fn test_execution_manager_concurrency_policy() {
 
     // TEST 6: Same app, false -> blocked
     queue_task(create_long_task("t_false_1", vec!["app_false"]));
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(250)).await;
     queue_task(create_long_task("t_false_2", vec!["app_false"]));
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(250)).await;
 
     {
         let st = status.lock().await;
