@@ -388,8 +388,17 @@ async fn test_execution_manager_race_safety() {
         })
         .await;
 
-    // Wait slightly just to allow the single thread receiver to process the queue.
-    tokio::time::sleep(Duration::from_millis(250)).await;
+    // Deterministically wait for the execution manager to process the queue
+    for _ in 0..100 {
+        let done = {
+            let st = status.lock().await;
+            st.running_tasks_count == 1 && st.queued_tasks_count == 1
+        };
+        if done {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
 
     let st = status.lock().await;
     assert_eq!(
