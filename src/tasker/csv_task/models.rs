@@ -58,7 +58,7 @@ impl<'a> From<&'a crate::tasker::config::DashboardUpdaterConfig> for CsvAnalysis
             start_date: config.start_date.as_deref(),
             exclude_branches: &config.exclude_branches,
             exclude_categories: &config.exclude_categories,
-            category_exceptions: None,
+            category_exceptions: config.category_exceptions.as_ref(),
         }
     }
 }
