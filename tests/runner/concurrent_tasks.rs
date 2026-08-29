@@ -66,12 +66,12 @@ fn create_long_task(id: &str, app_ids: Vec<&str>) -> RunnerTask {
     let mut actions = vec![
         #[cfg(target_family = "unix")]
         ActionSpec::ShellCommand(ShellCommandSpec {
-            command: "sleep 2".to_string(),
+            command: "sleep 5".to_string(),
             continue_on_error: true,
         }),
         #[cfg(target_family = "windows")]
         ActionSpec::ShellCommand(ShellCommandSpec {
-            command: "timeout /t 2 /nobreak > NUL".to_string(),
+            command: "timeout /t 5 /nobreak > NUL".to_string(),
             continue_on_error: true,
         }),
     ];
