@@ -384,6 +384,10 @@ pub(crate) async fn handle_apps_create(
             .get("config_path")
             .map(|s| s.trim().to_string())
             .unwrap_or_default(),
+        allow_concurrent_tasks: crate::runner::gui::forms::parse_checkbox(
+            values,
+            "allow_concurrent_tasks",
+        ),
     };
     cfg.registered_apps.push(app);
     cfg.save(&handle.runner_config_path)?;
@@ -420,6 +424,8 @@ pub(crate) async fn handle_apps_update(
             .get("config_path")
             .map(|s| s.trim().to_string())
             .unwrap_or_else(|| app.config_path.clone());
+        app.allow_concurrent_tasks =
+            crate::runner::gui::forms::parse_checkbox(values, "allow_concurrent_tasks");
         cfg.save(&handle.runner_config_path)?;
     }
     Ok((
