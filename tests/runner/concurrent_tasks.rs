@@ -45,7 +45,7 @@ fn test_registered_app_deserialize_defaults() {
     assert!(!app3.allow_concurrent_tasks);
 }
 
-fn create_long_task(id: &str, app_ids: Vec<&str>) -> RunnerTask {
+fn create_long_task(id: &str, app_ids: Vec<&str>, sync_file: &std::path::Path) -> RunnerTask {
     let mut task = RunnerTask {
         id: id.to_string(),
         name: "Test Task".to_string(),
@@ -61,17 +61,20 @@ fn create_long_task(id: &str, app_ids: Vec<&str>) -> RunnerTask {
         timeout_seconds: 10,
     };
 
-    // We add a shell command that sleeps for 5 seconds to hold up the execution pipeline
+    let sync_file_str = sync_file.to_str().unwrap();
+
+    // We add a deterministic file-polling shell command to hold up the execution pipeline.
+    // The task will not finish until the test explicitly creates the sync_file.
     // Then we add the external apps so they register as dependencies.
     let mut actions = vec![
         #[cfg(target_family = "unix")]
         ActionSpec::ShellCommand(ShellCommandSpec {
-            command: "sleep 5".to_string(),
+            command: format!("while [ ! -f '{sync_file_str}' ]; do sleep 0.1; done"),
             continue_on_error: true,
         }),
         #[cfg(target_family = "windows")]
         ActionSpec::ShellCommand(ShellCommandSpec {
-            command: "timeout /t 5 /nobreak > NUL".to_string(),
+            command: format!("powershell -Command \"while (-not (Test-Path '{sync_file_str}')) {{ Start-Sleep -Milliseconds 100 }}\""),
             continue_on_error: true,
         }),
     ];
@@ -130,6 +133,7 @@ async fn test_execution_manager_concurrency_policy() {
 
     let temp_file = NamedTempFile::new().unwrap();
     let config_path = temp_file.path().to_str().unwrap().to_string();
+    let sync_dir = tempfile::tempdir().unwrap();
 
     let exec_tx = spawn_execution_manager(status.clone(), config_path.clone());
 
@@ -160,9 +164,12 @@ async fn test_execution_manager_concurrency_policy() {
         })
     };
 
-    // Helper macro to flush queue checks
+    // Helper macro to flush queue checks and unblock tasks
     macro_rules! reset {
-        () => {
+        ($($files:expr),*) => {
+            $(
+                let _ = std::fs::write(&$files, "");
+            )*
             let _ = exec_tx
                 .send(ExecutionManagerCommand::ShutdownExecManager)
                 .await;
@@ -176,9 +183,11 @@ async fn test_execution_manager_concurrency_policy() {
     }
 
     // TEST 5: Same task duplicate blocked
-    queue_task(create_long_task("task_1", vec!["app_true"]));
+    let sync1 = sync_dir.path().join("task_1_a.lock");
+    let sync2 = sync_dir.path().join("task_1_b.lock");
+    queue_task(create_long_task("task_1", vec!["app_true"], &sync1));
     wait_for_state(&status, 1, 0).await;
-    queue_task(create_long_task("task_1", vec!["app_true"]));
+    queue_task(create_long_task("task_1", vec!["app_true"], &sync2));
     wait_for_state(&status, 1, 1).await;
 
     {
@@ -189,7 +198,7 @@ async fn test_execution_manager_concurrency_policy() {
         );
         assert_eq!(st.queued_tasks_count, 1, "Duplicate task should be queued");
     }
-    reset!();
+    reset!(sync1, sync2);
     let exec_tx = spawn_execution_manager(status.clone(), config_path.clone());
     let queue_task = |task: RunnerTask| {
         let tx = exec_tx.clone();
@@ -205,9 +214,11 @@ async fn test_execution_manager_concurrency_policy() {
     };
 
     // TEST 6: Same app, false -> blocked
-    queue_task(create_long_task("t_false_1", vec!["app_false"]));
+    let sync1 = sync_dir.path().join("t_false_1.lock");
+    let sync2 = sync_dir.path().join("t_false_2.lock");
+    queue_task(create_long_task("t_false_1", vec!["app_false"], &sync1));
     wait_for_state(&status, 1, 0).await;
-    queue_task(create_long_task("t_false_2", vec!["app_false"]));
+    queue_task(create_long_task("t_false_2", vec!["app_false"], &sync2));
     wait_for_state(&status, 1, 1).await;
 
     {
@@ -218,7 +229,7 @@ async fn test_execution_manager_concurrency_policy() {
         );
         assert_eq!(st.queued_tasks_count, 1, "2nd task queued");
     }
-    reset!();
+    reset!(sync1, sync2);
     let exec_tx = spawn_execution_manager(status.clone(), config_path.clone());
     let queue_task = |task: RunnerTask| {
         let tx = exec_tx.clone();
@@ -234,9 +245,11 @@ async fn test_execution_manager_concurrency_policy() {
     };
 
     // TEST 7: Same app, true -> allowed
-    queue_task(create_long_task("t_true_1", vec!["app_true"]));
+    let sync1 = sync_dir.path().join("t_true_1.lock");
+    let sync2 = sync_dir.path().join("t_true_2.lock");
+    queue_task(create_long_task("t_true_1", vec!["app_true"], &sync1));
     wait_for_state(&status, 1, 0).await;
-    queue_task(create_long_task("t_true_2", vec!["app_true"]));
+    queue_task(create_long_task("t_true_2", vec!["app_true"], &sync2));
     wait_for_state(&status, 2, 0).await;
 
     {
@@ -247,7 +260,7 @@ async fn test_execution_manager_concurrency_policy() {
         );
         assert_eq!(st.queued_tasks_count, 0, "No tasks queued");
     }
-    reset!();
+    reset!(sync1, sync2);
     let exec_tx = spawn_execution_manager(status.clone(), config_path.clone());
     let queue_task = |task: RunnerTask| {
         let tx = exec_tx.clone();
@@ -263,9 +276,11 @@ async fn test_execution_manager_concurrency_policy() {
     };
 
     // TEST 8: Different apps -> allowed
-    queue_task(create_long_task("t_diff_1", vec!["app_false"]));
+    let sync1 = sync_dir.path().join("t_diff_1.lock");
+    let sync2 = sync_dir.path().join("t_diff_2.lock");
+    queue_task(create_long_task("t_diff_1", vec!["app_false"], &sync1));
     wait_for_state(&status, 1, 0).await;
-    queue_task(create_long_task("t_diff_2", vec!["app_y"]));
+    queue_task(create_long_task("t_diff_2", vec!["app_y"], &sync2));
     wait_for_state(&status, 2, 0).await;
 
     {
@@ -273,7 +288,7 @@ async fn test_execution_manager_concurrency_policy() {
         assert_eq!(st.running_tasks_count, 2, "Different apps -> both allowed");
         assert_eq!(st.queued_tasks_count, 0, "No tasks queued");
     }
-    reset!();
+    reset!(sync1, sync2);
     let exec_tx = spawn_execution_manager(status.clone(), config_path.clone());
     let queue_task = |task: RunnerTask| {
         let tx = exec_tx.clone();
@@ -289,9 +304,19 @@ async fn test_execution_manager_concurrency_policy() {
     };
 
     // TEST 9: Multiple app dependencies, false -> blocked
-    queue_task(create_long_task("t_multi_1", vec!["app_true", "app_false"]));
+    let sync1 = sync_dir.path().join("t_multi_1.lock");
+    let sync2 = sync_dir.path().join("t_multi_2.lock");
+    queue_task(create_long_task(
+        "t_multi_1",
+        vec!["app_true", "app_false"],
+        &sync1,
+    ));
     wait_for_state(&status, 1, 0).await;
-    queue_task(create_long_task("t_multi_2", vec!["app_false", "app_z"]));
+    queue_task(create_long_task(
+        "t_multi_2",
+        vec!["app_false", "app_z"],
+        &sync2,
+    ));
     wait_for_state(&status, 1, 1).await;
 
     {
@@ -302,7 +327,7 @@ async fn test_execution_manager_concurrency_policy() {
         );
         assert_eq!(st.queued_tasks_count, 1, "2nd task queued");
     }
-    reset!();
+    reset!(sync1, sync2);
     let exec_tx = spawn_execution_manager(status.clone(), config_path.clone());
     let queue_task = |task: RunnerTask| {
         let tx = exec_tx.clone();
@@ -318,9 +343,19 @@ async fn test_execution_manager_concurrency_policy() {
     };
 
     // TEST 10: Multiple app dependencies, all allowed -> allowed
-    queue_task(create_long_task("t_multi_t1", vec!["app_true", "app_z"]));
+    let sync1 = sync_dir.path().join("t_multi_t1.lock");
+    let sync2 = sync_dir.path().join("t_multi_t2.lock");
+    queue_task(create_long_task(
+        "t_multi_t1",
+        vec!["app_true", "app_z"],
+        &sync1,
+    ));
     wait_for_state(&status, 1, 0).await;
-    queue_task(create_long_task("t_multi_t2", vec!["app_z", "app_true"]));
+    queue_task(create_long_task(
+        "t_multi_t2",
+        vec!["app_z", "app_true"],
+        &sync2,
+    ));
     wait_for_state(&status, 2, 0).await;
 
     {
@@ -331,7 +366,7 @@ async fn test_execution_manager_concurrency_policy() {
         );
         assert_eq!(st.queued_tasks_count, 0, "No tasks queued");
     }
-    reset!();
+    reset!(sync1, sync2);
     let exec_tx = spawn_execution_manager(status.clone(), config_path.clone());
     let queue_task = |task: RunnerTask| {
         let tx = exec_tx.clone();
@@ -347,9 +382,11 @@ async fn test_execution_manager_concurrency_policy() {
     };
 
     // TEST 11: No ExternalApp -> existing behavior
-    queue_task(create_long_task("t_noapp_1", vec![]));
+    let sync1 = sync_dir.path().join("t_noapp_1.lock");
+    let sync2 = sync_dir.path().join("t_noapp_2.lock");
+    queue_task(create_long_task("t_noapp_1", vec![], &sync1));
     wait_for_state(&status, 1, 0).await;
-    queue_task(create_long_task("t_noapp_2", vec![]));
+    queue_task(create_long_task("t_noapp_2", vec![], &sync2));
     wait_for_state(&status, 2, 0).await;
 
     {
@@ -357,6 +394,9 @@ async fn test_execution_manager_concurrency_policy() {
         assert_eq!(st.running_tasks_count, 2, "No app -> allowed");
         assert_eq!(st.queued_tasks_count, 0, "No tasks queued");
     }
+
+    let _ = std::fs::write(&sync1, "");
+    let _ = std::fs::write(&sync2, "");
 }
 
 // TEST 12: Race condition - Deterministic test avoiding arbitrary sleep where possible.
@@ -376,6 +416,7 @@ async fn test_execution_manager_race_safety() {
 
     let temp_file = NamedTempFile::new().unwrap();
     let config_path = temp_file.path().to_str().unwrap().to_string();
+    let sync_dir = tempfile::tempdir().unwrap();
     let exec_tx = spawn_execution_manager(status.clone(), config_path.clone());
 
     let policy = ExecutionPolicy {
@@ -387,8 +428,10 @@ async fn test_execution_manager_race_safety() {
         registered_apps: vec![create_mock_app("app_false", false)],
     };
 
-    let t1 = create_long_task("race_1", vec!["app_false"]);
-    let t2 = create_long_task("race_2", vec!["app_false"]);
+    let sync1 = sync_dir.path().join("race_1.lock");
+    let sync2 = sync_dir.path().join("race_2.lock");
+    let t1 = create_long_task("race_1", vec!["app_false"], &sync1);
+    let t2 = create_long_task("race_2", vec!["app_false"], &sync2);
 
     // Send both tasks as fast as possible to the channel queue to simulate a race condition.
     // The ExecutionManager channel receiver processes them in order.
@@ -426,4 +469,7 @@ async fn test_execution_manager_race_safety() {
         st.queued_tasks_count, 1,
         "The second task MUST be queued safely"
     );
+
+    let _ = std::fs::write(&sync1, "");
+    let _ = std::fs::write(&sync2, "");
 }
