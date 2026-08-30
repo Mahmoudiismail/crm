@@ -48,6 +48,8 @@ jobs:
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "rust-shared-ci"
 
       - name: Run clippy
         run: cargo clippy --workspace --all-targets --all-features
@@ -67,6 +69,8 @@ jobs:
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "rust-shared-ci"
 
       - name: Run tests
         run: cargo test --workspace --all-targets --all-features
