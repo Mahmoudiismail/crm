@@ -43,6 +43,7 @@ pub fn advance_schedule(
             every_seconds,
             next_run_at,
             start_time,
+            working_hours,
             ..
         } => {
             let effective_frequency = (*every_seconds).max(min_task_interval_seconds.max(1));
@@ -80,6 +81,12 @@ pub fn advance_schedule(
                 }
             } else {
                 now + chrono::TimeDelta::seconds(effective_frequency as i64)
+            };
+
+            let next = if let Some(wh) = working_hours {
+                crate::runner::config::next_working_time(wh, next)
+            } else {
+                next
             };
 
             *every_seconds = effective_frequency;

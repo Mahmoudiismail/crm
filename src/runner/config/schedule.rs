@@ -335,6 +335,26 @@ pub fn is_within_working_hours(
     working_hours.is_empty()
 }
 
+pub fn next_working_time(
+    working_hours: &std::collections::HashMap<String, WorkingHours>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> chrono::DateTime<chrono::Utc> {
+    if is_within_working_hours(working_hours, now) {
+        return now;
+    }
+
+    let mut candidate = now;
+    // Advance minute by minute up to 14 days
+    for _ in 0..(14 * 24 * 60) {
+        candidate += chrono::TimeDelta::minutes(1);
+        if is_within_working_hours(working_hours, candidate) {
+            return candidate;
+        }
+    }
+
+    now
+}
+
 pub fn human_duration(seconds: u64) -> String {
     if seconds == 0 {
         return "0 seconds".to_string();
