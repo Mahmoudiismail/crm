@@ -35,8 +35,19 @@ try {{
         $ws.AutoFilterMode = $false
     }}
 
-    $usedRange = $ws.UsedRange
-    $headers = $usedRange.Rows(1).Value2
+    $xlValues = -4123
+    $xlPart = 2
+    $xlByRows = 1
+    $xlByColumns = 2
+    $xlPrevious = 2
+
+    $realLastRow = $ws.Cells.Find("*", $ws.Cells.Item(1, 1), $xlValues, $xlPart, $xlByRows, $xlPrevious).Row
+    $realLastCol = $ws.Cells.Find("*", $ws.Cells.Item(1, 1), $xlValues, $xlPart, $xlByColumns, $xlPrevious).Column
+    if (-not $realLastRow) {{ $realLastRow = 1 }}
+    if (-not $realLastCol) {{ $realLastCol = 1 }}
+
+    $exactRange = $ws.Range($ws.Cells.Item(1, 1), $ws.Cells.Item($realLastRow, $realLastCol))
+    $headers = $exactRange.Rows(1).Value2
 
     if (-not $headers) {{ throw "No headers found in CSV." }}
 
@@ -53,11 +64,11 @@ try {{
     $dayName = (Get-Date).ToString("ddd") # "Mon", "Tue"
 
     if ($dColIdx -gt 0) {{
-        $usedRange.AutoFilter($dColIdx, $dayName) | Out-Null
+        $exactRange.AutoFilter($dColIdx, $dayName) | Out-Null
     }}
 
     if ($specialColIdx -gt 0) {{
-        $usedRange.AutoFilter($specialColIdx, "=") | Out-Null
+        $exactRange.AutoFilter($specialColIdx, "=") | Out-Null
     }}
 
     if ($checkCurrentYear -and $dateColIdx -gt 0) {{
@@ -65,10 +76,10 @@ try {{
         $yearEnd = $yearStart.AddYears(1)
         # Dates in Excel are often represented as numbers or strings depending on CSV load
         # For CSV loaded into Excel, standard > < text filter works if dates are formatted yyyy-mm-dd
-        $usedRange.AutoFilter($dateColIdx, ">=$($yearStart.ToString('yyyy-MM-dd'))", 1, "<$($yearEnd.ToString('yyyy-MM-dd'))") | Out-Null
+        $exactRange.AutoFilter($dateColIdx, ">=$($yearStart.ToString('yyyy-MM-dd'))", 1, "<$($yearEnd.ToString('yyyy-MM-dd'))") | Out-Null
     }}
 
-    $visibleRows = $usedRange.SpecialCells(12) # xlCellTypeVisible
+    $visibleRows = $exactRange.SpecialCells(12) # xlCellTypeVisible
 
     # Find last visible row
     $lastRow = 1
@@ -80,7 +91,7 @@ try {{
     }}
 
     # Hide blank columns at last row
-    for ($c = 1; $c -le $usedRange.Columns.Count; $c++) {{
+    for ($c = 1; $c -le $exactRange.Columns.Count; $c++) {{
         $val = $ws.Cells.Item($lastRow, $c).Text
         if ([string]::IsNullOrWhiteSpace($val)) {{
             $ws.Columns.Item($c).Hidden = $true
@@ -95,7 +106,7 @@ try {{
     $imagePath = Join-Path $env:TEMP "Query1.jpg"
     if (Test-Path $imagePath) {{ Remove-Item $imagePath -Force }}
 
-    $copyRange = $ws.Range($ws.Cells.Item(1, 1), $ws.Cells.Item($lastRow, $usedRange.Columns.Count))
+    $copyRange = $ws.Range($ws.Cells.Item(1, 1), $ws.Cells.Item($lastRow, $exactRange.Columns.Count))
     $copyRange.CopyPicture(1, 2) | Out-Null # xlScreen=1, xlPicture=2
 
     Start-Sleep -Seconds 1
@@ -103,7 +114,7 @@ try {{
     # Find exact width and height of visible range to size the chart appropriately
     $totalWidth = 0
     $totalHeight = 0
-    for ($c = 1; $c -le $usedRange.Columns.Count; $c++) {{
+    for ($c = 1; $c -le $exactRange.Columns.Count; $c++) {{
         if (-not $ws.Columns.Item($c).Hidden) {{
             $totalWidth += $ws.Columns.Item($c).Width
         }}
@@ -231,9 +242,9 @@ mod tests {
         .unwrap();
 
         // The old buggy code would just have $usedRange.CopyPicture(1, 2)
-        // The fix should replace it with a bounded range explicitly using $ws.Range
+        // The fix should replace it with a bounded range explicitly using $ws.Range and $exactRange
         assert!(
-            script.contains("$copyRange = $ws.Range($ws.Cells.Item(1, 1), $ws.Cells.Item($lastRow, $usedRange.Columns.Count))"),
+            script.contains("$copyRange = $ws.Range($ws.Cells.Item(1, 1), $ws.Cells.Item($lastRow, $exactRange.Columns.Count))"),
             "Script does not bound the copy range using $copyRange"
         );
         assert!(
