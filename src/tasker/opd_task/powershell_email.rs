@@ -3,10 +3,14 @@ use anyhow::Result;
 use std::path::Path;
 use tracing::info;
 
-pub fn generate_and_email_image(cus_file_path: &Path, config: &OpdAnalysisConfig) -> Result<()> {
-    if let (Some(email_to), Some(email_subject)) = (&config.email_to, &config.email_subject) {
-        let ps_script = format!(
-            r#"
+pub fn generate_powershell_script(
+    cus_file_path: &Path,
+    config: &OpdAnalysisConfig,
+    email_to: &str,
+    email_subject: &str,
+) -> Result<String> {
+    let script = format!(
+        r#"
 $ErrorActionPreference = "Stop"
 
 $csvPath = "{0}"
@@ -91,7 +95,8 @@ try {{
     $imagePath = Join-Path $env:TEMP "Query1.jpg"
     if (Test-Path $imagePath) {{ Remove-Item $imagePath -Force }}
 
-    $usedRange.CopyPicture(1, 2) | Out-Null # xlScreen=1, xlPicture=2
+    $copyRange = $ws.Range($ws.Cells.Item(1, 1), $ws.Cells.Item($lastRow, $usedRange.Columns.Count))
+    $copyRange.CopyPicture(1, 2) | Out-Null # xlScreen=1, xlPicture=2
 
     Start-Sleep -Seconds 1
 
@@ -138,20 +143,27 @@ try {{
     [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
 }}
 "#,
-            cus_file_path
-                .canonicalize()?
-                .to_string_lossy()
-                .replace(r"\\?\", ""),
-            email_to,
-            email_subject,
-            config.special_column_name,
-            config.date_column_name,
-            if config.check_current_year {
-                "$true"
-            } else {
-                "$false"
-            }
-        );
+        cus_file_path
+            .canonicalize()
+            .unwrap_or_else(|_| cus_file_path.to_path_buf())
+            .to_string_lossy()
+            .replace(r"\\?\", ""),
+        email_to,
+        email_subject,
+        config.special_column_name,
+        config.date_column_name,
+        if config.check_current_year {
+            "$true"
+        } else {
+            "$false"
+        }
+    );
+    Ok(script)
+}
+
+pub fn generate_and_email_image(cus_file_path: &Path, config: &OpdAnalysisConfig) -> Result<()> {
+    if let (Some(email_to), Some(email_subject)) = (&config.email_to, &config.email_subject) {
+        let ps_script = generate_powershell_script(cus_file_path, config, email_to, email_subject)?;
 
         let mut temp_file = tempfile::Builder::new()
             .prefix("opd_analysis_email_")
@@ -186,4 +198,53 @@ try {{
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_regression_copy_picture_bounds() {
+        let config = OpdAnalysisConfig {
+            download_path: "".to_string(),
+            cus_input: "".to_string(),
+            cus_file: "".to_string(),
+            exclude_specialities: vec![],
+            exclude_emp_names: vec![],
+            exclude_depts: vec![],
+            exclude_speciality_prefixes: vec![],
+            email_to: Some("test@example.com".to_string()),
+            email_subject: Some("Test".to_string()),
+            special_column_name: "Special".to_string(),
+            date_column_name: "KSA Time".to_string(),
+            check_current_year: false,
+        };
+
+        let script = generate_powershell_script(
+            &PathBuf::from("dummy.csv"),
+            &config,
+            "test@example.com",
+            "Test Subject",
+        )
+        .unwrap();
+
+        // The old buggy code would just have $usedRange.CopyPicture(1, 2)
+        // The fix should replace it with a bounded range explicitly using $ws.Range
+        assert!(
+            script.contains("$copyRange = $ws.Range($ws.Cells.Item(1, 1), $ws.Cells.Item($lastRow, $usedRange.Columns.Count))"),
+            "Script does not bound the copy range using $copyRange"
+        );
+        assert!(
+            script.contains("$copyRange.CopyPicture(1, 2)"),
+            "Script does not copy the bounded range"
+        );
+
+        // Ensure the bug (unbounded copy) is completely removed
+        assert!(
+            !script.contains("$usedRange.CopyPicture(1, 2)"),
+            "Script still contains unbounded $usedRange.CopyPicture"
+        );
+    }
 }
