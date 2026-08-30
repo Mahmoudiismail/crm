@@ -413,21 +413,34 @@ pub fn build_csv_reader_from_reader<R: std::io::Read>(rdr: R) -> csv::Reader<R> 
     build_csv_reader_builder().from_reader(rdr)
 }
 
-pub(crate) fn generate_csv_diagnostic_context(content: &str, line_num: usize) -> String {
-    let lines: Vec<&str> = content.lines().collect();
-    let mut ctx = String::new();
+pub(crate) fn generate_csv_diagnostic_context_from_file(
+    file_path: impl AsRef<std::path::Path>,
+    line_num: usize,
+) -> String {
+    use std::io::{BufRead, BufReader};
+    let file = match std::fs::File::open(file_path.as_ref()) {
+        Ok(f) => f,
+        Err(_) => return String::new(),
+    };
+    let reader = BufReader::new(file);
 
     let start = if line_num > 20 { line_num - 20 } else { 1 };
-    let end = std::cmp::min(line_num + 20, lines.len());
+    let end = line_num + 20;
 
-    for i in start..=end {
-        if i == 0 {
-            continue;
+    let mut ctx = String::new();
+    for (i, line_result) in reader.lines().enumerate() {
+        let current_line_num = i + 1;
+        if current_line_num > end {
+            break;
         }
-        if i == line_num {
-            ctx.push_str(&format!(">>> {:4} | {}\n", i, lines[i - 1]));
-        } else {
-            ctx.push_str(&format!("{:4} | {}\n", i, lines[i - 1]));
+        if current_line_num >= start {
+            if let Ok(line) = line_result {
+                if current_line_num == line_num {
+                    ctx.push_str(&format!(">>> {:4} | {}\n", current_line_num, line));
+                } else {
+                    ctx.push_str(&format!("{:4} | {}\n", current_line_num, line));
+                }
+            }
         }
     }
 
@@ -683,9 +696,12 @@ mod tests {
     fn test_generate_csv_diagnostic_context() {
         let lines: Vec<String> = (1..=50).map(|i| format!("Line {}", i)).collect();
         let file_content = lines.join("\n");
+        let temp_dir = tempfile::tempdir().unwrap();
+        let file_path = temp_dir.path().join("test_file.csv");
+        std::fs::write(&file_path, &file_content).unwrap();
 
         // Test middle
-        let ctx = generate_csv_diagnostic_context(&file_content, 25);
+        let ctx = generate_csv_diagnostic_context_from_file(&file_path, 25);
         let ctx_lines: Vec<&str> = ctx.trim().split('\n').collect();
         assert_eq!(ctx_lines.len(), 41); // 20 before + 1 error + 20 after
         assert_eq!(ctx_lines[0].trim(), "5 | Line 5");
@@ -693,7 +709,7 @@ mod tests {
         assert_eq!(ctx_lines[40].trim(), "45 | Line 45");
 
         // Test beginning bounds
-        let ctx_early = generate_csv_diagnostic_context(&file_content, 5);
+        let ctx_early = generate_csv_diagnostic_context_from_file(&file_path, 5);
         let ctx_early_lines: Vec<&str> = ctx_early.trim().split('\n').collect();
         assert_eq!(ctx_early_lines.len(), 25);
         assert_eq!(ctx_early_lines[0].trim(), "1 | Line 1");
@@ -701,7 +717,7 @@ mod tests {
         assert_eq!(ctx_early_lines[24].trim(), "25 | Line 25");
 
         // Test end bounds
-        let ctx_late = generate_csv_diagnostic_context(&file_content, 45);
+        let ctx_late = generate_csv_diagnostic_context_from_file(&file_path, 45);
         let ctx_late_lines: Vec<&str> = ctx_late.trim().split('\n').collect();
         assert_eq!(ctx_late_lines.len(), 26);
         assert_eq!(ctx_late_lines[0].trim(), "25 | Line 25");
