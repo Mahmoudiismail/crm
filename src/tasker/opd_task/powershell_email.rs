@@ -47,6 +47,26 @@ try {{
     if (-not $realLastCol) {{ $realLastCol = 1 }}
 
     $exactRange = $ws.Range($ws.Cells.Item(1, 1), $ws.Cells.Item($realLastRow, $realLastCol))
+
+    # Apply Visual Formatting
+    # 1. Autofit all columns
+    $exactRange.Columns.AutoFit() | Out-Null
+
+    # 2. Center alignment and borders for the entire range
+    $exactRange.HorizontalAlignment = -4108 # xlCenter
+    $exactRange.VerticalAlignment = -4108   # xlCenter
+    $exactRange.Borders.LineStyle = 1       # xlContinuous
+    $exactRange.Borders.Weight = 2          # xlThin
+
+    # 3. Header styling (Green background, white bold text)
+    $headerRange = $exactRange.Rows(1)
+    $headerRange.Interior.Color = 3439443 # #548235 in BGR decimal (0x347c53) -> roughly Excel Green
+    $headerRange.Font.Color = 16777215    # White
+    $headerRange.Font.Bold = $true
+
+    # 4. Make date column slightly wider if needed
+    $exactRange.Columns.Item(1).ColumnWidth = 20
+
     $headers = $exactRange.Rows(1).Value2
 
     if (-not $headers) {{ throw "No headers found in CSV." }}
