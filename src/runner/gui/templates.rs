@@ -1002,8 +1002,22 @@ pub(crate) fn render_app_edit_page(app: &crate::runner::config::RegisteredApp) -
 
 pub(crate) fn human_schedule(schedule: &TaskSchedule) -> String {
     match schedule {
-        TaskSchedule::Interval { every_seconds, .. } => {
-            format!("Every {}", compact_duration(*every_seconds))
+        TaskSchedule::Interval {
+            every_seconds,
+            working_hours,
+            start_time,
+            ..
+        } => {
+            let mut s = format!("Every {}", compact_duration(*every_seconds));
+            if let Some(st) = start_time {
+                if !st.is_empty() {
+                    s.push_str(&format!(" (st: {})", st));
+                }
+            }
+            if working_hours.is_some() {
+                s.push_str(" (wh)");
+            }
+            s
         }
         TaskSchedule::DailyTimes { times, .. } => format!("Daily at {}", times.join(", ")),
         TaskSchedule::Weekly {
