@@ -106,11 +106,6 @@ try {{
     $imagePath = Join-Path $env:TEMP "Query1.jpg"
     if (Test-Path $imagePath) {{ Remove-Item $imagePath -Force }}
 
-    $copyRange = $ws.Range($ws.Cells.Item(1, 1), $ws.Cells.Item($lastRow, $exactRange.Columns.Count))
-    $copyRange.CopyPicture(1, 2) | Out-Null # xlScreen=1, xlPicture=2
-
-    Start-Sleep -Seconds 1
-
     # Find exact width and height of visible range to size the chart appropriately
     $totalWidth = 0
     $totalHeight = 0
@@ -128,8 +123,24 @@ try {{
     if ($totalWidth -lt 50) {{ $totalWidth = 50 }}
     if ($totalHeight -lt 50) {{ $totalHeight = 50 }}
 
+    $copyRange = $ws.Range($ws.Cells.Item(1, 1), $ws.Cells.Item($lastRow, $exactRange.Columns.Count))
+
+    # Select the range explicitly to ensure clipboard receives data
+    $ws.Activate()
+    $copyRange.Select() | Out-Null
+
+    # Temporarily enable ScreenUpdating so Excel can render the xlScreen copy
+    $excel.ScreenUpdating = $true
+
+    # 1 = xlScreen, 2 = xlBitmap
+    $copyRange.CopyPicture(1, 2) | Out-Null
+    Start-Sleep -Seconds 1
+
     $chartObj = $ws.ChartObjects().Add(10, 10, $totalWidth, $totalHeight)
     $chartObj.Activate()
+
+    # Select ChartArea to ensure Paste targets the chart
+    $chartObj.Chart.ChartArea.Select() | Out-Null
     $chartObj.Chart.Paste() | Out-Null
     Start-Sleep -Seconds 1
 
