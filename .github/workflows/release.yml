@@ -49,23 +49,8 @@ jobs:
         with:
           targets: x86_64-pc-windows-msvc
 
-      - name: Cache cargo artifacts
-        uses: actions/cache@v6
-        with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-            !target/**/*.exe
-            !target/**/*.zip
-            !target/**/*.log
-            !target/**/*.json
-            !target/**/*.yaml
-            !target/**/*.yml
-          key: ${{ runner.os }}-cargo-crm-rust-shared-cache-${{ github.run_id }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-crm-rust-shared-cache
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
 
       - name: List Cache Contents
         shell: bash
