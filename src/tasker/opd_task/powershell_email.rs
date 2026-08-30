@@ -48,27 +48,7 @@ try {{
 
     $exactRange = $ws.Range($ws.Cells.Item(1, 1), $ws.Cells.Item($realLastRow, $realLastCol))
 
-    # Apply Visual Formatting
-    # 1. Autofit all columns
-    $exactRange.Columns.AutoFit() | Out-Null
-
-    # 2. Center alignment and borders for the entire range
-    $exactRange.HorizontalAlignment = -4108 # xlCenter
-    $exactRange.VerticalAlignment = -4108   # xlCenter
-    $exactRange.Borders.LineStyle = 1       # xlContinuous
-    $exactRange.Borders.Weight = 2          # xlThin
-
-    # 3. Header styling (Green background, white bold text)
-    $headerRange = $exactRange.Rows(1)
-    $headerRange.Interior.Color = 3439443 # #548235 in BGR decimal (0x347c53) -> roughly Excel Green
-    $headerRange.Font.Color = 16777215    # White
-    $headerRange.Font.Bold = $true
-
-    # 4. Make date column slightly wider if needed
-    $exactRange.Columns.Item(1).ColumnWidth = 20
-
     $headers = $exactRange.Rows(1).Value2
-
     if (-not $headers) {{ throw "No headers found in CSV." }}
 
     # Convert 2D array to 1D
@@ -81,14 +61,44 @@ try {{
     $specialColIdx = [array]::IndexOf($headerArray, $specialCol) + 1
     $dateColIdx = [array]::IndexOf($headerArray, $dateCol) + 1
 
+    # Apply Date format
+    if ($dateColIdx -gt 0) {{
+        $exactRange.Columns.Item($dateColIdx).NumberFormat = "dddd, dd mmmm yyyy"
+    }}
+
+    # Apply Visual Formatting
+    # 1. Autofit all columns first so Date fits
+    $exactRange.Columns.AutoFit() | Out-Null
+
+    # 2. Force timing columns (everything after column A) to width 10
+    for ($c = 2; $c -le $exactRange.Columns.Count; $c++) {{
+        $exactRange.Columns.Item($c).ColumnWidth = 10
+    }}
+
+    # 3. Center alignment and borders for the entire range
+    $exactRange.HorizontalAlignment = -4108 # xlCenter
+    $exactRange.VerticalAlignment = -4108   # xlCenter
+    $exactRange.Borders.LineStyle = 1       # xlContinuous
+    $exactRange.Borders.Weight = 2          # xlThin
+
+    # 4. Header styling (Green background, white bold text)
+    $headerRange = $exactRange.Rows(1)
+    $headerRange.Interior.Color = 3439443 # #548235 in BGR decimal (0x347c53) -> roughly Excel Green
+    $headerRange.Font.Color = 16777215    # White
+    $headerRange.Font.Bold = $true
+
     $dayName = (Get-Date).ToString("ddd") # "Mon", "Tue"
 
+    # Turn on Autofilter first to establish the dropdowns
+    $exactRange.AutoFilter() | Out-Null
+
+    # Apply Filters and hide their specific dropdowns
     if ($dColIdx -gt 0) {{
-        $exactRange.AutoFilter($dColIdx, $dayName) | Out-Null
+        $exactRange.AutoFilter($dColIdx, $dayName, 1, [Type]::Missing, $false) | Out-Null
     }}
 
     if ($specialColIdx -gt 0) {{
-        $exactRange.AutoFilter($specialColIdx, "=") | Out-Null
+        $exactRange.AutoFilter($specialColIdx, "=", 1, [Type]::Missing, $false) | Out-Null
     }}
 
     if ($checkCurrentYear -and $dateColIdx -gt 0) {{
@@ -96,7 +106,15 @@ try {{
         $yearEnd = $yearStart.AddYears(1)
         # Dates in Excel are often represented as numbers or strings depending on CSV load
         # For CSV loaded into Excel, standard > < text filter works if dates are formatted yyyy-mm-dd
-        $exactRange.AutoFilter($dateColIdx, ">=$($yearStart.ToString('yyyy-MM-dd'))", 1, "<$($yearEnd.ToString('yyyy-MM-dd'))") | Out-Null
+        $exactRange.AutoFilter($dateColIdx, ">=$($yearStart.ToString('yyyy-MM-dd'))", 1, "<$($yearEnd.ToString('yyyy-MM-dd'))", $false) | Out-Null
+    }}
+
+    # Hide the dropdown arrows for ALL other columns that weren't actively filtered above
+    for ($c = 1; $c -le $exactRange.Columns.Count; $c++) {{
+        if ($c -ne $dColIdx -and $c -ne $specialColIdx -and $c -ne $dateColIdx) {{
+            # Passing no criteria, just setting VisibleDropDown to $false
+            $exactRange.AutoFilter($c, [Type]::Missing, 1, [Type]::Missing, $false) | Out-Null
+        }}
     }}
 
     $visibleRows = $exactRange.SpecialCells(12) # xlCellTypeVisible
