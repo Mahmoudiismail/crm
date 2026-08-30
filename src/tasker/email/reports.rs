@@ -113,9 +113,9 @@ pub fn generate_leads_report(
                 Ok(r) => r,
                 Err(e) => {
                     let line_num = e.position().map(|p| p.line()).unwrap_or(0) as usize;
-                    let file_content = std::fs::read_to_string(&file_path).unwrap_or_default();
-                    let diagnostic_info =
-                        crate::utils::generate_csv_diagnostic_context(&file_content, line_num);
+                    let diagnostic_info = crate::utils::generate_csv_diagnostic_context_from_file(
+                        &file_path, line_num,
+                    );
 
                     error!(
                         "CSV parsing error in file {:?} at line {}: {}\nDiagnostic Context (±20 lines):\n{}",
