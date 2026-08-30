@@ -49,6 +49,14 @@ try {{
     $exactRange = $ws.Range($ws.Cells.Item(1, 1), $ws.Cells.Item($realLastRow, $realLastCol))
     $headers = $exactRange.Rows(1).Value2
 
+    $realLastRow = $ws.Cells.Find("*", $ws.Cells.Item(1, 1), $xlValues, $xlPart, $xlByRows, $xlPrevious).Row
+    $realLastCol = $ws.Cells.Find("*", $ws.Cells.Item(1, 1), $xlValues, $xlPart, $xlByColumns, $xlPrevious).Column
+    if (-not $realLastRow) {{ $realLastRow = 1 }}
+    if (-not $realLastCol) {{ $realLastCol = 1 }}
+
+    $exactRange = $ws.Range($ws.Cells.Item(1, 1), $ws.Cells.Item($realLastRow, $realLastCol))
+
+    $headers = $exactRange.Rows(1).Value2
     if (-not $headers) {{ throw "No headers found in CSV." }}
 
     # Convert 2D array to 1D
@@ -61,8 +69,38 @@ try {{
     $specialColIdx = [array]::IndexOf($headerArray, $specialCol) + 1
     $dateColIdx = [array]::IndexOf($headerArray, $dateCol) + 1
 
+    # Apply Date format
+    if ($dateColIdx -gt 0) {{
+        $exactRange.Columns.Item($dateColIdx).NumberFormat = "dddd, dd mmmm yyyy"
+    }}
+
+    # Apply Visual Formatting
+    # 1. Autofit all columns first so Date fits
+    $exactRange.Columns.AutoFit() | Out-Null
+
+    # 2. Force timing columns (everything after column A) to width 10
+    for ($c = 2; $c -le $exactRange.Columns.Count; $c++) {{
+        $exactRange.Columns.Item($c).ColumnWidth = 10
+    }}
+
+    # 3. Center alignment and borders for the entire range
+    $exactRange.HorizontalAlignment = -4108 # xlCenter
+    $exactRange.VerticalAlignment = -4108   # xlCenter
+    $exactRange.Borders.LineStyle = 1       # xlContinuous
+    $exactRange.Borders.Weight = 2          # xlThin
+
+    # 4. Header styling (Green background, white bold text)
+    $headerRange = $exactRange.Rows(1)
+    $headerRange.Interior.Color = 3439443 # #548235 in BGR decimal (0x347c53) -> roughly Excel Green
+    $headerRange.Font.Color = 16777215    # White
+    $headerRange.Font.Bold = $true
+
     $dayName = (Get-Date).ToString("ddd") # "Mon", "Tue"
 
+    # Turn on Autofilter first to establish the dropdowns
+    $exactRange.AutoFilter() | Out-Null
+
+    # Apply Filters and hide their specific dropdowns
     if ($dColIdx -gt 0) {{
         $exactRange.AutoFilter($dColIdx, $dayName) | Out-Null
     }}
@@ -128,8 +166,24 @@ try {{
     if ($totalWidth -lt 50) {{ $totalWidth = 50 }}
     if ($totalHeight -lt 50) {{ $totalHeight = 50 }}
 
+    $copyRange = $ws.Range($ws.Cells.Item(1, 1), $ws.Cells.Item($lastRow, $exactRange.Columns.Count))
+
+    # Select the range explicitly to ensure clipboard receives data
+    $ws.Activate()
+    $copyRange.Select() | Out-Null
+
+    # Temporarily enable ScreenUpdating so Excel can render the xlScreen copy
+    $excel.ScreenUpdating = $true
+
+    # 1 = xlScreen, 2 = xlBitmap
+    $copyRange.CopyPicture(1, 2) | Out-Null
+    Start-Sleep -Seconds 1
+
     $chartObj = $ws.ChartObjects().Add(10, 10, $totalWidth, $totalHeight)
     $chartObj.Activate()
+
+    # Select ChartArea to ensure Paste targets the chart
+    $chartObj.Chart.ChartArea.Select() | Out-Null
     $chartObj.Chart.Paste() | Out-Null
     Start-Sleep -Seconds 1
 
