@@ -47,6 +47,14 @@ try {{
     if (-not $realLastCol) {{ $realLastCol = 1 }}
 
     $exactRange = $ws.Range($ws.Cells.Item(1, 1), $ws.Cells.Item($realLastRow, $realLastCol))
+    $headers = $exactRange.Rows(1).Value2
+
+    $realLastRow = $ws.Cells.Find("*", $ws.Cells.Item(1, 1), $xlValues, $xlPart, $xlByRows, $xlPrevious).Row
+    $realLastCol = $ws.Cells.Find("*", $ws.Cells.Item(1, 1), $xlValues, $xlPart, $xlByColumns, $xlPrevious).Column
+    if (-not $realLastRow) {{ $realLastRow = 1 }}
+    if (-not $realLastCol) {{ $realLastCol = 1 }}
+
+    $exactRange = $ws.Range($ws.Cells.Item(1, 1), $ws.Cells.Item($realLastRow, $realLastCol))
 
     $headers = $exactRange.Rows(1).Value2
     if (-not $headers) {{ throw "No headers found in CSV." }}
@@ -94,11 +102,11 @@ try {{
 
     # Apply Filters and hide their specific dropdowns
     if ($dColIdx -gt 0) {{
-        $exactRange.AutoFilter($dColIdx, $dayName, 1, [Type]::Missing, $false) | Out-Null
+        $exactRange.AutoFilter($dColIdx, $dayName) | Out-Null
     }}
 
     if ($specialColIdx -gt 0) {{
-        $exactRange.AutoFilter($specialColIdx, "=", 1, [Type]::Missing, $false) | Out-Null
+        $exactRange.AutoFilter($specialColIdx, "=") | Out-Null
     }}
 
     if ($checkCurrentYear -and $dateColIdx -gt 0) {{
@@ -106,15 +114,7 @@ try {{
         $yearEnd = $yearStart.AddYears(1)
         # Dates in Excel are often represented as numbers or strings depending on CSV load
         # For CSV loaded into Excel, standard > < text filter works if dates are formatted yyyy-mm-dd
-        $exactRange.AutoFilter($dateColIdx, ">=$($yearStart.ToString('yyyy-MM-dd'))", 1, "<$($yearEnd.ToString('yyyy-MM-dd'))", $false) | Out-Null
-    }}
-
-    # Hide the dropdown arrows for ALL other columns that weren't actively filtered above
-    for ($c = 1; $c -le $exactRange.Columns.Count; $c++) {{
-        if ($c -ne $dColIdx -and $c -ne $specialColIdx -and $c -ne $dateColIdx) {{
-            # Passing no criteria, just setting VisibleDropDown to $false
-            $exactRange.AutoFilter($c, [Type]::Missing, 1, [Type]::Missing, $false) | Out-Null
-        }}
+        $exactRange.AutoFilter($dateColIdx, ">=$($yearStart.ToString('yyyy-MM-dd'))", 1, "<$($yearEnd.ToString('yyyy-MM-dd'))") | Out-Null
     }}
 
     $visibleRows = $exactRange.SpecialCells(12) # xlCellTypeVisible
@@ -143,6 +143,11 @@ try {{
 
     $imagePath = Join-Path $env:TEMP "Query1.jpg"
     if (Test-Path $imagePath) {{ Remove-Item $imagePath -Force }}
+
+    $copyRange = $ws.Range($ws.Cells.Item(1, 1), $ws.Cells.Item($lastRow, $exactRange.Columns.Count))
+    $copyRange.CopyPicture(1, 2) | Out-Null # xlScreen=1, xlPicture=2
+
+    Start-Sleep -Seconds 1
 
     # Find exact width and height of visible range to size the chart appropriately
     $totalWidth = 0
