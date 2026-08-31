@@ -35,7 +35,7 @@ fn create_sync_task(id: &str, app_ids: Vec<&str>, lock_file: &std::path::Path) -
         timeout_seconds: 10,
     };
 
-    let lock_str = lock_file.to_str().unwrap();
+    let lock_str = lock_file.to_str().unwrap().replace("\\", "/");
 
     let mut actions = vec![
         #[cfg(target_family = "unix")]
@@ -48,7 +48,7 @@ fn create_sync_task(id: &str, app_ids: Vec<&str>, lock_file: &std::path::Path) -
         #[cfg(target_family = "windows")]
         ActionSpec::ShellCommand(ShellCommandSpec {
             command: format!(
-                "powershell -Command \"New-Item -ItemType File -Force -Path '{lock_str}.started'; while (-not (Test-Path '{lock_str}.release')) {{ Start-Sleep -Milliseconds 100 }}\""
+                "New-Item -ItemType File -Force -Path '{lock_str}.started'; while (-not (Test-Path '{lock_str}.release')) {{ Start-Sleep -Milliseconds 100 }}"
             ),
             continue_on_error: true,
         }),
