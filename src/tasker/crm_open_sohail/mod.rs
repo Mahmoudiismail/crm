@@ -112,10 +112,9 @@ if ($null -ne $ThreadItem) {{
     Write-Host "Warning: Could not find matching thread. Creating a new email."
     $Mail = $Outlook.CreateItem(0)
     $Mail.HTMLBody = '{}'
+    $Mail.To = "{}"
+    $Mail.CC = "{}"
 }}
-
-$Mail.To = "{}"
-$Mail.CC = "{}"
 
 # Strip "RE:" and parenthesis per rules, force exact formatted subject
 $Mail.Subject = "{}"
