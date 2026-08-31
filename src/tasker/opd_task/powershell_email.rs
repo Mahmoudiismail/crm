@@ -100,13 +100,18 @@ try {{
     # Turn on Autofilter first to establish the dropdowns
     $exactRange.AutoFilter() | Out-Null
 
+    # Iterate through all columns in the range and hide AutoFilter dropdowns
+    for ($i = 1; $i -le $exactRange.Columns.Count; $i++) {{
+        $exactRange.AutoFilter($i, [Type]::Missing, [Type]::Missing, [Type]::Missing, $false) | Out-Null
+    }}
+
     # Apply Filters and hide their specific dropdowns
     if ($dColIdx -gt 0) {{
-        $exactRange.AutoFilter($dColIdx, $dayName) | Out-Null
+        $exactRange.AutoFilter($dColIdx, $dayName, 1, [Type]::Missing, $false) | Out-Null
     }}
 
     if ($specialColIdx -gt 0) {{
-        $exactRange.AutoFilter($specialColIdx, "=") | Out-Null
+        $exactRange.AutoFilter($specialColIdx, "=", 1, [Type]::Missing, $false) | Out-Null
     }}
 
     if ($checkCurrentYear -and $dateColIdx -gt 0) {{
@@ -114,7 +119,7 @@ try {{
         $yearEnd = $yearStart.AddYears(1)
         # Dates in Excel are often represented as numbers or strings depending on CSV load
         # For CSV loaded into Excel, standard > < text filter works if dates are formatted yyyy-mm-dd
-        $exactRange.AutoFilter($dateColIdx, ">=$($yearStart.ToString('yyyy-MM-dd'))", 1, "<$($yearEnd.ToString('yyyy-MM-dd'))") | Out-Null
+        $exactRange.AutoFilter($dateColIdx, ">=$($yearStart.ToString('yyyy-MM-dd'))", 1, "<$($yearEnd.ToString('yyyy-MM-dd'))", $false) | Out-Null
     }}
 
     $visibleRows = $exactRange.SpecialCells(12) # xlCellTypeVisible
@@ -310,6 +315,38 @@ mod tests {
         assert!(
             !script.contains("$usedRange.CopyPicture(1, 2)"),
             "Script still contains unbounded $usedRange.CopyPicture"
+        );
+    }
+
+    #[test]
+    fn test_autofilter_dropdown_hidden() {
+        let config = OpdAnalysisConfig {
+            download_path: "".to_string(),
+            cus_input: "".to_string(),
+            cus_file: "".to_string(),
+            exclude_specialities: vec![],
+            exclude_emp_names: vec![],
+            exclude_depts: vec![],
+            exclude_speciality_prefixes: vec![],
+            email_to: Some("test@example.com".to_string()),
+            email_subject: Some("Test".to_string()),
+            special_column_name: "Special".to_string(),
+            date_column_name: "KSA Time".to_string(),
+            check_current_year: false,
+        };
+
+        let script = generate_powershell_script(
+            &PathBuf::from("dummy.csv"),
+            &config,
+            "test@example.com",
+            "Test Subject",
+        )
+        .unwrap();
+
+        // Ensure the code loops through the columns to hide AutoFilter dropdowns
+        assert!(
+            script.contains("for ($i = 1; $i -le $exactRange.Columns.Count; $i++) {\n        $exactRange.AutoFilter($i, [Type]::Missing, [Type]::Missing, [Type]::Missing, $false) | Out-Null\n    }"),
+            "Script does not contain the loop to hide AutoFilter dropdowns"
         );
     }
 }
