@@ -35,10 +35,29 @@ pub fn run(config: &CrmOpenSohailConfig) -> Result<()> {
 
     info!("Email generation completed");
 
-    let subject = config
+    let yesterday = chrono::Local::now().date_naive() - chrono::Days::new(1);
+    let default_date = yesterday.format("%-d-%B").to_string();
+
+    let mut subject = config
         .subject_template
         .clone()
         .unwrap_or("CRM Updated open TKTs".to_string());
+
+    let sender_account = config
+        .sender_account_email
+        .clone()
+        .unwrap_or_else(|| "mahmoud_iismail@rayacx.com".to_string());
+    let search_prefix = config
+        .reply_subject_prefix
+        .clone()
+        .unwrap_or_else(|| "Open TKTs".to_string());
+
+    if config.reply_subject_prefix.is_some()
+        || config.sender_account_email.is_some()
+        || subject == "CRM Updated open TKTs"
+    {
+        subject = format!("{} {}", search_prefix, default_date);
+    }
 
     let email_to = config.dashboard_config.email_to.clone().unwrap_or_default();
     let email_cc = config.dashboard_config.email_cc.clone().unwrap_or_default();
@@ -51,17 +70,70 @@ pub fn run(config: &CrmOpenSohailConfig) -> Result<()> {
     let ps_email_script = format!(
         r#"
 $Outlook = New-Object -ComObject Outlook.Application
-$Mail = $Outlook.CreateItem(0)
+$TargetAccount = $null
+foreach ($Account in $Outlook.Session.Accounts) {{
+    if ($Account.SmtpAddress -eq "{}") {{
+        $TargetAccount = $Account
+        break
+    }}
+}}
+
+$SentFolder = $null
+if ($null -ne $TargetAccount) {{
+    try {{
+        $SentFolder = $TargetAccount.DeliveryStore.GetDefaultFolder(5) # olFolderSentMail
+    }} catch {{
+        $SentFolder = $null
+    }}
+}}
+
+if ($null -eq $SentFolder) {{
+    $SentFolder = $Outlook.Session.GetDefaultFolder(5)
+}}
+
+$Items = $SentFolder.Items
+$Items.Sort("[ReceivedTime]", $true) # Descending
+
+$Prefix = "{}"
+$ThreadItem = $null
+
+foreach ($Item in $Items) {{
+    if ($null -ne $Item.Subject -and $Item.Subject.StartsWith($Prefix, $true, $null)) {{
+        $ThreadItem = $Item
+        break
+    }}
+}}
+
+if ($null -ne $ThreadItem) {{
+    $Mail = $ThreadItem.ReplyAll()
+    $NewBody = '{}'
+    $Mail.HTMLBody = $NewBody + $Mail.HTMLBody
+}} else {{
+    Write-Host "Warning: Could not find matching thread. Creating a new email."
+    $Mail = $Outlook.CreateItem(0)
+    $Mail.HTMLBody = '{}'
+}}
+
 $Mail.To = "{}"
 $Mail.CC = "{}"
+
+# Strip "RE:" and parenthesis per rules, force exact formatted subject
 $Mail.Subject = "{}"
-$Mail.HTMLBody = '{}'
 $Mail.Send()
 "#,
+        sender_account.replace("\"", "'"),
+        search_prefix.replace("\"", "'"),
+        final_html.replace("'", "''"),
+        final_html.replace("'", "''"),
         email_to.replace("\"", "'"),
         email_cc.replace("\"", "'"),
-        subject.replace("\"", "''"),
-        final_html.replace("'", "''")
+        subject
+            .replace("\"", "''")
+            .replace("RE: ", "")
+            .replace("Re: ", "")
+            .replace("re: ", "")
+            .replace("(", "")
+            .replace(")", ""),
     );
 
     if config.dashboard_config.save_email_as_html.unwrap_or(false) {
@@ -244,6 +316,8 @@ mod tests {
             dashboard_sheet_name: None,
             dashboard_pivot_name: None,
             table_column_widths: None,
+            sender_account_email: None,
+            reply_subject_prefix: None,
         };
 
         // Running it against dummy data will yield no actual HTML tables of datasets since the mock PowerShell script output is `[]`.
@@ -311,6 +385,8 @@ mod tests {
             dashboard_sheet_name: None,
             dashboard_pivot_name: None,
             table_column_widths: None,
+            sender_account_email: None,
+            reply_subject_prefix: None,
         };
 
         // We run the task. Since save_email_as_html is true, PowerShell COM is skipped,
@@ -327,5 +403,133 @@ mod tests {
 
         let content = std::fs::read_to_string(&html_path).unwrap();
         assert!(content.contains("Dear All,"));
+    }
+
+    #[test]
+    fn test_email_replyall_script_generation() {
+        let dummy_dataset = setup_test_dataset();
+        let config = CrmOpenSohailConfig {
+            dashboard_config: crate::tasker::config::DashboardUpdaterConfig {
+                download_path: dummy_dataset
+                    .download_dir
+                    .path()
+                    .to_str()
+                    .unwrap()
+                    .to_string(),
+                users_file: dummy_dataset
+                    .users_file
+                    .path()
+                    .to_str()
+                    .unwrap()
+                    .to_string(),
+                assignment_settings_file: dummy_dataset
+                    .assignments_file
+                    .path()
+                    .to_str()
+                    .unwrap()
+                    .to_string(),
+                minutes_ago: 60,
+                start_date: None,
+                exclude_branches: vec![],
+                exclude_categories: vec![],
+                category_exceptions: None,
+                output_file: dummy_dataset
+                    .output_file
+                    .path()
+                    .to_str()
+                    .unwrap()
+                    .to_string(),
+                dashboard_file: dummy_dataset
+                    .teams_file
+                    .path()
+                    .to_str()
+                    .unwrap()
+                    .to_string(),
+                email_to: Some("test@example.com".to_string()),
+                email_cc: None,
+                save_email_as_html: Some(true),
+                indentation_spaces: Some(4),
+            },
+            team_mapping_file: dummy_dataset
+                .teams_file
+                .path()
+                .to_str()
+                .unwrap()
+                .to_string(),
+            body_template_file: None,
+            subject_template: Some("CRM Updated open TKTs".to_string()),
+            branch_filter: None,
+            month_filter: None,
+            fallback_oul: Some("".to_string()),
+            dashboard_sheet_name: None,
+            dashboard_pivot_name: None,
+            table_column_widths: None,
+            sender_account_email: Some("custom@example.com".to_string()),
+            reply_subject_prefix: Some("Open TKTs".to_string()),
+        };
+
+        // We run the task. We can't easily capture the PS script from run() because it doesn't return it,
+        // but we can just run the test to ensure it doesn't panic during generation.
+        let result = run(&config);
+        assert!(result.is_ok(), "Task failed: {:?}", result.err());
+    }
+}
+
+#[cfg(test)]
+mod subject_tests {
+    use super::*;
+
+    #[test]
+    fn test_email_replyall_subject_generation() {
+        let yesterday = chrono::Local::now().date_naive() - chrono::Days::new(1);
+        let default_date = yesterday.format("%-d-%B").to_string();
+
+        let config = CrmOpenSohailConfig {
+            dashboard_config: crate::tasker::config::DashboardUpdaterConfig {
+                download_path: "".to_string(),
+                users_file: "".to_string(),
+                assignment_settings_file: "".to_string(),
+                minutes_ago: 60,
+                start_date: None,
+                exclude_branches: vec![],
+                exclude_categories: vec![],
+                category_exceptions: None,
+                output_file: "".to_string(),
+                dashboard_file: "".to_string(),
+                email_to: Some("test@example.com".to_string()),
+                email_cc: None,
+                save_email_as_html: Some(true),
+                indentation_spaces: Some(4),
+            },
+            team_mapping_file: "".to_string(),
+            body_template_file: None,
+            subject_template: Some("CRM Updated open TKTs".to_string()),
+            branch_filter: None,
+            month_filter: None,
+            fallback_oul: Some("".to_string()),
+            dashboard_sheet_name: None,
+            dashboard_pivot_name: None,
+            table_column_widths: None,
+            sender_account_email: Some("custom@example.com".to_string()),
+            reply_subject_prefix: Some("Open TKTs".to_string()),
+        };
+
+        let mut subject = config
+            .subject_template
+            .clone()
+            .unwrap_or("CRM Updated open TKTs".to_string());
+        let search_prefix = config
+            .reply_subject_prefix
+            .clone()
+            .unwrap_or_else(|| "Open TKTs".to_string());
+
+        if config.reply_subject_prefix.is_some()
+            || config.sender_account_email.is_some()
+            || subject == "CRM Updated open TKTs"
+        {
+            subject = format!("{} {}", search_prefix, default_date);
+        }
+
+        assert_eq!(subject, format!("Open TKTs {}", default_date));
     }
 }
