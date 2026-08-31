@@ -91,13 +91,13 @@ fn test_crm_cooldown_behavior() {
         .unwrap_or_default()
         .as_secs();
 
-    let config_json = format!(
-        r#"{{
-        "cooldown_seconds": 60,
-        "last_run_timestamp": {}
-    }}"#,
-        now
-    );
+    // Serialize a complete AppConfig to satisfy full deserialization requirements during tests
+    let config = crm_tool::crm::config::AppConfig {
+        cooldown_seconds: 60,
+        last_run_timestamp: now,
+        ..Default::default()
+    };
+    let config_json = serde_json::to_string(&config).unwrap();
     fs::write(&config_path, config_json).unwrap();
 
     // Second run immediately (should be skipped due to cooldown)

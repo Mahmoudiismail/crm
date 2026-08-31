@@ -701,7 +701,7 @@ async fn fetch_and_update_incomplete_reservations(
     let mut current_token = token.to_string();
     let mut last_parsed = Value::Null;
 
-    for chunk in all_ids.chunks(batch_size) {
+    for chunk in all_ids.chunks(batch_size.max(1)) {
         let payload = BulkTicketPayload {
             status_id: "46282444-7951-42eb-a27e-b2bc65c53727",
             ids: chunk.to_vec(),
