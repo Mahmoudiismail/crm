@@ -100,13 +100,18 @@ try {{
     # Turn on Autofilter first to establish the dropdowns
     $exactRange.AutoFilter() | Out-Null
 
+    # Iterate through all columns in the range and hide AutoFilter dropdowns
+    for ($i = 1; $i -le $exactRange.Columns.Count; $i++) {{
+        $exactRange.AutoFilter($i, [Type]::Missing, [Type]::Missing, [Type]::Missing, $false) | Out-Null
+    }}
+
     # Apply Filters and hide their specific dropdowns
     if ($dColIdx -gt 0) {{
-        $exactRange.AutoFilter($dColIdx, $dayName) | Out-Null
+        $exactRange.AutoFilter($dColIdx, $dayName, 1, [Type]::Missing, $false) | Out-Null
     }}
 
     if ($specialColIdx -gt 0) {{
-        $exactRange.AutoFilter($specialColIdx, "=") | Out-Null
+        $exactRange.AutoFilter($specialColIdx, "=", 1, [Type]::Missing, $false) | Out-Null
     }}
 
     if ($checkCurrentYear -and $dateColIdx -gt 0) {{
@@ -114,7 +119,7 @@ try {{
         $yearEnd = $yearStart.AddYears(1)
         # Dates in Excel are often represented as numbers or strings depending on CSV load
         # For CSV loaded into Excel, standard > < text filter works if dates are formatted yyyy-mm-dd
-        $exactRange.AutoFilter($dateColIdx, ">=$($yearStart.ToString('yyyy-MM-dd'))", 1, "<$($yearEnd.ToString('yyyy-MM-dd'))") | Out-Null
+        $exactRange.AutoFilter($dateColIdx, ">=$($yearStart.ToString('yyyy-MM-dd'))", 1, "<$($yearEnd.ToString('yyyy-MM-dd'))", $false) | Out-Null
     }}
 
     # Iterate through all columns in the range and hide AutoFilter dropdowns
