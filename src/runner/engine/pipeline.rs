@@ -10,11 +10,14 @@ use crate::runner::engine::logging::TaskLogger;
 use crate::runner::engine::shell::run_shell_command;
 use crate::runner::engine::state::{ExecutionPolicy, RunnerStatus};
 
+use tokio::sync::Semaphore;
+
 async fn execute_action(
     action: &ActionSpec,
     logger: &TaskLogger,
     policy: &ExecutionPolicy,
     timeout_seconds: u64,
+    status: &Arc<Mutex<RunnerStatus>>,
 ) -> Result<()> {
     match action {
         ActionSpec::ShellCommand(spec) => {
@@ -32,6 +35,38 @@ async fn execute_action(
         }
         ActionSpec::ExternalApp(spec) => {
             if let Some(app) = policy.registered_apps.iter().find(|a| a.id == spec.app_id) {
+                let lock_opt = if !app.allow_concurrent_tasks {
+                    let mut st = status.lock().await;
+                    let sem = st
+                        .app_locks
+                        .entry(app.id.clone())
+                        .or_insert_with(|| Arc::new(Semaphore::new(1)))
+                        .clone();
+                    Some(sem)
+                } else {
+                    None
+                };
+
+                let _permit = match lock_opt {
+                    Some(sem) => {
+                        logger
+                            .log(&format!(
+                                "Waiting for exclusive lock on app '{}'...",
+                                app.id
+                            ))
+                            .await;
+                        let p = sem
+                            .acquire_owned()
+                            .await
+                            .map_err(|_| anyhow::anyhow!("Failed to acquire app lock"))?;
+                        logger
+                            .log(&format!("Acquired exclusive lock on app '{}'.", app.id))
+                            .await;
+                        Some(p)
+                    }
+                    None => None,
+                };
+
                 run_external_app(logger, app, &spec.args, timeout_seconds).await
             } else {
                 Err(anyhow::anyhow!(
@@ -48,11 +83,12 @@ async fn execute_step(
     logger: &TaskLogger,
     policy: &ExecutionPolicy,
     timeout_seconds: u64,
+    status: &Arc<Mutex<RunnerStatus>>,
 ) -> Result<()> {
     match step.mode {
         ExecutionMode::Sequential => {
             for action in &step.actions {
-                execute_action(action, logger, policy, timeout_seconds).await?;
+                execute_action(action, logger, policy, timeout_seconds, status).await?;
             }
             Ok(())
         }
@@ -62,9 +98,11 @@ async fn execute_step(
                 let action = action.clone();
                 let logger = logger.clone();
                 let policy = policy.clone();
+                let status = status.clone();
 
                 handles.push(tokio::spawn(async move {
-                    let result = execute_action(&action, &logger, &policy, timeout_seconds).await;
+                    let result =
+                        execute_action(&action, &logger, &policy, timeout_seconds, &status).await;
                     (action, result)
                 }));
             }
@@ -98,9 +136,10 @@ async fn execute_pipeline(
     logger: &TaskLogger,
     policy: &ExecutionPolicy,
     timeout_seconds: u64,
+    status: &Arc<Mutex<RunnerStatus>>,
 ) -> Result<()> {
     for step in steps {
-        execute_step(step, logger, policy, timeout_seconds).await?;
+        execute_step(step, logger, policy, timeout_seconds, status).await?;
     }
     Ok(())
 }
@@ -141,7 +180,14 @@ pub async fn run_task_inner(
         policy.post_run_timeout_seconds
     };
 
-    let result = execute_pipeline(&task.steps, &logger, policy, effective_shell_timeout).await;
+    let result = execute_pipeline(
+        &task.steps,
+        &logger,
+        policy,
+        effective_shell_timeout,
+        status,
+    )
+    .await;
 
     match result {
         Ok(_) => {
@@ -157,6 +203,7 @@ pub async fn run_task_inner(
                     &logger,
                     policy,
                     effective_post_run_timeout,
+                    status,
                 )
                 .await;
                 match post_run_result {
@@ -255,7 +302,17 @@ mod tests {
             ],
         };
 
-        execute_step(&step, &TaskLogger::new("test", "test"), &policy, 5)
+        let status = Arc::new(Mutex::new(RunnerStatus {
+            running_tasks_count: 0,
+            queued_tasks_count: 0,
+            running_task_ids: Vec::new(),
+            queued_task_ids: Vec::new(),
+            last_error: String::new(),
+            last_task_id: String::new(),
+            last_run_at: String::new(),
+            app_locks: std::collections::HashMap::new(),
+        }));
+        execute_step(&step, &TaskLogger::new("test", "test"), &policy, 5, &status)
             .await
             .unwrap();
     }
@@ -279,8 +336,18 @@ mod tests {
             })],
         };
 
+        let status = Arc::new(Mutex::new(RunnerStatus {
+            running_tasks_count: 0,
+            queued_tasks_count: 0,
+            running_task_ids: Vec::new(),
+            queued_task_ids: Vec::new(),
+            last_error: String::new(),
+            last_task_id: String::new(),
+            last_run_at: String::new(),
+            app_locks: std::collections::HashMap::new(),
+        }));
         assert!(
-            execute_step(&step, &TaskLogger::new("test", "test"), &policy, 5)
+            execute_step(&step, &TaskLogger::new("test", "test"), &policy, 5, &status)
                 .await
                 .is_err()
         );
@@ -305,9 +372,25 @@ mod tests {
             })],
         };
 
-        execute_step(&ignored_step, &TaskLogger::new("test", "test"), &policy, 5)
-            .await
-            .unwrap();
+        let status = Arc::new(Mutex::new(RunnerStatus {
+            running_tasks_count: 0,
+            queued_tasks_count: 0,
+            running_task_ids: Vec::new(),
+            queued_task_ids: Vec::new(),
+            last_error: String::new(),
+            last_task_id: String::new(),
+            last_run_at: String::new(),
+            app_locks: std::collections::HashMap::new(),
+        }));
+        execute_step(
+            &ignored_step,
+            &TaskLogger::new("test", "test"),
+            &policy,
+            5,
+            &status,
+        )
+        .await
+        .unwrap();
 
         let failed_step = TaskStep {
             name: None,
@@ -317,11 +400,15 @@ mod tests {
                 continue_on_error: false,
             })],
         };
-        assert!(
-            execute_step(&failed_step, &TaskLogger::new("test", "test"), &policy, 5)
-                .await
-                .is_err()
-        );
+        assert!(execute_step(
+            &failed_step,
+            &TaskLogger::new("test", "test"),
+            &policy,
+            5,
+            &status
+        )
+        .await
+        .is_err());
     }
 
     #[tokio::test]
@@ -367,8 +454,24 @@ mod tests {
             },
         ];
 
-        execute_pipeline(&steps, &TaskLogger::new("test", "test"), &policy, 5)
-            .await
-            .unwrap();
+        let status = Arc::new(Mutex::new(RunnerStatus {
+            running_tasks_count: 0,
+            queued_tasks_count: 0,
+            running_task_ids: Vec::new(),
+            queued_task_ids: Vec::new(),
+            last_error: String::new(),
+            last_task_id: String::new(),
+            last_run_at: String::new(),
+            app_locks: std::collections::HashMap::new(),
+        }));
+        execute_pipeline(
+            &steps,
+            &TaskLogger::new("test", "test"),
+            &policy,
+            5,
+            &status,
+        )
+        .await
+        .unwrap();
     }
 }

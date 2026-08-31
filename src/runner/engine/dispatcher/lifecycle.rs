@@ -98,30 +98,11 @@ pub fn spawn_execution_manager(
 
             let mut i = 0;
             while i < queued_tasks.len() {
-                let (task, policy) = &queued_tasks[i];
+                let (task, _policy) = &queued_tasks[i];
                 let mut can_run = true;
 
                 if running_tasks.iter().any(|(t, _)| t.id == task.id) {
                     can_run = false;
-                }
-
-                if can_run {
-                    let requested_app_ids = get_task_app_ids(task);
-                    for app_id in requested_app_ids {
-                        let app_policy = policy.registered_apps.iter().find(|app| app.id == app_id);
-
-                        if let Some(registered_app) = app_policy {
-                            if !registered_app.allow_concurrent_tasks {
-                                let overlap = running_tasks.iter().any(|(running_task, _)| {
-                                    get_task_app_ids(running_task).contains(&app_id)
-                                });
-                                if overlap {
-                                    can_run = false;
-                                    break;
-                                }
-                            }
-                        }
-                    }
                 }
 
                 if can_run {
@@ -180,6 +161,7 @@ pub fn start_scheduler(runner_config_path: String) -> RunnerHandle {
     info!("Starting scheduler with config: {}", runner_config_path);
     let (tx, mut rx) = mpsc::channel::<RunnerCommand>(64);
     let status = Arc::new(Mutex::new(RunnerStatus {
+        app_locks: std::collections::HashMap::new(),
         running_tasks_count: 0,
         queued_tasks_count: 0,
         running_task_ids: Vec::new(),

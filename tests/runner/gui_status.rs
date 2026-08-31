@@ -66,6 +66,7 @@ fn create_sync_task(id: &str, app_ids: Vec<&str>) -> RunnerTask {
 #[tokio::test]
 async fn test_gui_status_concurrent_tasks() {
     let status = Arc::new(Mutex::new(RunnerStatus {
+        app_locks: std::collections::HashMap::new(),
         running_tasks_count: 0,
         queued_tasks_count: 0,
         running_task_ids: Vec::new(),
