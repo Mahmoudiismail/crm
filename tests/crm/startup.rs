@@ -91,10 +91,13 @@ fn test_crm_cooldown_behavior() {
         .unwrap_or_default()
         .as_secs();
 
-    let config_json = format!(r#"{{
+    let config_json = format!(
+        r#"{{
         "cooldown_seconds": 60,
         "last_run_timestamp": {}
-    }}"#, now);
+    }}"#,
+        now
+    );
     fs::write(&config_path, config_json).unwrap();
 
     // Second run immediately (should be skipped due to cooldown)
