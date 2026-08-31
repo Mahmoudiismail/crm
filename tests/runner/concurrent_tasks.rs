@@ -126,6 +126,8 @@ async fn test_execution_manager_concurrency_policy() {
     let status = Arc::new(Mutex::new(RunnerStatus {
         running_tasks_count: 0,
         queued_tasks_count: 0,
+        running_task_ids: Vec::new(),
+        queued_task_ids: Vec::new(),
         last_error: "".to_string(),
         last_task_id: "".to_string(),
         last_run_at: "".to_string(),
@@ -409,6 +411,8 @@ async fn test_execution_manager_race_safety() {
     let status = Arc::new(Mutex::new(RunnerStatus {
         running_tasks_count: 0,
         queued_tasks_count: 0,
+        running_task_ids: Vec::new(),
+        queued_task_ids: Vec::new(),
         last_error: "".to_string(),
         last_task_id: "".to_string(),
         last_run_at: "".to_string(),
