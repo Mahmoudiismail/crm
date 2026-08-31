@@ -43,7 +43,7 @@ fn create_sync_task(id: &str, app_ids: Vec<&str>) -> RunnerTask {
         }),
         #[cfg(target_family = "windows")]
         ActionSpec::ShellCommand(ShellCommandSpec {
-            command: "Start-Sleep -Seconds 2".to_string(),
+            command: "powershell -Command \"Start-Sleep -Seconds 2\"".to_string(),
             continue_on_error: false,
         }),
     ];
