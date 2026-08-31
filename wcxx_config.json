@@ -1,5 +1,18 @@
 {
+  "allow_shell_tasks": false,
   "base_url": "https://api.wxcc-us1.cisco.com/v1",
+  "gui_host": "127.0.0.1",
+  "gui_port": 8787,
+  "log_file_level": "TRACE",
+  "log_retention_days": 30,
+  "log_stdout_level": "DEBUG",
+  "min_task_interval_seconds": 5,
   "org_id": "REDACTED",
-  "token": "REDACTED"
+  "poll_interval_seconds": 30,
+  "post_run_timeout_seconds": 900,
+  "registered_apps": [],
+  "shell_timeout_seconds": 900,
+  "tasks": [],
+  "token": "REDACTED",
+  "working_hours_profiles": []
 }

@@ -4,7 +4,7 @@ pub mod profile_commands;
 pub mod schedule;
 pub mod task_commands;
 
-pub use lifecycle::{spawn_execution_manager, start_scheduler};
+pub use lifecycle::{get_task_app_ids, spawn_execution_manager, start_scheduler};
 pub use task_commands::{create_task, delete_task, run_due_tasks, update_task};
 
 use anyhow::Result;

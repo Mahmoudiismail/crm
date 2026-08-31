@@ -23,7 +23,7 @@ pub(crate) fn render_dashboard(
         rows = "<tr><td colspan='5' class='px-6 py-12 text-center text-gray-500'>No tasks configured.</td></tr>".to_string();
     } else {
         for task in &cfg.tasks {
-            rows.push_str(&render_task_row(task));
+            rows.push_str(&render_task_row(task, status));
         }
     }
 
@@ -111,12 +111,36 @@ pub(crate) fn render_status_cards(status: &crate::runner::engine::RunnerStatus) 
     )
 }
 
-pub(crate) fn render_task_row(task: &RunnerTask) -> String {
-    let task_status = if task.enabled {
+pub(crate) fn render_task_row(
+    task: &RunnerTask,
+    status: &crate::runner::engine::RunnerStatus,
+) -> String {
+    let active_badge = if task.enabled {
         status_badge(true, "Active", "Inactive")
     } else {
         status_badge(false, "Active", "Inactive")
     };
+
+    let exec_status_badge = if status.running_task_ids.contains(&task.id) {
+        badge("Running", "bg-blue-100 text-blue-800")
+    } else if status.queued_task_ids.contains(&task.id) {
+        badge("Waiting", "bg-yellow-100 text-yellow-800")
+    } else if task.last_status.to_lowercase().contains("ok")
+        || task.last_status.to_lowercase().contains("success")
+    {
+        badge("Success", "bg-green-100 text-green-800")
+    } else if task.last_status.to_lowercase().contains("error")
+        || task.last_status.to_lowercase().contains("fail")
+    {
+        badge("Error", "bg-red-100 text-red-800")
+    } else {
+        badge("Ready", "bg-gray-100 text-gray-800")
+    };
+
+    let task_status = format!(
+        "{}<div class='mt-1'>{}</div>",
+        active_badge, exec_status_badge
+    );
 
     let schedules_text = task
         .schedules
