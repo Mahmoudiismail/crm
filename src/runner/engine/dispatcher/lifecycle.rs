@@ -16,7 +16,7 @@ use crate::runner::engine::state::{
 }; // We'll rename handle_command in mod.rs to avoid conflict
 use std::collections::HashSet;
 
-pub(crate) fn get_task_app_ids(task: &RunnerTask) -> HashSet<String> {
+pub fn get_task_app_ids(task: &RunnerTask) -> HashSet<String> {
     let mut app_ids = HashSet::new();
     for step in &task.steps {
         for action in &step.actions {
@@ -49,6 +49,10 @@ pub fn spawn_execution_manager(
         while let Some(cmd) = rx.recv().await {
             match cmd {
                 ExecutionManagerCommand::QueueTask { task, policy } => {
+                    {
+                        let mut st = status.lock().await;
+                        st.queued_task_ids.push(task.id.clone());
+                    }
                     queued_tasks.push_back((task, policy));
                 }
                 ExecutionManagerCommand::TaskFinished {
@@ -65,6 +69,7 @@ pub fn spawn_execution_manager(
                         if st.running_tasks_count > 0 {
                             st.running_tasks_count -= 1;
                         }
+                        st.running_task_ids.retain(|id| id != &task_id);
                         if let Some(err) = last_error {
                             st.last_error = err;
                         }
@@ -126,6 +131,8 @@ pub fn spawn_execution_manager(
                     {
                         let mut st = status.lock().await;
                         st.running_tasks_count += 1;
+                        st.running_task_ids.push(task_to_run.id.clone());
+                        st.queued_task_ids.retain(|id| id != &task_to_run.id);
                         st.last_task_id = task_to_run.id.clone();
                     }
 
@@ -175,6 +182,8 @@ pub fn start_scheduler(runner_config_path: String) -> RunnerHandle {
     let status = Arc::new(Mutex::new(RunnerStatus {
         running_tasks_count: 0,
         queued_tasks_count: 0,
+        running_task_ids: Vec::new(),
+        queued_task_ids: Vec::new(),
         last_error: String::new(),
         last_task_id: String::new(),
         last_run_at: String::new(),

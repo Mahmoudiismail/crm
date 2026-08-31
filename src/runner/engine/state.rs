@@ -31,6 +31,8 @@ pub enum RunnerCommand {
 pub struct RunnerStatus {
     pub running_tasks_count: usize,
     pub queued_tasks_count: usize,
+    pub running_task_ids: Vec<String>,
+    pub queued_task_ids: Vec<String>,
     pub last_error: String,
     pub last_task_id: String,
     pub last_run_at: String,

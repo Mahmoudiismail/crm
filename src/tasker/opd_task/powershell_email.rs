@@ -100,6 +100,11 @@ try {{
     # Turn on Autofilter first to establish the dropdowns
     $exactRange.AutoFilter() | Out-Null
 
+    # Iterate through all columns in the range and hide AutoFilter dropdowns
+    for ($i = 1; $i -le $exactRange.Columns.Count; $i++) {{
+        $exactRange.AutoFilter($i, [Type]::Missing, [Type]::Missing, [Type]::Missing, $false) | Out-Null
+    }}
+
     # Apply Filters and hide their specific dropdowns
     if ($dColIdx -gt 0) {{
         $exactRange.AutoFilter($dColIdx, $dayName, 1, [Type]::Missing, $false) | Out-Null

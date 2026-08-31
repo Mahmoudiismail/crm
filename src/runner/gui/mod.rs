@@ -183,6 +183,8 @@ mod tests {
         let status = Arc::new(Mutex::new(RunnerStatus {
             running_tasks_count: 1,
             queued_tasks_count: 0,
+            running_task_ids: Vec::new(),
+            queued_task_ids: Vec::new(),
             last_error: "Test Error".to_string(),
             last_task_id: "test_task".to_string(),
             last_run_at: "2024-01-01T00:00:00Z".to_string(),

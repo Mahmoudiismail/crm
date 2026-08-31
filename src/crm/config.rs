@@ -41,6 +41,8 @@ pub struct AppConfig {
     pub account_id: String,
     #[serde(default = "default_incomplete_reservation_limit")]
     pub incomplete_reservation_limit: u32,
+    #[serde(default = "default_batch_size")]
+    pub incomplete_reservation_batch_size: usize,
     #[serde(default)]
     pub application_id: String,
     #[serde(default)]
@@ -74,6 +76,11 @@ pub struct AppConfig {
     pub log_stdout_level: String,
     #[serde(default = "default_file_log_level")]
     pub log_file_level: String,
+
+    #[serde(default)]
+    pub cooldown_seconds: u64,
+    #[serde(default)]
+    pub last_run_timestamp: u64,
 }
 
 fn default_stdout_log_level() -> String {
@@ -90,6 +97,10 @@ fn default_true() -> bool {
 
 fn default_incomplete_reservation_limit() -> u32 {
     10000
+}
+
+fn default_batch_size() -> usize {
+    100
 }
 
 impl Default for AppConfig {
@@ -109,6 +120,7 @@ impl Default for AppConfig {
             download_csv: true,
             account_id: "233b5ff5-8aff-4445-815b-39d7916a1d46".into(),
             incomplete_reservation_limit: 10000,
+            incomplete_reservation_batch_size: 100,
             application_id: "83921976-97dd-4679-9b36-ee936ecf50d1".into(),
             app_timezone_plus_minutes: "180".into(),
             base_url: "https://crm.fakeeh.care/medi-crm/vault/v1/".into(),
@@ -123,6 +135,8 @@ impl Default for AppConfig {
             dynamic_calls_from_date: false,
             log_stdout_level: "DEBUG".to_string(),
             log_file_level: "TRACE".to_string(),
+            cooldown_seconds: 0,
+            last_run_timestamp: 0,
         }
     }
 }
@@ -289,6 +303,8 @@ impl std::fmt::Debug for AppConfig {
             .field("dynamic_calls_from_date", &self.dynamic_calls_from_date)
             .field("log_stdout_level", &self.log_stdout_level)
             .field("log_file_level", &self.log_file_level)
+            .field("cooldown_seconds", &self.cooldown_seconds)
+            .field("last_run_timestamp", &self.last_run_timestamp)
             .finish()
     }
 }
