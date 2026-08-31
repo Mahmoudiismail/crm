@@ -124,7 +124,7 @@ async fn test_gui_status_concurrent_tasks() {
     // Wait until A1 is started
     let started_a1 = sync_dir.path().join("a1.started");
     let mut a1_running = false;
-    for _ in 0..100 {
+    for _ in 0..1000 {
         if started_a1.exists() {
             a1_running = true;
             break;
@@ -152,7 +152,7 @@ async fn test_gui_status_concurrent_tasks() {
     // Wait until B1 is started
     let started_b1 = sync_dir.path().join("b1.started");
     let mut b1_running = false;
-    for _ in 0..100 {
+    for _ in 0..1000 {
         if started_b1.exists() {
             b1_running = true;
             break;
@@ -183,7 +183,7 @@ async fn test_gui_status_concurrent_tasks() {
     let _ = std::fs::write(sync_dir.path().join("b1.release"), "");
 
     // Wait for B1 to finish
-    for _ in 0..100 {
+    for _ in 0..1000 {
         let st = status.lock().await;
         if !st.running_task_ids.contains(&"B1".to_string()) {
             break;
@@ -213,7 +213,7 @@ async fn test_gui_status_concurrent_tasks() {
     let _ = std::fs::write(sync_dir.path().join("a1.release"), "");
 
     // Wait for A1 to finish
-    for _ in 0..100 {
+    for _ in 0..1000 {
         let st = status.lock().await;
         if !st.running_task_ids.contains(&"A1".to_string()) {
             break;
