@@ -81,6 +81,8 @@ pub struct AppConfig {
     pub cooldown_seconds: u64,
     #[serde(default)]
     pub last_run_timestamp: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retention_days: Option<u32>,
 }
 
 fn default_stdout_log_level() -> String {
@@ -137,6 +139,7 @@ impl Default for AppConfig {
             log_file_level: "TRACE".to_string(),
             cooldown_seconds: 0,
             last_run_timestamp: 0,
+            retention_days: None,
         }
     }
 }
@@ -305,6 +308,7 @@ impl std::fmt::Debug for AppConfig {
             .field("log_file_level", &self.log_file_level)
             .field("cooldown_seconds", &self.cooldown_seconds)
             .field("last_run_timestamp", &self.last_run_timestamp)
+            .field("retention_days", &self.retention_days)
             .finish()
     }
 }

@@ -1,0 +1,19 @@
+--- src/crm/mod.rs
++++ src/crm/mod.rs
+@@ -90,6 +90,16 @@
+         let final_cfg = config_arc.lock().await;
+         *config = final_cfg.clone();
+     }
++
++    if let Some(retention_days) = config.retention_days {
++        if retention_days > 0 {
++            tracing::info!("Running auto-cleanup for reports older than {} days...", retention_days);
++            match crate::crm::cleanup::cleanup_old_reports(&download_dir, retention_days) {
++                Ok(deleted_count) => tracing::info!("Cleanup completed. Deleted {} old files.", deleted_count),
++                Err(e) => tracing::error!("Failed to clean up old reports: {:?}", e),
++            }
++        }
++    }
+
+     use std::time::{SystemTime, UNIX_EPOCH};
+     config.last_run_timestamp = SystemTime::now()

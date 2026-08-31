@@ -36,33 +36,48 @@ struct BulkTicketPayload<'a> {
 // Fetch Context Context
 // ──────────────────────────────────────────────────────────────
 
-use tokio::sync::Mutex;
+use crate::crm::auth::TokenProvider;
+use std::future::Future;
 
-struct FetchContext {
-    config: Arc<Mutex<AppConfig>>,
+#[derive(Debug)]
+pub struct FetchContext {
+    pub token_provider: Arc<dyn TokenProvider>,
 }
 
 impl FetchContext {
-    async fn get_valid_token_or_refresh(
-        &self,
-        client: &reqwest::Client,
-        current_invalid_token: &str,
-    ) -> Result<String> {
-        let mut cfg = self.config.lock().await;
-        let token_in_cfg = if !cfg.id_token.is_empty() {
-            cfg.id_token.clone()
-        } else {
-            cfg.access_token.clone()
-        };
-        if !token_in_cfg.is_empty() && token_in_cfg != current_invalid_token {
-            return Ok(token_in_cfg);
-        }
-        tracing::info!("Token expired (401), performing Cognito SRP authentication...");
-        let new_token = crate::crm::auth::ensure_authenticated(&mut cfg, client, false)
-            .await
-            .context("Failed to refresh token after 401 Unauthorized")?;
-        Ok(new_token)
+    pub async fn get_valid_token_or_refresh(&self, force_refresh: bool) -> Result<String> {
+        self.token_provider.get_token(force_refresh).await
     }
+}
+
+pub async fn execute_with_auth_retry<F, Fut>(
+    context: Option<&FetchContext>,
+    token: &str,
+    make_request: F,
+) -> Result<reqwest::Response>
+where
+    F: Fn(String) -> Fut,
+    Fut: Future<Output = Result<reqwest::Response, reqwest::Error>>,
+{
+    let current_token = token.to_string();
+
+    let res = make_request(current_token)
+        .await
+        .context("HTTP request failed")?;
+
+    if res.status() == reqwest::StatusCode::UNAUTHORIZED {
+        if let Some(ctx) = context {
+            tracing::warn!("Received 401 Unauthorized. Forcing token refresh and retrying once...");
+            let fresh_token = ctx.get_valid_token_or_refresh(true).await?;
+
+            let retry_res = make_request(fresh_token)
+                .await
+                .context("Retry HTTP request failed")?;
+            return Ok(retry_res);
+        }
+    }
+
+    Ok(res)
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -163,8 +178,13 @@ pub async fn fetch_reports(
     // Build task list using Futures so we can process them with buffer_unordered
     let mut futures = Vec::new();
 
-    let context = Arc::new(FetchContext {
+    let provider = crate::crm::auth::CognitoTokenProvider {
         config: config_mutex.clone(),
+        client: client.clone(),
+        skip_login: false,
+    };
+    let context = Arc::new(FetchContext {
+        token_provider: Arc::new(provider),
     });
 
     let (
@@ -356,7 +376,7 @@ pub async fn fetch_reports(
             let key = def.key.to_string();
             let limit = incomplete_reservation_limit;
             let batch_size = {
-                let cfg = context.config.lock().await;
+                let cfg = config_mutex.lock().await;
                 cfg.incomplete_reservation_batch_size
             };
 
@@ -478,27 +498,10 @@ async fn fetch_users_report(
     info!("Fetching {} ...", endpoint);
     let start_time = std::time::Instant::now();
 
-    let mut current_token = token.to_string();
-    let mut resp = client
-        .get(&url)
-        .header("account_id", params.account_id)
-        .header("app-timezone-plus-minutes", params.tz)
-        .header("application_id", params.application_id)
-        .header("auth-type", "cognito")
-        .header("authorization", format!("Bearer {}", current_token))
-        .header("content-type", "application/json")
-        .header("accept", "*/*")
-        .send()
-        .await
-        .with_context(|| format!("HTTP request to {} failed", endpoint))?;
-
-    if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
-        if let Some(ctx) = context_opt.as_ref() {
-            let new_token = ctx
-                .get_valid_token_or_refresh(client, &current_token)
-                .await?;
-            current_token = new_token;
-            resp = client
+    let resp = execute_with_auth_retry(context_opt.as_deref(), token, |current_token| {
+        let url = url.clone();
+        async move {
+            client
                 .get(&url)
                 .header("account_id", params.account_id)
                 .header("app-timezone-plus-minutes", params.tz)
@@ -509,9 +512,10 @@ async fn fetch_users_report(
                 .header("accept", "*/*")
                 .send()
                 .await
-                .with_context(|| format!("Retry HTTP request to {} failed", endpoint))?;
         }
-    }
+    })
+    .await?;
+
     let status = resp.status();
     let body = resp
         .text()
@@ -611,23 +615,24 @@ async fn fetch_and_update_incomplete_reservations(
                 format_redacted_headers(&headers)
             );
 
-            let mut res = client.get(&url).headers(headers.clone()).send().await?;
-
-            if res.status() == reqwest::StatusCode::UNAUTHORIZED {
-                if let Some(ctx) = context_opt.as_ref() {
-                    let new_token = ctx
-                        .get_valid_token_or_refresh(client, &current_token)
-                        .await?;
-                    current_token = new_token;
+            let res =
+                execute_with_auth_retry(context_opt.as_deref(), &current_token, |token_str| {
+                    let url = url.clone();
                     let mut retry_headers = headers.clone();
-                    retry_headers.insert(
-                        reqwest::header::AUTHORIZATION,
-                        reqwest::header::HeaderValue::from_str(&format!(
-                            "Bearer {}",
-                            current_token
-                        ))?,
-                    );
-                    res = client.get(&url).headers(retry_headers).send().await?;
+                    if let Ok(hv) =
+                        reqwest::header::HeaderValue::from_str(&format!("Bearer {}", token_str))
+                    {
+                        retry_headers.insert(reqwest::header::AUTHORIZATION, hv);
+                    }
+                    async move { client.get(&url).headers(retry_headers).send().await }
+                })
+                .await?;
+
+            if res.status().is_success() {
+                if let Some(ctx) = context_opt.as_ref() {
+                    if let Ok(new_token) = ctx.get_valid_token_or_refresh(false).await {
+                        current_token = new_token;
+                    }
                 }
             }
 
@@ -717,35 +722,30 @@ async fn fetch_and_update_incomplete_reservations(
             payload_str
         );
 
-        let mut res = client
-            .patch(&patch_url)
-            .headers(headers.clone())
-            .body(payload_str.clone())
-            .send()
-            .await?;
-
-        if res.status() == reqwest::StatusCode::UNAUTHORIZED {
-            if let Some(ctx) = context_opt.as_ref() {
-                let new_token = ctx
-                    .get_valid_token_or_refresh(client, &current_token)
-                    .await?;
-                current_token = new_token;
-                let mut retry_headers = headers.clone();
-                retry_headers.insert(
-                    reqwest::header::AUTHORIZATION,
-                    reqwest::header::HeaderValue::from_str(&format!("Bearer {}", current_token))?,
-                );
-                // Also update the loop headers for future chunks
-                headers.insert(
-                    reqwest::header::AUTHORIZATION,
-                    reqwest::header::HeaderValue::from_str(&format!("Bearer {}", current_token))?,
-                );
-                res = client
+        let res = execute_with_auth_retry(context_opt.as_deref(), &current_token, |token_str| {
+            let patch_url = patch_url.clone();
+            let mut retry_headers = headers.clone();
+            if let Ok(hv) = reqwest::header::HeaderValue::from_str(&format!("Bearer {}", token_str))
+            {
+                retry_headers.insert(reqwest::header::AUTHORIZATION, hv);
+            }
+            let payload_str = payload_str.clone();
+            async move {
+                client
                     .patch(&patch_url)
                     .headers(retry_headers)
                     .body(payload_str)
                     .send()
-                    .await?;
+                    .await
+            }
+        })
+        .await?;
+
+        if res.status().is_success() {
+            if let Some(ctx) = context_opt.as_ref() {
+                if let Ok(new_token) = ctx.get_valid_token_or_refresh(false).await {
+                    current_token = new_token;
+                }
             }
         }
 
@@ -986,28 +986,11 @@ async fn fetch_single(
 
     info!("Fetching {} [{} to {}]...", endpoint, from_date, to_date);
 
-    let mut current_token = token.to_string();
-    let mut resp = client
-        .get(&url)
-        .query(&query)
-        .header("account_id", params.account_id)
-        .header("app-timezone-plus-minutes", params.tz)
-        .header("application_id", params.application_id)
-        .header("auth-type", "cognito")
-        .header("authorization", format!("Bearer {}", current_token))
-        .header("content-type", "application/json")
-        .header("accept", "*/*")
-        .send()
-        .await
-        .with_context(|| format!("HTTP request to {} failed", endpoint))?;
-
-    if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
-        if let Some(ctx) = context_opt.as_ref() {
-            let new_token = ctx
-                .get_valid_token_or_refresh(client, &current_token)
-                .await?;
-            current_token = new_token;
-            resp = client
+    let resp = execute_with_auth_retry(context_opt.as_deref(), token, |current_token| {
+        let url = url.clone();
+        let query = query.clone();
+        async move {
+            client
                 .get(&url)
                 .query(&query)
                 .header("account_id", params.account_id)
@@ -1019,9 +1002,10 @@ async fn fetch_single(
                 .header("accept", "*/*")
                 .send()
                 .await
-                .with_context(|| format!("Retry HTTP request to {} failed", endpoint))?;
         }
-    }
+    })
+    .await?;
+
     let status = resp.status();
     let headers = format_redacted_headers(resp.headers());
     let body = resp
