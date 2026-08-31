@@ -123,8 +123,11 @@ try {{
     }}
 
     # Iterate through all columns in the range and hide AutoFilter dropdowns
-    for ($i = 1; $i -le $exactRange.Columns.Count; $i++) {{
-        $exactRange.AutoFilter($i, [Type]::Missing, [Type]::Missing, [Type]::Missing, $false) | Out-Null
+    for ($c = 1; $c -le $exactRange.Columns.Count; $c++) {{
+        if ($c -ne $dColIdx -and $c -ne $specialColIdx -and $c -ne $dateColIdx) {{
+            # Passing no criteria, just setting VisibleDropDown to $false
+            $exactRange.AutoFilter($c, [Type]::Missing, 1, [Type]::Missing, $false) | Out-Null
+        }}
     }}
 
     $visibleRows = $exactRange.SpecialCells(12) # xlCellTypeVisible
@@ -350,8 +353,8 @@ mod tests {
 
         // Ensure the code loops through the columns to hide AutoFilter dropdowns
         assert!(
-            script.contains("for ($i = 1; $i -le $exactRange.Columns.Count; $i++) {\n        $exactRange.AutoFilter($i, [Type]::Missing, [Type]::Missing, [Type]::Missing, $false) | Out-Null\n    }"),
-            "Script does not contain the loop to hide AutoFilter dropdowns"
+            script.contains("for ($c = 1; $c -le $exactRange.Columns.Count; $c++) {\n        if ($c -ne $dColIdx -and $c -ne $specialColIdx -and $c -ne $dateColIdx) {\n            # Passing no criteria, just setting VisibleDropDown to $false\n            $exactRange.AutoFilter($c, [Type]::Missing, 1, [Type]::Missing, $false) | Out-Null\n        }\n    }"),
+            "Script does not contain the updated loop to hide AutoFilter dropdowns"
         );
     }
 }
