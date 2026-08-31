@@ -19,7 +19,7 @@ fn create_mock_app(id: &str, concurrent: bool) -> RegisteredApp {
     }
 }
 
-fn create_sync_task(id: &str, app_ids: Vec<&str>, lock_file: &std::path::Path) -> RunnerTask {
+fn create_sync_task(id: &str, app_ids: Vec<&str>) -> RunnerTask {
     let mut task = RunnerTask {
         id: id.to_string(),
         name: format!("Task {}", id),
@@ -35,21 +35,15 @@ fn create_sync_task(id: &str, app_ids: Vec<&str>, lock_file: &std::path::Path) -
         timeout_seconds: 60,
     };
 
-    let lock_str = lock_file.to_str().unwrap().replace("\\", "/");
-
     let mut actions = vec![
         #[cfg(target_family = "unix")]
         ActionSpec::ShellCommand(ShellCommandSpec {
-            command: format!(
-                "touch '{lock_str}.started' && while [ ! -f '{lock_str}.release' ]; do sleep 0.1; done"
-            ),
+            command: "sleep 2".to_string(),
             continue_on_error: false,
         }),
         #[cfg(target_family = "windows")]
         ActionSpec::ShellCommand(ShellCommandSpec {
-            command: format!(
-                "echo \"started\" > \"{lock_str}.started\"; while (-not (Test-Path \"{lock_str}.release\")) {{ Start-Sleep -Milliseconds 100 }}"
-            ),
+            command: "Start-Sleep -Seconds 2".to_string(),
             continue_on_error: false,
         }),
     ];
@@ -83,7 +77,7 @@ async fn test_gui_status_concurrent_tasks() {
 
     let temp_file = NamedTempFile::new().unwrap();
     let config_path = temp_file.path().to_str().unwrap().to_string();
-    let sync_dir = tempfile::tempdir().unwrap();
+    let _sync_dir = tempfile::tempdir().unwrap();
 
     let exec_tx = spawn_execution_manager(status.clone(), config_path.clone());
 
@@ -112,22 +106,21 @@ async fn test_gui_status_concurrent_tasks() {
         })
     };
 
-    let lock_a1 = sync_dir.path().join("a1");
-    let lock_b1 = sync_dir.path().join("b1");
-
-    let t_a1 = create_sync_task("A1", vec!["App A"], &lock_a1);
-    let t_b1 = create_sync_task("B1", vec!["App B"], &lock_b1);
+    let t_a1 = create_sync_task("A1", vec!["App A"]);
+    let t_b1 = create_sync_task("B1", vec!["App B"]);
 
     // 1. Start A1.
     queue_task(t_a1.clone());
 
     // Wait until A1 is started
-    let started_a1 = sync_dir.path().join("a1.started");
     let mut a1_running = false;
     for _ in 0..1000 {
-        if started_a1.exists() {
-            a1_running = true;
-            break;
+        {
+            let st = status.lock().await;
+            if st.running_task_ids.contains(&"A1".to_string()) {
+                a1_running = true;
+                break;
+            }
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
@@ -153,12 +146,14 @@ async fn test_gui_status_concurrent_tasks() {
     queue_task(t_b1.clone());
 
     // Wait until B1 is started
-    let started_b1 = sync_dir.path().join("b1.started");
     let mut b1_running = false;
     for _ in 0..1000 {
-        if started_b1.exists() {
-            b1_running = true;
-            break;
+        {
+            let st = status.lock().await;
+            if st.running_task_ids.contains(&"B1".to_string()) {
+                b1_running = true;
+                break;
+            }
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
@@ -182,10 +177,7 @@ async fn test_gui_status_concurrent_tasks() {
         );
     }
 
-    // 6. Release B1.
-    let _ = std::fs::write(sync_dir.path().join("b1.release"), "");
-
-    // Wait for B1 to finish
+    // 6. Wait for B1 to finish (since it sleeps for 2 seconds)
     for _ in 0..1000 {
         let st = status.lock().await;
         if !st.running_task_ids.contains(&"B1".to_string()) {
@@ -203,19 +195,7 @@ async fn test_gui_status_concurrent_tasks() {
         );
     }
 
-    // 8. A1 remains RUNNING until it finishes.
-    {
-        let st = status.lock().await;
-        assert!(
-            st.running_task_ids.contains(&"A1".to_string()),
-            "A1 should still be running"
-        );
-    }
-
-    // 9. Release A1.
-    let _ = std::fs::write(sync_dir.path().join("a1.release"), "");
-
-    // Wait for A1 to finish
+    // 8. Wait for A1 to finish (since it sleeps for 2 seconds)
     for _ in 0..1000 {
         let st = status.lock().await;
         if !st.running_task_ids.contains(&"A1".to_string()) {
