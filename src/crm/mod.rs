@@ -91,6 +91,12 @@ pub async fn run_once(
         *config = final_cfg.clone();
     }
 
+    use std::time::{SystemTime, UNIX_EPOCH};
+    config.last_run_timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
     config
         .save(&path_str)
         .context("Failed to save configuration after fetching reports")?;
