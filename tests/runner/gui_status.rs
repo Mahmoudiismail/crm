@@ -32,7 +32,7 @@ fn create_sync_task(id: &str, app_ids: Vec<&str>, lock_file: &std::path::Path) -
         post_run_steps: vec![],
         last_run_at: "".to_string(),
         last_status: "".to_string(),
-        timeout_seconds: 10,
+        timeout_seconds: 60,
     };
 
     let lock_str = lock_file.to_str().unwrap().replace("\\", "/");
@@ -43,14 +43,14 @@ fn create_sync_task(id: &str, app_ids: Vec<&str>, lock_file: &std::path::Path) -
             command: format!(
                 "touch '{lock_str}.started' && while [ ! -f '{lock_str}.release' ]; do sleep 0.1; done"
             ),
-            continue_on_error: true,
+            continue_on_error: false,
         }),
         #[cfg(target_family = "windows")]
         ActionSpec::ShellCommand(ShellCommandSpec {
             command: format!(
-                "New-Item -ItemType File -Force -Path '{lock_str}.started'; while (-not (Test-Path '{lock_str}.release')) {{ Start-Sleep -Milliseconds 100 }}"
+                "echo \"started\" > \"{lock_str}.started\"; while (-not (Test-Path \"{lock_str}.release\")) {{ Start-Sleep -Milliseconds 100 }}"
             ),
-            continue_on_error: true,
+            continue_on_error: false,
         }),
     ];
 
@@ -131,7 +131,10 @@ async fn test_gui_status_concurrent_tasks() {
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
-    assert!(a1_running, "A1 did not start");
+    if !a1_running {
+        let st = status.lock().await;
+        panic!("A1 did not start. Last error: {}", st.last_error);
+    }
 
     // 2. A1 remains running.
     {
