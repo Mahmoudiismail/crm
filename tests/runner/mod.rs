@@ -1,4 +1,5 @@
 pub mod concurrent_tasks;
+pub mod gui_status;
 pub mod gui_steps;
 pub mod loader;
 pub mod manifest;
