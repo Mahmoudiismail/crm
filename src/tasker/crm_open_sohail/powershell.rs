@@ -718,6 +718,8 @@ mod tests {
             dashboard_sheet_name: None,
             dashboard_pivot_name: None,
             table_column_widths: None,
+            sender_account_email: None,
+            reply_subject_prefix: None,
         };
 
         let result = extract_data(&config);

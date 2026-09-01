@@ -36,33 +36,48 @@ struct BulkTicketPayload<'a> {
 // Fetch Context Context
 // ──────────────────────────────────────────────────────────────
 
-use tokio::sync::Mutex;
+use crate::crm::auth::TokenProvider;
+use std::future::Future;
 
-struct FetchContext {
-    config: Arc<Mutex<AppConfig>>,
+#[derive(Debug)]
+pub struct FetchContext {
+    pub token_provider: Arc<dyn TokenProvider>,
 }
 
 impl FetchContext {
-    async fn get_valid_token_or_refresh(
-        &self,
-        client: &reqwest::Client,
-        current_invalid_token: &str,
-    ) -> Result<String> {
-        let mut cfg = self.config.lock().await;
-        let token_in_cfg = if !cfg.id_token.is_empty() {
-            cfg.id_token.clone()
-        } else {
-            cfg.access_token.clone()
-        };
-        if !token_in_cfg.is_empty() && token_in_cfg != current_invalid_token {
-            return Ok(token_in_cfg);
-        }
-        tracing::info!("Token expired (401), performing Cognito SRP authentication...");
-        let new_token = crate::crm::auth::ensure_authenticated(&mut cfg, client, false)
-            .await
-            .context("Failed to refresh token after 401 Unauthorized")?;
-        Ok(new_token)
+    pub async fn get_valid_token_or_refresh(&self, force_refresh: bool) -> Result<String> {
+        self.token_provider.get_token(force_refresh).await
     }
+}
+
+pub async fn execute_with_auth_retry<F, Fut>(
+    context: Option<&FetchContext>,
+    token: &str,
+    make_request: F,
+) -> Result<reqwest::Response>
+where
+    F: Fn(String) -> Fut,
+    Fut: Future<Output = Result<reqwest::Response, reqwest::Error>>,
+{
+    let current_token = token.to_string();
+
+    let res = make_request(current_token)
+        .await
+        .context("HTTP request failed")?;
+
+    if res.status() == reqwest::StatusCode::UNAUTHORIZED {
+        if let Some(ctx) = context {
+            tracing::warn!("Received 401 Unauthorized. Forcing token refresh and retrying once...");
+            let fresh_token = ctx.get_valid_token_or_refresh(true).await?;
+
+            let retry_res = make_request(fresh_token)
+                .await
+                .context("Retry HTTP request failed")?;
+            return Ok(retry_res);
+        }
+    }
+
+    Ok(res)
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -163,8 +178,13 @@ pub async fn fetch_reports(
     // Build task list using Futures so we can process them with buffer_unordered
     let mut futures = Vec::new();
 
-    let context = Arc::new(FetchContext {
+    let provider = crate::crm::auth::CognitoTokenProvider {
         config: config_mutex.clone(),
+        client: client.clone(),
+        skip_login: false,
+    };
+    let context = Arc::new(FetchContext {
+        token_provider: Arc::new(provider),
     });
 
     let (
@@ -355,6 +375,10 @@ pub async fn fetch_reports(
             let token = token.clone();
             let key = def.key.to_string();
             let limit = incomplete_reservation_limit;
+            let batch_size = {
+                let cfg = config_mutex.lock().await;
+                cfg.incomplete_reservation_batch_size
+            };
 
             futures.push(
                 async move {
@@ -366,6 +390,7 @@ pub async fn fetch_reports(
                         &application_id,
                         &tz,
                         limit,
+                        batch_size,
                         Some(context.clone()),
                     )
                     .await
@@ -473,27 +498,10 @@ async fn fetch_users_report(
     info!("Fetching {} ...", endpoint);
     let start_time = std::time::Instant::now();
 
-    let mut current_token = token.to_string();
-    let mut resp = client
-        .get(&url)
-        .header("account_id", params.account_id)
-        .header("app-timezone-plus-minutes", params.tz)
-        .header("application_id", params.application_id)
-        .header("auth-type", "cognito")
-        .header("authorization", format!("Bearer {}", current_token))
-        .header("content-type", "application/json")
-        .header("accept", "*/*")
-        .send()
-        .await
-        .with_context(|| format!("HTTP request to {} failed", endpoint))?;
-
-    if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
-        if let Some(ctx) = context_opt.as_ref() {
-            let new_token = ctx
-                .get_valid_token_or_refresh(client, &current_token)
-                .await?;
-            current_token = new_token;
-            resp = client
+    let resp = execute_with_auth_retry(context_opt.as_deref(), token, |current_token| {
+        let url = url.clone();
+        async move {
+            client
                 .get(&url)
                 .header("account_id", params.account_id)
                 .header("app-timezone-plus-minutes", params.tz)
@@ -504,9 +512,10 @@ async fn fetch_users_report(
                 .header("accept", "*/*")
                 .send()
                 .await
-                .with_context(|| format!("Retry HTTP request to {} failed", endpoint))?;
         }
-    }
+    })
+    .await?;
+
     let status = resp.status();
     let body = resp
         .text()
@@ -539,6 +548,7 @@ async fn fetch_and_update_incomplete_reservations(
     application_id: &str,
     tz: &str,
     limit: u32,
+    batch_size: usize,
     context_opt: Option<Arc<FetchContext>>,
 ) -> Result<Value> {
     let mut all_ids = Vec::new();
@@ -546,80 +556,110 @@ async fn fetch_and_update_incomplete_reservations(
         "f38fafc3-bd3f-4dd0-ac6a-09dd7d51b6a0",
         "275688a4-df41-4725-ae56-fd2deab9c1c9",
     ];
+    let batch_size_u32 = batch_size as u32;
 
     for status_id in status_ids {
         let endpoint = "task/ticket";
-        let mut url = format!(
-            "{}{}?offset=0&limit={}&status_id={}&event_name=cc_booking_incomplete_reservation",
-            base_url, endpoint, limit, status_id
-        );
-        if status_id == "f38fafc3-bd3f-4dd0-ac6a-09dd7d51b6a0" {
-            url.push_str("&sort_column=follow_up_date&sort_val=ASC");
-        }
-
-        let mut headers = reqwest::header::HeaderMap::new();
-        headers.insert("accept", reqwest::header::HeaderValue::from_static("*/*"));
-        headers.insert(
-            "account_id",
-            reqwest::header::HeaderValue::from_str(account_id)?,
-        );
-        headers.insert(
-            "application_id",
-            reqwest::header::HeaderValue::from_str(application_id)?,
-        );
-        headers.insert(
-            "app-timezone-plus-minutes",
-            reqwest::header::HeaderValue::from_str(tz)?,
-        );
-        headers.insert(
-            "auth-type",
-            reqwest::header::HeaderValue::from_static("cognito"),
-        );
-        headers.insert(
-            reqwest::header::AUTHORIZATION,
-            reqwest::header::HeaderValue::from_str(&format!("Bearer {}", token))?,
-        );
-        headers.insert(
-            reqwest::header::CONTENT_TYPE,
-            reqwest::header::HeaderValue::from_static("application/json"),
-        );
-
-        debug!(
-            "GET {} - headers: {}",
-            url,
-            format_redacted_headers(&headers)
-        );
-
+        let mut offset = 0;
         let mut current_token = token.to_string();
-        let mut res = client.get(&url).headers(headers.clone()).send().await?;
 
-        if res.status() == reqwest::StatusCode::UNAUTHORIZED {
-            if let Some(ctx) = context_opt.as_ref() {
-                let new_token = ctx
-                    .get_valid_token_or_refresh(client, &current_token)
-                    .await?;
-                current_token = new_token;
-                let mut retry_headers = headers.clone();
-                retry_headers.insert(
-                    reqwest::header::AUTHORIZATION,
-                    reqwest::header::HeaderValue::from_str(&format!("Bearer {}", current_token))?,
+        let mut status_done = false;
+        loop {
+            if all_ids.len() as u32 >= limit {
+                info!(
+                    "Reached total limit of {} for incomplete reservations.",
+                    limit
                 );
-                res = client.get(&url).headers(retry_headers).send().await?;
+                status_done = true;
+                break;
             }
+
+            let mut url = format!(
+                "{}{}?offset={}&limit={}&status_id={}&event_name=cc_booking_incomplete_reservation",
+                base_url, endpoint, offset, batch_size_u32, status_id
+            );
+            if status_id == "f38fafc3-bd3f-4dd0-ac6a-09dd7d51b6a0" {
+                url.push_str("&sort_column=follow_up_date&sort_val=ASC");
+            }
+
+            let mut headers = reqwest::header::HeaderMap::new();
+            headers.insert("accept", reqwest::header::HeaderValue::from_static("*/*"));
+            headers.insert(
+                "account_id",
+                reqwest::header::HeaderValue::from_str(account_id)?,
+            );
+            headers.insert(
+                "application_id",
+                reqwest::header::HeaderValue::from_str(application_id)?,
+            );
+            headers.insert(
+                "app-timezone-plus-minutes",
+                reqwest::header::HeaderValue::from_str(tz)?,
+            );
+            headers.insert(
+                "auth-type",
+                reqwest::header::HeaderValue::from_static("cognito"),
+            );
+            headers.insert(
+                reqwest::header::AUTHORIZATION,
+                reqwest::header::HeaderValue::from_str(&format!("Bearer {}", current_token))?,
+            );
+            headers.insert(
+                reqwest::header::CONTENT_TYPE,
+                reqwest::header::HeaderValue::from_static("application/json"),
+            );
+
+            debug!(
+                "GET {} - headers: {}",
+                url,
+                format_redacted_headers(&headers)
+            );
+
+            let res =
+                execute_with_auth_retry(context_opt.as_deref(), &current_token, |token_str| {
+                    let url = url.clone();
+                    let mut retry_headers = headers.clone();
+                    if let Ok(hv) =
+                        reqwest::header::HeaderValue::from_str(&format!("Bearer {}", token_str))
+                    {
+                        retry_headers.insert(reqwest::header::AUTHORIZATION, hv);
+                    }
+                    async move { client.get(&url).headers(retry_headers).send().await }
+                })
+                .await?;
+
+            if res.status().is_success() {
+                if let Some(ctx) = context_opt.as_ref() {
+                    if let Ok(new_token) = ctx.get_valid_token_or_refresh(false).await {
+                        current_token = new_token;
+                    }
+                }
+            }
+
+            if !res.status().is_success() {
+                let status = res.status();
+                let body = res.text().await.unwrap_or_default();
+                anyhow::bail!("GET {} failed with status {}: {}", url, status, body);
+            }
+
+            let text: String = res.text().await.unwrap_or_default();
+            let parsed: IncompleteReservationResponse = serde_json::from_str(&text)
+                .with_context(|| format!("Failed to parse response: {}", text))?;
+
+            let fetched_count = parsed.data.items.len();
+            for item in parsed.data.items {
+                all_ids.push(item.id);
+            }
+
+            if fetched_count < batch_size {
+                break;
+            }
+
+            offset += batch_size_u32;
         }
 
-        if !res.status().is_success() {
-            let status = res.status();
-            let body = res.text().await.unwrap_or_default();
-            anyhow::bail!("GET {} failed with status {}: {}", url, status, body);
-        }
-
-        let text: String = res.text().await.unwrap_or_default();
-        let parsed: IncompleteReservationResponse = serde_json::from_str(&text)
-            .with_context(|| format!("Failed to parse response: {}", text))?;
-
-        for item in parsed.data.items {
-            all_ids.push(item.id);
+        if status_done {
+            break;
         }
     }
 
@@ -663,61 +703,70 @@ async fn fetch_and_update_incomplete_reservations(
         reqwest::header::HeaderValue::from_static("application/json"),
     );
 
-    let payload = BulkTicketPayload {
-        status_id: "46282444-7951-42eb-a27e-b2bc65c53727",
-        ids: all_ids,
-    };
+    let mut current_token = token.to_string();
+    let mut last_parsed = Value::Null;
 
-    let payload_str = serde_json::to_string(&payload)?;
+    for chunk in all_ids.chunks(batch_size.max(1)) {
+        let payload = BulkTicketPayload {
+            status_id: "46282444-7951-42eb-a27e-b2bc65c53727",
+            ids: chunk.to_vec(),
+        };
 
-    debug!(
-        "PATCH {} - headers: {}, body: {}",
-        patch_url,
-        format_redacted_headers(&headers),
-        payload_str
-    );
+        let payload_str = serde_json::to_string(&payload)?;
 
-    let mut res = client
-        .patch(&patch_url)
-        .headers(headers.clone())
-        .body(payload_str.clone())
-        .send()
+        debug!(
+            "PATCH {} (chunk size {}) - headers: {}, body: {}",
+            patch_url,
+            chunk.len(),
+            format_redacted_headers(&headers),
+            payload_str
+        );
+
+        let res = execute_with_auth_retry(context_opt.as_deref(), &current_token, |token_str| {
+            let patch_url = patch_url.clone();
+            let mut retry_headers = headers.clone();
+            if let Ok(hv) = reqwest::header::HeaderValue::from_str(&format!("Bearer {}", token_str))
+            {
+                retry_headers.insert(reqwest::header::AUTHORIZATION, hv);
+            }
+            let payload_str = payload_str.clone();
+            async move {
+                client
+                    .patch(&patch_url)
+                    .headers(retry_headers)
+                    .body(payload_str)
+                    .send()
+                    .await
+            }
+        })
         .await?;
 
-    if res.status() == reqwest::StatusCode::UNAUTHORIZED {
-        if let Some(ctx) = context_opt.as_ref() {
-            let new_token = ctx.get_valid_token_or_refresh(client, token).await?;
-            let current_token = new_token;
-            let mut retry_headers = headers.clone();
-            retry_headers.insert(
-                reqwest::header::AUTHORIZATION,
-                reqwest::header::HeaderValue::from_str(&format!("Bearer {}", current_token))?,
-            );
-            res = client
-                .patch(&patch_url)
-                .headers(retry_headers)
-                .body(payload_str)
-                .send()
-                .await?;
+        if res.status().is_success() {
+            if let Some(ctx) = context_opt.as_ref() {
+                if let Ok(new_token) = ctx.get_valid_token_or_refresh(false).await {
+                    current_token = new_token;
+                }
+            }
         }
+
+        if !res.status().is_success() {
+            let status = res.status();
+            let body = res.text().await.unwrap_or_default();
+            anyhow::bail!(
+                "PATCH {} failed with status {}: {}",
+                patch_url,
+                status,
+                body
+            );
+        }
+
+        let text = res.text().await?;
+        let parsed: Value = serde_json::from_str(&text)
+            .with_context(|| format!("Failed to parse response: {}", text))?;
+        last_parsed = parsed;
     }
 
-    if !res.status().is_success() {
-        let status = res.status();
-        let body = res.text().await.unwrap_or_default();
-        anyhow::bail!(
-            "PATCH {} failed with status {}: {}",
-            patch_url,
-            status,
-            body
-        );
-    }
-
-    let text = res.text().await?;
-    let parsed: Value = serde_json::from_str(&text)
-        .with_context(|| format!("Failed to parse response: {}", text))?;
-
-    Ok(parsed)
+    Ok(last_parsed)
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -937,28 +986,11 @@ async fn fetch_single(
 
     info!("Fetching {} [{} to {}]...", endpoint, from_date, to_date);
 
-    let mut current_token = token.to_string();
-    let mut resp = client
-        .get(&url)
-        .query(&query)
-        .header("account_id", params.account_id)
-        .header("app-timezone-plus-minutes", params.tz)
-        .header("application_id", params.application_id)
-        .header("auth-type", "cognito")
-        .header("authorization", format!("Bearer {}", current_token))
-        .header("content-type", "application/json")
-        .header("accept", "*/*")
-        .send()
-        .await
-        .with_context(|| format!("HTTP request to {} failed", endpoint))?;
-
-    if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
-        if let Some(ctx) = context_opt.as_ref() {
-            let new_token = ctx
-                .get_valid_token_or_refresh(client, &current_token)
-                .await?;
-            current_token = new_token;
-            resp = client
+    let resp = execute_with_auth_retry(context_opt.as_deref(), token, |current_token| {
+        let url = url.clone();
+        let query = query.clone();
+        async move {
+            client
                 .get(&url)
                 .query(&query)
                 .header("account_id", params.account_id)
@@ -970,9 +1002,10 @@ async fn fetch_single(
                 .header("accept", "*/*")
                 .send()
                 .await
-                .with_context(|| format!("Retry HTTP request to {} failed", endpoint))?;
         }
-    }
+    })
+    .await?;
+
     let status = resp.status();
     let headers = format_redacted_headers(resp.headers());
     let body = resp
