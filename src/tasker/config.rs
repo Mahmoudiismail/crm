@@ -191,6 +191,10 @@ pub struct CrmOpenSohailConfig {
     pub dashboard_pivot_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub table_column_widths: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sender_account_email: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reply_subject_prefix: Option<String>,
 }
 
 impl std::fmt::Debug for TaskerConfig {
