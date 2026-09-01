@@ -111,3 +111,10 @@ The SRP-6a modular exponentiation math in `compute_s` is unit-tested against kno
 - Prefer default TLS verification (`no_verify_ssl = false`) in production.
 - Use `remember_secrets = false` if config should not retain tokens/password.
 - Do not log raw passwords.
+
+## CRM API Requests & Auth Retry Logic
+Added a proactive token expiration buffer: tokens within 5 minutes of their expiry are now forcefully refreshed prior to making API calls.
+Implemented a 401 Unauthorized Interceptor: if an API call fails with 401, the system invalidates the cached token, requests a new one seamlessly via the AWS Cognito SRP login flow, and retries the request automatically exactly once to prevent infinite loops.
+
+## Report Cleanup Policy
+Added `retention_days` to `crm_config.json`. Setting it to `0` or omitting it leaves downloaded CSV files intact. If set to an integer value greater than `0`, the crm execution will automatically delete downloaded `ticket_report_*.csv` and `lead_report_*.csv` files that are older than the specified retention window in days.

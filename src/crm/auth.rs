@@ -57,13 +57,34 @@ const INFO_BITS: &[u8] = b"Caldera Derived Key";
 ///
 /// # Returns
 /// A valid ID token (`String`) ready for use in HTTP Authorization headers.
+#[async_trait::async_trait]
+pub trait TokenProvider: Send + Sync + std::fmt::Debug {
+    async fn get_token(&self, force_refresh: bool) -> Result<String>;
+}
+
+#[derive(Debug)]
+pub struct CognitoTokenProvider {
+    pub config: std::sync::Arc<tokio::sync::Mutex<crate::crm::config::AppConfig>>,
+    pub client: reqwest::Client,
+    pub skip_login: bool,
+}
+
+#[async_trait::async_trait]
+impl TokenProvider for CognitoTokenProvider {
+    async fn get_token(&self, force_refresh: bool) -> Result<String> {
+        let mut cfg = self.config.lock().await;
+        ensure_authenticated(&mut cfg, &self.client, self.skip_login, force_refresh).await
+    }
+}
+
 pub async fn ensure_authenticated(
     config: &mut AppConfig,
     client: &reqwest::Client,
     skip_login: bool,
+    force_refresh: bool,
 ) -> Result<String> {
     // 1. --skip-login: use cached token
-    if skip_login {
+    if skip_login && !force_refresh {
         if !config.id_token.is_empty() {
             info!("Using cached id_token (--skip-login)");
             return Ok(config.id_token.clone());
@@ -76,9 +97,9 @@ pub async fn ensure_authenticated(
     }
 
     // 2. Check cached token expiry
-    if !config.access_token.is_empty() && !config.access_token_expiry.is_empty() {
+    if !force_refresh && !config.access_token.is_empty() && !config.access_token_expiry.is_empty() {
         if let Ok(expiry) = DateTime::parse_from_rfc3339(&config.access_token_expiry) {
-            if expiry > Utc::now() {
+            if expiry > Utc::now() + chrono::TimeDelta::try_minutes(5).unwrap() {
                 info!("Cached token still valid (expires {})", expiry);
                 let token = if !config.id_token.is_empty() {
                     config.id_token.clone()
@@ -87,12 +108,16 @@ pub async fn ensure_authenticated(
                 };
                 return Ok(token);
             }
-            debug!("Cached token expired at {}", expiry);
+            debug!("Cached token expired or expiring soon at {}", expiry);
         }
     }
 
     // 3. Fresh login
-    info!("Performing Cognito SRP authentication...");
+    if force_refresh {
+        info!("Force refresh requested. Performing Cognito SRP authentication...");
+    } else {
+        info!("Performing Cognito SRP authentication...");
+    }
     let tokens = cognito_srp_login(config, client).await?;
 
     config.access_token = tokens.access_token.clone();
