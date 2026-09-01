@@ -181,7 +181,6 @@ mod tests {
 
         let (tx, _rx) = mpsc::channel(1);
         let status = Arc::new(Mutex::new(RunnerStatus {
-            app_locks: std::collections::HashMap::new(),
             running_tasks_count: 1,
             queued_tasks_count: 0,
             running_task_ids: Vec::new(),
@@ -189,6 +188,7 @@ mod tests {
             last_error: "Test Error".to_string(),
             last_task_id: "test_task".to_string(),
             last_run_at: "2024-01-01T00:00:00Z".to_string(),
+            waiting_for_app: std::collections::HashMap::new(),
         }));
 
         let (exec_tx, _) = mpsc::channel(128);

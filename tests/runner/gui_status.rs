@@ -66,7 +66,6 @@ fn create_sync_task(id: &str, app_ids: Vec<&str>) -> RunnerTask {
 #[tokio::test]
 async fn test_gui_status_concurrent_tasks() {
     let status = Arc::new(Mutex::new(RunnerStatus {
-        app_locks: std::collections::HashMap::new(),
         running_tasks_count: 0,
         queued_tasks_count: 0,
         running_task_ids: Vec::new(),
@@ -74,13 +73,18 @@ async fn test_gui_status_concurrent_tasks() {
         last_error: "".to_string(),
         last_task_id: "".to_string(),
         last_run_at: "".to_string(),
+        waiting_for_app: std::collections::HashMap::new(),
     }));
 
     let temp_file = NamedTempFile::new().unwrap();
     let config_path = temp_file.path().to_str().unwrap().to_string();
     let _sync_dir = tempfile::tempdir().unwrap();
 
-    let exec_tx = spawn_execution_manager(status.clone(), config_path.clone());
+    let exec_tx = spawn_execution_manager(
+        status.clone(),
+        config_path.clone(),
+        Arc::new(Mutex::new(std::collections::HashMap::new())),
+    );
 
     let policy = ExecutionPolicy {
         allow_shell_tasks: true,
