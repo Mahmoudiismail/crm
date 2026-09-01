@@ -6,7 +6,6 @@ use std::time::{Duration, SystemTime};
 use tokio::sync::{mpsc, Mutex};
 use tracing::{error, info};
 
-use crate::runner::config::ActionSpec;
 use crate::runner::config::{RunnerConfig, RunnerTask};
 use crate::runner::engine::dispatcher::mod_handle_command;
 use crate::runner::engine::dispatcher::schedule::schedule_is_due;
@@ -14,28 +13,8 @@ use crate::runner::engine::pipeline::run_task_inner;
 use crate::runner::engine::state::{
     ExecutionManagerCommand, ExecutionPolicy, RunnerCommand, RunnerHandle, RunnerStatus,
 }; // We'll rename handle_command in mod.rs to avoid conflict
-use std::collections::HashSet;
 
-pub fn get_task_app_ids(task: &RunnerTask) -> HashSet<String> {
-    let mut app_ids = HashSet::new();
-    for step in &task.steps {
-        for action in &step.actions {
-            if let ActionSpec::ExternalApp(app) = action {
-                app_ids.insert(app.app_id.clone());
-            }
-        }
-    }
-    for step in &task.post_run_steps {
-        for action in &step.actions {
-            if let ActionSpec::ExternalApp(app) = action {
-                app_ids.insert(app.app_id.clone());
-            }
-        }
-    }
-    app_ids
-}
-
-use crate::runner::engine::state::AppLockManager;
+use crate::runner::engine::app_lock::AppLockManager;
 
 pub fn spawn_execution_manager(
     status: Arc<Mutex<RunnerStatus>>,
@@ -54,14 +33,16 @@ pub fn spawn_execution_manager(
                 ExecutionManagerCommand::QueueTask { task, policy } => {
                     {
                         let mut st = status.lock().await;
-                        st.queued_task_ids.push(task.id.clone());
+                        if !st.queued_task_ids.contains(&task.id) {
+                            st.queued_task_ids.push(task.id.clone());
+                        }
                     }
                     queued_tasks.push_back((task, policy));
                 }
                 ExecutionManagerCommand::TaskFinished {
                     task_id,
                     last_status,
-                    last_error,
+                    result,
                 } => {
                     if let Some(pos) = running_tasks.iter().position(|(t, _)| t.id == task_id) {
                         running_tasks.remove(pos);
@@ -73,7 +54,8 @@ pub fn spawn_execution_manager(
                             st.running_tasks_count -= 1;
                         }
                         st.running_task_ids.retain(|id| id != &task_id);
-                        if let Some(err) = last_error {
+                        st.waiting_for_app.remove(&task_id);
+                        if let Some(err) = result.error {
                             st.last_error = err;
                         }
                     }
@@ -115,7 +97,9 @@ pub fn spawn_execution_manager(
                     {
                         let mut st = status.lock().await;
                         st.running_tasks_count += 1;
-                        st.running_task_ids.push(task_to_run.id.clone());
+                        if !st.running_task_ids.contains(&task_to_run.id) {
+                            st.running_task_ids.push(task_to_run.id.clone());
+                        }
                         st.queued_task_ids.retain(|id| id != &task_to_run.id);
                         st.last_task_id = task_to_run.id.clone();
                     }
@@ -127,21 +111,16 @@ pub fn spawn_execution_manager(
                     let handle = tokio::spawn(async move {
                         let mut task_to_run = task_to_run_for_spawn;
                         let task_id = task_to_run.id.clone();
-                        run_task_inner(&mut task_to_run, &policy, &st_clone, &app_lock_mgr).await;
 
-                        let mut last_err = None;
-                        {
-                            let st = st_clone.lock().await;
-                            if !st.last_error.is_empty() {
-                                last_err = Some(st.last_error.clone());
-                            }
-                        }
+                        let result =
+                            run_task_inner(&mut task_to_run, &policy, &st_clone, &app_lock_mgr)
+                                .await;
 
                         let _ = tx_finish
                             .send(ExecutionManagerCommand::TaskFinished {
                                 task_id,
                                 last_status: task_to_run.last_status.clone(),
-                                last_error: last_err,
+                                result,
                             })
                             .await;
                     });
@@ -178,7 +157,7 @@ pub fn start_scheduler(runner_config_path: String) -> RunnerHandle {
     let status_bg = status.clone();
     let config_path = runner_config_path.clone();
 
-    let app_lock_manager = Arc::new(Mutex::new(std::collections::HashMap::new()));
+    let app_lock_manager = AppLockManager::new();
     let exec_tx = spawn_execution_manager(status.clone(), config_path.clone(), app_lock_manager);
     let _exec_tx_loop = exec_tx.clone();
 
@@ -292,14 +271,20 @@ mod tests_queue {
             let res = exec_tx.try_send(ExecutionManagerCommand::TaskFinished {
                 task_id: format!("task_{}", i),
                 last_status: "success".into(),
-                last_error: None,
+                result: crate::runner::engine::state::TaskExecutionResult {
+                    success: true,
+                    error: None,
+                },
             });
             assert!(res.is_ok(), "Should send up to capacity");
         }
         let res = exec_tx.try_send(ExecutionManagerCommand::TaskFinished {
             task_id: "overflow".into(),
             last_status: "success".into(),
-            last_error: None,
+            result: crate::runner::engine::state::TaskExecutionResult {
+                success: true,
+                error: None,
+            },
         });
         assert!(res.is_err(), "Should fail when capacity reached");
     }

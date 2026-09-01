@@ -1,12 +1,11 @@
 use crm_tool::runner::config::{
-    ActionSpec, ExecutionMode, ExternalAppSpec, RegisteredApp, RunnerTask, ShellCommandSpec,
-    TaskStep,
+    ActionSpec, ExecutionMode, ExternalAppSpec, RegisteredApp, Repetition, RunnerTask, TaskStep,
 };
-use crm_tool::runner::engine::dispatcher::spawn_execution_manager;
-use crm_tool::runner::engine::state::{ExecutionManagerCommand, ExecutionPolicy, RunnerStatus};
+use crm_tool::runner::engine::app_lock::AppLockManager;
+use crm_tool::runner::engine::pipeline::run_task_inner;
+use crm_tool::runner::engine::state::{ExecutionPolicy, RunnerStatus};
 use std::sync::Arc;
 use std::time::Duration;
-use tempfile::NamedTempFile;
 use tokio::sync::Mutex;
 
 fn create_mock_app(id: &str, concurrent: bool) -> RegisteredApp {
@@ -19,52 +18,11 @@ fn create_mock_app(id: &str, concurrent: bool) -> RegisteredApp {
     }
 }
 
-fn create_sync_task(id: &str, app_ids: Vec<&str>) -> RunnerTask {
-    let mut task = RunnerTask {
-        id: id.to_string(),
-        name: format!("Task {}", id),
-        enabled: true,
-        repetition: Default::default(),
-        frequency_seconds: 0,
-        next_run_at: "".to_string(),
-        schedules: vec![],
-        steps: vec![],
-        post_run_steps: vec![],
-        last_run_at: "".to_string(),
-        last_status: "".to_string(),
-        timeout_seconds: 60,
-    };
-
-    let mut actions = vec![
-        #[cfg(target_family = "unix")]
-        ActionSpec::ShellCommand(ShellCommandSpec {
-            command: "sleep 2".to_string(),
-            continue_on_error: false,
-        }),
-        #[cfg(target_family = "windows")]
-        ActionSpec::ShellCommand(ShellCommandSpec {
-            command: "powershell -Command \"Start-Sleep -Seconds 2\"".to_string(),
-            continue_on_error: false,
-        }),
-    ];
-
-    for app_id in app_ids {
-        actions.push(ActionSpec::ExternalApp(ExternalAppSpec {
-            app_id: app_id.to_string(),
-            args: Default::default(),
-        }));
-    }
-
-    task.steps.push(TaskStep {
-        name: None,
-        mode: ExecutionMode::Sequential,
-        actions,
-    });
-    task
-}
-
+// --------------------------------------------------
+// TEST: GUI STATUS WAITING FOR NON-CONCURRENT APP
+// --------------------------------------------------
 #[tokio::test]
-async fn test_gui_status_concurrent_tasks() {
+async fn test_gui_status_waiting_for_app_deterministic() {
     let status = Arc::new(Mutex::new(RunnerStatus {
         running_tasks_count: 0,
         queued_tasks_count: 0,
@@ -76,144 +34,83 @@ async fn test_gui_status_concurrent_tasks() {
         waiting_for_app: std::collections::HashMap::new(),
     }));
 
-    let temp_file = NamedTempFile::new().unwrap();
-    let config_path = temp_file.path().to_str().unwrap().to_string();
-    let _sync_dir = tempfile::tempdir().unwrap();
-
-    let exec_tx = spawn_execution_manager(
-        status.clone(),
-        config_path.clone(),
-        Arc::new(Mutex::new(std::collections::HashMap::new())),
-    );
-
     let policy = ExecutionPolicy {
         allow_shell_tasks: true,
         shell_timeout_seconds: 10,
         post_run_timeout_seconds: 10,
         min_task_interval_seconds: 1,
         log_retention_days: 1,
-        registered_apps: vec![
-            create_mock_app("App A", true),
-            create_mock_app("App B", false),
-        ],
+        registered_apps: vec![create_mock_app("App B", false)],
     };
 
-    let queue_task = |task: RunnerTask| {
-        let tx = exec_tx.clone();
-        let p = policy.clone();
-        tokio::spawn(async move {
-            let _ = tx
-                .send(ExecutionManagerCommand::QueueTask {
-                    task: Box::new(task),
-                    policy: p,
-                })
-                .await;
-        })
+    let app_lock_mgr = AppLockManager::new();
+
+    let mut task = RunnerTask {
+        id: "t1".to_string(),
+        name: "t1".to_string(),
+        enabled: true,
+        timeout_seconds: 5,
+        schedules: vec![],
+        frequency_seconds: 0,
+        repetition: Repetition::Once,
+        steps: vec![TaskStep {
+            name: None,
+            mode: ExecutionMode::Sequential,
+            actions: vec![ActionSpec::ExternalApp(ExternalAppSpec {
+                app_id: "App B".to_string(),
+                args: std::collections::HashMap::new(),
+            })],
+        }],
+        post_run_steps: vec![],
+        last_run_at: "".to_string(),
+        last_status: "".to_string(),
+        next_run_at: "".to_string(),
     };
 
-    let t_a1 = create_sync_task("A1", vec!["App A"]);
-    let t_b1 = create_sync_task("B1", vec!["App B"]);
+    // To test "waiting_for_app", we must make sure another thread holds the lock first.
+    let sem = app_lock_mgr.get_semaphore("App B").await;
+    let permit = sem.clone().acquire_owned().await.unwrap();
 
-    // 1. Start A1.
-    queue_task(t_a1.clone());
+    let st_clone = status.clone();
+    let am = app_lock_mgr.clone();
+    let pol = policy.clone();
 
-    // Wait until A1 is started
-    let mut a1_running = false;
-    for _ in 0..1000 {
-        {
+    // Start execution
+    let handle = tokio::spawn(async move { run_task_inner(&mut task, &pol, &st_clone, &am).await });
+
+    // Wait until it marks itself as waiting
+    for _ in 0..100 {
+        let is_waiting = {
             let st = status.lock().await;
-            if st.running_task_ids.contains(&"A1".to_string()) {
-                a1_running = true;
-                break;
-            }
-        }
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
-    if !a1_running {
-        let st = status.lock().await;
-        panic!("A1 did not start. Last error: {}", st.last_error);
-    }
-
-    // 2. A1 remains running.
-    {
-        let st = status.lock().await;
-        assert!(
-            st.running_task_ids.contains(&"A1".to_string()),
-            "A1 is not in running_task_ids"
-        );
-        assert!(
-            !st.queued_task_ids.contains(&"A1".to_string()),
-            "A1 should not be queued"
-        );
-    }
-
-    // 3. Start B1 while A1 is still running.
-    queue_task(t_b1.clone());
-
-    // Wait until B1 is started
-    let mut b1_running = false;
-    for _ in 0..1000 {
-        {
-            let st = status.lock().await;
-            if st.running_task_ids.contains(&"B1".to_string()) {
-                b1_running = true;
-                break;
-            }
-        }
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
-    assert!(b1_running, "B1 did not start concurrently with A1");
-
-    // 4. B1 is reported as RUNNING, not WAITING.
-    // 5. A1 is still reported as RUNNING.
-    {
-        let st = status.lock().await;
-        assert!(
-            st.running_task_ids.contains(&"A1".to_string()),
-            "A1 is not in running_task_ids"
-        );
-        assert!(
-            st.running_task_ids.contains(&"B1".to_string()),
-            "B1 is not in running_task_ids"
-        );
-        assert!(
-            !st.queued_task_ids.contains(&"B1".to_string()),
-            "B1 should not be queued"
-        );
-    }
-
-    // 6. Wait for B1 to finish (since it sleeps for 2 seconds)
-    for _ in 0..1000 {
-        let st = status.lock().await;
-        if !st.running_task_ids.contains(&"B1".to_string()) {
+            st.waiting_for_app.contains_key("t1")
+        };
+        if is_waiting {
             break;
         }
-        tokio::time::sleep(Duration::from_millis(50)).await;
+        tokio::time::sleep(Duration::from_millis(5)).await;
     }
 
-    // 7. B1 becomes SUCCESS.
     {
         let st = status.lock().await;
-        assert!(
-            !st.running_task_ids.contains(&"B1".to_string()),
-            "B1 should have finished"
+        assert_eq!(
+            st.waiting_for_app.get("t1").unwrap(),
+            "App B",
+            "GUI should correctly report that t1 is waiting for App B"
         );
     }
 
-    // 8. Wait for A1 to finish (since it sleeps for 2 seconds)
-    for _ in 0..1000 {
-        let st = status.lock().await;
-        if !st.running_task_ids.contains(&"A1".to_string()) {
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
+    // Now release the permit
+    drop(permit);
 
+    // Wait until it finishes
+    let _ = handle.await.unwrap();
+
+    // Verify it cleans up properly
     {
         let st = status.lock().await;
         assert!(
-            !st.running_task_ids.contains(&"A1".to_string()),
-            "A1 should have finished"
+            !st.waiting_for_app.contains_key("t1"),
+            "waiting_for_app state should be cleared after completion"
         );
     }
 }

@@ -9,6 +9,7 @@ pub mod shell;
 pub mod state;
 pub mod validation;
 
+pub use app_lock::AppLockManager;
 pub use dispatcher::{
     create_task, delete_task, spawn_execution_manager, start_scheduler, update_task,
 };
@@ -16,3 +17,4 @@ pub use pipeline::run_task_inner;
 pub use state::{
     ExecutionManagerCommand, ExecutionPolicy, RunnerCommand, RunnerHandle, RunnerStatus,
 };
+pub mod app_lock;

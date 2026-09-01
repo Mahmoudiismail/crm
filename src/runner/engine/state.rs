@@ -28,9 +28,6 @@ pub enum RunnerCommand {
 }
 
 use std::collections::HashMap;
-use tokio::sync::Semaphore;
-
-pub type AppLockManager = Arc<Mutex<HashMap<String, Arc<Semaphore>>>>;
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct RunnerStatus {
@@ -44,6 +41,12 @@ pub struct RunnerStatus {
     pub waiting_for_app: HashMap<String, String>, // task_id -> app_id
 }
 
+#[derive(Debug, Clone)]
+pub struct TaskExecutionResult {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
 #[derive(Debug)]
 pub enum ExecutionManagerCommand {
     QueueTask {
@@ -53,7 +56,7 @@ pub enum ExecutionManagerCommand {
     TaskFinished {
         task_id: String,
         last_status: String,
-        last_error: Option<String>,
+        result: TaskExecutionResult,
     },
     ShutdownExecManager,
 }
