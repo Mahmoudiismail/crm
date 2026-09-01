@@ -66,3 +66,4 @@ Specific to the `crm_open_sohail` task. Inherits all fields from `DashboardUpdat
 | `branch_filter` | Option<Vec<String>> | Filter applied to Slicers to restrict the parsed branches. |
 | `month_filter` | Option<Vec<String>> | Filter applied to Slicers to restrict parsed months. |
 | `fallback_oul` | Option<String> | Value mapped in the OUL column when a team is missing from the mapping file. |
+- `retention_days` (optional, default `None`): Controls the automatic cleanup of older report files (`ticket_report_*.csv`, `lead_report_*.csv`) in the downloads directory. If set to an integer greater than 0, any matching report file with a modification timestamp older than `retention_days` will be deleted during the CRM run.
