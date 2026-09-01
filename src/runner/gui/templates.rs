@@ -122,7 +122,14 @@ pub(crate) fn render_task_row(
     };
 
     let exec_status_badge = if status.running_task_ids.contains(&task.id) {
-        badge("Running", "bg-blue-100 text-blue-800")
+        if let Some(app_id) = status.waiting_for_app.get(&task.id) {
+            badge(
+                &format!("Waiting for {}", app_id),
+                "bg-blue-100 text-blue-800",
+            )
+        } else {
+            badge("Running", "bg-blue-100 text-blue-800")
+        }
     } else if status.queued_task_ids.contains(&task.id) {
         badge("Waiting", "bg-yellow-100 text-yellow-800")
     } else if task.last_status.to_lowercase().contains("ok")

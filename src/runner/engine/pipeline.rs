@@ -10,6 +10,7 @@ use crate::runner::engine::logging::TaskLogger;
 use crate::runner::engine::shell::run_shell_command;
 use crate::runner::engine::state::{ExecutionPolicy, RunnerStatus};
 
+use crate::runner::engine::state::AppLockManager;
 use tokio::sync::Semaphore;
 
 async fn execute_action(
@@ -17,7 +18,6 @@ async fn execute_action(
     logger: &TaskLogger,
     policy: &ExecutionPolicy,
     timeout_seconds: u64,
-    status: &Arc<Mutex<RunnerStatus>>,
 ) -> Result<()> {
     match action {
         ActionSpec::ShellCommand(spec) => {
@@ -35,38 +35,6 @@ async fn execute_action(
         }
         ActionSpec::ExternalApp(spec) => {
             if let Some(app) = policy.registered_apps.iter().find(|a| a.id == spec.app_id) {
-                let lock_opt = if !app.allow_concurrent_tasks {
-                    let mut st = status.lock().await;
-                    let sem = st
-                        .app_locks
-                        .entry(app.id.clone())
-                        .or_insert_with(|| Arc::new(Semaphore::new(1)))
-                        .clone();
-                    Some(sem)
-                } else {
-                    None
-                };
-
-                let _permit = match lock_opt {
-                    Some(sem) => {
-                        logger
-                            .log(&format!(
-                                "Waiting for exclusive lock on app '{}'...",
-                                app.id
-                            ))
-                            .await;
-                        let p = sem
-                            .acquire_owned()
-                            .await
-                            .map_err(|_| anyhow::anyhow!("Failed to acquire app lock"))?;
-                        logger
-                            .log(&format!("Acquired exclusive lock on app '{}'.", app.id))
-                            .await;
-                        Some(p)
-                    }
-                    None => None,
-                };
-
                 run_external_app(logger, app, &spec.args, timeout_seconds).await
             } else {
                 Err(anyhow::anyhow!(
@@ -84,13 +52,83 @@ async fn execute_step(
     policy: &ExecutionPolicy,
     timeout_seconds: u64,
     status: &Arc<Mutex<RunnerStatus>>,
+    app_lock_manager: &AppLockManager,
+    task_id: &str,
 ) -> Result<()> {
-    match step.mode {
-        ExecutionMode::Sequential => {
-            for action in &step.actions {
-                execute_action(action, logger, policy, timeout_seconds, status).await?;
+    // 1. Identify all applications required by this step
+    let mut required_apps = std::collections::HashSet::new();
+    for action in &step.actions {
+        if let ActionSpec::ExternalApp(app) = action {
+            required_apps.insert(app.app_id.clone());
+        }
+    }
+
+    // 2. Filter out concurrent apps and keep only non-concurrent ones
+    let mut non_concurrent_apps = Vec::new();
+    for app_id in required_apps {
+        if let Some(app) = policy.registered_apps.iter().find(|a| a.id == app_id) {
+            if !app.allow_concurrent_tasks {
+                non_concurrent_apps.push(app_id.clone());
             }
-            Ok(())
+        }
+    }
+
+    // 3. Sort deterministically to avoid deadlocks
+    non_concurrent_apps.sort();
+
+    // 4. Acquire all necessary semaphores in order
+    let mut acquired_permits = Vec::new();
+    for app_id in &non_concurrent_apps {
+        let sem = {
+            let mut mgr = app_lock_manager.lock().await;
+            mgr.entry(app_id.clone())
+                .or_insert_with(|| Arc::new(Semaphore::new(1)))
+                .clone()
+        };
+
+        // Notify GUI we are waiting
+        {
+            let mut st = status.lock().await;
+            st.waiting_for_app
+                .insert(task_id.to_string(), app_id.clone());
+        }
+
+        logger
+            .log(&format!(
+                "Waiting for exclusive lock on app '{}'...",
+                app_id
+            ))
+            .await;
+
+        let permit = sem
+            .acquire_owned()
+            .await
+            .map_err(|_| anyhow::anyhow!("Failed to acquire app lock for {}", app_id))?;
+
+        logger
+            .log(&format!("Acquired exclusive lock on app '{}'.", app_id))
+            .await;
+
+        // Lock acquired, remove from waiting state
+        {
+            let mut st = status.lock().await;
+            st.waiting_for_app.remove(task_id);
+        }
+
+        acquired_permits.push(permit);
+    }
+
+    // 5. Execute the step
+    let result = match step.mode {
+        ExecutionMode::Sequential => {
+            let mut step_result = Ok(());
+            for action in &step.actions {
+                if let Err(e) = execute_action(action, logger, policy, timeout_seconds).await {
+                    step_result = Err(e);
+                    break;
+                }
+            }
+            step_result
         }
         ExecutionMode::Parallel => {
             let mut handles = Vec::new();
@@ -98,11 +136,9 @@ async fn execute_step(
                 let action = action.clone();
                 let logger = logger.clone();
                 let policy = policy.clone();
-                let status = status.clone();
 
                 handles.push(tokio::spawn(async move {
-                    let result =
-                        execute_action(&action, &logger, &policy, timeout_seconds, &status).await;
+                    let result = execute_action(&action, &logger, &policy, timeout_seconds).await;
                     (action, result)
                 }));
             }
@@ -128,7 +164,10 @@ async fn execute_step(
                 ))
             }
         }
-    }
+    };
+
+    // 6. Permits are dropped automatically when `acquired_permits` goes out of scope here.
+    result
 }
 
 async fn execute_pipeline(
@@ -137,9 +176,20 @@ async fn execute_pipeline(
     policy: &ExecutionPolicy,
     timeout_seconds: u64,
     status: &Arc<Mutex<RunnerStatus>>,
+    app_lock_manager: &AppLockManager,
+    task_id: &str,
 ) -> Result<()> {
     for step in steps {
-        execute_step(step, logger, policy, timeout_seconds, status).await?;
+        execute_step(
+            step,
+            logger,
+            policy,
+            timeout_seconds,
+            status,
+            app_lock_manager,
+            task_id,
+        )
+        .await?;
     }
     Ok(())
 }
@@ -148,6 +198,7 @@ pub async fn run_task_inner(
     task: &mut RunnerTask,
     policy: &ExecutionPolicy,
     status: &Arc<Mutex<RunnerStatus>>,
+    app_lock_manager: &AppLockManager,
 ) {
     let logger = TaskLogger::new(&task.id, &task.name);
     logger.log("Initializing task execution...").await;
@@ -186,6 +237,8 @@ pub async fn run_task_inner(
         policy,
         effective_shell_timeout,
         status,
+        app_lock_manager,
+        &task.id,
     )
     .await;
 
@@ -204,6 +257,8 @@ pub async fn run_task_inner(
                     policy,
                     effective_post_run_timeout,
                     status,
+                    app_lock_manager,
+                    &task.id,
                 )
                 .await;
                 match post_run_result {
@@ -310,11 +365,20 @@ mod tests {
             last_error: String::new(),
             last_task_id: String::new(),
             last_run_at: String::new(),
-            app_locks: std::collections::HashMap::new(),
+            waiting_for_app: std::collections::HashMap::new(),
         }));
-        execute_step(&step, &TaskLogger::new("test", "test"), &policy, 5, &status)
-            .await
-            .unwrap();
+        let app_lock_mgr = Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new()));
+        execute_step(
+            &step,
+            &TaskLogger::new("test", "test"),
+            &policy,
+            5,
+            &status,
+            &app_lock_mgr,
+            "test_task",
+        )
+        .await
+        .unwrap();
     }
 
     #[tokio::test]
@@ -344,13 +408,20 @@ mod tests {
             last_error: String::new(),
             last_task_id: String::new(),
             last_run_at: String::new(),
-            app_locks: std::collections::HashMap::new(),
+            waiting_for_app: std::collections::HashMap::new(),
         }));
-        assert!(
-            execute_step(&step, &TaskLogger::new("test", "test"), &policy, 5, &status)
-                .await
-                .is_err()
-        );
+        let app_lock_mgr = Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new()));
+        assert!(execute_step(
+            &step,
+            &TaskLogger::new("test", "test"),
+            &policy,
+            5,
+            &status,
+            &app_lock_mgr,
+            "test_task"
+        )
+        .await
+        .is_err());
     }
 
     #[tokio::test]
@@ -380,14 +451,17 @@ mod tests {
             last_error: String::new(),
             last_task_id: String::new(),
             last_run_at: String::new(),
-            app_locks: std::collections::HashMap::new(),
+            waiting_for_app: std::collections::HashMap::new(),
         }));
+        let app_lock_mgr = Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new()));
         execute_step(
             &ignored_step,
             &TaskLogger::new("test", "test"),
             &policy,
             5,
             &status,
+            &app_lock_mgr,
+            "test_task",
         )
         .await
         .unwrap();
@@ -405,7 +479,9 @@ mod tests {
             &TaskLogger::new("test", "test"),
             &policy,
             5,
-            &status
+            &status,
+            &app_lock_mgr,
+            "test_task"
         )
         .await
         .is_err());
@@ -462,14 +538,17 @@ mod tests {
             last_error: String::new(),
             last_task_id: String::new(),
             last_run_at: String::new(),
-            app_locks: std::collections::HashMap::new(),
+            waiting_for_app: std::collections::HashMap::new(),
         }));
+        let app_lock_mgr = Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new()));
         execute_pipeline(
             &steps,
             &TaskLogger::new("test", "test"),
             &policy,
             5,
             &status,
+            &app_lock_mgr,
+            "test_task",
         )
         .await
         .unwrap();

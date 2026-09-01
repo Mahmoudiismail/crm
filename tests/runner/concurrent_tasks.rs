@@ -124,7 +124,6 @@ async fn wait_for_state(
 #[tokio::test]
 async fn test_execution_manager_concurrency_policy() {
     let status = Arc::new(Mutex::new(RunnerStatus {
-        app_locks: std::collections::HashMap::new(),
         running_tasks_count: 0,
         queued_tasks_count: 0,
         running_task_ids: Vec::new(),
@@ -132,13 +131,18 @@ async fn test_execution_manager_concurrency_policy() {
         last_error: "".to_string(),
         last_task_id: "".to_string(),
         last_run_at: "".to_string(),
+        waiting_for_app: std::collections::HashMap::new(),
     }));
 
     let temp_file = NamedTempFile::new().unwrap();
     let config_path = temp_file.path().to_str().unwrap().to_string();
     let sync_dir = tempfile::tempdir().unwrap();
 
-    let exec_tx = spawn_execution_manager(status.clone(), config_path.clone());
+    let exec_tx = spawn_execution_manager(
+        status.clone(),
+        config_path.clone(),
+        Arc::new(Mutex::new(std::collections::HashMap::new())),
+    );
 
     let policy = ExecutionPolicy {
         allow_shell_tasks: true,
@@ -202,7 +206,11 @@ async fn test_execution_manager_concurrency_policy() {
         assert_eq!(st.queued_tasks_count, 1, "Duplicate task should be queued");
     }
     reset!(sync1, sync2);
-    let exec_tx = spawn_execution_manager(status.clone(), config_path.clone());
+    let exec_tx = spawn_execution_manager(
+        status.clone(),
+        config_path.clone(),
+        Arc::new(Mutex::new(std::collections::HashMap::new())),
+    );
     let queue_task = |task: RunnerTask| {
         let tx = exec_tx.clone();
         let p = policy.clone();
@@ -234,9 +242,18 @@ async fn test_execution_manager_concurrency_policy() {
             "Same app_false -> 2nd task enters running state to wait on dynamic lock"
         );
         assert_eq!(st.queued_tasks_count, 0, "No tasks queued in manager");
+        assert_eq!(
+            st.waiting_for_app.get("t_false_2").map(|s| s.as_str()),
+            Some("app_false"),
+            "T2 is waiting for app_false lock"
+        );
     }
     reset!(sync1, sync2);
-    let exec_tx = spawn_execution_manager(status.clone(), config_path.clone());
+    let exec_tx = spawn_execution_manager(
+        status.clone(),
+        config_path.clone(),
+        Arc::new(Mutex::new(std::collections::HashMap::new())),
+    );
     let queue_task = |task: RunnerTask| {
         let tx = exec_tx.clone();
         let p = policy.clone();
@@ -267,7 +284,11 @@ async fn test_execution_manager_concurrency_policy() {
         assert_eq!(st.queued_tasks_count, 0, "No tasks queued");
     }
     reset!(sync1, sync2);
-    let exec_tx = spawn_execution_manager(status.clone(), config_path.clone());
+    let exec_tx = spawn_execution_manager(
+        status.clone(),
+        config_path.clone(),
+        Arc::new(Mutex::new(std::collections::HashMap::new())),
+    );
     let queue_task = |task: RunnerTask| {
         let tx = exec_tx.clone();
         let p = policy.clone();
@@ -289,13 +310,30 @@ async fn test_execution_manager_concurrency_policy() {
     queue_task(create_long_task("t_diff_2", vec!["app_y"], &sync2));
     wait_for_state(&status, 2, 0).await;
 
+    // Give time for lock acquisition to avoid false positive wait status
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
     {
         let st = status.lock().await;
         assert_eq!(st.running_tasks_count, 2, "Different apps -> both allowed");
         assert_eq!(st.queued_tasks_count, 0, "No tasks queued");
+        assert_eq!(
+            st.waiting_for_app.get("t_diff_1"),
+            None,
+            "T1 not waiting for app"
+        );
+        assert_eq!(
+            st.waiting_for_app.get("t_diff_2"),
+            None,
+            "T2 not waiting for app"
+        );
     }
     reset!(sync1, sync2);
-    let exec_tx = spawn_execution_manager(status.clone(), config_path.clone());
+    let exec_tx = spawn_execution_manager(
+        status.clone(),
+        config_path.clone(),
+        Arc::new(Mutex::new(std::collections::HashMap::new())),
+    );
     let queue_task = |task: RunnerTask| {
         let tx = exec_tx.clone();
         let p = policy.clone();
@@ -334,7 +372,11 @@ async fn test_execution_manager_concurrency_policy() {
         assert_eq!(st.queued_tasks_count, 0, "No tasks queued");
     }
     reset!(sync1, sync2);
-    let exec_tx = spawn_execution_manager(status.clone(), config_path.clone());
+    let exec_tx = spawn_execution_manager(
+        status.clone(),
+        config_path.clone(),
+        Arc::new(Mutex::new(std::collections::HashMap::new())),
+    );
     let queue_task = |task: RunnerTask| {
         let tx = exec_tx.clone();
         let p = policy.clone();
@@ -373,7 +415,11 @@ async fn test_execution_manager_concurrency_policy() {
         assert_eq!(st.queued_tasks_count, 0, "No tasks queued");
     }
     reset!(sync1, sync2);
-    let exec_tx = spawn_execution_manager(status.clone(), config_path.clone());
+    let exec_tx = spawn_execution_manager(
+        status.clone(),
+        config_path.clone(),
+        Arc::new(Mutex::new(std::collections::HashMap::new())),
+    );
     let queue_task = |task: RunnerTask| {
         let tx = exec_tx.clone();
         let p = policy.clone();
@@ -411,7 +457,6 @@ async fn test_execution_manager_concurrency_policy() {
 #[tokio::test]
 async fn test_execution_manager_race_safety() {
     let status = Arc::new(Mutex::new(RunnerStatus {
-        app_locks: std::collections::HashMap::new(),
         running_tasks_count: 0,
         queued_tasks_count: 0,
         running_task_ids: Vec::new(),
@@ -419,12 +464,17 @@ async fn test_execution_manager_race_safety() {
         last_error: "".to_string(),
         last_task_id: "".to_string(),
         last_run_at: "".to_string(),
+        waiting_for_app: std::collections::HashMap::new(),
     }));
 
     let temp_file = NamedTempFile::new().unwrap();
     let config_path = temp_file.path().to_str().unwrap().to_string();
     let sync_dir = tempfile::tempdir().unwrap();
-    let exec_tx = spawn_execution_manager(status.clone(), config_path.clone());
+    let exec_tx = spawn_execution_manager(
+        status.clone(),
+        config_path.clone(),
+        Arc::new(Mutex::new(std::collections::HashMap::new())),
+    );
 
     let policy = ExecutionPolicy {
         allow_shell_tasks: true,

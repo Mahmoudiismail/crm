@@ -35,9 +35,12 @@ pub fn get_task_app_ids(task: &RunnerTask) -> HashSet<String> {
     app_ids
 }
 
+use crate::runner::engine::state::AppLockManager;
+
 pub fn spawn_execution_manager(
     status: Arc<Mutex<RunnerStatus>>,
     config_path: String,
+    app_lock_manager: AppLockManager,
 ) -> mpsc::Sender<ExecutionManagerCommand> {
     let (tx, mut rx) = mpsc::channel(128);
     let tx_clone = tx.clone();
@@ -119,11 +122,12 @@ pub fn spawn_execution_manager(
 
                     let tx_finish = tx_clone.clone();
                     let st_clone = status.clone();
+                    let app_lock_mgr = app_lock_manager.clone();
                     let task_to_run_for_spawn = task_to_run.clone();
                     let handle = tokio::spawn(async move {
                         let mut task_to_run = task_to_run_for_spawn;
                         let task_id = task_to_run.id.clone();
-                        run_task_inner(&mut task_to_run, &policy, &st_clone).await;
+                        run_task_inner(&mut task_to_run, &policy, &st_clone, &app_lock_mgr).await;
 
                         let mut last_err = None;
                         {
@@ -161,7 +165,6 @@ pub fn start_scheduler(runner_config_path: String) -> RunnerHandle {
     info!("Starting scheduler with config: {}", runner_config_path);
     let (tx, mut rx) = mpsc::channel::<RunnerCommand>(64);
     let status = Arc::new(Mutex::new(RunnerStatus {
-        app_locks: std::collections::HashMap::new(),
         running_tasks_count: 0,
         queued_tasks_count: 0,
         running_task_ids: Vec::new(),
@@ -169,12 +172,14 @@ pub fn start_scheduler(runner_config_path: String) -> RunnerHandle {
         last_error: String::new(),
         last_task_id: String::new(),
         last_run_at: String::new(),
+        waiting_for_app: std::collections::HashMap::new(),
     }));
 
     let status_bg = status.clone();
     let config_path = runner_config_path.clone();
 
-    let exec_tx = spawn_execution_manager(status.clone(), config_path.clone());
+    let app_lock_manager = Arc::new(Mutex::new(std::collections::HashMap::new()));
+    let exec_tx = spawn_execution_manager(status.clone(), config_path.clone(), app_lock_manager);
     let _exec_tx_loop = exec_tx.clone();
 
     let get_mod_time = |p: &str| -> Option<SystemTime> { fs::metadata(p).ok()?.modified().ok() };
