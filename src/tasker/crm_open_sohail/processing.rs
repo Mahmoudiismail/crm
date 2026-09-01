@@ -256,19 +256,12 @@ fn enrich_dataset(
             });
         }
 
-        let total_count: f64 = enriched_rows.iter().map(|r| r.grand_total).sum();
-        if !enriched_rows.is_empty() && total_count > 0.0 {
+        if !enriched_rows.is_empty() {
             final_datasets.push(EnrichedDataset {
                 branch: dataset.branch,
                 month: dataset.month,
                 data: enriched_rows,
             });
-        } else if total_count == 0.0 {
-            tracing::info!(
-                "Omitting empty table for branch: '{}', month: '{}' (Total tickets: 0)",
-                dataset.branch,
-                dataset.month
-            );
         }
     }
 

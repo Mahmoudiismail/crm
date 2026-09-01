@@ -1,5 +1,4 @@
 pub mod auth;
-pub mod cleanup;
 pub mod config;
 pub mod downloader;
 pub mod fetcher;
@@ -41,7 +40,7 @@ pub async fn run_once(
     let client = build_client(config).context("Failed to build HTTP client")?;
 
     tracing::info!("Ensuring authentication...");
-    let _token = auth::ensure_authenticated(config, &client, false, false)
+    let _token = auth::ensure_authenticated(config, &client, false)
         .await
         .context("Failed during authentication process")?;
     tracing::trace!("Authentication successful.");
@@ -91,27 +90,6 @@ pub async fn run_once(
         let final_cfg = config_arc.lock().await;
         *config = final_cfg.clone();
     }
-
-    if let Some(retention_days) = config.retention_days {
-        if retention_days > 0 {
-            tracing::info!(
-                "Running auto-cleanup for reports older than {} days...",
-                retention_days
-            );
-            match crate::crm::cleanup::cleanup_old_reports(&download_dir, retention_days) {
-                Ok(deleted_count) => {
-                    tracing::info!("Cleanup completed. Deleted {} old files.", deleted_count)
-                }
-                Err(e) => tracing::error!("Failed to clean up old reports: {:?}", e),
-            }
-        }
-    }
-
-    use std::time::{SystemTime, UNIX_EPOCH};
-    config.last_run_timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
 
     config
         .save(&path_str)
