@@ -124,6 +124,7 @@ async fn wait_for_state(
 #[tokio::test]
 async fn test_execution_manager_concurrency_policy() {
     let status = Arc::new(Mutex::new(RunnerStatus {
+        app_locks: std::collections::HashMap::new(),
         running_tasks_count: 0,
         queued_tasks_count: 0,
         running_task_ids: Vec::new(),
@@ -215,21 +216,24 @@ async fn test_execution_manager_concurrency_policy() {
         })
     };
 
-    // TEST 6: Same app, false -> blocked
+    // TEST 6: Same app, false -> NO LONGER blocked in the execution manager queue
+    // (It now starts and acquires a dynamic lock inside the execution pipeline,
+    //  so both tasks enter 'running' state from the manager's perspective,
+    //  even though the 2nd task is sleeping on the semaphore inside pipeline.rs)
     let sync1 = sync_dir.path().join("t_false_1.lock");
     let sync2 = sync_dir.path().join("t_false_2.lock");
     queue_task(create_long_task("t_false_1", vec!["app_false"], &sync1));
     wait_for_state(&status, 1, 0).await;
     queue_task(create_long_task("t_false_2", vec!["app_false"], &sync2));
-    wait_for_state(&status, 1, 1).await;
+    wait_for_state(&status, 2, 0).await;
 
     {
         let st = status.lock().await;
         assert_eq!(
-            st.running_tasks_count, 1,
-            "Same app_false -> 2nd task blocked"
+            st.running_tasks_count, 2,
+            "Same app_false -> 2nd task enters running state to wait on dynamic lock"
         );
-        assert_eq!(st.queued_tasks_count, 1, "2nd task queued");
+        assert_eq!(st.queued_tasks_count, 0, "No tasks queued in manager");
     }
     reset!(sync1, sync2);
     let exec_tx = spawn_execution_manager(status.clone(), config_path.clone());
@@ -305,7 +309,7 @@ async fn test_execution_manager_concurrency_policy() {
         })
     };
 
-    // TEST 9: Multiple app dependencies, false -> blocked
+    // TEST 9: Multiple app dependencies, false -> allowed (waits internally at execution)
     let sync1 = sync_dir.path().join("t_multi_1.lock");
     let sync2 = sync_dir.path().join("t_multi_2.lock");
     queue_task(create_long_task(
@@ -319,15 +323,15 @@ async fn test_execution_manager_concurrency_policy() {
         vec!["app_false", "app_z"],
         &sync2,
     ));
-    wait_for_state(&status, 1, 1).await;
+    wait_for_state(&status, 2, 0).await;
 
     {
         let st = status.lock().await;
         assert_eq!(
-            st.running_tasks_count, 1,
-            "Multi app with shared false app -> blocked"
+            st.running_tasks_count, 2,
+            "Multi app enters running state concurrently"
         );
-        assert_eq!(st.queued_tasks_count, 1, "2nd task queued");
+        assert_eq!(st.queued_tasks_count, 0, "No tasks queued");
     }
     reset!(sync1, sync2);
     let exec_tx = spawn_execution_manager(status.clone(), config_path.clone());
@@ -402,13 +406,12 @@ async fn test_execution_manager_concurrency_policy() {
 }
 
 // TEST 12: Race condition - Deterministic test avoiding arbitrary sleep where possible.
-// Because the ExecutionManager processes the rx mpsc queue sequentially, two tasks sent sequentially
-// will be queued and evaluated by the `can_run` logic atomically relative to each other in the `queued_tasks` loop.
-// This proves that even if both are pushed into the queue at the same time, the first one that transitions to running
-// will inherently block the second one during the same cycle because `running_tasks` is updated synchronously before processing the next item.
+// Both tasks are submitted quickly. They should both enter the running state (since they are different tasks)
+// but lock dynamically on the same application under the hood.
 #[tokio::test]
 async fn test_execution_manager_race_safety() {
     let status = Arc::new(Mutex::new(RunnerStatus {
+        app_locks: std::collections::HashMap::new(),
         running_tasks_count: 0,
         queued_tasks_count: 0,
         running_task_ids: Vec::new(),
@@ -456,7 +459,7 @@ async fn test_execution_manager_race_safety() {
     for _ in 0..100 {
         let done = {
             let st = status.lock().await;
-            st.running_tasks_count == 1 && st.queued_tasks_count == 1
+            st.running_tasks_count == 2 && st.queued_tasks_count == 0
         };
         if done {
             break;
@@ -466,13 +469,10 @@ async fn test_execution_manager_race_safety() {
 
     let st = status.lock().await;
     assert_eq!(
-        st.running_tasks_count, 1,
-        "Only one task should acquire execution permission deterministically"
+        st.running_tasks_count, 2,
+        "Both tasks should acquire execution permission and enter running state"
     );
-    assert_eq!(
-        st.queued_tasks_count, 1,
-        "The second task MUST be queued safely"
-    );
+    assert_eq!(st.queued_tasks_count, 0, "No tasks are queued safely");
 
     let _ = std::fs::write(&sync1, "");
     let _ = std::fs::write(&sync2, "");

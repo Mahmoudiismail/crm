@@ -398,6 +398,7 @@ mod tests {
         save_config(cfg, path_str).await.unwrap();
 
         let status = Arc::new(Mutex::new(RunnerStatus {
+            app_locks: std::collections::HashMap::new(),
             running_tasks_count: 0,
             queued_tasks_count: 0,
             running_task_ids: Vec::new(),
@@ -509,6 +510,7 @@ mod tests {
         save_config(cfg, path_str).await.unwrap();
 
         let status = Arc::new(Mutex::new(RunnerStatus {
+            app_locks: std::collections::HashMap::new(),
             running_tasks_count: 0,
             queued_tasks_count: 0,
             running_task_ids: Vec::new(),

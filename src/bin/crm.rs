@@ -72,27 +72,6 @@ async fn run_crm_startup(options: CrmCliOptions) -> Result<()> {
         .as_deref()
         .map(|e| replace_date_vars(e, start_date.as_deref()));
 
-    let manual_override = options.start_date.is_some() || options.end_date.is_some();
-
-    if !manual_override && config.cooldown_seconds > 0 {
-        use std::time::{SystemTime, UNIX_EPOCH};
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
-
-        if config.last_run_timestamp > 0 {
-            let elapsed = now.saturating_sub(config.last_run_timestamp);
-            if elapsed < config.cooldown_seconds {
-                info!(
-                    "Skipping CRM execution: cooldown active. Last run: {}s ago, cooldown: {}s",
-                    elapsed, config.cooldown_seconds
-                );
-                return Ok(());
-            }
-        }
-    }
-
     crm::run_once(
         &mut config,
         &config_path,
