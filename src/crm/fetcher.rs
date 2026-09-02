@@ -178,6 +178,8 @@ pub async fn fetch_reports(
         from_date,
         download_csv,
         incomplete_reservation_limit,
+        recent_download_window_seconds,
+        retention_days,
         initial_token,
     ) = {
         let cfg = config_mutex.lock().await;
@@ -197,6 +199,8 @@ pub async fn fetch_reports(
             cfg.from_date.clone(),
             cfg.download_csv,
             cfg.incomplete_reservation_limit,
+            cfg.recent_download_window_seconds,
+            cfg.retention_days,
             t,
         )
     };
@@ -217,10 +221,12 @@ pub async fn fetch_reports(
             _ => "",
         };
 
-        if !prefix.is_empty() && has_recent_download(download_dir, prefix).await {
+        if !prefix.is_empty()
+            && has_recent_download(download_dir, prefix, recent_download_window_seconds).await
+        {
             info!(
-                "Skipping fetch for '{}': A recent file (<30s old) already exists in Downloads",
-                def.key
+                "Skipping fetch for '{}': A recent file (<{}s old) already exists in Downloads",
+                def.key, recent_download_window_seconds
             );
             continue;
         }
@@ -442,6 +448,16 @@ pub async fn fetch_reports(
 
     // Await all downloads to complete
     let _ = download_processor.await;
+
+    if let Some(days) = retention_days {
+        if days > 0 {
+            trace!(
+                "Running retention cleanup for CRM reports older than {} days",
+                days
+            );
+            cleanup_old_reports(download_dir, days).await;
+        }
+    }
 
     // Assemble results
     let mut calls_array: Vec<Value> = Vec::new();
@@ -1174,8 +1190,52 @@ fn format_redacted_headers(headers: &reqwest::header::HeaderMap) -> String {
 // Tests
 // ──────────────────────────────────────────────────────────────
 
-async fn has_recent_download(download_dir: &Path, prefix: &str) -> bool {
-    let threshold = SystemTime::now() - std::time::Duration::from_secs(30);
+async fn cleanup_old_reports(download_dir: &Path, retention_days: u64) {
+    if retention_days == 0 {
+        return;
+    }
+
+    let threshold =
+        SystemTime::now() - std::time::Duration::from_secs(retention_days * 24 * 60 * 60);
+    let prefixes = [
+        "ticket_report_",
+        "call_logs_",
+        "lead_report_",
+        "user_report_",
+    ];
+
+    if let Ok(mut entries) = fs::read_dir(download_dir).await {
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            if let Ok(metadata) = entry.metadata().await {
+                if metadata.is_file() {
+                    if let Some(name) = entry.file_name().to_str() {
+                        if name.ends_with(".csv") && prefixes.iter().any(|&p| name.starts_with(p)) {
+                            if let Ok(modified) = metadata.modified() {
+                                if modified < threshold {
+                                    if let Err(e) = fs::remove_file(entry.path()).await {
+                                        error!(
+                                            "Failed to delete old CRM report '{}': {:#}",
+                                            name, e
+                                        );
+                                    } else {
+                                        info!("Deleted old CRM report: {}", name);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+async fn has_recent_download(download_dir: &Path, prefix: &str, window_seconds: u64) -> bool {
+    if window_seconds == 0 {
+        return false;
+    }
+
+    let threshold = SystemTime::now() - std::time::Duration::from_secs(window_seconds);
 
     if let Ok(mut entries) = fs::read_dir(download_dir).await {
         while let Ok(Some(entry)) = entries.next_entry().await {
@@ -1200,6 +1260,74 @@ async fn has_recent_download(download_dir: &Path, prefix: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn test_has_recent_download() {
+        let dir = tempdir().unwrap();
+        let path = dir.path();
+        let file_path = path.join("ticket_report_123.csv");
+        std::fs::write(&file_path, "dummy").unwrap();
+
+        // With window > 0, should find the recent file
+        assert!(has_recent_download(path, "ticket_report_", 30).await);
+
+        // With window = 0, should always return false
+        assert!(!has_recent_download(path, "ticket_report_", 0).await);
+
+        // Different prefix should not match
+        assert!(!has_recent_download(path, "call_logs_", 30).await);
+
+        // Ensure older files are ignored, we change the modified time of the file to 1 hour ago
+        let one_hour_ago = filetime::FileTime::from_system_time(
+            SystemTime::now() - std::time::Duration::from_secs(3600),
+        );
+        filetime::set_file_mtime(&file_path, one_hour_ago).unwrap();
+        assert!(!has_recent_download(path, "ticket_report_", 30).await);
+    }
+
+    #[tokio::test]
+    async fn test_cleanup_old_reports() {
+        let dir = tempdir().unwrap();
+        let path = dir.path();
+
+        let old_ticket = path.join("ticket_report_old.csv");
+        let old_lead = path.join("lead_report_old.csv");
+        let recent_ticket = path.join("ticket_report_new.csv");
+        let other_csv = path.join("other_data.csv");
+        let other_txt = path.join("ticket_report_123.txt");
+
+        std::fs::write(&old_ticket, "dummy").unwrap();
+        std::fs::write(&old_lead, "dummy").unwrap();
+        std::fs::write(&recent_ticket, "dummy").unwrap();
+        std::fs::write(&other_csv, "dummy").unwrap();
+        std::fs::write(&other_txt, "dummy").unwrap();
+
+        let old_time = filetime::FileTime::from_system_time(
+            SystemTime::now() - std::time::Duration::from_secs(3 * 24 * 60 * 60), // 3 days ago
+        );
+        filetime::set_file_mtime(&old_ticket, old_time).unwrap();
+        filetime::set_file_mtime(&old_lead, old_time).unwrap();
+        filetime::set_file_mtime(&other_csv, old_time).unwrap();
+        filetime::set_file_mtime(&other_txt, old_time).unwrap();
+
+        // Run cleanup with retention 0 (should do nothing)
+        cleanup_old_reports(path, 0).await;
+        assert!(old_ticket.exists());
+        assert!(old_lead.exists());
+
+        // Run cleanup with retention 2 days
+        cleanup_old_reports(path, 2).await;
+
+        // Old reports should be deleted
+        assert!(!old_ticket.exists());
+        assert!(!old_lead.exists());
+
+        // Recent reports and unrelated files should be kept
+        assert!(recent_ticket.exists());
+        assert!(other_csv.exists());
+        assert!(other_txt.exists());
+    }
 
     #[test]
     fn test_split_monthly_single_month() {

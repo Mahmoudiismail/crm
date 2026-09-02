@@ -42,7 +42,17 @@ This file controls the GUI, global timing, and task scheduling. It has a `regist
 
 Executables spawned via the runner or manually have their own configurations.
 
-- **`config.json` (CRM):** Cognito user pool, API endpoints, credentials. Can override the standard `Downloads` folder using `custom_download_folder`. The CLI argument `--custom-download-folder` overrides this config key for a single run without persisting to `config.json`.
+- **`config.json` (CRM):** Cognito user pool, API endpoints, credentials. Can override the standard `Downloads` folder using `custom_download_folder`. The CLI argument `--custom-download-folder` overrides this config key for a single run without persisting to `config.json`. Includes CRM-specific download configuration properties:
+  - `recent_download_window_seconds`: (Default: 30) Prevents redundant CRM downloads by skipping requests if a recently downloaded file for the same report already exists in the folder and its age is within this window in seconds. Set to `0` to always fetch. This is based on the presence/age of downloaded report files, and it is NOT a general CRM execution cooldown.
+  - `retention_days`: (Optional) If configured with a value greater than `0`, the CRM process will clean up older downloaded CRM reports (`ticket_report_*`, `call_logs_*`, `lead_report_*`, `user_report_*`) modified longer than `retention_days` days ago. Missing, `null` or `0` disables cleanup. Unrelated files in the directory are safely preserved.
+
+  ```json
+  {
+    "username": "my_user",
+    "recent_download_window_seconds": 60,
+    "retention_days": 14
+  }
+  ```
 - **`yasweb_config.json`:** Browser automation configurations, cached filter mappings, and report timeout limits. The `timeout_minutes` field defines how long to wait for UI loaders and file downloads. `start_date_key` and `end_date_key` are dictionaries containing `key` and `format` fields to specify both the web UI filter name and its exact expected date/time format (e.g. `{"key": "FromDate", "format": "%d-%m-%Y 00:00"}`).
 - **`wcxx_config.json`:** Webex CC token and organization endpoints.
 - **`tasker_config.json`:** Tasker tasks like CSV pivoting, team mappings, Outlook configuration, and leads reporting for the Call Center. Includes `send_exceptions` to dynamically read from `category_exceptions` and skip standard team branch logic for exception tickets.
