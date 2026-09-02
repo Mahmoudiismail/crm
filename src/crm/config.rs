@@ -53,6 +53,12 @@ pub struct AppConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub custom_download_folder: Option<String>,
 
+    #[serde(default = "default_recent_download_window_seconds")]
+    pub recent_download_window_seconds: u64,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retention_days: Option<u64>,
+
     // Token / auth cache
     #[serde(default)]
     pub access_token: String,
@@ -88,6 +94,10 @@ fn default_true() -> bool {
     true
 }
 
+fn default_recent_download_window_seconds() -> u64 {
+    30
+}
+
 fn default_incomplete_reservation_limit() -> u32 {
     10000
 }
@@ -114,6 +124,8 @@ impl Default for AppConfig {
             base_url: "https://crm.fakeeh.care/medi-crm/vault/v1/".into(),
             scheduled_time: "01:00".into(),
             custom_download_folder: None,
+            recent_download_window_seconds: 30,
+            retention_days: None,
             access_token: String::new(),
             access_token_expiry: String::new(),
             id_token: String::new(),
@@ -280,6 +292,11 @@ impl std::fmt::Debug for AppConfig {
             .field("base_url", &self.base_url)
             .field("scheduled_time", &self.scheduled_time)
             .field("custom_download_folder", &self.custom_download_folder)
+            .field(
+                "recent_download_window_seconds",
+                &self.recent_download_window_seconds,
+            )
+            .field("retention_days", &self.retention_days)
             .field("access_token", &"***REDACTED***")
             .field("access_token_expiry", &self.access_token_expiry)
             .field("id_token", &"***REDACTED***")
