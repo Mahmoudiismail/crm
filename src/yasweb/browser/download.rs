@@ -27,6 +27,49 @@ pub fn configure_download_directory(
     }
 }
 
+/// Waits for a completed spreadsheet or CSV download in the specified directory.
+
+///
+
+/// A download is considered complete when the directory contains an `.xlsx`, `.xls`,
+
+/// or `.csv` file and no `.crdownload` or `.tmp` files. The wait ends when the
+
+/// download completes or the timeout expires.
+
+///
+
+/// # Examples
+
+///
+
+/// ```
+
+/// use std::fs;
+
+/// use std::path::PathBuf;
+
+///
+
+/// let download_dir = std::env::temp_dir().join("download-example");
+
+/// fs::create_dir_all(&download_dir).unwrap();
+
+/// fs::write(download_dir.join("report.csv"), b"data").unwrap();
+
+///
+
+/// wait_for_download(Some(&download_dir), 1);
+
+///
+
+/// fs::remove_dir_all(download_dir).unwrap();
+
+/// ```
+
+///
+
+/// `download_dir` of `None` leaves the function without waiting.
 pub fn wait_for_download(download_dir: Option<&PathBuf>, timeout_minutes: u64) {
     if let Some(dl_dir) = download_dir {
         info!("Waiting for download to complete in {:?}...", dl_dir);

@@ -7,6 +7,41 @@ use tracing::{error, info, warn};
 
 use crate::yasweb::browser::{debug, javascript};
 
+/// Navigates to an MIS report, applies the requested filters, and exports the report as XLSX.
+///
+/// Returns the filter labels discovered in the report form.
+///
+/// # Examples
+///
+/// ```no_run
+/// use std::collections::HashMap;
+/// use std::sync::Arc;
+///
+/// # let tab: Arc<Tab> = unimplemented!();
+/// let mut step_num = 0;
+/// let filters = HashMap::new();
+///
+/// let discovered = navigate_and_run_report(
+///     &tab,
+///     "Sales Report",
+///     "Operational",
+///     &filters,
+///     10,
+///     &mut step_num,
+/// )?;
+/// # Ok::<(), anyhow::Error>(())
+/// ```
+///
+/// # Arguments
+///
+/// * `active_report_name` - The report to select and export.
+/// * `active_report_type` - The report category to select.
+/// * `active_filters` - Filter values to apply before generating the report.
+/// * `step_num` - Counter used to number saved browser-state snapshots.
+///
+/// # Returns
+///
+/// The labels of the filters discovered in the report form.
 pub fn navigate_and_run_report(
     tab: &Arc<Tab>,
     active_report_name: &str,
