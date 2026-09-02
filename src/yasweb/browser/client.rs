@@ -4,6 +4,19 @@ use std::sync::{Arc, Weak};
 use std::time::Duration;
 use tracing::info;
 
+/// Retrieves the first available browser tab or opens a new one when no tab exists.
+///
+/// # Examples
+///
+/// ```no_run
+/// # fn example(browser: std::sync::Arc<Browser>) -> anyhow::Result<()> {
+/// let tab = get_or_create_tab(&browser)?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// [`Browser`]: https://docs.rs/chromiumoxide/latest/chromiumoxide/browser/struct.Browser.html
+pub fn get_or_create_tab(browser: &Arc<Browser>) -> Result<Arc<Tab>> {
 pub fn get_or_create_tab(browser: &Arc<Browser>) -> Result<Arc<Tab>> {
     let mut found = None;
     for _ in 0..10 {
