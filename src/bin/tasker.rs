@@ -117,7 +117,9 @@ pub fn run_app(options: TaskerCliOptions) -> Result<()> {
       "fallback_oul": "",
       "dashboard_sheet_name": "Sheet1",
       "dashboard_pivot_name": "PivotTable2",
-      "table_column_widths": ["15%", "10%", "10%", "15%", "15%", "15%", "20%"]
+      "table_column_widths": ["15%", "10%", "10%", "15%", "15%", "15%", "20%"],
+      "sender_account_email": "default@example.com",
+      "reply_subject_prefix": "[CRM]"
     },
     {
       "type": "department_split",
