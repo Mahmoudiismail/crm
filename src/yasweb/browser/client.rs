@@ -6,13 +6,13 @@ use tracing::info;
 
 pub fn get_or_create_tab(browser: &Arc<Browser>) -> Result<Arc<Tab>> {
     let mut found = None;
-    for _ in 0..5 {
+    for _ in 0..10 {
         let tabs = browser.get_tabs().lock().unwrap_or_else(|e| e.into_inner());
         if let Some(first) = tabs.first() {
             found = Some(first.clone());
             break;
         }
-        std::thread::sleep(Duration::from_millis(500));
+        std::thread::sleep(Duration::from_millis(100));
     }
 
     match found {
