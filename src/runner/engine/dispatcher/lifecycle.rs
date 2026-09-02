@@ -31,13 +31,14 @@ pub fn spawn_execution_manager(
         while let Some(cmd) = rx.recv().await {
             match cmd {
                 ExecutionManagerCommand::QueueTask { task, policy } => {
-                    {
+                    let is_duplicate = queued_tasks.iter().any(|(t, _)| t.id == task.id);
+                    if !is_duplicate {
                         let mut st = status.lock().await;
                         if !st.queued_task_ids.contains(&task.id) {
                             st.queued_task_ids.push(task.id.clone());
                         }
+                        queued_tasks.push_back((task, policy));
                     }
-                    queued_tasks.push_back((task, policy));
                 }
                 ExecutionManagerCommand::TaskFinished {
                     task_id,
