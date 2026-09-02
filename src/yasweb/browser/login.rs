@@ -32,14 +32,12 @@ pub fn execute_login(
     info!("Waiting for username input...");
     let username_selector = "input[formcontrolname='username'], #mat-input-0";
 
-    // Custom wait loop to wait longer than default timeout
     let mut username_found = false;
-    for _ in 0..6 {
-        if tab.wait_for_element(username_selector).is_ok() {
-            username_found = true;
-            break;
-        }
-        std::thread::sleep(Duration::from_secs(5));
+    if tab
+        .wait_for_element_with_custom_timeout(username_selector, Duration::from_secs(30))
+        .is_ok()
+    {
+        username_found = true;
     }
 
     if !username_found {
@@ -61,8 +59,6 @@ pub fn execute_login(
                 return Err(anyhow::anyhow!("Failed to type username"));
             }
             info!("Successfully typed username.");
-
-            std::thread::sleep(Duration::from_secs(2));
 
             if let Some(password) = &config.password {
                 info!("Waiting for password input...");
@@ -119,7 +115,7 @@ pub fn execute_login(
 
             info!("Waiting for dashboard to load or error message...");
             let mut login_success = false;
-            for _ in 0..15 {
+            for _ in 0..60 {
                 if let Ok(err_alert) = tab.find_element(".alert-danger.fade.show") {
                     let msg = err_alert.get_inner_text().unwrap_or_default();
                     error!("Login failed: {}", msg.trim());
@@ -146,7 +142,7 @@ pub fn execute_login(
                     }
                     break;
                 }
-                std::thread::sleep(Duration::from_secs(2));
+                std::thread::sleep(Duration::from_millis(500));
             }
 
             if !login_success {
