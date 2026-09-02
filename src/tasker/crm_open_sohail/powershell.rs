@@ -572,16 +572,28 @@ mod tests {
     fn test_dsfmc_awali_filter_and_clear_logic() {
         let src = include_str!("powershell.rs");
         // Assert we are explicitly clearing ALL filters before filtering/processing
-        assert!(src.contains("$Pivot.ClearAllFilters()"), "Should clear pivot filters to avoid persisting leftover state");
-        assert!(src.contains("$branchSlicerCache.ClearAllFilters()"), "Should clear branch slicer filters");
-        assert!(src.contains("$monthSlicerCache.ClearAllFilters()"), "Should clear month slicer filters");
+        assert!(
+            src.contains("$Pivot.ClearAllFilters()"),
+            "Should clear pivot filters to avoid persisting leftover state"
+        );
+        assert!(
+            src.contains("$branchSlicerCache.ClearAllFilters()"),
+            "Should clear branch slicer filters"
+        );
+        assert!(
+            src.contains("$monthSlicerCache.ClearAllFilters()"),
+            "Should clear month slicer filters"
+        );
 
         // Assert we are using regex bounding instead of not_contains to avoid skipping branches
         assert!(src.contains("-match \"^$([regex]::Escape($f.Trim()))$\""), "Should match explicitly with regex to prevent space trimming bugs dropping DSFMC-Awali");
 
         let bad_not = "-notcon";
         let bad_contains = "tains";
-        assert!(!src.contains(&format!("{}{}", bad_not, bad_contains)), "Should not use array matching for branch iteration");
+        assert!(
+            !src.contains(&format!("{}{}", bad_not, bad_contains)),
+            "Should not use array matching for branch iteration"
+        );
     }
 
     #[test]

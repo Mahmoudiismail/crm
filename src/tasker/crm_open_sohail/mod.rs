@@ -396,24 +396,48 @@ mod tests {
         let src = include_str!("mod.rs");
 
         // Assert sender_account_email is used
-        assert!(src.contains("sender_account_email"), "Should reference sender_account_email config field");
-        assert!(src.contains("$TargetAccount = $account"), "Should locate the specific target account by matching SMTP address");
+        assert!(
+            src.contains("sender_account_email"),
+            "Should reference sender_account_email config field"
+        );
+        assert!(
+            src.contains("$TargetAccount = $account"),
+            "Should locate the specific target account by matching SMTP address"
+        );
 
         // Assert reply_subject_prefix is used for searching
-        assert!(src.contains("reply_subject_prefix"), "Should reference reply_subject_prefix config field");
-        assert!(src.contains("like '%{subject_prefix}%'"), "Should use subject prefix in search query");
+        assert!(
+            src.contains("reply_subject_prefix"),
+            "Should reference reply_subject_prefix config field"
+        );
+        assert!(
+            src.contains("like '%{subject_prefix}%'"),
+            "Should use subject prefix in search query"
+        );
 
         // Assert .ReplyAll() is used instead of .CreateItem() or .Reply()
-        assert!(src.contains(".ReplyAll()"), "Should use Outlook's ReplyAll method to preserve thread context");
+        assert!(
+            src.contains(".ReplyAll()"),
+            "Should use Outlook's ReplyAll method to preserve thread context"
+        );
 
         let create_item = "$Outlook.CreateItem";
-        assert!(!src.contains(&format!("{}(0)", create_item)), "Should not create a brand new email item");
+        assert!(
+            !src.contains(&format!("{}(0)", create_item)),
+            "Should not create a brand new email item"
+        );
 
         // Assert .Save() is used instead of .Send() to ensure Draft state
-        assert!(src.contains("$ReplyMail.Save()"), "Should save email as draft");
+        assert!(
+            src.contains("$ReplyMail.Save()"),
+            "Should save email as draft"
+        );
 
         let bad_send = "$ReplyMail.Se";
         let bad_send2 = "nd()";
-        assert!(!src.contains(&format!("{}{}", bad_send, bad_send2)), "Should never call Send() on the generated email");
+        assert!(
+            !src.contains(&format!("{}{}", bad_send, bad_send2)),
+            "Should never call Send() on the generated email"
+        );
     }
 }
