@@ -5,7 +5,6 @@ use crm_tool::runner::engine::app_lock::AppLockManager;
 use crm_tool::runner::engine::pipeline::run_task_inner;
 use crm_tool::runner::engine::state::{ExecutionPolicy, RunnerStatus};
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::Mutex;
 
 fn create_mock_app(id: &str, concurrent: bool) -> RegisteredApp {
@@ -76,19 +75,33 @@ async fn test_gui_status_waiting_for_app_deterministic() {
     let pol = policy.clone();
 
     // Start execution
-    let handle = tokio::spawn(async move { run_task_inner(&mut task, &pol, &st_clone, &am).await });
+    let (tx1, rx1) = tokio::sync::oneshot::channel();
+    let handle = tokio::spawn(async move {
+        tx1.send(()).unwrap();
+        run_task_inner(&mut task, &pol, &st_clone, &am).await
+    });
 
-    // Wait until it marks itself as waiting
-    for _ in 0..100 {
-        let is_waiting = {
-            let st = status.lock().await;
-            st.waiting_for_app.contains_key("t1")
-        };
-        if is_waiting {
-            break;
+    rx1.await.unwrap();
+    tokio::task::yield_now().await;
+
+    // Wait until it marks itself as waiting via channel
+    let (tx_check, rx_check) = tokio::sync::oneshot::channel();
+    let st_clone2 = status.clone();
+    tokio::spawn(async move {
+        loop {
+            let is_waiting = {
+                let st = st_clone2.lock().await;
+                st.waiting_for_app.contains_key("t1")
+            };
+            if is_waiting {
+                tx_check.send(()).unwrap();
+                break;
+            }
+            tokio::task::yield_now().await;
         }
-        tokio::time::sleep(Duration::from_millis(5)).await;
-    }
+    });
+
+    rx_check.await.unwrap();
 
     {
         let st = status.lock().await;

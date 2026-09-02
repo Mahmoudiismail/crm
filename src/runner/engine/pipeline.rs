@@ -63,7 +63,7 @@ async fn execute_step(
     }
 
     // 2. Filter out concurrent apps and keep only non-concurrent ones
-    let mut non_concurrent_apps = Vec::new();
+    let mut non_concurrent_apps: Vec<String> = Vec::new();
     for app_id in required_apps {
         if let Some(app) = policy.registered_apps.iter().find(|a| a.id == app_id) {
             if !app.allow_concurrent_tasks {
@@ -74,6 +74,7 @@ async fn execute_step(
 
     // 3. Sort deterministically to avoid deadlocks
     non_concurrent_apps.sort();
+    non_concurrent_apps.dedup();
 
     // 4. Acquire all necessary semaphores in order
     let mut acquired_permits = Vec::new();
