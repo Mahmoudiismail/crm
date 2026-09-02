@@ -607,7 +607,7 @@ async fn main() -> Result<()> {
                         let launch_options = headless_chrome::LaunchOptions::default_builder()
                             .headless(config_task.headless)
                             .sandbox(false)
-                            .idle_browser_timeout(std::time::Duration::from_secs(120))
+                            .idle_browser_timeout(std::time::Duration::MAX)
                             .user_data_dir(Some(user_data_dir.clone()))
                             .args(args)
                             .build()

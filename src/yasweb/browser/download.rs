@@ -31,9 +31,10 @@ pub fn wait_for_download(download_dir: Option<&PathBuf>, timeout_minutes: u64) {
     if let Some(dl_dir) = download_dir {
         info!("Waiting for download to complete in {:?}...", dl_dir);
         let mut download_complete = false;
-        let timeout_seconds = timeout_minutes * 60;
+        let timeout_duration = Duration::from_secs(timeout_minutes * 60);
+        let start_time = std::time::Instant::now();
 
-        for _ in 0..timeout_seconds {
+        while start_time.elapsed() < timeout_duration {
             if let Ok(entries) = std::fs::read_dir(dl_dir) {
                 let mut found_incomplete = false;
                 let mut found_completed = false;
@@ -53,7 +54,7 @@ pub fn wait_for_download(download_dir: Option<&PathBuf>, timeout_minutes: u64) {
                     break;
                 }
             }
-            std::thread::sleep(Duration::from_secs(1));
+            std::thread::sleep(Duration::from_millis(200));
         }
 
         if download_complete {
