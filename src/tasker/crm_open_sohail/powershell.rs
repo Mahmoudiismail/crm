@@ -160,6 +160,11 @@ try {{
     if (-not $branchSlicerCache) {{ throw "Branch slicer cache not found" }}
     if (-not $monthSlicerCache) {{ throw "Month slicer cache not found" }}
 
+    Write-Output "Clearing saved filters..."
+    $Pivot.ClearAllFilters()
+    $branchSlicerCache.ClearAllFilters()
+    $monthSlicerCache.ClearAllFilters()
+
     function Get-SlicerItems {{
         param ($cache)
         $items = @()
@@ -189,14 +194,32 @@ try {{
     $branchItemsRaw = Get-SlicerItems -cache $branchSlicerCache
     $branchItems = @()
     foreach ($item in $branchItemsRaw) {{
-        if ($branchFilter -and $branchFilter -notcontains $item.Caption) {{ continue }}
+        if ($branchFilter) {{
+            $found = $false
+            foreach ($f in $branchFilter) {{
+                if ($item.Caption.Trim() -match "^$([regex]::Escape($f.Trim()))$") {{
+                    $found = $true
+                    break
+                }}
+            }}
+            if (-not $found) {{ continue }}
+        }}
         $branchItems += $item
     }}
 
     $monthItemsRaw = Get-SlicerItems -cache $monthSlicerCache
     $monthItems = @()
     foreach ($item in $monthItemsRaw) {{
-        if ($monthFilter -and $monthFilter -notcontains $item.Caption) {{ continue }}
+        if ($monthFilter) {{
+            $found = $false
+            foreach ($f in $monthFilter) {{
+                if ($item.Caption.Trim() -match "^$([regex]::Escape($f.Trim()))$") {{
+                    $found = $true
+                    break
+                }}
+            }}
+            if (-not $found) {{ continue }}
+        }}
         $monthItems += $item
     }}
 
@@ -546,6 +569,34 @@ mod tests {
     }
 
     #[test]
+    fn test_dsfmc_awali_filter_and_clear_logic() {
+        let src = include_str!("powershell.rs");
+        // Assert we are explicitly clearing ALL filters before filtering/processing
+        assert!(
+            src.contains("$Pivot.ClearAllFilters()"),
+            "Should clear pivot filters to avoid persisting leftover state"
+        );
+        assert!(
+            src.contains("$branchSlicerCache.ClearAllFilters()"),
+            "Should clear branch slicer filters"
+        );
+        assert!(
+            src.contains("$monthSlicerCache.ClearAllFilters()"),
+            "Should clear month slicer filters"
+        );
+
+        // Assert we are using regex bounding instead of not_contains to avoid skipping branches
+        assert!(src.contains("-match \"^$([regex]::Escape($f.Trim()))$\""), "Should match explicitly with regex to prevent space trimming bugs dropping DSFMC-Awali");
+
+        let bad_not = "-notcon";
+        let bad_contains = "tains";
+        assert!(
+            !src.contains(&format!("{}{}", bad_not, bad_contains)),
+            "Should not use array matching for branch iteration"
+        );
+    }
+
+    #[test]
     fn test_json_parsing_with_and_without_bom() {
         // Create a fake JSON file with a BOM and see if our trim logic handles it
         // Rather than run the full task which mocks it to `[]` anyway, we just test the specific lines
@@ -704,6 +755,8 @@ mod tests {
                 save_email_as_html: Some(true),
                 indentation_spaces: Some(4),
             },
+            sender_account_email: "sender@example.com".to_string(),
+            reply_subject_prefix: "[CRM-TEST]".to_string(),
             team_mapping_file: dummy_dataset
                 .output_file
                 .path()

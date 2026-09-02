@@ -169,10 +169,23 @@ fn default_date_column_name() -> String {
     "KSA Time".to_string()
 }
 
+fn default_sender_account_email() -> String {
+    "".to_string()
+}
+
+fn default_reply_subject_prefix() -> String {
+    "".to_string()
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CrmOpenSohailConfig {
     #[serde(flatten)]
     pub dashboard_config: DashboardUpdaterConfig,
+
+    #[serde(default = "default_sender_account_email")]
+    pub sender_account_email: String,
+    #[serde(default = "default_reply_subject_prefix")]
+    pub reply_subject_prefix: String,
 
     pub team_mapping_file: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -286,6 +299,8 @@ mod tests {
               "dashboard_file": "./dashboard.xlsx",
               "email_to": "sohail@example.com",
               "email_cc": "cc@example.com",
+              "sender_account_email": "sender@example.com",
+              "reply_subject_prefix": "[CRM-TEST]",
               "team_mapping_file": "./teams.csv",
               "fallback_oul": ""
             }
@@ -299,6 +314,8 @@ mod tests {
             TaskConfig::CrmOpenSohail(task) => {
                 assert_eq!(task.dashboard_config.dashboard_file, "./dashboard.xlsx");
                 assert_eq!(task.team_mapping_file, "./teams.csv");
+                assert_eq!(task.sender_account_email, "sender@example.com");
+                assert_eq!(task.reply_subject_prefix, "[CRM-TEST]");
                 assert_eq!(task.fallback_oul.as_deref(), Some(""));
             }
             _ => panic!("Expected CrmOpenSohail task"),

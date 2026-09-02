@@ -48,20 +48,86 @@ pub fn run(config: &CrmOpenSohailConfig) -> Result<()> {
         return Ok(());
     }
 
+    let sender_account_email = config.sender_account_email.clone();
+    let reply_subject_prefix = config.reply_subject_prefix.clone();
+
     let ps_email_script = format!(
         r#"
+$ErrorActionPreference = "Stop"
+
 $Outlook = New-Object -ComObject Outlook.Application
-$Mail = $Outlook.CreateItem(0)
-$Mail.To = "{}"
-$Mail.CC = "{}"
-$Mail.Subject = "{}"
-$Mail.HTMLBody = '{}'
-$Mail.Send()
+$Namespace = $Outlook.GetNamespace("MAPI")
+
+$TargetAccount = $null
+foreach ($account in $Namespace.Accounts) {{
+    if ($account.SmtpAddress -eq "{sender_account}") {{
+        $TargetAccount = $account
+        break
+    }}
+}}
+
+if (-not $TargetAccount) {{
+    throw "Outlook account matching '{sender_account}' not found."
+}}
+
+# Access Inbox and Sent Items to search for the original message
+$Inbox = $TargetAccount.DeliveryStore.GetDefaultFolder(6) # olFolderInbox
+$SentItems = $TargetAccount.DeliveryStore.GetDefaultFolder(5) # olFolderSentMail
+
+$OriginalMail = $null
+$Filter = "@SQL=""urn:schemas:httpmail:subject"" like '%{subject_prefix}%'"
+
+# Search Inbox
+if ($Inbox) {{
+    $Items = $Inbox.Items
+    $Items.Sort("[ReceivedTime]", $true)
+    $OriginalMail = $Items.Find($Filter)
+}}
+
+# Search Sent Items if not found in Inbox
+if (-not $OriginalMail -and $SentItems) {{
+    $Items = $SentItems.Items
+    $Items.Sort("[SentOn]", $true)
+    $OriginalMail = $Items.Find($Filter)
+}}
+
+if (-not $OriginalMail) {{
+    throw "Original message with subject prefix '{subject_prefix}' not found in Inbox or Sent Items of '{sender_account}'."
+}}
+
+$ReplyMail = $OriginalMail.ReplyAll()
+
+# Append recipients if any are explicitly provided via config, preserving Original thread
+if ("{email_to}") {{
+    if ($ReplyMail.To) {{
+        $ReplyMail.To = $ReplyMail.To + "; " + "{email_to}"
+    }} else {{
+        $ReplyMail.To = "{email_to}"
+    }}
+}}
+if ("{email_cc}") {{
+    if ($ReplyMail.CC) {{
+        $ReplyMail.CC = $ReplyMail.CC + "; " + "{email_cc}"
+    }} else {{
+        $ReplyMail.CC = "{email_cc}"
+    }}
+}}
+if ("{subject}") {{
+    $ReplyMail.Subject = "{subject}"
+}}
+
+# Prepend the generated dashboard to the HTMLBody
+$ReplyMail.HTMLBody = '{html_body}' + $ReplyMail.HTMLBody
+
+$ReplyMail.Save()
+Write-Output "Successfully saved Reply All draft."
 "#,
-        email_to.replace("\"", "'"),
-        email_cc.replace("\"", "'"),
-        subject.replace("\"", "''"),
-        final_html.replace("'", "''")
+        sender_account = sender_account_email.replace("'", "''"),
+        subject_prefix = reply_subject_prefix.replace("'", "''"),
+        email_to = email_to.replace("'", "''"),
+        email_cc = email_cc.replace("'", "''"),
+        subject = subject.replace("'", "''"),
+        html_body = final_html.replace("'", "''")
     );
 
     if config.dashboard_config.save_email_as_html.unwrap_or(false) {
@@ -235,6 +301,8 @@ mod tests {
                 save_email_as_html: Some(true),
                 indentation_spaces: Some(4),
             },
+            sender_account_email: "sender@example.com".to_string(),
+            reply_subject_prefix: "[CRM-TEST]".to_string(),
             team_mapping_file: temp_mapping.path().to_str().unwrap().to_string(),
             body_template_file: None,
             subject_template: Some("Test Subject".to_string()),
@@ -302,6 +370,8 @@ mod tests {
                 save_email_as_html: Some(true),
                 indentation_spaces: Some(4),
             },
+            sender_account_email: "sender@example.com".to_string(),
+            reply_subject_prefix: "[CRM-TEST]".to_string(),
             team_mapping_file: temp_mapping.path().to_str().unwrap().to_string(),
             body_template_file: None,
             subject_template: Some("Test Subject".to_string()),
@@ -327,5 +397,55 @@ mod tests {
 
         let content = std::fs::read_to_string(&html_path).unwrap();
         assert!(content.contains("Dear All,"));
+    }
+
+    #[test]
+    fn test_outlook_reply_all_draft_mechanism() {
+        let src = include_str!("mod.rs");
+
+        // Assert sender_account_email is used
+        assert!(
+            src.contains("sender_account_email"),
+            "Should reference sender_account_email config field"
+        );
+        assert!(
+            src.contains("$TargetAccount = $account"),
+            "Should locate the specific target account by matching SMTP address"
+        );
+
+        // Assert reply_subject_prefix is used for searching
+        assert!(
+            src.contains("reply_subject_prefix"),
+            "Should reference reply_subject_prefix config field"
+        );
+        assert!(
+            src.contains("like '%{subject_prefix}%'"),
+            "Should use subject prefix in search query"
+        );
+
+        // Assert .ReplyAll() is used instead of .CreateItem() or .Reply()
+        assert!(
+            src.contains(".ReplyAll()"),
+            "Should use Outlook's ReplyAll method to preserve thread context"
+        );
+
+        let create_item = "$Outlook.CreateItem";
+        assert!(
+            !src.contains(&format!("{}(0)", create_item)),
+            "Should not create a brand new email item"
+        );
+
+        // Assert .Save() is used instead of .Send() to ensure Draft state
+        assert!(
+            src.contains("$ReplyMail.Save()"),
+            "Should save email as draft"
+        );
+
+        let bad_send = "$ReplyMail.Se";
+        let bad_send2 = "nd()";
+        assert!(
+            !src.contains(&format!("{}{}", bad_send, bad_send2)),
+            "Should never call Send() on the generated email"
+        );
     }
 }
