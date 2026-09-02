@@ -1,0 +1,102 @@
+--- src/tasker/crm_open_sohail/mod.rs
++++ src/tasker/crm_open_sohail/mod.rs
+@@ -44,7 +44,7 @@
+     let email_cc = config.dashboard_config.email_cc.clone().unwrap_or_default();
+
+     if email_to.is_empty() {
+-        warn!("No email_to specified. Skipping email send.");
++        warn!("No email_to specified. Skipping email draft creation.");
+         return Ok(());
+     }
+
+@@ -58,40 +58,35 @@
+ $Outlook = New-Object -ComObject Outlook.Application
+ $Namespace = $Outlook.GetNamespace("MAPI")
+
+-$TargetAccount = $null
+-foreach ($account in $Namespace.Accounts) {{
+-    if ($account.SmtpAddress -eq "{sender_account}") {{
+-        $TargetAccount = $account
+-        break
+-    }}
+-}}
+-
+-if (-not $TargetAccount) {{
+-    throw "Outlook account matching '{sender_account}' not found."
+-}}
+-
+ # Access Inbox and Sent Items to search for the original message
+-$Inbox = $TargetAccount.DeliveryStore.GetDefaultFolder(6) # olFolderInbox
+-$SentItems = $TargetAccount.DeliveryStore.GetDefaultFolder(5) # olFolderSentMail
++$Inbox = $Namespace.GetDefaultFolder(6) # olFolderInbox
++$SentItems = $Namespace.GetDefaultFolder(5) # olFolderSentMail
+
+ $OriginalMail = $null
+-$Filter = "@SQL=""urn:schemas:httpmail:subject"" like '%{subject_prefix}%'"
++$SenderToMatch = "{sender_account}"
++$PrefixToMatch = "{subject_prefix}"
+
+-# Search Inbox
+-if ($Inbox) {{
+-    $Items = $Inbox.Items
+-    $Items.Sort("[ReceivedTime]", $true)
+-    $OriginalMail = $Items.Find($Filter)
+-}}
++function Find-OriginalMessage ($FolderItems, $SortProperty) {{
++    if (-not $FolderItems) {{ return $null }}
++    $FolderItems.Sort($SortProperty, $true)
++
++    foreach ($Item in $FolderItems) {{
++        if (-not $Item.Subject -or -not $Item.Subject.StartsWith($PrefixToMatch, [System.StringComparison]::InvariantCultureIgnoreCase)) {{
++            continue
++        }}
++
++        $SenderAddress = $Item.SenderEmailAddress
++        if ($Item.SenderEmailType -eq "EX") {{
++            $PropAccessor = $Item.PropertyAccessor
++            $SenderAddress = $PropAccessor.GetProperty("http://schemas.microsoft.com/mapi/proptag/0x39FE001E")
++        }}
++
++        if ($SenderAddress -eq $SenderToMatch) {{
++            return $Item
++        }}
++    }}
++
++    return $null
++}}
+
+-# Search Sent Items if not found in Inbox
+-if (-not $OriginalMail -and $SentItems) {{
+-    $Items = $SentItems.Items
+-    $Items.Sort("[SentOn]", $true)
+-    $OriginalMail = $Items.Find($Filter)
+-}}
++# Search Inbox
++$OriginalMail = Find-OriginalMessage -FolderItems $Inbox.Items -SortProperty "[ReceivedTime]"
++
++# Search Sent Items if not found in Inbox
++if (-not $OriginalMail) {{
++    $OriginalMail = Find-OriginalMessage -FolderItems $SentItems.Items -SortProperty "[SentOn]"
++}}
+
+ if (-not $OriginalMail) {{
+     throw "Original message with subject prefix '{subject_prefix}' not found in Inbox or Sent Items of '{sender_account}'."
+@@ -136,13 +131,13 @@
+         std::fs::write(&html_path, final_html)?;
+         info!("save_email_as_html is true. Saved email body to {}. Skipping PowerShell send for testing.", html_path.display());
+     } else {
+-        info!("Sending email via Outlook COM...");
++        info!("Creating/saving reply draft via Outlook COM...");
+         if let Err(e) = powershell::run_powershell(&ps_email_script) {
+-            error!("Failed to send email: {}", e);
+-            anyhow::bail!("Failed to send email");
++            error!("Failed to create/save reply draft: {}", e);
++            anyhow::bail!("Failed to create/save reply draft");
+         }
+-        info!("Email sent successfully.");
+-        info!("Email sent");
++        info!("Reply draft saved successfully.");
++        info!("Reply draft saved");
+     }
+
+     Ok(())

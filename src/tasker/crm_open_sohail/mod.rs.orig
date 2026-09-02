@@ -414,6 +414,10 @@ mod tests {
             src.contains("sender_account_email"),
             "Should reference sender_account_email config field"
         );
+        assert!(
+            src.contains("$TargetAccount = $account"),
+            "Should locate the specific target account by matching SMTP address"
+        );
 
         // Assert reply_subject_prefix is used for searching
         assert!(
@@ -421,8 +425,8 @@ mod tests {
             "Should reference reply_subject_prefix config field"
         );
         assert!(
-            src.contains(".StartsWith($PrefixToMatch"),
-            "Should use explicit prefix startswith check"
+            src.contains("like '%{subject_prefix}%'"),
+            "Should use subject prefix in search query"
         );
 
         // Assert .ReplyAll() is used instead of .CreateItem() or .Reply()

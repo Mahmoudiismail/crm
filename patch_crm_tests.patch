@@ -1,0 +1,24 @@
+--- src/tasker/crm_open_sohail/mod.rs
++++ src/tasker/crm_open_sohail/mod.rs
+@@ -409,10 +409,6 @@
+             src.contains("sender_account_email"),
+             "Should reference sender_account_email config field"
+         );
+-        assert!(
+-            src.contains("$TargetAccount = $account"),
+-            "Should locate the specific target account by matching SMTP address"
+-        );
+
+         // Assert reply_subject_prefix is used for searching
+         assert!(
+@@ -420,8 +416,8 @@
+             "Should reference reply_subject_prefix config field"
+         );
+         assert!(
+-            src.contains("like '%{subject_prefix}%'"),
+-            "Should use subject prefix in search query"
++            src.contains(".StartsWith($PrefixToMatch"),
++            "Should use explicit prefix startswith check"
+         );
+
+         // Assert .ReplyAll() is used instead of .CreateItem() or .Reply()
