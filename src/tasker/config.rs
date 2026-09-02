@@ -169,12 +169,22 @@ fn default_date_column_name() -> String {
     "KSA Time".to_string()
 }
 
+fn default_sender_account_email() -> String {
+    "".to_string()
+}
+
+fn default_reply_subject_prefix() -> String {
+    "".to_string()
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CrmOpenSohailConfig {
     #[serde(flatten)]
     pub dashboard_config: DashboardUpdaterConfig,
 
+    #[serde(default = "default_sender_account_email")]
     pub sender_account_email: String,
+    #[serde(default = "default_reply_subject_prefix")]
     pub reply_subject_prefix: String,
 
     pub team_mapping_file: String,

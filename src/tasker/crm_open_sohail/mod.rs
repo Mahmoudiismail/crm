@@ -97,12 +97,20 @@ if (-not $OriginalMail) {{
 
 $ReplyMail = $OriginalMail.ReplyAll()
 
-# Set recipients if any are explicitly provided via config, otherwise preserve Original thread
+# Append recipients if any are explicitly provided via config, preserving Original thread
 if ("{email_to}") {{
-    $ReplyMail.To = "{email_to}"
+    if ($ReplyMail.To) {{
+        $ReplyMail.To = $ReplyMail.To + "; " + "{email_to}"
+    }} else {{
+        $ReplyMail.To = "{email_to}"
+    }}
 }}
 if ("{email_cc}") {{
-    $ReplyMail.CC = "{email_cc}"
+    if ($ReplyMail.CC) {{
+        $ReplyMail.CC = $ReplyMail.CC + "; " + "{email_cc}"
+    }} else {{
+        $ReplyMail.CC = "{email_cc}"
+    }}
 }}
 if ("{subject}") {{
     $ReplyMail.Subject = "{subject}"
