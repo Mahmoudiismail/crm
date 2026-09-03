@@ -32,7 +32,13 @@ pub fn run_powershell(script: &str) -> Result<()> {
     let stderr_str = String::from_utf8_lossy(&output.stderr);
 
     if !stdout_str.trim().is_empty() {
-        tracing::info!("PowerShell output:\n{}", stdout_str.trim());
+        for line in stdout_str.lines() {
+            if line.starts_with("TRACE:") {
+                tracing::trace!("PS: {}", line.strip_prefix("TRACE:").unwrap().trim());
+            } else if !line.trim().is_empty() {
+                tracing::info!("PS: {}", line.trim());
+            }
+        }
     }
     if !stderr_str.trim().is_empty() {
         tracing::error!("PowerShell error output:\n{}", stderr_str.trim());

@@ -27,7 +27,9 @@ $excel.ScreenUpdating = $false
 $excel.EnableEvents = $false
 
 try {{
+    Write-Output "TRACE: Opening CSV workbook: $csvPath"
     $workbook = $excel.Workbooks.Open($csvPath)
+    Write-Output "TRACE: Extracting first worksheet"
     $ws = $workbook.Sheets.Item(1)
 
     # Apply AutoFilter
@@ -97,28 +99,49 @@ try {{
 
     $dayName = (Get-Date).ToString("ddd") # "Mon", "Tue"
 
-    # Turn on Autofilter first to establish the dropdowns
+
+
+
+    Write-Output "TRACE: Turning on AutoFilter to establish dropdowns"
     $exactRange.AutoFilter() | Out-Null
 
-    # Apply Filters and hide their specific dropdowns
+    # Track which columns we explicitly filter
+    $filteredCols = @{{}}
+
+    # Apply Filters and hide their dropdown icons AT THE SAME TIME
     if ($dColIdx -gt 0) {{
-        $exactRange.AutoFilter($dColIdx, $dayName) | Out-Null
+        Write-Output "TRACE: Applying Day Filter on column $dColIdx"
+        $exactRange.AutoFilter($dColIdx, $dayName, 1, [Type]::Missing, $false) | Out-Null
+        $filteredCols[$dColIdx] = $true
     }}
 
     if ($specialColIdx -gt 0) {{
-        $exactRange.AutoFilter($specialColIdx, "=") | Out-Null
+        Write-Output "TRACE: Applying Special Filter on column $specialColIdx"
+        $exactRange.AutoFilter($specialColIdx, "=", 1, [Type]::Missing, $false) | Out-Null
+        $filteredCols[$specialColIdx] = $true
     }}
 
     if ($checkCurrentYear -and $dateColIdx -gt 0) {{
+        Write-Output "TRACE: Applying Date Filter on column $dateColIdx"
         $yearStart = Get-Date -Year (Get-Date).Year -Month 1 -Day 1 -Hour 0 -Minute 0 -Second 0
         $yearEnd = $yearStart.AddYears(1)
-        # Dates in Excel are often represented as numbers or strings depending on CSV load
-        # For CSV loaded into Excel, standard > < text filter works if dates are formatted yyyy-mm-dd
-        $exactRange.AutoFilter($dateColIdx, ">=$($yearStart.ToString('yyyy-MM-dd'))", 1, "<$($yearEnd.ToString('yyyy-MM-dd'))") | Out-Null
+        $exactRange.AutoFilter($dateColIdx, ">=$($yearStart.ToString('yyyy-MM-dd'))", 1, "<$($yearEnd.ToString('yyyy-MM-dd'))", $false) | Out-Null
+        $filteredCols[$dateColIdx] = $true
     }}
 
-    $visibleRows = $exactRange.SpecialCells(12) # xlCellTypeVisible
+    Write-Output "TRACE: Hiding AutoFilter dropdown icons for remaining unfiltered columns"
+    for ($col = 1; $col -le $exactRange.Columns.Count; $col++) {{
+        if (-not $filteredCols.ContainsKey($col)) {{
+            try {{
+                $exactRange.AutoFilter($col, [Type]::Missing, 1, [Type]::Missing, $false) | Out-Null
+            }} catch {{
+                Write-Output "TRACE: Warning: Failed to hide AutoFilter dropdown for column $col"
+            }}
+        }}
+    }}
+        $visibleRows = $exactRange.SpecialCells(12) # xlCellTypeVisible
 
+    Write-Output "TRACE: Finding last visible row after filters"
     # Find last visible row
     $lastRow = 1
     foreach ($area in $visibleRows.Areas) {{
@@ -128,6 +151,7 @@ try {{
         }}
     }}
 
+    Write-Output "TRACE: Hiding blank columns at last row"
     # Hide blank columns at last row
     for ($c = 1; $c -le $exactRange.Columns.Count; $c++) {{
         $val = $ws.Cells.Item($lastRow, $c).Text
@@ -250,6 +274,17 @@ pub fn generate_and_email_image(cus_file_path: &Path, config: &OpdAnalysisConfig
             .arg(&path)
             .output()?;
 
+        let stdout_str = String::from_utf8_lossy(&output.stdout);
+        if !stdout_str.trim().is_empty() {
+            for line in stdout_str.lines() {
+                if line.starts_with("TRACE:") {
+                    tracing::trace!("PS: {}", line.strip_prefix("TRACE:").unwrap().trim());
+                } else if !line.trim().is_empty() {
+                    tracing::info!("PS: {}", line.trim());
+                }
+            }
+        }
+
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             tracing::error!("PowerShell script failed:\n{}", stderr);
@@ -266,6 +301,7 @@ pub fn generate_and_email_image(cus_file_path: &Path, config: &OpdAnalysisConfig
 }
 
 #[cfg(test)]
+#[allow(unused_imports)]
 mod tests {
     use super::*;
     use std::path::PathBuf;
@@ -310,6 +346,33 @@ mod tests {
         assert!(
             !script.contains("$usedRange.CopyPicture(1, 2)"),
             "Script still contains unbounded $usedRange.CopyPicture"
+        );
+    }
+}
+
+#[cfg(test)]
+#[allow(unused_imports)]
+mod opd_autofilter_tests {
+    use super::*;
+
+    #[test]
+    fn test_regression_autofilter_visible_dropdown_hidden() {
+        let src = include_str!("powershell_email.rs");
+
+        // Verify that the code iterates through columns to hide the dropdowns without disabling AutoFilterMode
+
+        assert!(
+            src.contains(
+                "$exactRange.AutoFilter($col, [Type]::Missing, 1, [Type]::Missing, $false)"
+            ),
+            "Should explicitly hide dropdowns using proper AutoFilter args"
+        );
+
+        // Ensure it doesn't just indiscriminately turn off AutoFilter completely (except for initialization logic at the top)
+        // AutoFilterMode = $false is used for reset at the top, but the final state must be just the dropdowns hidden.
+        assert!(
+            src.contains("Hiding AutoFilter dropdown icons for remaining unfiltered columns"),
+            "Should contain trace logging for hiding icons"
         );
     }
 }

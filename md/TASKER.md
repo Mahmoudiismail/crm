@@ -241,3 +241,24 @@ The `DashboardUpdater` script explicitly optimizes Excel interactions by:
 - Setting `Calculation` mode to Manual before pasting data to avoid 10+ minute refresh locks on large data sets (like 45,000+ rows).
 - Capturing and logging all PowerShell standard and error outputs sequentially through Rust's `tracing` mechanisms to ensure operational transparency.
 - Securely handling temporary PowerShell scripts by logging any cleanup/deletion failures to prevent unmanaged files remaining on disk silently.
+
+## Diagnostic Tracing
+
+Starting with the latest reliability updates, Tasks 3, 4, and 5 use `TRACE` level logging extensively.
+This means you will not see enormous log volume at the `INFO` level, but when diagnosing a failure (like an Outlook COM issue or Excel error), you can set the `RUST_LOG` environment variable to `trace` (or review the default `trace` logs inside the file logger) to see exact, step-by-step COM interaction context.
+
+For instance:
+- **Task 3:** Traces exactly which email candidates were reviewed, the resolution of `EX` addresses vs. SMTP addresses, and whether the case-insensitive `reply_subject_prefix` strictly matched at the beginning of the subject line.
+- **Task 4:** Logs exactly which target file is being generated, the exact `$target` output, and how many rows were retained vs. deleted.
+- **Task 5:** Traces the AutoFilter states and records the exact steps taken to preserve filters while only disabling `VisibleDropDown` icons.
+
+## Important Requirements for Task 3 (CrmOpenSohail)
+
+- **`sender_account_email`**: This configuration field is *only* a search criterion used to locate the original message in the Outlook Sent/Inbox. It does not dictate the resulting draft's sender account or the execution environment's default identity.
+- **`reply_subject_prefix`**: Used strictly as a case-insensitive beginning-of-subject matching rule (e.g., `StartsWith()`).
+- **Recipients**: When creating the draft, Task 3 explicitly utilizes `ReplyAll()`. It will strictly ignore any `email_to` or `email_cc` values provided in the `dashboard_updater` configuration payload to ensure the original email thread's distribution list remains perfectly preserved.
+- **Final Draft**: The script explicitly invokes `.Save()` to generate a draft. It will never invoke `.Send()`.
+
+## Important Requirements for Task 5 (OPD)
+
+- The AutoFilter icons are strictly hidden for the visual image export, but the actual filters themselves are fully preserved in the `.xlsm` file via COM `VisibleDropDown = $false`.
