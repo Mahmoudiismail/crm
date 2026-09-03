@@ -17,16 +17,23 @@ pub async fn run_once(
     end_date: Option<String>,
     custom_download_folder_cli: Option<String>,
 ) -> Result<()> {
-    use crate::utils::to_iso_date;
+    use crate::utils::to_iso_date_with_base;
 
-    if let Some(sd) = start_date {
+    let resolved_start = if let Some(sd) = start_date {
         if !sd.is_empty() {
-            config.from_date = to_iso_date(&sd);
+            let parsed = to_iso_date_with_base(&sd, None);
+            config.from_date = parsed.clone();
+            Some(parsed)
+        } else {
+            None
         }
-    }
+    } else {
+        None
+    };
+
     if let Some(ed) = end_date {
         if !ed.is_empty() {
-            config.to_date = to_iso_date(&ed);
+            config.to_date = to_iso_date_with_base(&ed, resolved_start.as_deref());
         }
     }
 
