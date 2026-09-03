@@ -35,4 +35,6 @@ No production code changes were required or made. This finding is closed.
 ### Task 5 (OPD Analysis)
 **Problem:** The AutoFilter dropdown icon remained visible in the saved Excel screenshot outputs.
 **Fix:**
-- Rewrote the PowerShell logic so it loops from `1..Columns.Count` and executes `$exactRange.AutoFilter($col, [Type]::Missing, 1, [Type]::Missing, $false)` dynamically, strictly hiding only the `VisibleDropDown` icons while retaining the actual data filtering.
+- The previous fix for hiding dropdowns incorrectly wiped existing filter criteria on already-filtered columns when attempting to hide their dropdowns.
+- Rewrote the PowerShell logic so it dynamically checks each column to see if an existing filter is applied (`$ws.AutoFilter.Filters.Item($col).On`).
+- If a filter is applied, it safely captures the exact `Criteria1`, `Operator`, and `Criteria2`, and reapplies them alongside `VisibleDropDown = $false`, ensuring the existing filter criteria and visible row outcomes are strictly preserved. Unfiltered columns simply have their dropdown hidden.

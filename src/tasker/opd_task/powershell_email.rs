@@ -32,9 +32,9 @@ try {{
     Write-Output "TRACE: Extracting first worksheet"
     $ws = $workbook.Sheets.Item(1)
 
-    # Apply AutoFilter
-    if ($ws.AutoFilterMode) {{
-        $ws.AutoFilterMode = $false
+    # Enable AutoFilter if not already enabled
+    if (-not $ws.AutoFilterMode) {{
+        $ws.Range($ws.Cells.Item(1, 1), $ws.Cells.Item(1, $ws.UsedRange.Columns.Count)).AutoFilter() | Out-Null
     }}
 
     $xlValues = -4123
@@ -99,11 +99,10 @@ try {{
 
     $dayName = (Get-Date).ToString("ddd") # "Mon", "Tue"
 
-
-
-
-    Write-Output "TRACE: Turning on AutoFilter to establish dropdowns"
-    $exactRange.AutoFilter() | Out-Null
+    if (-not $ws.AutoFilterMode) {{
+        Write-Output "TRACE: Turning on AutoFilter to establish dropdowns"
+        $exactRange.AutoFilter() | Out-Null
+    }}
 
     # Track which columns we explicitly filter
     $filteredCols = @{{}}
@@ -129,13 +128,39 @@ try {{
         $filteredCols[$dateColIdx] = $true
     }}
 
-    Write-Output "TRACE: Hiding AutoFilter dropdown icons for remaining unfiltered columns"
+    Write-Output "TRACE: Hiding AutoFilter dropdown icons for remaining columns while preserving filters"
     for ($col = 1; $col -le $exactRange.Columns.Count; $col++) {{
         if (-not $filteredCols.ContainsKey($col)) {{
             try {{
-                $exactRange.AutoFilter($col, [Type]::Missing, 1, [Type]::Missing, $false) | Out-Null
+                # Check if this column already has a filter applied
+                $filter = $ws.AutoFilter.Filters.Item($col)
+                if ($filter -and $filter.On) {{
+                    Write-Output "TRACE: Hiding dropdown for already-filtered column $col"
+
+                    # Capture existing criteria
+                    $c1 = [Type]::Missing
+                    $op = 1 # xlAnd (default)
+                    $c2 = [Type]::Missing
+
+                    try {{ $c1 = $filter.Criteria1 }} catch {{ }}
+                    try {{ $op = $filter.Operator }} catch {{ }}
+                    try {{ $c2 = $filter.Criteria2 }} catch {{ }}
+
+                    # Re-apply exact same criteria with VisibleDropDown = $false
+                    if ($null -ne $c1 -and $c1 -ne [Type]::Missing -and $null -ne $c2 -and $c2 -ne [Type]::Missing) {{
+                        $exactRange.AutoFilter($col, $c1, $op, $c2, $false) | Out-Null
+                    }} elseif ($null -ne $c1 -and $c1 -ne [Type]::Missing) {{
+                        $exactRange.AutoFilter($col, $c1, $op, [Type]::Missing, $false) | Out-Null
+                    }} else {{
+                        # If for some reason we couldn't read Criteria1, skip to prevent clearing the filter
+                        Write-Output "TRACE: Warning: Failed to extract Criteria1 for column $col, skipping dropdown hide to preserve filter."
+                    }}
+                }} else {{
+                    # No filter is currently applied; safe to just hide dropdown
+                    $exactRange.AutoFilter($col, [Type]::Missing, 1, [Type]::Missing, $false) | Out-Null
+                }}
             }} catch {{
-                Write-Output "TRACE: Warning: Failed to hide AutoFilter dropdown for column $col"
+                Write-Output "TRACE: Warning: Failed to hide AutoFilter dropdown for column $col - $_"
             }}
         }}
     }}
@@ -359,20 +384,30 @@ mod opd_autofilter_tests {
     fn test_regression_autofilter_visible_dropdown_hidden() {
         let src = include_str!("powershell_email.rs");
 
-        // Verify that the code iterates through columns to hide the dropdowns without disabling AutoFilterMode
+        // Verify that the code iterates through columns and preserves existing filters
 
         assert!(
             src.contains(
-                "$exactRange.AutoFilter($col, [Type]::Missing, 1, [Type]::Missing, $false)"
+                "Hiding AutoFilter dropdown icons for remaining columns while preserving filters"
             ),
-            "Should explicitly hide dropdowns using proper AutoFilter args"
+            "Should contain trace logging for hiding icons while preserving filters"
         );
 
-        // Ensure it doesn't just indiscriminately turn off AutoFilter completely (except for initialization logic at the top)
-        // AutoFilterMode = $false is used for reset at the top, but the final state must be just the dropdowns hidden.
+        // Check that AutoFilterMode is not indiscriminately disabled
+        let bad_mode_set = format!("{}{} = $false", "$ws.AutoFilter", "Mode");
         assert!(
-            src.contains("Hiding AutoFilter dropdown icons for remaining unfiltered columns"),
-            "Should contain trace logging for hiding icons"
+            !src.contains(&bad_mode_set),
+            "Should not blindly clear AutoFilterMode which destroys existing filters"
+        );
+
+        // Check for extraction and reapplication of existing criteria
+        assert!(
+            src.contains("$filter = $ws.AutoFilter.Filters.Item($col)"),
+            "Should check existing filters"
+        );
+        assert!(
+            src.contains("$exactRange.AutoFilter($col, $c1, $op, $c2, $false)"),
+            "Should reapply exact criteria with VisibleDropDown = $false"
         );
     }
 }
