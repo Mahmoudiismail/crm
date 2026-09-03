@@ -51,7 +51,7 @@ pub fn navigate_and_run_report(
     active_report_name: &str,
     active_report_type: &str,
     active_filters: &HashMap<String, String>,
-    _timeout_minutes: u64,
+    timeout_minutes: u64,
     step_num: &mut u32,
 ) -> Result<Vec<String>> {
     let mut discovered_filters = Vec::new();
@@ -668,72 +668,12 @@ pub fn navigate_and_run_report(
 
                         // STEP 6: Wait for Loader and Click Export
                         tracing::debug!("Executing JavaScript to wait for export generation...");
-                        let step6_export_js = r#"
-                                        (async function() {
-                                            function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-                                            let logs = [];
-                                            let doc = document.querySelector('iframe').contentWindow.document;
-
-                                            logs.push("Waiting for report generation loader to finish...");
-                                            let reportGenerated = false;
-                                            for(let i=0; i<1200; i++) {
-                                                let loader = document.querySelector('.loading-screen-wrapper, mat-progress-bar, .dx-loadpanel') || doc.querySelector('.loading-screen-wrapper, mat-progress-bar, .dx-loadpanel');
-                                                let isLoaderVisible = false;
-                                                if (loader) {
-                                                    let style = loader.ownerDocument.defaultView.getComputedStyle(loader);
-                                                    if (style.display !== 'none' && style.opacity !== '0' && style.visibility !== 'hidden') {
-                                                        isLoaderVisible = true;
-                                                    }
-                                                }
-                                                if (!isLoaderVisible) {
-                                                    reportGenerated = true;
-                                                    break;
-                                                }
-                                                await sleep(100);
-                                                if (i % 50 === 0) logs.push("Still loading...");
-                                            }
-                                            if (!reportGenerated) return JSON.stringify({ status: "ERROR", msg: "Report generation timeout.", logs });
-
-                                            await sleep(200); // UI breathing room
-
-                                            logs.push("Looking for Export button...");
-                                            let exportBtn = null;
-                                            for(let i=0; i<75; i++) {
-                                                exportBtn = doc.querySelector('div[aria-label="Export"]');
-                                                if (exportBtn && exportBtn.offsetParent !== null) break;
-
-                                                let dxButtons = doc.querySelectorAll('.dx-button-text');
-                                                for (let b of dxButtons) {
-                                                    if (b.textContent.trim() === 'Export') {
-                                                        exportBtn = b.closest('div[role="button"]');
-                                                        break;
-                                                    }
-                                                }
-                                                if (exportBtn && exportBtn.offsetParent !== null) break;
-
-                                                let allButtons = doc.querySelectorAll('button, div[role="button"], span');
-                                                for (let b of allButtons) {
-                                                    if (b.textContent.trim() === 'Export' && b.offsetParent !== null) {
-                                                        exportBtn = b;
-                                                        break;
-                                                    }
-                                                }
-                                                if (exportBtn && exportBtn.offsetParent !== null) break;
-                                                await sleep(200);
-                                            }
-
-                                            if (!exportBtn) return JSON.stringify({ status: "ERROR", msg: "Export button not found.", logs });
-
-                                            exportBtn.click();
-                                            logs.push("Clicked Export button");
-                                            return JSON.stringify({ status: "SUCCESS", logs });
-                                        })();
-                                    "#;
+                        let step6_export_js = generate_step6_js(timeout_minutes);
 
                         info!("Waiting for generation & clicking Export...");
                         javascript::evaluate_automation_step(
                             tab,
-                            step6_export_js,
+                            &step6_export_js,
                             "Step 6 (Wait & Export)",
                         )?;
 
@@ -824,4 +764,82 @@ pub fn navigate_and_run_report(
     }
 
     Ok(discovered_filters)
+}
+
+pub fn generate_step6_js(timeout_minutes: u64) -> String {
+    format!(
+        r#"
+        (async function(timeoutMinutes) {{
+            function sleep(ms) {{ return new Promise(r => setTimeout(r, ms)); }}
+            let logs = [];
+            let doc = document.querySelector('iframe').contentWindow.document;
+
+            logs.push("Waiting for report generation loader to finish...");
+            let reportGenerated = false;
+
+            // Deadline in milliseconds
+            const deadline = Date.now() + timeoutMinutes * 60 * 1000;
+            let iterations = 0;
+
+            while (Date.now() <= deadline) {{
+                let loader = document.querySelector('.loading-screen-wrapper, mat-progress-bar, .dx-loadpanel') || doc.querySelector('.loading-screen-wrapper, mat-progress-bar, .dx-loadpanel');
+                let isLoaderVisible = false;
+                if (loader) {{
+                    let style = loader.ownerDocument.defaultView.getComputedStyle(loader);
+                    if (style.display !== 'none' && style.opacity !== '0' && style.visibility !== 'hidden') {{
+                        isLoaderVisible = true;
+                    }}
+                }}
+
+                // If it's not visible, report is generated
+                if (!isLoaderVisible) {{
+                    reportGenerated = true;
+                    break;
+                }}
+
+                await sleep(100);
+                if (iterations % 50 === 0) logs.push("Still loading...");
+                iterations++;
+            }}
+
+            // If the time ran out and it's still not generated
+            if (!reportGenerated) return JSON.stringify({{ status: "ERROR", msg: "Report generation timeout.", logs }});
+
+            await sleep(200); // UI breathing room
+
+            logs.push("Looking for Export button...");
+            let exportBtn = null;
+            for(let i=0; i<75; i++) {{
+                exportBtn = doc.querySelector('div[aria-label="Export"]');
+                if (exportBtn && exportBtn.offsetParent !== null) break;
+
+                let dxButtons = doc.querySelectorAll('.dx-button-text');
+                for (let b of dxButtons) {{
+                    if (b.textContent.trim() === 'Export') {{
+                        exportBtn = b.closest('div[role="button"]');
+                        break;
+                    }}
+                }}
+                if (exportBtn && exportBtn.offsetParent !== null) break;
+
+                let allButtons = doc.querySelectorAll('button, div[role="button"], span');
+                for (let b of allButtons) {{
+                    if (b.textContent.trim() === 'Export' && b.offsetParent !== null) {{
+                        exportBtn = b;
+                        break;
+                    }}
+                }}
+                if (exportBtn && exportBtn.offsetParent !== null) break;
+                await sleep(200);
+            }}
+
+            if (!exportBtn) return JSON.stringify({{ status: "ERROR", msg: "Export button not found.", logs }});
+
+            exportBtn.click();
+            logs.push("Clicked Export button");
+            return JSON.stringify({{ status: "SUCCESS", logs }});
+        }})({});
+        "#,
+        timeout_minutes
+    )
 }
