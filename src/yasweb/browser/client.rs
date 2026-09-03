@@ -9,6 +9,9 @@ use tracing::info;
 /// # Examples
 ///
 /// ```no_run
+/// use headless_chrome::Browser;
+/// use crm_tool::yasweb::browser::client::get_or_create_tab;
+///
 /// # fn example(browser: std::sync::Arc<Browser>) -> anyhow::Result<()> {
 /// let tab = get_or_create_tab(&browser)?;
 /// # Ok(())
@@ -16,7 +19,6 @@ use tracing::info;
 /// ```
 ///
 /// [`Browser`]: https://docs.rs/chromiumoxide/latest/chromiumoxide/browser/struct.Browser.html
-pub fn get_or_create_tab(browser: &Arc<Browser>) -> Result<Arc<Tab>> {
 pub fn get_or_create_tab(browser: &Arc<Browser>) -> Result<Arc<Tab>> {
     let mut found = None;
     for _ in 0..10 {

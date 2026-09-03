@@ -23,12 +23,18 @@ use crate::yasweb::config::YaswebConfig;
 /// # Examples
 ///
 /// ```no_run
-/// # use std::sync::Arc;
+/// use std::sync::Arc;
+/// use headless_chrome::Tab;
+/// use crm_tool::yasweb::config::YaswebConfig;
+/// use crm_tool::yasweb::browser::login::execute_login;
+///
+/// # fn example() -> anyhow::Result<()> {
 /// # let tab: Arc<Tab> = unimplemented!();
 /// # let config: YaswebConfig = unimplemented!();
 /// let mut step_num = 0;
 /// execute_login(&tab, &config, "login", &mut step_num)?;
-/// # Ok::<(), anyhow::Error>(())
+/// # Ok(())
+/// # }
 /// ```
 ///
 /// # Errors

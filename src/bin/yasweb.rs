@@ -218,6 +218,7 @@ pub fn finalize_download(
 /// assert_eq!(args[1], "--name");
 /// # }
 /// ```
+#[tokio::main]
 async fn main() -> Result<()> {
     // Pre-parse args to look for --manifest and try to parse --config manually first
     let args: Vec<String> = std::env::args().collect();
