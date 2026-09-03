@@ -175,7 +175,7 @@ pub async fn process_base64_payload(
         .await
         .with_context(|| format!("Failed to create download directory: {:?}", target_dir))?;
 
-    // Create filename user_report_<timestamp>.csv
+    // Create filename <report_key>_<timestamp>.csv
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()

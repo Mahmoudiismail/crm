@@ -8,6 +8,12 @@ pub struct ReplacementMapEntry {
     pub executable_name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub restart_args: Option<Vec<String>>,
+    #[serde(default = "default_true")]
+    pub autostart: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -40,6 +46,7 @@ impl fmt::Debug for ReplacementMapEntry {
             .field("target_path", &self.target_path)
             .field("executable_name", &self.executable_name)
             .field("restart_args", &self.restart_args)
+            .field("autostart", &self.autostart)
             .finish()
     }
 }

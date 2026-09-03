@@ -8,7 +8,14 @@ use zip::ZipArchive;
 pub fn process_update_pipeline(config: &crate::crm_updater::config::UpdaterConfig) -> Result<()> {
     info!("Starting update pipeline.");
 
-    let downloads_dir = Path::new(&config.downloads_dir);
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+        .unwrap_or_else(|| PathBuf::from("."));
+
+    let downloads_dir_buf = exe_dir.join(&config.downloads_dir);
+    let downloads_dir = downloads_dir_buf.as_path();
+
     if !downloads_dir.exists() {
         fs::create_dir_all(downloads_dir)?;
     }
@@ -224,16 +231,44 @@ fn generate_update_script(
     config: &crate::crm_updater::config::UpdaterConfig,
     downloads_dir: &Path,
 ) -> Result<PathBuf> {
-    let mut script = String::from(
-        "$ErrorActionPreference = 'Continue'
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+        .unwrap_or_else(|| PathBuf::from("."));
 
-",
-    );
+    let log_path = clean_canonicalized_path(&exe_dir.join("updater_detached.log"));
+
+    let mut script = String::from("$ErrorActionPreference = 'Stop'\n");
+
+    script.push_str(&format!(
+        r#"
+function Write-Log {{
+    param([string]$Message)
+    $Timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+    $LogLine = "[$Timestamp] $Message"
+    Write-Output $LogLine
+    Add-Content -Path '{}' -Value $LogLine
+}}
+
+try {{
+    Write-Log "Detached update process started."
+"#,
+        log_path.replace("'", "''")
+    ));
 
     let abs_downloads_dir = std::fs::canonicalize(downloads_dir)?;
     let downloads_dir_str = clean_canonicalized_path(&abs_downloads_dir);
+    script.push_str(&format!(
+        "    Write-Log \"Downloads directory resolved to: {}\"\n",
+        downloads_dir_str.replace("\"", "\"\"")
+    ));
 
-    // Stop processes
+    // Wait a bit to ensure the Rust process has exited
+    script.push_str(
+        "    Write-Log \"Waiting 2 seconds for original updater process to exit...\"\n    Start-Sleep -Seconds 2\n",
+    );
+
+    // Stop processes and wait for termination
     let mut apps_to_stop = std::collections::HashSet::new();
     for entry in &config.file_replacement_map {
         apps_to_stop.insert(entry.executable_name.clone());
@@ -241,27 +276,38 @@ fn generate_update_script(
 
     for app in apps_to_stop {
         let process_name = app.strip_suffix(".exe").unwrap_or(&app);
+        let escaped_process = process_name.replace("'", "''");
         script.push_str(&format!(
-            "Stop-Process -Name '{}' -Force -ErrorAction SilentlyContinue
-",
-            process_name.replace("'", "''")
+            r#"
+    $Process = Get-Process -Name '{escaped_process}' -ErrorAction SilentlyContinue
+    if ($Process) {{
+        Write-Log "Target process '{escaped_process}' is running. Stopping..."
+        Stop-Process -Name '{escaped_process}' -Force -ErrorAction SilentlyContinue
+
+        $TimeoutSeconds = 30
+        $WaitCount = 0
+        while ((Get-Process -Name '{escaped_process}' -ErrorAction SilentlyContinue) -and ($WaitCount -lt $TimeoutSeconds)) {{
+            Start-Sleep -Seconds 1
+            $WaitCount++
+        }}
+
+        if (Get-Process -Name '{escaped_process}' -ErrorAction SilentlyContinue) {{
+            Write-Log "FAILURE: Process '{escaped_process}' failed to terminate after $TimeoutSeconds seconds."
+            throw "Process termination timeout"
+        }} else {{
+            Write-Log "Process '{escaped_process}' terminated successfully."
+        }}
+    }} else {{
+        Write-Log "Target process '{escaped_process}' is not running. No stop required."
+    }}
+"#
         ));
     }
-
-    // Wait for file handles to release
-    script.push_str(
-        "Start-Sleep -Seconds 3
-
-",
-    );
 
     // Replace files
     for entry in &config.file_replacement_map {
         let src = Path::new(&downloads_dir_str).join(&entry.source_file);
 
-        // Canonicalize target_path to ensure absolute path
-        // Target path might not exist, but we can canonicalize '.' and then join.
-        // Or if it exists, canonicalize it.
         let target_dir = Path::new(&entry.target_path);
         let abs_target_dir = if target_dir.exists() {
             std::fs::canonicalize(target_dir).unwrap_or_else(|_| target_dir.to_path_buf())
@@ -270,17 +316,26 @@ fn generate_update_script(
         };
 
         let abs_target_str = clean_canonicalized_path(&abs_target_dir);
-
         let dst = Path::new(&abs_target_str).join(&entry.executable_name);
 
+        let src_escaped = src.display().to_string().replace("'", "''");
+        let dst_escaped = dst.display().to_string().replace("'", "''");
+
         script.push_str(&format!(
-            "if (Test-Path '{}') {{
-    Copy-Item -Path '{}' -Destination '{}' -Force
-}}
-",
-            src.display().to_string().replace("'", "''"),
-            src.display().to_string().replace("'", "''"),
-            dst.display().to_string().replace("'", "''")
+            r#"
+    if (Test-Path '{src_escaped}') {{
+        Write-Log "Replacing '{dst_escaped}' with '{src_escaped}'..."
+        Copy-Item -Path '{src_escaped}' -Destination '{dst_escaped}' -Force
+        if (Test-Path '{dst_escaped}') {{
+            Write-Log "Successfully replaced '{dst_escaped}'."
+        }} else {{
+            Write-Log "FAILURE: Could not verify '{dst_escaped}' after copy."
+            throw "File verification failed"
+        }}
+    }} else {{
+        Write-Log "Source file '{src_escaped}' not found. Skipping replacement."
+    }}
+"#
         ));
     }
 
@@ -293,31 +348,41 @@ fn generate_update_script(
             target_dir.to_path_buf()
         };
         let abs_target_str = clean_canonicalized_path(&abs_target_dir);
-
         let dst = Path::new(&abs_target_str).join(&entry.executable_name);
 
-        let args_str = match &entry.restart_args {
-            Some(args) => {
-                let joined = args
-                    .iter()
-                    .map(|a| format!("'{}'", a.replace("'", "''")))
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                format!("-ArgumentList {}", joined)
-            }
-            None => "".to_string(),
-        };
+        let dst_escaped = dst.display().to_string().replace("'", "''");
+        let work_escaped = abs_target_str.replace("'", "''");
 
-        script.push_str(&format!(
-            "if (Test-Path '{}') {{
-    Start-Process -FilePath '{}' -WorkingDirectory '{}' {}
-}}
-",
-            dst.display().to_string().replace("'", "''"),
-            dst.display().to_string().replace("'", "''"),
-            abs_target_str.replace("'", "''"),
-            args_str
-        ));
+        if entry.autostart {
+            let args_str = match &entry.restart_args {
+                Some(args) => {
+                    let joined = args
+                        .iter()
+                        .map(|a| format!("'{}'", a.replace("'", "''")))
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    format!("-ArgumentList {}", joined)
+                }
+                None => "".to_string(),
+            };
+
+            script.push_str(&format!(
+                r#"
+    if (Test-Path '{dst_escaped}') {{
+        Write-Log "Autostart is enabled. Starting '{dst_escaped}'..."
+        Start-Process -FilePath '{dst_escaped}' -WorkingDirectory '{work_escaped}' {args_str}
+        Write-Log "Started '{dst_escaped}' successfully."
+    }}
+"#
+            ));
+        } else {
+            script.push_str(&format!(
+                r#"
+    Write-Log "Autostart is disabled for '{}'. Leaving it stopped."
+"#,
+                dst_escaped
+            ));
+        }
     }
 
     // Clean up extracted files
@@ -325,18 +390,24 @@ fn generate_update_script(
         let src = Path::new(&downloads_dir_str).join(&entry.source_file);
         let src_escaped = src.display().to_string().replace("'", "''");
         script.push_str(&format!(
-            "if (Test-Path '{}') {{
-    Remove-Item -Path '{}' -Force
-}}
-",
-            src_escaped, src_escaped
+            r#"
+    if (Test-Path '{src_escaped}') {{
+        Remove-Item -Path '{src_escaped}' -Force
+        Write-Log "Cleaned up source file '{src_escaped}'."
+    }}
+"#
         ));
     }
 
-    // Delete the PowerShell script itself
     script.push_str(
-        "Remove-Item -Path $PSCommandPath -Force
-",
+        r#"
+    Write-Log "SUCCESS: Update completed successfully."
+} catch {
+    Write-Log "FAILURE: An error occurred during the update process: $_"
+} finally {
+    Remove-Item -Path $PSCommandPath -Force -ErrorAction SilentlyContinue
+}
+"#,
     );
 
     let mut temp_file = tempfile::Builder::new()
@@ -400,5 +471,42 @@ mod tests {
 
         let unix_path = Path::new(r"/usr/bin/test");
         assert_eq!(clean_canonicalized_path(unix_path), r"/usr/bin/test");
+    }
+
+    #[test]
+    fn test_generate_update_script_autostart_logic() {
+        use crate::crm_updater::config::{ReplacementMapEntry, UpdaterConfig};
+        let config = UpdaterConfig {
+            downloads_dir: "down".to_string(),
+            runner_logs_dir: "logs".to_string(),
+            log_recipient_email: "test@test.com".to_string(),
+            log_stdout_level: "DEBUG".to_string(),
+            log_file_level: "TRACE".to_string(),
+            file_replacement_map: vec![
+                ReplacementMapEntry {
+                    source_file: "src1.exe".to_string(),
+                    target_path: ".".to_string(),
+                    executable_name: "app1.exe".to_string(),
+                    restart_args: None,
+                    autostart: true,
+                },
+                ReplacementMapEntry {
+                    source_file: "src2.exe".to_string(),
+                    target_path: ".".to_string(),
+                    executable_name: "app2.exe".to_string(),
+                    restart_args: None,
+                    autostart: false,
+                },
+            ],
+        };
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let script_path = generate_update_script(&config, temp_dir.path()).unwrap();
+        let script_content = std::fs::read_to_string(&script_path).unwrap();
+
+        assert!(script_content.contains("Autostart is enabled. Starting '"));
+        assert!(script_content.contains("Autostart is disabled for '"));
+        assert!(script_content.contains("Get-Process -Name 'app1'"));
+        assert!(script_content.contains("SUCCESS: Update completed successfully."));
     }
 }

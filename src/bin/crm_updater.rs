@@ -39,7 +39,12 @@ fn main() -> Result<()> {
         }
     }
 
-    let config_path = PathBuf::from("updater_config.json");
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+        .unwrap_or_else(|| PathBuf::from("."));
+
+    let config_path = exe_dir.join("updater_config.json");
 
     let default_config = UpdaterConfig {
         downloads_dir: "downloads".to_string(),
@@ -51,12 +56,14 @@ fn main() -> Result<()> {
                 target_path: ".".to_string(),
                 executable_name: "crm_updater.exe".to_string(),
                 restart_args: None,
+                autostart: true,
             },
             ReplacementMapEntry {
                 source_file: "runner.exe".to_string(),
                 target_path: ".".to_string(),
                 executable_name: "runner.exe".to_string(),
                 restart_args: None,
+                autostart: true,
             },
         ],
         log_stdout_level: "DEBUG".to_string(),

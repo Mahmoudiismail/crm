@@ -217,7 +217,7 @@ pub async fn fetch_reports(
             "tickets" => "ticket_report_",
             "calls" => "call_logs_",
             "leads" => "lead_report_",
-            "users" => "user_report_",
+            "users" => "users_",
             _ => "",
         };
 
@@ -236,63 +236,60 @@ pub async fn fetch_reports(
         let extra = def.extra_params;
 
         if def.key == "calls" {
-            // Call logs: split into monthly batches
-            let batches = split_monthly(&calls_from_date, &to_date)?;
-            info!(
-                "Call logs: {} monthly batches from {} to {}",
-                batches.len(),
-                calls_from_date,
-                to_date
+            // Call logs: resolve date range
+            let start_date = if !from_date.is_empty() {
+                from_date.clone()
+            } else {
+                calls_from_date.clone()
+            };
+
+            let client = client.clone();
+            let context = Arc::clone(&context);
+            let base_url = base_url.clone();
+            let _email = email.clone();
+            let account_id = account_id.clone();
+            let application_id = application_id.clone();
+            let tz = tz.clone();
+            let token = token.clone();
+            let to_date_val = to_date.clone();
+
+            let download_dir = download_dir.to_path_buf();
+            let download_tx = download_tx.clone();
+
+            futures.push(
+                async move {
+                    let key = def.key.to_string();
+                    let params = FetchParams {
+                        base_url: &base_url,
+                        email: &_email,
+                        account_id: &account_id,
+                        application_id: &application_id,
+                        tz: &tz,
+                        extra_params: extra,
+                    };
+                    let v = fetch_with_signed_url_split(
+                        &client,
+                        &token,
+                        endpoint,
+                        &start_date,
+                        &to_date_val,
+                        &params,
+                        download_csv,
+                        Some(&download_dir),
+                        &key,
+                        download_tx,
+                        Some(context.clone()),
+                    )
+                    .await
+                    .unwrap_or_else(|e| {
+                        error!("Report '{}' failed: {}", endpoint, e);
+                        serde_json::json!({"error": format!("{}", e)})
+                    });
+
+                    (key, v)
+                }
+                .boxed(),
             );
-
-            for (batch_from, batch_to) in batches {
-                let client = client.clone();
-                let context = Arc::clone(&context);
-                let base_url = base_url.clone();
-                let _email = email.clone();
-                let account_id = account_id.clone();
-                let application_id = application_id.clone();
-                let tz = tz.clone();
-                let token = token.clone();
-
-                let download_dir = download_dir.to_path_buf();
-                let download_tx = download_tx.clone();
-
-                futures.push(
-                    async move {
-                        let key = format!("calls_{}_{}", batch_from, batch_to);
-                        let params = FetchParams {
-                            base_url: &base_url,
-                            email: &_email,
-                            account_id: &account_id,
-                            application_id: &application_id,
-                            tz: &tz,
-                            extra_params: extra,
-                        };
-                        let v = fetch_with_signed_url_split(
-                            &client,
-                            &token,
-                            endpoint,
-                            &batch_from,
-                            &batch_to,
-                            &params,
-                            download_csv,
-                            Some(&download_dir),
-                            &key,
-                            download_tx,
-                            Some(context.clone()),
-                        )
-                        .await
-                        .unwrap_or_else(|e| {
-                            error!("Call log batch {}-{} failed: {}", batch_from, batch_to, e);
-                            serde_json::json!({"error": format!("{}", e)})
-                        });
-
-                        (key, v)
-                    }
-                    .boxed(),
-                );
-            }
         } else if def.key == "users" {
             // Users report: direct GET request, no dates, returns Base64 CSV
             let client = client.clone();
@@ -1197,12 +1194,7 @@ async fn cleanup_old_reports(download_dir: &Path, retention_days: u64) {
 
     let threshold =
         SystemTime::now() - std::time::Duration::from_secs(retention_days * 24 * 60 * 60);
-    let prefixes = [
-        "ticket_report_",
-        "call_logs_",
-        "lead_report_",
-        "user_report_",
-    ];
+    let prefixes = ["ticket_report_", "call_logs_", "lead_report_", "users_"];
 
     if let Ok(mut entries) = fs::read_dir(download_dir).await {
         while let Ok(Some(entry)) = entries.next_entry().await {
