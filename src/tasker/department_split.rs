@@ -279,7 +279,11 @@ try {{
 
     if !stdout_str.is_empty() {
         for line in stdout_str.lines() {
-            info!("PS: {}", line);
+            if line.starts_with("TRACE:") {
+                tracing::trace!("PS: {}", line.strip_prefix("TRACE:").unwrap().trim());
+            } else {
+                info!("PS: {}", line);
+            }
         }
     }
 

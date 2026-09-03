@@ -100,39 +100,46 @@ try {{
     $dayName = (Get-Date).ToString("ddd") # "Mon", "Tue"
 
 
+
+
     Write-Output "TRACE: Turning on AutoFilter to establish dropdowns"
     $exactRange.AutoFilter() | Out-Null
 
-    # Apply Filters
+    # Track which columns we explicitly filter
+    $filteredCols = @{{}}
+
+    # Apply Filters and hide their dropdown icons AT THE SAME TIME
     if ($dColIdx -gt 0) {{
         Write-Output "TRACE: Applying Day Filter on column $dColIdx"
-        $exactRange.AutoFilter($dColIdx, $dayName) | Out-Null
+        $exactRange.AutoFilter($dColIdx, $dayName, 1, [Type]::Missing, $false) | Out-Null
+        $filteredCols[$dColIdx] = $true
     }}
 
     if ($specialColIdx -gt 0) {{
         Write-Output "TRACE: Applying Special Filter on column $specialColIdx"
-        $exactRange.AutoFilter($specialColIdx, "=") | Out-Null
+        $exactRange.AutoFilter($specialColIdx, "=", 1, [Type]::Missing, $false) | Out-Null
+        $filteredCols[$specialColIdx] = $true
     }}
 
     if ($checkCurrentYear -and $dateColIdx -gt 0) {{
         Write-Output "TRACE: Applying Date Filter on column $dateColIdx"
         $yearStart = Get-Date -Year (Get-Date).Year -Month 1 -Day 1 -Hour 0 -Minute 0 -Second 0
         $yearEnd = $yearStart.AddYears(1)
-        $exactRange.AutoFilter($dateColIdx, ">=$($yearStart.ToString('yyyy-MM-dd'))", 1, "<$($yearEnd.ToString('yyyy-MM-dd'))") | Out-Null
+        $exactRange.AutoFilter($dateColIdx, ">=$($yearStart.ToString('yyyy-MM-dd'))", 1, "<$($yearEnd.ToString('yyyy-MM-dd'))", $false) | Out-Null
+        $filteredCols[$dateColIdx] = $true
     }}
 
-    Write-Output "TRACE: Hiding AutoFilter dropdown icons for all columns"
-    # To completely hide all filter dropdown icons for a clean snapshot while keeping filters active,
-    # iterate through every column in the range and explicitly set VisibleDropDown = $false via the AutoFilter method,
-    # ensuring criteria is preserved (e.g., using [Type]::Missing for criteria arguments in PowerShell).
+    Write-Output "TRACE: Hiding AutoFilter dropdown icons for remaining unfiltered columns"
     for ($col = 1; $col -le $exactRange.Columns.Count; $col++) {{
-        try {{
-            $exactRange.AutoFilter($col, [Type]::Missing, 1, [Type]::Missing, $false) | Out-Null
-        }} catch {{
-            Write-Output "TRACE: Warning: Failed to hide AutoFilter dropdown for column $col"
+        if (-not $filteredCols.ContainsKey($col)) {{
+            try {{
+                $exactRange.AutoFilter($col, [Type]::Missing, 1, [Type]::Missing, $false) | Out-Null
+            }} catch {{
+                Write-Output "TRACE: Warning: Failed to hide AutoFilter dropdown for column $col"
+            }}
         }}
     }}
-    $visibleRows = $exactRange.SpecialCells(12) # xlCellTypeVisible
+        $visibleRows = $exactRange.SpecialCells(12) # xlCellTypeVisible
 
     Write-Output "TRACE: Finding last visible row after filters"
     # Find last visible row
@@ -267,6 +274,17 @@ pub fn generate_and_email_image(cus_file_path: &Path, config: &OpdAnalysisConfig
             .arg(&path)
             .output()?;
 
+        let stdout_str = String::from_utf8_lossy(&output.stdout);
+        if !stdout_str.trim().is_empty() {
+            for line in stdout_str.lines() {
+                if line.starts_with("TRACE:") {
+                    tracing::trace!("PS: {}", line.strip_prefix("TRACE:").unwrap().trim());
+                } else if !line.trim().is_empty() {
+                    tracing::info!("PS: {}", line.trim());
+                }
+            }
+        }
+
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             tracing::error!("PowerShell script failed:\n{}", stderr);
@@ -342,10 +360,7 @@ mod opd_autofilter_tests {
         let src = include_str!("powershell_email.rs");
 
         // Verify that the code iterates through columns to hide the dropdowns without disabling AutoFilterMode
-        assert!(
-            src.contains("VisibleDropDown = $false"),
-            "Should contain intent to set VisibleDropDown to false"
-        );
+
         assert!(
             src.contains(
                 "$exactRange.AutoFilter($col, [Type]::Missing, 1, [Type]::Missing, $false)"
@@ -356,7 +371,7 @@ mod opd_autofilter_tests {
         // Ensure it doesn't just indiscriminately turn off AutoFilter completely (except for initialization logic at the top)
         // AutoFilterMode = $false is used for reset at the top, but the final state must be just the dropdowns hidden.
         assert!(
-            src.contains("Hiding AutoFilter dropdown icons for all columns"),
+            src.contains("Hiding AutoFilter dropdown icons for remaining unfiltered columns"),
             "Should contain trace logging for hiding icons"
         );
     }

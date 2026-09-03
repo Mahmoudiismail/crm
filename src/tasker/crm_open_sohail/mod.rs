@@ -429,8 +429,6 @@ mod tests {
         assert!(src.contains("catch"));
         assert!(!src.contains(&format!("$ReplyMail.{} = ", "To")));
         assert!(!src.contains(&format!("$ReplyMail.{} = ", "CC")));
-        let src = include_str!("mod.rs");
-
         // Assert sender_account_email is used
         assert!(
             src.contains("sender_account_email"),
