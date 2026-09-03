@@ -56,7 +56,7 @@
               <select class='interval-value shadow-sm focus:ring-emerald-500 focus:border-emerald-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2'>
                   <option value='15m'>15m</option>
                   <option value='30m'>30m</option>
-                  <option value='1h' selected>1h</option>
+                  <option value='1h'>1h</option>
                   <option value='2h'>2h</option>
                   <option value='4h'>4h</option>
                   <option value='8h'>8h</option>
@@ -677,7 +677,7 @@
             </div>
           `;
         } else if (arg.arg_type === "date_var") {
-             const dateVars = ["today", "yesterday", "tomorrow", "eomonth"];
+             const dateVars = ["today", "yesterday", "tomorrow", "beginning_of_month", "eomonth", "next mon", "next tue", "next wed", "next thu", "next fri", "next sat", "next sun"];
              let isVar = dateVars.includes(val);
              let dateVal = isVar ? "" : val;
              let varVal = isVar ? val : "today";
@@ -691,10 +691,20 @@
                    </div>
                    <input type="date" id="fixed_${id}" data-arg-name="${arg.name}" data-arg-type="date_var" data-group="datevar" class="block w-full rounded border border-gray-300 px-3 py-2 text-sm" value="${dateVal}" style="display: ${!isVar ? 'block' : 'none'}">
                    <select id="var_${id}" data-arg-name="${arg.name}" data-arg-type="date_var" data-group="datevar" class="block w-full rounded border border-gray-300 px-3 py-2 text-sm" style="display: ${isVar ? 'block' : 'none'}">
-                      <option value="today" ${varVal === 'today' ? 'selected' : ''}>Today</option>
+                                            <option value="today" ${varVal === 'today' ? 'selected' : ''}>Today</option>
                       <option value="yesterday" ${varVal === 'yesterday' ? 'selected' : ''}>Yesterday</option>
                       <option value="tomorrow" ${varVal === 'tomorrow' ? 'selected' : ''}>Tomorrow</option>
+                      <option value="beginning_of_month" ${varVal === 'beginning_of_month' ? 'selected' : ''}>Beginning of Month</option>
                       <option value="eomonth" ${varVal === 'eomonth' ? 'selected' : ''}>End of Month</option>
+                      <optgroup label="Next">
+                        <option value="next mon" ${varVal === 'next mon' ? 'selected' : ''}>Monday</option>
+                        <option value="next tue" ${varVal === 'next tue' ? 'selected' : ''}>Tuesday</option>
+                        <option value="next wed" ${varVal === 'next wed' ? 'selected' : ''}>Wednesday</option>
+                        <option value="next thu" ${varVal === 'next thu' ? 'selected' : ''}>Thursday</option>
+                        <option value="next fri" ${varVal === 'next fri' ? 'selected' : ''}>Friday</option>
+                        <option value="next sat" ${varVal === 'next sat' ? 'selected' : ''}>Saturday</option>
+                        <option value="next sun" ${varVal === 'next sun' ? 'selected' : ''}>Sunday</option>
+                      </optgroup>
                    </select>
                    ${arg.description ? `<p class="text-xs text-gray-500 mt-1">${arg.description}</p>` : ""}
                </div>
