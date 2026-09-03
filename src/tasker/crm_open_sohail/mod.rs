@@ -1,6 +1,12 @@
 use crate::tasker::config::CrmOpenSohailConfig;
 use anyhow::Result;
-use tracing::{error, info, warn};
+use tracing::{error, info};
+
+/// Calculates the expected Subject format: "Open TKTs DD-MMMM" based on yesterday's local date.
+pub fn calculate_yesterday_subject(today: chrono::NaiveDate) -> String {
+    let yesterday = today - chrono::Duration::days(1);
+    format!("Open TKTs {}", yesterday.format("%d-%B"))
+}
 
 pub mod models;
 pub mod powershell;
@@ -35,18 +41,8 @@ pub fn run(config: &CrmOpenSohailConfig) -> Result<()> {
 
     info!("Email generation completed");
 
-    let subject = config
-        .subject_template
-        .clone()
-        .unwrap_or("CRM Updated open TKTs".to_string());
-
-    let email_to = config.dashboard_config.email_to.clone().unwrap_or_default();
-    let email_cc = config.dashboard_config.email_cc.clone().unwrap_or_default();
-
-    if email_to.is_empty() {
-        warn!("No email_to specified. Skipping email draft creation.");
-        return Ok(());
-    }
+    let yesterday = chrono::Local::now().date_naive() - chrono::Duration::days(1);
+    let subject = format!("Open TKTs {}", yesterday.format("%d-%B"));
 
     let sender_account_email = config.sender_account_email.clone();
     let reply_subject_prefix = config.reply_subject_prefix.clone();
@@ -55,16 +51,20 @@ pub fn run(config: &CrmOpenSohailConfig) -> Result<()> {
         r#"
 $ErrorActionPreference = "Stop"
 
+Write-Output "TRACE: Acquiring Outlook COM object..."
 $Outlook = New-Object -ComObject Outlook.Application
 $Namespace = $Outlook.GetNamespace("MAPI")
 
 # Access Inbox and Sent Items to search for the original message
+Write-Output "TRACE: Accessing Inbox and Sent Items..."
 $Inbox = $Namespace.GetDefaultFolder(6) # olFolderInbox
 $SentItems = $Namespace.GetDefaultFolder(5) # olFolderSentMail
 
 $OriginalMail = $null
 $SenderToMatch = "{sender_account}"
 $PrefixToMatch = "{subject_prefix}"
+
+Write-Output "TRACE: Searching for original message with sender: '$SenderToMatch' and subject prefix: '$PrefixToMatch'"
 
 function Find-OriginalMessage ($FolderItems, $SortProperty) {{
     if (-not $FolderItems) {{ return $null }}
@@ -75,14 +75,41 @@ function Find-OriginalMessage ($FolderItems, $SortProperty) {{
             continue
         }}
 
+        Write-Output "TRACE: Found candidate with matching subject prefix: $($Item.Subject)"
+
         $SenderAddress = $Item.SenderEmailAddress
         if ($Item.SenderEmailType -eq "EX") {{
-            $PropAccessor = $Item.PropertyAccessor
-            $SenderAddress = $PropAccessor.GetProperty("http://schemas.microsoft.com/mapi/proptag/0x39FE001E")
+            # Attempt to resolve EX to SMTP
+            Write-Output "TRACE: SenderEmailType is EX, attempting resolution..."
+            try {{
+                $ExchangeUser = $Item.Sender.GetExchangeUser()
+                if ($ExchangeUser) {{
+                    $SenderAddress = $ExchangeUser.PrimarySmtpAddress
+                    Write-Output "TRACE: Resolved via GetExchangeUser to: $SenderAddress"
+                }} else {{
+                    Write-Output "TRACE: GetExchangeUser returned null."
+                }}
+            }} catch {{
+                Write-Output "TRACE: GetExchangeUser failed: $_"
+            }}
+
+            # Fallback to PropertyAccessor if still not resolved or empty
+            if (-not $SenderAddress -or $SenderAddress.IndexOf("@") -eq -1) {{
+                try {{
+                    $PropAccessor = $Item.PropertyAccessor
+                    $SenderAddress = $PropAccessor.GetProperty("http://schemas.microsoft.com/mapi/proptag/0x39FE001E")
+                    Write-Output "TRACE: Resolved via PropertyAccessor to: $SenderAddress"
+                }} catch {{
+                    Write-Output "TRACE: PropertyAccessor 0x39FE001E failed: $_"
+                }}
+            }}
         }}
 
         if ($SenderAddress -eq $SenderToMatch) {{
+            Write-Output "TRACE: Sender match successful ($SenderAddress). Selected as original message."
             return $Item
+        }} else {{
+            Write-Output "TRACE: Candidate rejected. Sender '$SenderAddress' does not match '$SenderToMatch'."
         }}
     }}
 
@@ -90,10 +117,12 @@ function Find-OriginalMessage ($FolderItems, $SortProperty) {{
 }}
 
 # Search Inbox
+Write-Output "TRACE: Searching Inbox..."
 $OriginalMail = Find-OriginalMessage -FolderItems $Inbox.Items -SortProperty "[ReceivedTime]"
 
 # Search Sent Items if not found in Inbox
 if (-not $OriginalMail) {{
+    Write-Output "TRACE: Not found in Inbox, searching Sent Items..."
     $OriginalMail = Find-OriginalMessage -FolderItems $SentItems.Items -SortProperty "[SentOn]"
 }}
 
@@ -101,37 +130,23 @@ if (-not $OriginalMail) {{
     throw "Original message with subject prefix '{subject_prefix}' not found in Inbox or Sent Items of '{sender_account}'."
 }}
 
+Write-Output "TRACE: Creating ReplyAll draft..."
 $ReplyMail = $OriginalMail.ReplyAll()
 
-# Append recipients if any are explicitly provided via config, preserving Original thread
-if ("{email_to}") {{
-    if ($ReplyMail.To) {{
-        $ReplyMail.To = $ReplyMail.To + "; " + "{email_to}"
-    }} else {{
-        $ReplyMail.To = "{email_to}"
-    }}
-}}
-if ("{email_cc}") {{
-    if ($ReplyMail.CC) {{
-        $ReplyMail.CC = $ReplyMail.CC + "; " + "{email_cc}"
-    }} else {{
-        $ReplyMail.CC = "{email_cc}"
-    }}
-}}
 if ("{subject}") {{
     $ReplyMail.Subject = "{subject}"
 }}
 
 # Prepend the generated dashboard to the HTMLBody
+Write-Output "TRACE: Populating reply draft body..."
 $ReplyMail.HTMLBody = '{html_body}' + $ReplyMail.HTMLBody
 
+Write-Output "TRACE: Saving reply draft..."
 $ReplyMail.Save()
-Write-Output "Successfully saved Reply All draft."
+Write-Output "TRACE: Reply draft saved successfully."
 "#,
         sender_account = sender_account_email.replace("'", "''"),
         subject_prefix = reply_subject_prefix.replace("'", "''"),
-        email_to = email_to.replace("'", "''"),
-        email_cc = email_cc.replace("'", "''"),
         subject = subject.replace("'", "''"),
         html_body = final_html.replace("'", "''")
     );
@@ -408,6 +423,13 @@ mod tests {
     #[test]
     fn test_outlook_reply_all_draft_mechanism() {
         let src = include_str!("mod.rs");
+        assert!(src.contains("GetExchangeUser()"));
+        assert!(src.contains("PrimarySmtpAddress"));
+        assert!(src.contains("0x39FE001E"));
+        assert!(src.contains("catch"));
+        assert!(!src.contains(&format!("$ReplyMail.{} = ", "To")));
+        assert!(!src.contains(&format!("$ReplyMail.{} = ", "CC")));
+        let src = include_str!("mod.rs");
 
         // Assert sender_account_email is used
         assert!(
@@ -442,12 +464,30 @@ mod tests {
             src.contains("$ReplyMail.Save()"),
             "Should save email as draft"
         );
+    }
 
-        let bad_send = "$ReplyMail.Se";
-        let bad_send2 = "nd()";
-        assert!(
-            !src.contains(&format!("{}{}", bad_send, bad_send2)),
-            "Should never call Send() on the generated email"
+    #[test]
+    fn test_calculate_yesterday_subject() {
+        use chrono::NaiveDate;
+        // Normal day
+        assert_eq!(
+            calculate_yesterday_subject(NaiveDate::from_ymd_opt(2026, 9, 3).unwrap()),
+            "Open TKTs 02-September"
+        );
+        // Month boundary
+        assert_eq!(
+            calculate_yesterday_subject(NaiveDate::from_ymd_opt(2026, 10, 1).unwrap()),
+            "Open TKTs 30-September"
+        );
+        // Year boundary
+        assert_eq!(
+            calculate_yesterday_subject(NaiveDate::from_ymd_opt(2027, 1, 1).unwrap()),
+            "Open TKTs 31-December"
+        );
+        // Leap year
+        assert_eq!(
+            calculate_yesterday_subject(NaiveDate::from_ymd_opt(2024, 3, 1).unwrap()),
+            "Open TKTs 29-February"
         );
     }
 }

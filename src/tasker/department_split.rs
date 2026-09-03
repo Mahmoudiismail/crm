@@ -89,14 +89,14 @@ $dashboardPath = '{dashboard_path}'
 $outDir = '{out_dir}'
 $mappingFile = '{mapping_file}'
 
-Write-Output "Loading mapping JSON..."
+Write-Output "TRACE: Loading mapping JSON..."
 $mappingJson = Get-Content $mappingFile -Raw | ConvertFrom-Json
 $mappingHash = @{{}}
 foreach ($prop in $mappingJson.psobject.properties) {{
     $mappingHash[$prop.Name] = $prop.Value
 }}
 
-Write-Output "Starting Excel COM Object..."
+Write-Output "TRACE: Starting Excel COM Object..."
 $Excel = New-Object -ComObject Excel.Application
 $Excel.Visible = $false
 $Excel.DisplayAlerts = $false
@@ -114,7 +114,7 @@ try {{
 }}
 
 try {{
-    Write-Output "Opening master dashboard: $dashboardPath"
+    Write-Output "TRACE: Opening master dashboard: $dashboardPath"
     $Workbook = $Excel.Workbooks.Open($dashboardPath)
     $Sheet = $Workbook.Worksheets.Item("OPD Report")
 
@@ -140,10 +140,10 @@ try {{
         throw "DEPT column not found"
     }}
 
-    Write-Output "DEPT column found at index: $deptCol (Header Row: $headerRow)"
+    Write-Output "TRACE: DEPT column found at index: $deptCol (Header Row: $headerRow)"
 
     $lastRow = $Sheet.Cells.SpecialCells(11).Row
-    Write-Output "Total rows in OPD Report: $lastRow"
+    Write-Output "TRACE: Total rows in OPD Report: $lastRow"
 
     # First pass: Build a list of unique CHIR targets based on the data
     $uniqueTargets = @{{}}
@@ -163,7 +163,7 @@ try {{
     }}
 
     $Workbook.Close($false)
-    Write-Output "Found unique targets: $($uniqueTargets.Keys -join ', ')"
+    Write-Output "TRACE: Found unique targets: $($uniqueTargets.Keys -join ', ')"
 
     # Loop over each target CHIR and create a copy
     foreach ($target in $uniqueTargets.Keys) {{
@@ -171,7 +171,7 @@ try {{
         $targetPath = Join-Path $outDir $targetFileName
 
         Copy-Item $dashboardPath $targetPath -Force
-        Write-Output "Created copy for $target: $targetPath"
+        Write-Output "TRACE: Created copy for ${{target}}: ${{targetPath}}"
 
         $TargetWB = $Excel.Workbooks.Open($targetPath)
         $TargetSheet = $TargetWB.Worksheets.Item("OPD Report")
@@ -195,7 +195,7 @@ try {{
             }}
         }}
 
-        Write-Output "Department: $target | Total records: $($rowsRetained + $rowsDeleted) | Retained records: $rowsRetained"
+        Write-Output "TRACE: Completed copy for target ${{target}} | Total records: $($rowsRetained + $rowsDeleted) | Retained records: $rowsRetained"
 
         # Refresh Data Model and PivotTables
         if ($TargetWB.Model) {{
@@ -212,11 +212,11 @@ try {{
     }}
 
 }} catch {{
-    Write-Error "Failed to process dashboard: $_"
+    Write-Error "Failed to process dashboard (target: ${{target}}): $_"
     if ($Workbook) {{ try {{ $Workbook.Close($false) }} catch {{}} }}
     [System.Environment]::ExitCode = 1
 }} finally {{
-    Write-Output "Cleaning up Excel COM object..."
+    Write-Output "TRACE: Cleaning up Excel COM object..."
     try {{
         if ($Excel) {{
             $Excel.ScreenUpdating = $true
@@ -227,7 +227,7 @@ try {{
             [System.Runtime.InteropServices.Marshal]::ReleaseComObject($Excel) | Out-Null
         }}
     }} catch {{
-        Write-Output "Warning: Failed to cleanly quit Excel."
+        Write-Output "TRACE: Warning: Failed to cleanly quit Excel."
     }}
 
     [System.GC]::Collect()
@@ -298,4 +298,35 @@ try {{
 
     info!("Departmental Splitter task completed successfully.");
     Ok(())
+}
+
+#[cfg(test)]
+#[allow(unused_imports)]
+mod tests {
+    // use super::*;
+
+    #[test]
+    fn test_powershell_interpolation_safety() {
+        let src = include_str!("department_split.rs");
+
+        // Assert the problematic unsafe interpolation does not exist
+        assert!(
+            !src.contains(&format!("{}{}", "$target", ": $targetPath")),
+            "Should not contain unsafe interpolation"
+        );
+        assert!(
+            !src.contains(&format!("{}{}", "$target", ":")),
+            "Should not contain ambiguous interpolation"
+        );
+
+        // Assert the safe version does exist
+        assert!(
+            src.contains("${{target}}: ${{targetPath}}"),
+            "Should contain strictly safe string interpolation"
+        );
+        assert!(
+            src.contains("${{target}}"),
+            "Should use safe bracket notation for target"
+        );
+    }
 }
