@@ -100,7 +100,7 @@ pub(crate) fn legacy_fields_from_schedules(
             }
         }
     } else {
-        (Repetition::Once, 3600, String::new())
+        (Repetition::Once, 0, String::new())
     }
 }
 
@@ -114,7 +114,7 @@ pub(crate) fn legacy_fields_from_values(
     let frequency_seconds = values
         .get("frequency_seconds")
         .and_then(|v| v.parse::<u64>().ok())
-        .unwrap_or(3600);
+        .unwrap_or(0);
     let next_run_at = values
         .get("next_run_at")
         .map(|v| v.trim().to_string())

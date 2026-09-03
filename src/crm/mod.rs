@@ -17,16 +17,23 @@ pub async fn run_once(
     end_date: Option<String>,
     custom_download_folder_cli: Option<String>,
 ) -> Result<()> {
-    use crate::utils::to_iso_date;
+    use crate::utils::to_iso_date_with_base;
 
-    if let Some(sd) = start_date {
+    let resolved_start = if let Some(sd) = start_date {
         if !sd.is_empty() {
-            config.from_date = to_iso_date(&sd);
+            let parsed = to_iso_date_with_base(&sd, None);
+            config.from_date = parsed.clone();
+            Some(parsed)
+        } else {
+            None
         }
-    }
+    } else {
+        None
+    };
+
     if let Some(ed) = end_date {
         if !ed.is_empty() {
-            config.to_date = to_iso_date(&ed);
+            config.to_date = to_iso_date_with_base(&ed, resolved_start.as_deref());
         }
     }
 
@@ -36,6 +43,38 @@ pub async fn run_once(
         config.from_date,
         config.to_date
     );
+
+    // Validate that from_date <= to_date if both are present
+    if !config.from_date.is_empty() && !config.to_date.is_empty() {
+        if let (Some(start_dt), Some(end_dt)) = (
+            crate::utils::parse_flexible_date(&config.from_date),
+            crate::utils::parse_flexible_date(&config.to_date),
+        ) {
+            if start_dt > end_dt {
+                anyhow::bail!(
+                    "Validation failed: from_date ({}) is after to_date ({})",
+                    config.from_date,
+                    config.to_date
+                );
+            }
+        }
+    }
+
+    // Validate that from_date <= to_date if both are present
+    if !config.from_date.is_empty() && !config.to_date.is_empty() {
+        if let (Some(start_dt), Some(end_dt)) = (
+            crate::utils::parse_flexible_date(&config.from_date),
+            crate::utils::parse_flexible_date(&config.to_date),
+        ) {
+            if start_dt > end_dt {
+                anyhow::bail!(
+                    "Validation failed: from_date ({}) is after to_date ({})",
+                    config.from_date,
+                    config.to_date
+                );
+            }
+        }
+    }
 
     let client = build_client(config).context("Failed to build HTTP client")?;
 

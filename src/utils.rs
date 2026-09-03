@@ -269,7 +269,7 @@ pub(crate) fn resolve_date_var(val: &str, base_date: Option<&str>) -> Result<chr
             trace!("Variable resolution path: yesterday");
             Ok(dt)
         }
-        "this_month" => {
+        "this_month" | "beginning_of_month" => {
             info!("Variable detected: {}", val);
             let base_dt = if let Some(bd) = base_date {
                 parse_flexible_date_impl(bd, None)
@@ -281,7 +281,7 @@ pub(crate) fn resolve_date_var(val: &str, base_date: Option<&str>) -> Result<chr
                 .context("valid first day of month")?;
 
             trace!(
-                "Variable resolution path: this_month. Base: {}, Result: {}",
+                "Variable resolution path: beginning_of_month. Base: {}, Result: {}",
                 dt,
                 res
             );
@@ -313,6 +313,44 @@ pub(crate) fn resolve_date_var(val: &str, base_date: Option<&str>) -> Result<chr
 
             trace!(
                 "Variable resolution path: eomonth. Base: {}, Result: {}",
+                dt,
+                res
+            );
+            debug!("Resolved value: {} (Original: {})", res, val);
+            Ok(res)
+        }
+
+        v if v.starts_with("next ") => {
+            info!("Variable detected: {}", val);
+            let base_dt = if let Some(bd) = base_date {
+                parse_flexible_date_impl(bd, None)
+            } else {
+                None
+            };
+            let dt = base_dt.unwrap_or_else(|| Local::now().date_naive());
+            let target_weekday = match v {
+                "next mon" => chrono::Weekday::Mon,
+                "next tue" => chrono::Weekday::Tue,
+                "next wed" => chrono::Weekday::Wed,
+                "next thu" => chrono::Weekday::Thu,
+                "next fri" => chrono::Weekday::Fri,
+                "next sat" => chrono::Weekday::Sat,
+                "next sun" => chrono::Weekday::Sun,
+                _ => anyhow::bail!("Invalid next weekday variable: {}", val),
+            };
+
+            // Calculate next occurrence STRICTLY AFTER the base date
+            let current_weekday = dt.weekday();
+            let mut days_to_add = (target_weekday.num_days_from_monday() + 7
+                - current_weekday.num_days_from_monday())
+                % 7;
+            if days_to_add == 0 {
+                days_to_add = 7;
+            }
+
+            let res = dt + chrono::TimeDelta::try_days(days_to_add as i64).context("valid days")?;
+            trace!(
+                "Variable resolution path: next_weekday. Base: {}, Result: {}",
                 dt,
                 res
             );
@@ -527,6 +565,33 @@ mod tests {
             to_iso_date_with_base("invalid", Some("2026-05-01")),
             "invalid"
         );
+    }
+
+    #[test]
+    fn test_resolve_date_var_dynamic_combinations() {
+        use chrono::Datelike;
+        // next sat + eomonth
+        let _base = chrono::Local::now().date_naive();
+        // Since test run can happen any day, we'll just check it parses and eomonth base is correct
+        let resolved_start = resolve_date_var("next sat", None).unwrap();
+        let resolved_end = resolve_date_var(
+            "eomonth",
+            Some(&resolved_start.format("%Y-%m-%d").to_string()),
+        )
+        .unwrap();
+        assert!(resolved_start <= resolved_end);
+
+        let feb_start = resolve_date_var("eomonth", Some("2026-02-15")).unwrap();
+        assert_eq!(feb_start.format("%Y-%m-%d").to_string(), "2026-02-28");
+
+        let feb_leap_start = resolve_date_var("eomonth", Some("2028-02-15")).unwrap();
+        assert_eq!(feb_leap_start.format("%Y-%m-%d").to_string(), "2028-02-29");
+
+        // Beginning of month -> eomonth
+        let bom = resolve_date_var("beginning_of_month", None).unwrap();
+        let eom = resolve_date_var("eomonth", Some(&bom.format("%Y-%m-%d").to_string())).unwrap();
+        assert!(bom <= eom);
+        assert_eq!(bom.month(), eom.month());
     }
 
     #[test]
