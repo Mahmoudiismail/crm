@@ -37,6 +37,22 @@ pub async fn run_once(
         config.to_date
     );
 
+    // Validate that from_date <= to_date if both are present
+    if !config.from_date.is_empty() && !config.to_date.is_empty() {
+        if let (Some(start_dt), Some(end_dt)) = (
+            crate::utils::parse_flexible_date(&config.from_date),
+            crate::utils::parse_flexible_date(&config.to_date),
+        ) {
+            if start_dt > end_dt {
+                anyhow::bail!(
+                    "Validation failed: from_date ({}) is after to_date ({})",
+                    config.from_date,
+                    config.to_date
+                );
+            }
+        }
+    }
+
     let client = build_client(config).context("Failed to build HTTP client")?;
 
     tracing::info!("Ensuring authentication...");

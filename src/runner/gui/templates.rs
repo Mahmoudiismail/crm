@@ -324,9 +324,7 @@ pub(crate) fn schedule_editor_html(
     let rows = if let Some(task) = task {
         schedule_rows_html(task, profiles)
     } else {
-        schedule_row_html(
-            0, "interval", "1h", "", "", "", "", None, None, None, profiles,
-        )
+        String::new()
     };
 
     format!(
@@ -643,7 +641,7 @@ pub(crate) fn schedule_row_html(
         if kind == "weekly" { "selected" } else { "" },
         if kind == "monthly" { "selected" } else { "" },
         interval_hidden,
-        {            let opts = vec!["15m", "30m", "1h", "2h", "4h", "8h", "12h", "24h", "2d", "7d"];            let mut found = false;            let mut html = String::new();            for opt in &opts {                if *opt == interval_value {                    html.push_str(&format!("<option value='{}' selected>{}</option>", opt, opt));                    found = true;                } else {                    html.push_str(&format!("<option value='{}'>{}</option>", opt, opt));                }            }            if !found && !interval_value.is_empty() {                html.push_str(&format!("<option value='{}' selected>{}</option>", interval_value, interval_value));            }            html        },
+        {            let opts = vec!["15m", "30m", "1h", "2h", "4h", "8h", "12h", "24h", "2d", "7d"];            let mut found = false;            let mut html = String::new();            for opt in &opts {                if *opt == interval_value {                    html.push_str(&format!("<option value='{}' selected>{}</option>", opt, opt));                    found = true;                } else {                    html.push_str(&format!("<option value='{}'>{}</option>", opt, opt));                }            }            if !found && !interval_value.is_empty() {                html.push_str(&format!("<option value='{}' selected>{}</option>", interval_value, interval_value));            } else if !found && interval_value.is_empty() { html.push_str("<option value='1h'>1h</option>"); }            html        },
         once_hidden,
         escape_html(once_value),
         daily_hidden,
