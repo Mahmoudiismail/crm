@@ -16,7 +16,10 @@ use crate::yasweb::browser::{debug, javascript};
 /// ```no_run
 /// use std::collections::HashMap;
 /// use std::sync::Arc;
+/// use headless_chrome::Tab;
+/// use crm_tool::yasweb::browser::reports::navigate_and_run_report;
 ///
+/// # fn example() -> anyhow::Result<()> {
 /// # let tab: Arc<Tab> = unimplemented!();
 /// let mut step_num = 0;
 /// let filters = HashMap::new();
@@ -29,7 +32,8 @@ use crate::yasweb::browser::{debug, javascript};
 ///     10,
 ///     &mut step_num,
 /// )?;
-/// # Ok::<(), anyhow::Error>(())
+/// # Ok(())
+/// # }
 /// ```
 ///
 /// # Arguments
