@@ -41,8 +41,7 @@ pub fn run(config: &CrmOpenSohailConfig) -> Result<()> {
 
     info!("Email generation completed");
 
-    let yesterday = chrono::Local::now().date_naive() - chrono::Duration::days(1);
-    let subject = format!("Open TKTs {}", yesterday.format("%d-%B"));
+    let subject = calculate_yesterday_subject(chrono::Local::now().date_naive());
 
     let sender_account_email = config.sender_account_email.clone();
     let reply_subject_prefix = config.reply_subject_prefix.clone();
