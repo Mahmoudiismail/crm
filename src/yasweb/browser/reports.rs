@@ -7,6 +7,41 @@ use tracing::{error, info, warn};
 
 use crate::yasweb::browser::{debug, javascript};
 
+/// Navigates to an MIS report, applies the requested filters, and exports the report as XLSX.
+///
+/// Returns the filter labels discovered in the report form.
+///
+/// # Examples
+///
+/// ```no_run,ignore
+/// use std::collections::HashMap;
+/// use std::sync::Arc;
+///
+/// # let tab: Arc<Tab> = unimplemented!();
+/// let mut step_num = 0;
+/// let filters = HashMap::new();
+///
+/// let discovered = navigate_and_run_report(
+///     &tab,
+///     "Sales Report",
+///     "Operational",
+///     &filters,
+///     10,
+///     &mut step_num,
+/// )?;
+/// # Ok::<(), anyhow::Error>(())
+/// ```
+///
+/// # Arguments
+///
+/// * `active_report_name` - The report to select and export.
+/// * `active_report_type` - The report category to select.
+/// * `active_filters` - Filter values to apply before generating the report.
+/// * `step_num` - Counter used to number saved browser-state snapshots.
+///
+/// # Returns
+///
+/// The labels of the filters discovered in the report form.
 pub fn navigate_and_run_report(
     tab: &Arc<Tab>,
     active_report_name: &str,
@@ -34,17 +69,22 @@ pub fn navigate_and_run_report(
                         error!("Page HTML after failed menu click:\n{}", html);
                     }
                 } else {
-                    for _ in 0..10 {
-                        let check_js = "document.querySelector('.menuModules') ? document.querySelector('.menuModules').classList.contains('show-modules') : false";
-                        if let Ok(eval_result) = tab.evaluate(check_js, true) {
-                            if let Some(val) = eval_result.value {
-                                if val.as_bool().unwrap_or(false) {
-                                    sidebar_toggled = true;
-                                    break;
-                                }
-                            }
+                    let check_js_eval = r#"
+                        new Promise(resolve => {
+                            let attempts = 0;
+                            let check = () => {
+                                let m = document.querySelector('.menuModules');
+                                if (m && m.classList.contains('show-modules')) { resolve(true); }
+                                else if (attempts > 50) { resolve(false); }
+                                else { attempts++; setTimeout(check, 100); }
+                            };
+                            check();
+                        })
+                    "#;
+                    if let Ok(eval_result) = tab.evaluate(check_js_eval, true) {
+                        if let Some(val) = eval_result.value {
+                            sidebar_toggled = val.as_bool().unwrap_or(false);
                         }
-                        std::thread::sleep(Duration::from_millis(1000));
                     }
 
                     if !sidebar_toggled {
@@ -69,12 +109,11 @@ pub fn navigate_and_run_report(
                     *step_num += 1;
 
                     info!("Waiting for MIS module to be present in DOM...");
-                    for _ in 0..5 {
-                        if tab.find_element(mis_selector).is_ok() {
-                            mis_found = true;
-                            break;
-                        }
-                        std::thread::sleep(Duration::from_secs(1));
+                    if tab
+                        .wait_for_element_with_custom_timeout(mis_selector, Duration::from_secs(10))
+                        .is_ok()
+                    {
+                        mis_found = true;
                     }
                 }
 
@@ -117,12 +156,12 @@ pub fn navigate_and_run_report(
                         let mut mis_reports_found = false;
                         let mis_reports_xpath = "//div[contains(@class, 'label') and contains(@class, 'fw-bold') and contains(text(), 'MIS Reports')]";
 
-                        for _ in 0..10 {
+                        for _ in 0..100 {
                             if tab.find_element_by_xpath(mis_reports_xpath).is_ok() {
                                 mis_reports_found = true;
                                 break;
                             }
-                            std::thread::sleep(Duration::from_secs(2));
+                            std::thread::sleep(Duration::from_millis(100));
                         }
 
                         if !mis_reports_found {
@@ -143,17 +182,13 @@ pub fn navigate_and_run_report(
                         );
                         *step_num += 1;
 
-                        std::thread::sleep(Duration::from_secs(2));
-
                         info!("Searching for auto-login iframe...");
                         let mut iframe_node_id = None;
 
-                        for _ in 0..5 {
-                            if let Ok(iframe_node) = tab.find_element("iframe") {
-                                iframe_node_id = Some(iframe_node.node_id);
-                                break;
-                            }
-                            std::thread::sleep(Duration::from_secs(2));
+                        if let Ok(iframe_node) = tab
+                            .wait_for_element_with_custom_timeout("iframe", Duration::from_secs(10))
+                        {
+                            iframe_node_id = Some(iframe_node.node_id);
                         }
 
                         if iframe_node_id.is_none() {
@@ -190,7 +225,7 @@ pub fn navigate_and_run_report(
                                                 await sleep(500);
                                             }}
 
-                                            for (let i = 0; i < 20; i++) {{
+                                            for (let i = 0; i < 100; i++) {{
                                                 let xpathType = `//*[contains(normalize-space(.), '${{reportType}}')]/ancestor-or-self::mat-radio-button`;
                                                 let resultType = doc.evaluate(xpathType, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
                                                 let matRadioButton = resultType.singleNodeValue;
@@ -291,7 +326,7 @@ pub fn navigate_and_run_report(
                                             }}
                                             if (!listLoaded) return JSON.stringify({{ status: "ERROR", msg: "Report list timeout.", logs }});
                                             logs.push("Report list loaded.");
-                                            await sleep(1000);
+                                            await sleep(200);
 
                                             logs.push("Typing in search input...");
                                             let searchInputList = doc.querySelector('input[formcontrolname="searchInput"], input[placeholder="Search"]');
@@ -312,7 +347,7 @@ pub fn navigate_and_run_report(
                                                 searchInputList.blur();
                                                 searchInputList.dispatchEvent(new Event('blur', {{ bubbles: true }}));
                                                 logs.push("Typed search input using simulation and triggered Enter");
-                                                await sleep(500); // Wait after typing
+                                                await sleep(100); // Wait after typing
                                             }} else {{
                                                 logs.push("Warning: searchInputList not found.");
                                             }}
@@ -572,8 +607,6 @@ pub fn navigate_and_run_report(
                         );
                         *step_num += 1;
 
-                        std::thread::sleep(Duration::from_secs(1));
-
                         // STEP 5: Search Click
                         tracing::debug!("Executing JavaScript to click search...");
                         let step5_search_js = r#"
@@ -585,7 +618,7 @@ pub fn navigate_and_run_report(
                                             logs.push("Waiting for Search button to appear...");
                                             let clickedSearch = false;
 
-                                            for (let i = 0; i < 20; i++) {
+                                            for (let i = 0; i < 100; i++) {
                                                 let btn = doc.querySelector('button[mattooltip="Search"]');
                                                 if (btn && btn.offsetParent !== null) {
                                                     btn.click();
@@ -604,7 +637,7 @@ pub fn navigate_and_run_report(
                                                         break;
                                                     }
                                                 }
-                                                await sleep(1000);
+                                                await sleep(200);
                                             }
 
                                             if (!clickedSearch) {
@@ -639,7 +672,7 @@ pub fn navigate_and_run_report(
 
                                             logs.push("Waiting for report generation loader to finish...");
                                             let reportGenerated = false;
-                                            for(let i=0; i<120; i++) {
+                                            for(let i=0; i<1200; i++) {
                                                 let loader = document.querySelector('.loading-screen-wrapper, mat-progress-bar, .dx-loadpanel') || doc.querySelector('.loading-screen-wrapper, mat-progress-bar, .dx-loadpanel');
                                                 let isLoaderVisible = false;
                                                 if (loader) {
@@ -652,16 +685,16 @@ pub fn navigate_and_run_report(
                                                     reportGenerated = true;
                                                     break;
                                                 }
-                                                await sleep(1000);
-                                                if (i % 5 === 0) logs.push("Still loading... " + (i*1) + "s elapsed");
+                                                await sleep(100);
+                                                if (i % 50 === 0) logs.push("Still loading...");
                                             }
                                             if (!reportGenerated) return JSON.stringify({ status: "ERROR", msg: "Report generation timeout.", logs });
 
-                                            await sleep(1500); // UI breathing room
+                                            await sleep(200); // UI breathing room
 
                                             logs.push("Looking for Export button...");
                                             let exportBtn = null;
-                                            for(let i=0; i<15; i++) {
+                                            for(let i=0; i<75; i++) {
                                                 exportBtn = doc.querySelector('div[aria-label="Export"]');
                                                 if (exportBtn && exportBtn.offsetParent !== null) break;
 
@@ -682,7 +715,7 @@ pub fn navigate_and_run_report(
                                                     }
                                                 }
                                                 if (exportBtn && exportBtn.offsetParent !== null) break;
-                                                await sleep(1000);
+                                                await sleep(200);
                                             }
 
                                             if (!exportBtn) return JSON.stringify({ status: "ERROR", msg: "Export button not found.", logs });
@@ -718,7 +751,7 @@ pub fn navigate_and_run_report(
                                             let logs = [];
                                             let xlsxOption = null;
 
-                                            for(let i=0; i<15; i++) {
+                                            for(let i=0; i<75; i++) {
                                                 let listItems = doc.querySelectorAll('.dx-list-item-content');
                                                 for (let item of listItems) {
                                                     if (item.textContent.trim() === 'XLSX') { xlsxOption = item.closest('.dx-list-item'); break; }
@@ -748,7 +781,7 @@ pub fn navigate_and_run_report(
                                                 }
 
                                                 if (xlsxOption) break;
-                                                await sleep(1000);
+                                                await sleep(200);
                                             }
 
                                             if (!xlsxOption) return JSON.stringify({ status: "ERROR", msg: "XLSX option not found.", logs });
@@ -768,7 +801,6 @@ pub fn navigate_and_run_report(
                             *step_num,
                             "After clicking XLSX",
                         );
-                        std::thread::sleep(Duration::from_secs(5));
                     }
                 }
                 Err(e) => {

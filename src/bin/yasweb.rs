@@ -202,6 +202,22 @@ pub fn finalize_download(
     let _ = std::fs::remove_dir_all(temp_dl_dir);
     Ok(())
 }
+/// Runs the YAS Web scraper command-line application.
+///
+/// # Errors
+///
+/// Returns an error when the executable directory, configuration, logging setup,
+/// filter input, configuration persistence, or report execution cannot be prepared
+/// successfully.
+///
+/// # Examples
+///
+/// ```
+/// # fn main() {
+/// let args = ["yasweb", "--name", "sales"];
+/// assert_eq!(args[1], "--name");
+/// # }
+/// ```
 #[tokio::main]
 async fn main() -> Result<()> {
     // Pre-parse args to look for --manifest and try to parse --config manually first
@@ -607,7 +623,7 @@ async fn main() -> Result<()> {
                         let launch_options = headless_chrome::LaunchOptions::default_builder()
                             .headless(config_task.headless)
                             .sandbox(false)
-                            .idle_browser_timeout(std::time::Duration::from_secs(120))
+                            .idle_browser_timeout(std::time::Duration::MAX)
                             .user_data_dir(Some(user_data_dir.clone()))
                             .args(args)
                             .build()

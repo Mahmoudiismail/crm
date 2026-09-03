@@ -7,6 +7,34 @@ use tracing::{error, info};
 use crate::yasweb::browser::debug;
 use crate::yasweb::config::YaswebConfig;
 
+/// Automates the login flow and waits for the dashboard to appear.
+///
+/// The function records HTML snapshots for successful navigation and login steps,
+/// updating `step_num` after each snapshot. It returns an error when required
+/// login elements cannot be found, input cannot be entered, the login button
+/// cannot be clicked, a login error is displayed, or the dashboard does not
+/// appear within the timeout.
+///
+/// # Parameters
+///
+/// * `active_report_name` — Identifies the report associated with saved HTML snapshots.
+/// * `step_num` — Step counter used for naming snapshots; incremented after successful navigation and login.
+///
+/// # Examples
+///
+/// ```no_run,ignore
+/// # use std::sync::Arc;
+/// # let tab: Arc<Tab> = unimplemented!();
+/// # let config: YaswebConfig = unimplemented!();
+/// let mut step_num = 0;
+/// execute_login(&tab, &config, "login", &mut step_num)?;
+/// # Ok::<(), anyhow::Error>(())
+/// ```
+///
+/// # Errors
+///
+/// Returns an error if login cannot be completed or the dashboard does not
+/// appear within the timeout.
 pub fn execute_login(
     tab: &Arc<Tab>,
     config: &YaswebConfig,
@@ -32,14 +60,12 @@ pub fn execute_login(
     info!("Waiting for username input...");
     let username_selector = "input[formcontrolname='username'], #mat-input-0";
 
-    // Custom wait loop to wait longer than default timeout
     let mut username_found = false;
-    for _ in 0..6 {
-        if tab.wait_for_element(username_selector).is_ok() {
-            username_found = true;
-            break;
-        }
-        std::thread::sleep(Duration::from_secs(5));
+    if tab
+        .wait_for_element_with_custom_timeout(username_selector, Duration::from_secs(30))
+        .is_ok()
+    {
+        username_found = true;
     }
 
     if !username_found {
@@ -61,8 +87,6 @@ pub fn execute_login(
                 return Err(anyhow::anyhow!("Failed to type username"));
             }
             info!("Successfully typed username.");
-
-            std::thread::sleep(Duration::from_secs(2));
 
             if let Some(password) = &config.password {
                 info!("Waiting for password input...");
@@ -119,7 +143,7 @@ pub fn execute_login(
 
             info!("Waiting for dashboard to load or error message...");
             let mut login_success = false;
-            for _ in 0..15 {
+            for _ in 0..60 {
                 if let Ok(err_alert) = tab.find_element(".alert-danger.fade.show") {
                     let msg = err_alert.get_inner_text().unwrap_or_default();
                     error!("Login failed: {}", msg.trim());
@@ -146,7 +170,7 @@ pub fn execute_login(
                     }
                     break;
                 }
-                std::thread::sleep(Duration::from_secs(2));
+                std::thread::sleep(Duration::from_millis(500));
             }
 
             if !login_success {
