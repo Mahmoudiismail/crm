@@ -44,7 +44,7 @@ pub fn run(config: &CrmOpenSohailConfig) -> Result<()> {
     let email_cc = config.dashboard_config.email_cc.clone().unwrap_or_default();
 
     if email_to.is_empty() {
-        warn!("No email_to specified. Skipping email draft creation.");
+        warn!("No email_to specified. Skipping email send.");
         return Ok(());
     }
 
@@ -58,43 +58,37 @@ $ErrorActionPreference = "Stop"
 $Outlook = New-Object -ComObject Outlook.Application
 $Namespace = $Outlook.GetNamespace("MAPI")
 
-# Access Inbox and Sent Items to search for the original message
-$Inbox = $Namespace.GetDefaultFolder(6) # olFolderInbox
-$SentItems = $Namespace.GetDefaultFolder(5) # olFolderSentMail
-
-$OriginalMail = $null
-$SenderToMatch = "{sender_account}"
-$PrefixToMatch = "{subject_prefix}"
-
-function Find-OriginalMessage ($FolderItems, $SortProperty) {{
-    if (-not $FolderItems) {{ return $null }}
-    $FolderItems.Sort($SortProperty, $true)
-
-    foreach ($Item in $FolderItems) {{
-        if (-not $Item.Subject -or -not $Item.Subject.StartsWith($PrefixToMatch, [System.StringComparison]::InvariantCultureIgnoreCase)) {{
-            continue
-        }}
-
-        $SenderAddress = $Item.SenderEmailAddress
-        if ($Item.SenderEmailType -eq "EX") {{
-            $PropAccessor = $Item.PropertyAccessor
-            $SenderAddress = $PropAccessor.GetProperty("http://schemas.microsoft.com/mapi/proptag/0x39FE001E")
-        }}
-
-        if ($SenderAddress -eq $SenderToMatch) {{
-            return $Item
-        }}
+$TargetAccount = $null
+foreach ($account in $Namespace.Accounts) {{
+    if ($account.SmtpAddress -eq "{sender_account}") {{
+        $TargetAccount = $account
+        break
     }}
-
-    return $null
 }}
 
+if (-not $TargetAccount) {{
+    throw "Outlook account matching '{sender_account}' not found."
+}}
+
+# Access Inbox and Sent Items to search for the original message
+$Inbox = $TargetAccount.DeliveryStore.GetDefaultFolder(6) # olFolderInbox
+$SentItems = $TargetAccount.DeliveryStore.GetDefaultFolder(5) # olFolderSentMail
+
+$OriginalMail = $null
+$Filter = "@SQL=""urn:schemas:httpmail:subject"" like '%{subject_prefix}%'"
+
 # Search Inbox
-$OriginalMail = Find-OriginalMessage -FolderItems $Inbox.Items -SortProperty "[ReceivedTime]"
+if ($Inbox) {{
+    $Items = $Inbox.Items
+    $Items.Sort("[ReceivedTime]", $true)
+    $OriginalMail = $Items.Find($Filter)
+}}
 
 # Search Sent Items if not found in Inbox
-if (-not $OriginalMail) {{
-    $OriginalMail = Find-OriginalMessage -FolderItems $SentItems.Items -SortProperty "[SentOn]"
+if (-not $OriginalMail -and $SentItems) {{
+    $Items = $SentItems.Items
+    $Items.Sort("[SentOn]", $true)
+    $OriginalMail = $Items.Find($Filter)
 }}
 
 if (-not $OriginalMail) {{
@@ -142,13 +136,13 @@ Write-Output "Successfully saved Reply All draft."
         std::fs::write(&html_path, final_html)?;
         info!("save_email_as_html is true. Saved email body to {}. Skipping PowerShell send for testing.", html_path.display());
     } else {
-        info!("Creating/saving reply draft via Outlook COM...");
+        info!("Sending email via Outlook COM...");
         if let Err(e) = powershell::run_powershell(&ps_email_script) {
-            error!("Failed to create/save reply draft: {}", e);
-            anyhow::bail!("Failed to create/save reply draft");
+            error!("Failed to send email: {}", e);
+            anyhow::bail!("Failed to send email");
         }
-        info!("Reply draft saved successfully.");
-        info!("Reply draft saved");
+        info!("Email sent successfully.");
+        info!("Email sent");
     }
 
     Ok(())
@@ -414,6 +408,10 @@ mod tests {
             src.contains("sender_account_email"),
             "Should reference sender_account_email config field"
         );
+        assert!(
+            src.contains("$TargetAccount = $account"),
+            "Should locate the specific target account by matching SMTP address"
+        );
 
         // Assert reply_subject_prefix is used for searching
         assert!(
@@ -421,8 +419,8 @@ mod tests {
             "Should reference reply_subject_prefix config field"
         );
         assert!(
-            src.contains(".StartsWith($PrefixToMatch"),
-            "Should use explicit prefix startswith check"
+            src.contains("like '%{subject_prefix}%'"),
+            "Should use subject prefix in search query"
         );
 
         // Assert .ReplyAll() is used instead of .CreateItem() or .Reply()

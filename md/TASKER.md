@@ -215,19 +215,12 @@ The `crm_open_sohail` task automates the generation and delivery of Branch & Mon
   "team_mapping_file": "./teams.csv",
   "email_to": "sohail@example.com",
   "email_cc": "reports@example.com",
-  "sender_account_email": "sender@example.com",
-  "reply_subject_prefix": "[CRM-TEST]",
   "fallback_oul": "N/A",
   "dashboard_sheet_name": "Sheet1",
   "dashboard_pivot_name": "PivotTable2",
   "table_column_widths": ["15%", "10%", "10%", "15%", "15%", "15%", "20%"]
 }
 ```
-
-### Important Outlook Configuration Fields
-- `sender_account_email`: Specifies the exact **sender email address of the ORIGINAL message** to locate. It is used exclusively as a matching criterion for finding the original email thread. It does **NOT** determine the identity of the Outlook account used to create the draft or send the reply.
-- `reply_subject_prefix`: Specifies the strict prefix that must match the **BEGINNING** of the original message's Subject. This is a case-insensitive prefix search (e.g. using `.StartsWith`), NOT a substring search.
-- **Draft Creation**: This task only locates the original email, executes a `ReplyAll()` to preserve thread semantics, populates the new response body, and saves the result as a **DRAFT**. It will NEVER invoke `.Send()` directly.
 
 ## Recent Fixes
 * **CSV Parsing:** Lead report CSV parsing was updated to identify delimiters exclusively from the first line, avoiding errors when data fields contain tabs. `flexible(true)` has been globally removed from `csv::ReaderBuilder` to strictly validate column counts per project guidelines.

@@ -231,12 +231,7 @@ try {{
         $bName = $b.Name
         $bCaption = $b.Caption
         if ($branchSlicerCache.Olap) {{
-            try {{
-                $branchSlicerCache.VisibleSlicerItemsList = @($bName)
-            }} catch {{
-                Write-Output "Warning: Could not set branch OLAP slicer for $($bName) - $_. Skipping."
-                continue
-            }}
+            $branchSlicerCache.VisibleSlicerItemsList = @($bName)
         }} else {{
             # Must select the target item first to prevent COM exception where all items are deselected
             $branchSlicerCache.SlicerItems($bName).Selected = $true
@@ -255,12 +250,7 @@ try {{
                     $visibleList += $m.Name
                 }}
                 if ($visibleList.Count -gt 0) {{
-                    try {{
-                        $monthSlicerCache.VisibleSlicerItemsList = $visibleList
-                    }} catch {{
-                        Write-Output "Warning: Could not set month OLAP slicer list - $_. Skipping executive clinic extraction for branch $bCaption."
-                        continue
-                    }}
+                    $monthSlicerCache.VisibleSlicerItemsList = $visibleList
                 }}
             }} else {{
                 # Select the first item to avoid deselecting all
@@ -367,16 +357,9 @@ try {{
                     foreach ($m in $otherMonths) {{
                         $visibleList += $m.Name
                     }}
-                    $failedOlap = $false
                     if ($visibleList.Count -gt 0) {{
-                        try {{
-                            $monthSlicerCache.VisibleSlicerItemsList = $visibleList
-                        }} catch {{
-                            Write-Output "Warning: Could not set month OLAP slicer for 'other months' - $_. Skipping."
-                            $failedOlap = $true
-                        }}
+                        $monthSlicerCache.VisibleSlicerItemsList = $visibleList
                     }}
-                    if ($failedOlap) {{ continue }}
                 }} else {{
                     $firstM = $otherMonths[0]
                     $monthSlicerCache.SlicerItems($firstM.Name).Selected = $true
@@ -445,14 +428,8 @@ try {{
             }}
 
             if ($null -ne $currentMonthItem) {{
-                $failedOlap = $false
                 if ($monthSlicerCache.Olap) {{
-                    try {{
-                        $monthSlicerCache.VisibleSlicerItemsList = @($currentMonthItem.Name)
-                    }} catch {{
-                        Write-Output "Warning: Could not set month OLAP slicer for '$($currentMonthItem.Name)' - $_. Skipping current month extraction for branch $bCaption."
-                        $failedOlap = $true
-                    }}
+                    $monthSlicerCache.VisibleSlicerItemsList = @($currentMonthItem.Name)
                 }} else {{
                     $mName = $currentMonthItem.Name
                     $monthSlicerCache.SlicerItems($mName).Selected = $true
@@ -460,8 +437,6 @@ try {{
                         if ($item.Name -ne $mName) {{ $item.Selected = $false }}
                     }}
                 }}
-
-                if ($failedOlap) {{ continue }}
 
                 Write-Output "Extracting data for Branch: $bCaption (Current Month)"
                 $Pivot.RefreshTable()
