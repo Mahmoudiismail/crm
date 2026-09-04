@@ -50,18 +50,19 @@ pub fn run(config: &CrmOpenSohailConfig) -> Result<()> {
         r#"
 $ErrorActionPreference = "Stop"
 
-Write-Output "TRACE: Acquiring Outlook COM object..."
-$Outlook = New-Object -ComObject Outlook.Application
-$Namespace = $Outlook.GetNamespace("MAPI")
+try {{
+    Write-Output "TRACE: Acquiring Outlook COM object..."
+    $Outlook = New-Object -ComObject Outlook.Application
+    $Namespace = $Outlook.GetNamespace("MAPI")
 
-# Access Inbox and Sent Items to search for the original message
-Write-Output "TRACE: Accessing Inbox and Sent Items..."
-$Inbox = $Namespace.GetDefaultFolder(6) # olFolderInbox
-$SentItems = $Namespace.GetDefaultFolder(5) # olFolderSentMail
+    # Access Inbox and Sent Items to search for the original message
+    Write-Output "TRACE: Accessing Inbox and Sent Items..."
+    $Inbox = $Namespace.GetDefaultFolder(6) # olFolderInbox
+    $SentItems = $Namespace.GetDefaultFolder(5) # olFolderSentMail
 
-$OriginalMail = $null
-$SenderToMatch = "{sender_account}"
-$PrefixToMatch = "{subject_prefix}"
+    $OriginalMail = $null
+    $SenderToMatch = "{sender_account}"
+    $PrefixToMatch = "{subject_prefix}"
 
 Write-Output "TRACE: Searching for original message with sender: '$SenderToMatch' and subject prefix: '$PrefixToMatch'"
 
@@ -104,7 +105,12 @@ function Find-OriginalMessage ($FolderItems, $SortProperty) {{
             }}
         }}
 
-        if ($SenderAddress -eq $SenderToMatch) {{
+        if ([string]::IsNullOrWhiteSpace($SenderAddress)) {{
+            Write-Output "TRACE: Candidate rejected. Sender address is empty."
+            continue
+        }}
+
+        if ([string]::Equals($SenderAddress.Trim(), $SenderToMatch.Trim(), [System.StringComparison]::OrdinalIgnoreCase)) {{
             Write-Output "TRACE: Sender match successful ($SenderAddress). Selected as original message."
             return $Item
         }} else {{
@@ -115,34 +121,39 @@ function Find-OriginalMessage ($FolderItems, $SortProperty) {{
     return $null
 }}
 
-# Search Inbox
-Write-Output "TRACE: Searching Inbox..."
-$OriginalMail = Find-OriginalMessage -FolderItems $Inbox.Items -SortProperty "[ReceivedTime]"
+    # Search Inbox
+    Write-Output "TRACE: Searching Inbox..."
+    $OriginalMail = Find-OriginalMessage -FolderItems $Inbox.Items -SortProperty "[ReceivedTime]"
 
-# Search Sent Items if not found in Inbox
-if (-not $OriginalMail) {{
-    Write-Output "TRACE: Not found in Inbox, searching Sent Items..."
-    $OriginalMail = Find-OriginalMessage -FolderItems $SentItems.Items -SortProperty "[SentOn]"
+    # Search Sent Items if not found in Inbox
+    if (-not $OriginalMail) {{
+        Write-Output "TRACE: Not found in Inbox, searching Sent Items..."
+        $OriginalMail = Find-OriginalMessage -FolderItems $SentItems.Items -SortProperty "[SentOn]"
+    }}
+
+    if (-not $OriginalMail) {{
+        throw "Original message with subject prefix '{subject_prefix}' not found in Inbox or Sent Items of '{sender_account}'."
+    }}
+
+    Write-Output "TRACE: Creating ReplyAll draft..."
+    $ReplyMail = $OriginalMail.ReplyAll()
+
+    if ("{subject}") {{
+        $ReplyMail.Subject = "{subject}"
+    }}
+
+    # Prepend the generated dashboard to the HTMLBody
+    Write-Output "TRACE: Populating reply draft body..."
+    $ReplyMail.HTMLBody = '{html_body}' + $ReplyMail.HTMLBody
+
+    Write-Output "TRACE: Saving reply draft..."
+    $ReplyMail.Save()
+    Write-Output "TRACE: Reply draft saved successfully."
+
+}} catch {{
+    Write-Error "Outlook operation failed: $_"
+    exit 1
 }}
-
-if (-not $OriginalMail) {{
-    throw "Original message with subject prefix '{subject_prefix}' not found in Inbox or Sent Items of '{sender_account}'."
-}}
-
-Write-Output "TRACE: Creating ReplyAll draft..."
-$ReplyMail = $OriginalMail.ReplyAll()
-
-if ("{subject}") {{
-    $ReplyMail.Subject = "{subject}"
-}}
-
-# Prepend the generated dashboard to the HTMLBody
-Write-Output "TRACE: Populating reply draft body..."
-$ReplyMail.HTMLBody = '{html_body}' + $ReplyMail.HTMLBody
-
-Write-Output "TRACE: Saving reply draft..."
-$ReplyMail.Save()
-Write-Output "TRACE: Reply draft saved successfully."
 "#,
         sender_account = sender_account_email.replace("'", "''"),
         subject_prefix = reply_subject_prefix.replace("'", "''"),
@@ -460,6 +471,26 @@ mod tests {
         assert!(
             src.contains("$ReplyMail.Save()"),
             "Should save email as draft"
+        );
+
+        // Assert explicit error handling exits with non-zero
+        assert!(
+            src.contains("} catch {"),
+            "Should use try/catch block to trap COM errors"
+        );
+        assert!(
+            src.contains("exit 1"),
+            "Should explicitly exit with non-zero code on failure"
+        );
+
+        // Assert strict case-insensitive match
+        assert!(
+            src.contains("[System.StringComparison]::OrdinalIgnoreCase"),
+            "Should use OrdinalIgnoreCase for string comparison"
+        );
+        assert!(
+            src.contains(".Trim()"),
+            "Should trim whitespace before comparing"
         );
     }
 
