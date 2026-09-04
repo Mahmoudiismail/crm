@@ -330,19 +330,29 @@ try {{
         $TargetPaths = {target_paths_ps}
         foreach ($Proc in $Processes) {{
             $ProcPath = $null
+            $PathError = $null
+
             try {{
                 $ProcPath = $Proc.Path
-                if ([string]::IsNullOrWhiteSpace($ProcPath)) {{
-                    $ProcPath = $Proc.MainModule.FileName
-                }}
             }} catch {{
-                Write-Log "FAILURE: Cannot safely inspect process path for process ID $($Proc.Id) ($escaped_process). Error: $_"
-                throw "Unsafe process targeting: Cannot inspect process path."
+                $PathError = $_
             }}
 
             if ([string]::IsNullOrWhiteSpace($ProcPath)) {{
-                Write-Log "FAILURE: Process path is null or empty for process ID $($Proc.Id) ($escaped_process). Cannot safely verify target."
-                throw "Unsafe process targeting: Null process path."
+                try {{
+                    $ProcPath = $Proc.MainModule.FileName
+                }} catch {{
+                    if (-not $PathError) {{
+                        $PathError = $_
+                    }} else {{
+                        $PathError = "$PathError | $_"
+                    }}
+                }}
+            }}
+
+            if ([string]::IsNullOrWhiteSpace($ProcPath)) {{
+                Write-Log "FAILURE: Cannot safely inspect process path for process ID $($Proc.Id) ($escaped_process). Error: $PathError"
+                throw "Unsafe process targeting: Cannot inspect process path."
             }}
 
             $IsTargetMatch = $false
@@ -355,7 +365,13 @@ try {{
 
             if ($IsTargetMatch) {{
                 Write-Log "Target process '{escaped_process}' (PID: $($Proc.Id)) matches one of the target paths. Stopping..."
-                Stop-Process -Id $Proc.Id -Force -ErrorAction SilentlyContinue
+
+                try {{
+                    Stop-Process -Id $Proc.Id -Force -ErrorAction Stop
+                }} catch {{
+                    Write-Log "FAILURE: Stop-Process failed for process '{escaped_process}' (PID: $($Proc.Id)). Error: $_"
+                    throw "Process termination error"
+                }}
 
                 $TimeoutSeconds = 30
                 $WaitCount = 0
@@ -643,9 +659,10 @@ mod tests {
 
         // Assert safer path inspection and termination logic exists
         assert!(script_content.contains("$ProcPath = $Proc.Path"));
+        assert!(script_content.contains("$ProcPath = $Proc.MainModule.FileName"));
         assert!(script_content
             .contains("throw \"Unsafe process targeting: Cannot inspect process path.\""));
-        assert!(script_content.contains("Stop-Process -Id $Proc.Id"));
+        assert!(script_content.contains("Stop-Process -Id $Proc.Id -Force -ErrorAction Stop"));
         assert!(!script_content.contains("Stop-Process -Name"));
 
         // Assert PID termination logic exists
