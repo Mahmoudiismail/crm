@@ -291,33 +291,65 @@ try {{
     ));
 
     // Stop processes and wait for termination
-    let mut apps_to_stop = std::collections::HashSet::new();
+    let mut apps_to_stop = std::collections::HashMap::new();
     for entry in &config.file_replacement_map {
-        apps_to_stop.insert(entry.executable_name.clone());
+        let target_dir = resolve_target_dir(&exe_dir, &entry.target_path);
+        let abs_target_dir = if target_dir.exists() {
+            std::fs::canonicalize(&target_dir).unwrap_or_else(|_| target_dir.to_path_buf())
+        } else {
+            target_dir.to_path_buf()
+        };
+        let abs_target_str = clean_canonicalized_path(&abs_target_dir);
+        let dst = Path::new(&abs_target_str).join(&entry.executable_name);
+        apps_to_stop.insert(entry.executable_name.clone(), dst.display().to_string());
     }
 
-    for app in apps_to_stop {
-        let process_name = app.strip_suffix(".exe").unwrap_or(&app);
+    for (app_name, target_path) in apps_to_stop {
+        let process_name = app_name.strip_suffix(".exe").unwrap_or(&app_name);
         let escaped_process = process_name.replace("'", "''");
+        let escaped_target_path = target_path.replace("'", "''");
+
         script.push_str(&format!(
             r#"
-    $Process = Get-Process -Name '{escaped_process}' -ErrorAction SilentlyContinue
-    if ($Process) {{
-        Write-Log "Target process '{escaped_process}' is running. Stopping..."
-        Stop-Process -Name '{escaped_process}' -Force -ErrorAction SilentlyContinue
+    $Processes = Get-Process -Name '{escaped_process}' -ErrorAction SilentlyContinue
+    if ($Processes) {{
+        foreach ($Proc in $Processes) {{
+            $ProcPath = $null
+            try {{
+                $ProcPath = $Proc.Path
+                if ([string]::IsNullOrWhiteSpace($ProcPath)) {{
+                    $ProcPath = $Proc.MainModule.FileName
+                }}
+            }} catch {{
+                Write-Log "FAILURE: Cannot safely inspect process path for process ID $($Proc.Id) ($escaped_process). Error: $_"
+                throw "Unsafe process targeting: Cannot inspect process path."
+            }}
 
-        $TimeoutSeconds = 30
-        $WaitCount = 0
-        while ((Get-Process -Name '{escaped_process}' -ErrorAction SilentlyContinue) -and ($WaitCount -lt $TimeoutSeconds)) {{
-            Start-Sleep -Seconds 1
-            $WaitCount++
-        }}
+            if ([string]::IsNullOrWhiteSpace($ProcPath)) {{
+                Write-Log "FAILURE: Process path is null or empty for process ID $($Proc.Id) ($escaped_process). Cannot safely verify target."
+                throw "Unsafe process targeting: Null process path."
+            }}
 
-        if (Get-Process -Name '{escaped_process}' -ErrorAction SilentlyContinue) {{
-            Write-Log "FAILURE: Process '{escaped_process}' failed to terminate after $TimeoutSeconds seconds."
-            throw "Process termination timeout"
-        }} else {{
-            Write-Log "Process '{escaped_process}' terminated successfully."
+            if ([string]::Equals($ProcPath.Trim(), '{escaped_target_path}'.Trim(), [System.StringComparison]::OrdinalIgnoreCase)) {{
+                Write-Log "Target process '{escaped_process}' (PID: $($Proc.Id)) matches target path. Stopping..."
+                Stop-Process -Id $Proc.Id -Force -ErrorAction SilentlyContinue
+
+                $TimeoutSeconds = 30
+                $WaitCount = 0
+                while ((Get-Process -Id $Proc.Id -ErrorAction SilentlyContinue) -and ($WaitCount -lt $TimeoutSeconds)) {{
+                    Start-Sleep -Seconds 1
+                    $WaitCount++
+                }}
+
+                if (Get-Process -Id $Proc.Id -ErrorAction SilentlyContinue) {{
+                    Write-Log "FAILURE: Process '{escaped_process}' (PID: $($Proc.Id)) failed to terminate after $TimeoutSeconds seconds."
+                    throw "Process termination timeout"
+                }} else {{
+                    Write-Log "Process '{escaped_process}' (PID: $($Proc.Id)) terminated successfully."
+                }}
+            }} else {{
+                Write-Log "Process '{escaped_process}' (PID: $($Proc.Id)) is running at a different path ($ProcPath). Skipping termination."
+            }}
         }}
     }} else {{
         Write-Log "Target process '{escaped_process}' is not running. No stop required."
@@ -585,6 +617,13 @@ mod tests {
         assert!(script_content.contains("Autostart is enabled. Starting '"));
         assert!(script_content.contains("Autostart is disabled for '"));
         assert!(script_content.contains("Get-Process -Name 'app1'"));
+
+        // Assert safer path inspection and termination logic exists
+        assert!(script_content.contains("$ProcPath = $Proc.Path"));
+        assert!(script_content
+            .contains("throw \"Unsafe process targeting: Cannot inspect process path.\""));
+        assert!(script_content.contains("Stop-Process -Id $Proc.Id"));
+        assert!(!script_content.contains("Stop-Process -Name"));
 
         // Assert PID termination logic exists
         assert!(script_content.contains("$ParentPid = 99999"));
