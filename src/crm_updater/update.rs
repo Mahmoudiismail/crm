@@ -291,7 +291,10 @@ try {{
     ));
 
     // Stop processes and wait for termination
-    let mut apps_to_stop = std::collections::HashMap::new();
+    // We map executable_name -> Vec<target_path> to properly handle scenarios
+    // where the same executable is targeted at multiple different paths.
+    let mut apps_to_stop: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
     for entry in &config.file_replacement_map {
         let target_dir = resolve_target_dir(&exe_dir, &entry.target_path);
         let abs_target_dir = if target_dir.exists() {
@@ -301,18 +304,30 @@ try {{
         };
         let abs_target_str = clean_canonicalized_path(&abs_target_dir);
         let dst = Path::new(&abs_target_str).join(&entry.executable_name);
-        apps_to_stop.insert(entry.executable_name.clone(), dst.display().to_string());
+        apps_to_stop
+            .entry(entry.executable_name.clone())
+            .or_default()
+            .push(dst.display().to_string());
     }
 
-    for (app_name, target_path) in apps_to_stop {
+    for (app_name, target_paths) in apps_to_stop {
         let process_name = app_name.strip_suffix(".exe").unwrap_or(&app_name);
         let escaped_process = process_name.replace("'", "''");
-        let escaped_target_path = target_path.replace("'", "''");
+
+        let mut target_paths_ps = String::from("@(");
+        for (i, tp) in target_paths.iter().enumerate() {
+            if i > 0 {
+                target_paths_ps.push_str(", ");
+            }
+            target_paths_ps.push_str(&format!("'{}'", tp.replace("'", "''")));
+        }
+        target_paths_ps.push(')');
 
         script.push_str(&format!(
             r#"
     $Processes = Get-Process -Name '{escaped_process}' -ErrorAction SilentlyContinue
     if ($Processes) {{
+        $TargetPaths = {target_paths_ps}
         foreach ($Proc in $Processes) {{
             $ProcPath = $null
             try {{
@@ -330,8 +345,16 @@ try {{
                 throw "Unsafe process targeting: Null process path."
             }}
 
-            if ([string]::Equals($ProcPath.Trim(), '{escaped_target_path}'.Trim(), [System.StringComparison]::OrdinalIgnoreCase)) {{
-                Write-Log "Target process '{escaped_process}' (PID: $($Proc.Id)) matches target path. Stopping..."
+            $IsTargetMatch = $false
+            foreach ($tp in $TargetPaths) {{
+                if ([string]::Equals($ProcPath.Trim(), $tp.Trim(), [System.StringComparison]::OrdinalIgnoreCase)) {{
+                    $IsTargetMatch = $true
+                    break
+                }}
+            }}
+
+            if ($IsTargetMatch) {{
+                Write-Log "Target process '{escaped_process}' (PID: $($Proc.Id)) matches one of the target paths. Stopping..."
                 Stop-Process -Id $Proc.Id -Force -ErrorAction SilentlyContinue
 
                 $TimeoutSeconds = 30
