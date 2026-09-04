@@ -178,15 +178,10 @@ impl AppConfig {
             debug!("to_date defaulted to today (Local): {}", self.to_date);
         }
 
-        // Finalize calls_from_date: if empty, fall back to from_date
-        if self.calls_from_date.is_empty() {
-            self.calls_from_date = self.from_date.clone();
-            self.dynamic_calls_from_date = true;
-            debug!(
-                "calls_from_date defaulted to from_date: {}",
-                self.calls_from_date
-            );
-        }
+        // (Do NOT overwrite calls_from_date merely because from_date exists)
+        // If from_date is present, fetcher.rs logic will prioritize from_date over calls_from_date.
+        // If calls_from_date is completely missing we could optionally default it,
+        // but it acts as a fallback when from_date is absent.
     }
 
     /// Save config to file, optionally stripping secrets and null values.
@@ -419,7 +414,7 @@ mod tests {
         let mut config = AppConfig {
             from_date: "01-May-2026".to_string(),
             to_date: "".to_string(),
-            calls_from_date: "".to_string(),
+            calls_from_date: "01-Apr-2026".to_string(),
             ..AppConfig::default()
         };
 
@@ -431,8 +426,8 @@ mod tests {
         assert_eq!(config.to_date, today);
         assert!(config.dynamic_to_date);
 
-        // calls_from_date should fall back to from_date
-        assert_eq!(config.calls_from_date, "2026-05-01");
-        assert!(config.dynamic_calls_from_date);
+        // calls_from_date should NOT fall back to from_date
+        assert_eq!(config.calls_from_date, "2026-04-01");
+        assert!(!config.dynamic_calls_from_date);
     }
 }

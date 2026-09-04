@@ -11,11 +11,13 @@ If found, it:
 - Extracts the ZIP archive using AES decryption (default password: `123456`).
 - Unblocks the extracted files (`Unblock-File`).
 - Dynamically generates and executes a detached PowerShell script (`.ps1`) to:
-  - Gracefully stop the target running applications (e.g., `crm_updater.exe`, `runner.exe`).
-  - Wait for process handles to be released.
-  - Overwrite the existing executables with the newly extracted ones as defined in `updater_config.json`.
-  - Restart the applications (with optional arguments).
-- Gracefully exits itself to allow the PowerShell script to perform the self-update.
+  - Resolves source and target paths relative to the current executable's directory.
+  - Check if target processes are currently running.
+  - Gracefully stop any running target applications (e.g., `crm_updater.exe`, `runner.exe`) and robustly wait for actual process termination.
+  - Overwrite the existing executables with the newly extracted ones as defined in `updater_config.json` and verify replacement success.
+  - Restart the applications (with optional arguments), guided by the `autostart` configuration.
+  - Generate a detailed, persistent log at `updater_detached.log` providing diagnostics on paths, running status, replacement, and success/failure outcome.
+- Gracefully exits itself to allow the PowerShell script to perform the self-update, ensuring update logging continues robustly.
 
 ### 2. Log Rotation & Sending
 The application scans the configured `runner_logs_dir` for `.log` files.
@@ -37,12 +39,14 @@ When first run, `crm_updater` generates a default `updater_config.json` configur
     {
       "source_file": "crm_updater.exe",
       "target_path": ".",
-      "executable_name": "crm_updater.exe"
+      "executable_name": "crm_updater.exe",
+      "autostart": true
     },
     {
       "source_file": "runner.exe",
       "target_path": ".",
-      "executable_name": "runner.exe"
+      "executable_name": "runner.exe",
+      "autostart": true
     }
   ],
   "log_stdout_level": "DEBUG",
