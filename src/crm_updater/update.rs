@@ -51,7 +51,8 @@ pub fn process_update_pipeline(config: &crate::crm_updater::config::UpdaterConfi
     }
 
     // 3. Generate PowerShell script for shutdown, replace, and restart
-    let ps_script = generate_update_script(config, downloads_dir)?;
+    let parent_pid = std::process::id();
+    let ps_script = generate_update_script(config, downloads_dir, parent_pid)?;
 
     // Execute script as detached process
     execute_detached_powershell(&ps_script)?;
@@ -227,9 +228,14 @@ fn clean_canonicalized_path(path: &Path) -> String {
         .to_string()
 }
 
+fn resolve_target_dir(exe_dir: &Path, target_path: &str) -> PathBuf {
+    exe_dir.join(target_path)
+}
+
 fn generate_update_script(
     config: &crate::crm_updater::config::UpdaterConfig,
     downloads_dir: &Path,
+    parent_pid: u32,
 ) -> Result<PathBuf> {
     let exe_dir = std::env::current_exe()
         .ok()
@@ -263,10 +269,26 @@ try {{
         downloads_dir_str.replace("\"", "\"\"")
     ));
 
-    // Wait a bit to ensure the Rust process has exited
-    script.push_str(
-        "    Write-Log \"Waiting 2 seconds for original updater process to exit...\"\n    Start-Sleep -Seconds 2\n",
-    );
+    script.push_str(&format!(
+        r#"
+    $ParentPid = {}
+    Write-Log "Waiting for original updater process (PID: $ParentPid) to exit..."
+    $TimeoutSeconds = 30
+    $WaitCount = 0
+    while ((Get-Process -Id $ParentPid -ErrorAction SilentlyContinue) -and ($WaitCount -lt $TimeoutSeconds)) {{
+        Start-Sleep -Seconds 1
+        $WaitCount++
+    }}
+
+    if (Get-Process -Id $ParentPid -ErrorAction SilentlyContinue) {{
+        Write-Log "FAILURE: Original updater process (PID: $ParentPid) failed to terminate after $TimeoutSeconds seconds."
+        throw "Original updater termination timeout"
+    }} else {{
+        Write-Log "Original updater process terminated successfully."
+    }}
+"#,
+        parent_pid
+    ));
 
     // Stop processes and wait for termination
     let mut apps_to_stop = std::collections::HashSet::new();
@@ -308,9 +330,9 @@ try {{
     for entry in &config.file_replacement_map {
         let src = Path::new(&downloads_dir_str).join(&entry.source_file);
 
-        let target_dir = Path::new(&entry.target_path);
+        let target_dir = resolve_target_dir(&exe_dir, &entry.target_path);
         let abs_target_dir = if target_dir.exists() {
-            std::fs::canonicalize(target_dir).unwrap_or_else(|_| target_dir.to_path_buf())
+            std::fs::canonicalize(&target_dir).unwrap_or_else(|_| target_dir.to_path_buf())
         } else {
             target_dir.to_path_buf()
         };
@@ -327,10 +349,17 @@ try {{
         Write-Log "Replacing '{dst_escaped}' with '{src_escaped}'..."
         Copy-Item -Path '{src_escaped}' -Destination '{dst_escaped}' -Force
         if (Test-Path '{dst_escaped}') {{
-            Write-Log "Successfully replaced '{dst_escaped}'."
+            $SrcHash = (Get-FileHash -Path '{src_escaped}' -Algorithm SHA256).Hash
+            $DstHash = (Get-FileHash -Path '{dst_escaped}' -Algorithm SHA256).Hash
+            if ($SrcHash -eq $DstHash) {{
+                Write-Log "Successfully replaced '{dst_escaped}' and verified SHA-256 hash."
+            }} else {{
+                Write-Log "FAILURE: Hash mismatch after copying to '{dst_escaped}'. Source: $SrcHash, Dest: $DstHash"
+                throw "File verification failed"
+            }}
         }} else {{
-            Write-Log "FAILURE: Could not verify '{dst_escaped}' after copy."
-            throw "File verification failed"
+            Write-Log "FAILURE: File '{dst_escaped}' not found after copy."
+            throw "File copy failed"
         }}
     }} else {{
         Write-Log "Source file '{src_escaped}' not found. Skipping replacement."
@@ -341,9 +370,9 @@ try {{
 
     // Restart apps
     for entry in &config.file_replacement_map {
-        let target_dir = Path::new(&entry.target_path);
+        let target_dir = resolve_target_dir(&exe_dir, &entry.target_path);
         let abs_target_dir = if target_dir.exists() {
-            std::fs::canonicalize(target_dir).unwrap_or_else(|_| target_dir.to_path_buf())
+            std::fs::canonicalize(&target_dir).unwrap_or_else(|_| target_dir.to_path_buf())
         } else {
             target_dir.to_path_buf()
         };
@@ -404,8 +433,12 @@ try {{
     Write-Log "SUCCESS: Update completed successfully."
 } catch {
     Write-Log "FAILURE: An error occurred during the update process: $_"
+    $UpdateFailed = $true
 } finally {
     Remove-Item -Path $PSCommandPath -Force -ErrorAction SilentlyContinue
+    if ($UpdateFailed) {
+        exit 1
+    }
 }
 "#,
     );
@@ -474,6 +507,51 @@ mod tests {
     }
 
     #[test]
+    fn test_resolve_target_dir() {
+        let exe_dir = if cfg!(windows) {
+            Path::new(r"C:\App")
+        } else {
+            Path::new("/App")
+        };
+
+        // Relative path "."
+        assert_eq!(
+            resolve_target_dir(exe_dir, "."),
+            if cfg!(windows) {
+                Path::new(r"C:\App")
+            } else {
+                Path::new("/App")
+            }
+        );
+
+        // Relative subdirectory
+        let expected_rel = if cfg!(windows) {
+            Path::new(r"C:\App\data\runner")
+        } else {
+            Path::new("/App/data/runner")
+        };
+        assert_eq!(
+            resolve_target_dir(
+                exe_dir,
+                if cfg!(windows) {
+                    r"data\runner"
+                } else {
+                    "data/runner"
+                }
+            ),
+            expected_rel
+        );
+
+        // Absolute path (should replace the base)
+        let abs_path = if cfg!(windows) {
+            r"D:\Programs\Runner"
+        } else {
+            "/usr/bin/runner"
+        };
+        assert_eq!(resolve_target_dir(exe_dir, abs_path), Path::new(abs_path));
+    }
+
+    #[test]
     fn test_generate_update_script_autostart_logic() {
         use crate::crm_updater::config::{ReplacementMapEntry, UpdaterConfig};
         let config = UpdaterConfig {
@@ -501,12 +579,25 @@ mod tests {
         };
 
         let temp_dir = tempfile::tempdir().unwrap();
-        let script_path = generate_update_script(&config, temp_dir.path()).unwrap();
+        let script_path = generate_update_script(&config, temp_dir.path(), 99999).unwrap();
         let script_content = std::fs::read_to_string(&script_path).unwrap();
 
         assert!(script_content.contains("Autostart is enabled. Starting '"));
         assert!(script_content.contains("Autostart is disabled for '"));
         assert!(script_content.contains("Get-Process -Name 'app1'"));
+
+        // Assert PID termination logic exists
+        assert!(script_content.contains("$ParentPid = 99999"));
+        assert!(script_content.contains("Get-Process -Id $ParentPid"));
+
+        // Assert hash verification logic exists
+        assert!(script_content.contains("Get-FileHash"));
+        assert!(script_content.contains("-Algorithm SHA256"));
+
+        // Assert non-zero exit semantics
+        assert!(script_content.contains("$UpdateFailed = $true"));
+        assert!(script_content.contains("exit 1"));
+
         assert!(script_content.contains("SUCCESS: Update completed successfully."));
     }
 }
