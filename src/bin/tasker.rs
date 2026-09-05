@@ -185,6 +185,7 @@ pub fn run_app(options: TaskerCliOptions) -> Result<()> {
                 tracing::trace!("Executing CsvAnalysis for task #{}.", task_idx);
                 if let Err(e) = csv_task::run(csv_config, only_call_center, send_exceptions) {
                     error!("Error running CsvAnalysis task #{}: {:?}", task_idx, e);
+                    anyhow::bail!("CsvAnalysis task {} failed: {}", task_idx, e);
                 }
                 tracing::trace!("CsvAnalysis for task #{} finished.", task_idx);
             }
@@ -192,6 +193,7 @@ pub fn run_app(options: TaskerCliOptions) -> Result<()> {
                 tracing::trace!("Executing DashboardUpdater for task #{}.", task_idx);
                 if let Err(e) = dashboard_updater::run(dash_config) {
                     error!("Error running DashboardUpdater task #{}: {:?}", task_idx, e);
+                    anyhow::bail!("DashboardUpdater task {} failed: {}", task_idx, e);
                 }
                 tracing::trace!("DashboardUpdater for task #{} finished.", task_idx);
             }
@@ -350,8 +352,8 @@ mod tests {
         file.sync_all().unwrap();
         drop(file);
 
-        // Passing valid task index 2. This won't actually succeed all the way because 'path2' doesn't exist,
-        // but it WILL pass the bounds check and fail further down the execution tree.
+        // Passing valid task index 2. This won't actually succeed all the way because 'path2' doesn't exist.
+        // With correct error propagation, run_app should return Err now.
         let args = vec![
             "tasker".to_string(),
             "--config".to_string(),
@@ -363,12 +365,16 @@ mod tests {
         let options = TaskerCliOptions::parse_from(args);
 
         // We know it won't bail on BoundsCheck.
-        // It will return Ok(()) but inside `csv_task::run` it logs an error if path2 doesn't exist.
-        // run_app itself returns Ok(()) if internal task errors are caught and logged.
+        // It will return Err(_) because path2 doesn't exist and we now propagate CsvAnalysis errors.
         let res = run_app(options);
         assert!(
-            res.is_ok(),
-            "run_app should successfully route the valid task filter"
+            res.is_err(),
+            "run_app MUST bail when the task index is valid but the task itself fails"
+        );
+        let err_msg = res.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("CsvAnalysis task 2 failed"),
+            "Error message should mention task failure"
         );
     }
 

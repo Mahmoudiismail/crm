@@ -1407,15 +1407,26 @@ mod tests {
         let dir = tempdir().unwrap();
         let path = dir.path();
 
+        // 4 prefixes: ticket_report_, call_logs_, lead_report_, users_
         let old_ticket = path.join("ticket_report_old.csv");
         let old_lead = path.join("lead_report_old.csv");
+        let old_call = path.join("call_logs_old.csv");
+        let old_users = path.join("users_old.csv");
+
         let recent_ticket = path.join("ticket_report_new.csv");
+        let recent_call = path.join("call_logs_new.csv");
+
         let other_csv = path.join("other_data.csv");
         let other_txt = path.join("ticket_report_123.txt");
 
         std::fs::write(&old_ticket, "dummy").unwrap();
         std::fs::write(&old_lead, "dummy").unwrap();
+        std::fs::write(&old_call, "dummy").unwrap();
+        std::fs::write(&old_users, "dummy").unwrap();
+
         std::fs::write(&recent_ticket, "dummy").unwrap();
+        std::fs::write(&recent_call, "dummy").unwrap();
+
         std::fs::write(&other_csv, "dummy").unwrap();
         std::fs::write(&other_txt, "dummy").unwrap();
 
@@ -1424,6 +1435,8 @@ mod tests {
         );
         filetime::set_file_mtime(&old_ticket, old_time).unwrap();
         filetime::set_file_mtime(&old_lead, old_time).unwrap();
+        filetime::set_file_mtime(&old_call, old_time).unwrap();
+        filetime::set_file_mtime(&old_users, old_time).unwrap();
         filetime::set_file_mtime(&other_csv, old_time).unwrap();
         filetime::set_file_mtime(&other_txt, old_time).unwrap();
 
@@ -1431,16 +1444,21 @@ mod tests {
         cleanup_old_reports(path, 0).await;
         assert!(old_ticket.exists());
         assert!(old_lead.exists());
+        assert!(old_call.exists());
+        assert!(old_users.exists());
 
-        // Run cleanup with retention 2 days
+        // Run cleanup with retention 2 days (deletes files older than 2 days)
         cleanup_old_reports(path, 2).await;
 
-        // Old reports should be deleted
+        // Old reports of all 4 prefixes should be deleted
         assert!(!old_ticket.exists());
         assert!(!old_lead.exists());
+        assert!(!old_call.exists());
+        assert!(!old_users.exists());
 
         // Recent reports and unrelated files should be kept
         assert!(recent_ticket.exists());
+        assert!(recent_call.exists());
         assert!(other_csv.exists());
         assert!(other_txt.exists());
     }
