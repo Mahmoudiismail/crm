@@ -134,12 +134,7 @@ pub async fn fetch_reports(
         return Ok(Value::Object(results));
     }
 
-    let (download_tx, download_rx) = tokio::sync::mpsc::unbounded_channel::<(
-        reqwest::Client,
-        String,
-        String,
-        std::path::PathBuf,
-    )>();
+    let (download_tx, download_rx) = tokio::sync::mpsc::unbounded_channel::<DownloadTask>();
 
     // Spawn a background task to process downloads concurrently (limit 6)
     let download_processor = tokio::spawn(async move {
@@ -147,13 +142,109 @@ pub async fn fetch_reports(
             rx.recv().await.map(|item| (item, rx))
         });
         stream
-            .for_each_concurrent(6, |(client, url, k, dir)| async move {
-                if let Err(e) = crate::crm::downloader::download_csv(&client, &url, &k, &dir).await
-                {
-                    error!("Download failed for {}: {:#}", k, e);
+            .map(Ok)
+            .try_for_each_concurrent(6, |task: DownloadTask| async move {
+                let current_url = task.url.clone();
+                let mut download_success = false;
+
+                for attempt in 1..=3 {
+                    match crate::crm::downloader::download_csv(
+                        &task.client,
+                        &current_url,
+                        &task.report_key,
+                        &task.dir,
+                    )
+                    .await
+                    {
+                        Ok(_) => {
+                            download_success = true;
+                            break;
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                "Download attempt {} for {} failed: {:#}",
+                                attempt,
+                                task.report_key,
+                                e
+                            );
+                        }
+                    }
                 }
+
+                if !download_success {
+                    info!(
+                        "Failed to download {} after 3 attempts, requesting fresh URL",
+                        task.report_key
+                    );
+                    let ep_refs: Vec<(&str, &str)> = task
+                        .extra_params
+                        .iter()
+                        .map(|(k, v)| (k.as_str(), v.as_str()))
+                        .collect();
+                    let params = FetchParams {
+                        base_url: &task.base_url,
+                        email: &task.email,
+                        account_id: &task.account_id,
+                        application_id: &task.application_id,
+                        tz: &task.tz,
+                        extra_params: &ep_refs,
+                    };
+
+                    let value = fetch_single(
+                        &task.client,
+                        &task.token,
+                        &task.endpoint,
+                        &task.from_date,
+                        &task.to_date,
+                        &params,
+                        task.context_opt.clone(),
+                    )
+                    .await?;
+
+                    let mut fresh_urls = Vec::new();
+                    extract_urls_for_key(&task.key_prefix, &value, &mut fresh_urls);
+
+                    let fresh_url = fresh_urls
+                        .into_iter()
+                        .find(|(k, _)| k == &task.report_key)
+                        .map(|(_, u)| u);
+
+                    if let Some(url) = fresh_url {
+                        let mut fresh_success = false;
+                        for attempt in 1..=3 {
+                            match crate::crm::downloader::download_csv(
+                                &task.client,
+                                &url,
+                                &task.report_key,
+                                &task.dir,
+                            )
+                            .await
+                            {
+                                Ok(_) => {
+                                    fresh_success = true;
+                                    break;
+                                }
+                                Err(e) => {
+                                    tracing::warn!(
+                                        "Fresh URL download attempt {} for {} failed: {:#}",
+                                        attempt,
+                                        task.report_key,
+                                        e
+                                    );
+                                }
+                            }
+                        }
+                        if !fresh_success {
+                            anyhow::bail!("Failed to download fresh URL for {}", task.report_key);
+                        }
+                    } else {
+                        anyhow::bail!("Fresh URL did not contain {}", task.report_key);
+                    }
+                }
+
+                Ok::<(), anyhow::Error>(())
             })
-            .await;
+            .await
     });
 
     let defs = report_defs();
@@ -444,7 +535,12 @@ pub async fn fetch_reports(
         .await;
 
     // Await all downloads to complete
-    let _ = download_processor.await;
+    let download_result = download_processor.await;
+    match download_result {
+        Ok(Err(e)) => anyhow::bail!("A download failed: {}", e),
+        Err(e) => anyhow::bail!("Download processor panicked: {}", e),
+        _ => {}
+    }
 
     if let Some(days) = retention_days {
         if days > 0 {
@@ -737,6 +833,25 @@ async fn fetch_and_update_incomplete_reservations(
 // Single report fetch
 // ──────────────────────────────────────────────────────────────
 
+struct DownloadTask {
+    client: reqwest::Client,
+    url: String,
+    report_key: String,
+    dir: std::path::PathBuf,
+    token: String,
+    endpoint: String,
+    from_date: String,
+    to_date: String,
+    base_url: String,
+    email: String,
+    account_id: String,
+    application_id: String,
+    tz: String,
+    extra_params: Vec<(String, String)>,
+    context_opt: Option<Arc<FetchContext>>,
+    key_prefix: String,
+}
+
 struct FetchParams<'a> {
     base_url: &'a str,
     email: &'a str,
@@ -749,6 +864,7 @@ struct FetchParams<'a> {
 use futures_util::future::BoxFuture;
 use futures_util::stream::StreamExt;
 use futures_util::FutureExt;
+use futures_util::TryStreamExt;
 
 #[allow(clippy::too_many_arguments)]
 async fn fetch_with_signed_url_split(
@@ -761,12 +877,7 @@ async fn fetch_with_signed_url_split(
     download_csv: bool,
     download_dir: Option<&Path>,
     key_prefix: &str,
-    download_tx: tokio::sync::mpsc::UnboundedSender<(
-        reqwest::Client,
-        String,
-        String,
-        std::path::PathBuf,
-    )>,
+    download_tx: tokio::sync::mpsc::UnboundedSender<DownloadTask>,
     context_opt: Option<Arc<FetchContext>>,
 ) -> Result<Value> {
     let mut completed = fetch_recursive(
@@ -823,12 +934,7 @@ fn fetch_recursive(
     download_csv: bool,
     download_dir: Option<std::path::PathBuf>,
     key_prefix: String,
-    download_tx: tokio::sync::mpsc::UnboundedSender<(
-        reqwest::Client,
-        String,
-        String,
-        std::path::PathBuf,
-    )>,
+    download_tx: tokio::sync::mpsc::UnboundedSender<DownloadTask>,
     context_opt: Option<Arc<FetchContext>>,
 ) -> BoxFuture<'static, Result<Vec<(String, String, Value)>>> {
     async move {
@@ -851,7 +957,25 @@ fn fetch_recursive(
                         let mut urls = Vec::new();
                         extract_urls_for_key(&key_prefix, &value, &mut urls);
                         for (k, url) in urls {
-                            let _ = download_tx.send((client.clone(), url, k, dir.clone()));
+                            let task = DownloadTask {
+                                client: client.clone(),
+                                url,
+                                report_key: k,
+                                dir: dir.clone(),
+                                token: token.clone(),
+                                endpoint: endpoint.clone(),
+                                from_date: from_date.clone(),
+                                to_date: to_date.clone(),
+                                base_url: base_url.clone(),
+                                email: email.clone(),
+                                account_id: account_id.clone(),
+                                application_id: application_id.clone(),
+                                tz: tz.clone(),
+                                extra_params: extra_params.clone(),
+                                context_opt: context_opt.clone(),
+                                key_prefix: key_prefix.clone(),
+                            };
+                            let _ = download_tx.send(task);
                         }
                     }
                 }

@@ -45,21 +45,42 @@ pub async fn download_csv(
     let content_length = resp.content_length();
     debug!("[{}] Content-Length: {:?}", report_key, content_length);
 
-    let file = tokio::fs::File::create(&dest_path)
+    let temp_filename = format!("{}.tmp", filename);
+    let temp_dest_path = target_dir.join(&temp_filename);
+
+    let file = tokio::fs::File::create(&temp_dest_path)
         .await
-        .with_context(|| format!("Failed to create file: {:?}", dest_path))?;
+        .with_context(|| format!("Failed to create temp file: {:?}", temp_dest_path))?;
     let mut writer = BufWriter::with_capacity(128 * 1024, file);
 
     let mut stream = resp.bytes_stream();
     let mut downloaded: u64 = 0;
 
     while let Some(chunk) = stream.next().await {
-        let chunk = chunk.with_context(|| format!("[{}] Error reading stream", report_key))?;
-        writer.write_all(&chunk).await?;
+        let chunk = match chunk {
+            Ok(c) => c,
+            Err(e) => {
+                let _ = tokio::fs::remove_file(&temp_dest_path).await;
+                anyhow::bail!("[{}] Error reading stream: {}", report_key, e);
+            }
+        };
+        if let Err(e) = writer.write_all(&chunk).await {
+            let _ = tokio::fs::remove_file(&temp_dest_path).await;
+            anyhow::bail!("[{}] Error writing to temp file: {}", report_key, e);
+        }
         downloaded += chunk.len() as u64;
     }
 
-    writer.flush().await?;
+    if let Err(e) = writer.flush().await {
+        let _ = tokio::fs::remove_file(&temp_dest_path).await;
+        anyhow::bail!("[{}] Error flushing temp file: {}", report_key, e);
+    }
+
+    // Rename temp file to final destination
+    if let Err(e) = tokio::fs::rename(&temp_dest_path, &dest_path).await {
+        let _ = tokio::fs::remove_file(&temp_dest_path).await;
+        anyhow::bail!("[{}] Error renaming temp file to final: {}", report_key, e);
+    }
     info!(
         "[{}] Download complete: {} ({} bytes)",
         report_key, filename, downloaded

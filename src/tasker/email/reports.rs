@@ -162,7 +162,11 @@ pub fn generate_leads_report(
     }
 
     let tmp_dir = std::env::temp_dir();
-    let xlsx_path = tmp_dir.join("Call_Center_Leads.xlsx");
+    let unique_id = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0); // Fallback to 0 if time went backwards
+    let xlsx_path = tmp_dir.join(format!("Call_Center_Leads_{}.xlsx", unique_id));
     let mut workbook = Workbook::new();
     let worksheet = workbook.add_worksheet();
 
@@ -217,7 +221,7 @@ mod tests {
         assert!(result.is_some(), "Leads report should be generated");
         let path = result.unwrap();
         assert!(path.exists());
-        assert!(path.to_string_lossy().contains("Call_Center_Leads.xlsx"));
+        assert!(path.to_string_lossy().contains("Call_Center_Leads_"));
 
         let _ = std::fs::remove_file(path);
     }
@@ -250,9 +254,9 @@ mod tests {
         assert!(path.is_some());
 
         let out_path = path.unwrap();
-        let out_bytes = std::fs::read(&out_path).unwrap(); // Excel files are binary, not strings!
-
-        // Let's just check the size or existence to prove it worked, we can't easily assert on binary Excel
+        assert!(out_path.exists(), "The leads output file must exist");
+        let out_bytes = std::fs::read(&out_path).unwrap();
         assert!(out_bytes.len() > 100);
+        let _ = std::fs::remove_file(out_path);
     }
 }

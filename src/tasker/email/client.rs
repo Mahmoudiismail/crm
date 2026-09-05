@@ -8,7 +8,6 @@ use crate::tasker::config::EmailConfig;
 use crate::tasker::email::attachments::generate_ticket_attachment;
 use crate::tasker::email::html::generate_pivot_html;
 use crate::tasker::email::message::TicketRow;
-use crate::tasker::email::outlook::run_powershell;
 use crate::tasker::email::recipients::{
     group_tickets_into_buckets, load_team_mappings, resolve_recipients,
 };
@@ -25,6 +24,34 @@ pub fn process_emails(
     category_exceptions: Option<&[crate::tasker::config::CategoryException]>,
     exclude_branches: &[String],
 ) -> Result<()> {
+    process_emails_with_runner(
+        results_file,
+        config,
+        only_call_center,
+        send_exceptions,
+        download_dir,
+        minutes_ago,
+        category_exceptions,
+        exclude_branches,
+        crate::tasker::email::outlook::run_powershell,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn process_emails_with_runner<F>(
+    results_file: &str,
+    config: &EmailConfig,
+    only_call_center: bool,
+    send_exceptions: bool,
+    download_dir: &str,
+    minutes_ago: i64,
+    category_exceptions: Option<&[crate::tasker::config::CategoryException]>,
+    exclude_branches: &[String],
+    mut run_powershell_fn: F,
+) -> Result<()>
+where
+    F: FnMut(&str) -> Result<()>,
+{
     info!(
         "Starting email processing module. Reading output from {} (only_call_center: {}, send_exceptions: {})",
         results_file, only_call_center, send_exceptions
@@ -227,9 +254,9 @@ pub fn process_emails(
     );
     let today_str = Local::now().format("%d %b %Y").to_string();
 
-    let send_email_for_bucket = |raw_bucket_name: &str,
-                                 rows: &[TicketRow],
-                                 is_branch: bool|
+    let mut send_email_for_bucket = |raw_bucket_name: &str,
+                                     rows: &[TicketRow],
+                                     is_branch: bool|
      -> Result<()> {
         let bucket_name_cleaned = raw_bucket_name.replace('\u{FFFD}', "").replace("ï¿½", "");
         let bucket_name = bucket_name_cleaned.as_str();
@@ -517,25 +544,8 @@ $Mail.HTMLBody = '{}'
             return Ok(());
         }
 
-        if let Err(e) = run_powershell(&ps_script) {
+        if let Err(e) = run_powershell_fn(&ps_script) {
             error!("Failed to send email for {}: {}", bucket_name, e);
-            let err_script = format!(
-                r#"
-$Outlook = New-Object -ComObject Outlook.Application
-$Mail = $Outlook.CreateItem(0)
-$Mail.To = "{}"
-$Mail.Subject = "Error generating email for {}"
-$Mail.Body = "An error occurred while generating or sending the email for {}. Error: {}"
-$Mail.Display()
-"#,
-                config.default_to_email,
-                bucket_name,
-                bucket_name,
-                e.to_string().replace("\"", "'")
-            );
-            if let Err(e2) = run_powershell(&err_script) {
-                error!("Failed to send error notification email: {}", e2);
-            }
             anyhow::bail!(
                 "PowerShell execution failed for email bucket {}: {}",
                 bucket_name,
@@ -614,7 +624,7 @@ mod tests {
             save_email_as_html: None,
         };
 
-        let result = process_emails(
+        let result = process_emails_with_runner(
             download_dir.path().join("results.csv").to_str().unwrap(),
             &email_config,
             false,
@@ -623,6 +633,7 @@ mod tests {
             60,
             None,
             &[],
+            |_| anyhow::bail!("PowerShell execution failed: Simulated failure"),
         );
 
         assert!(result.is_ok());
@@ -759,5 +770,61 @@ mod tests {
 
         let _ = std::fs::remove_file(attachment_csv);
         let _ = std::fs::remove_file(email_html);
+    }
+
+    #[test]
+    fn test_email_outlook_error_cascade_removal() {
+        // We will call process_emails with an configuration that causes
+        // run_powershell to fail (by trying to send email on linux test env)
+        let download_dir = tempfile::tempdir().unwrap();
+        let mut ticket_file = File::create(download_dir.path().join("results.csv")).unwrap();
+        writeln!(
+            ticket_file,
+            "Ticket Id,Branch Name,Category,Type,Subtype,Status,Creation Date,Assignee,Position,team,Is Exception"
+        )
+        .unwrap();
+        writeln!(
+            ticket_file,
+            "1001,Main Branch,Cat1,Type1,Sub1,open,01/01/2026 12:00:00,alice,Pos1,Team A,No"
+        )
+        .unwrap();
+
+        let mut teams_file = NamedTempFile::new().unwrap();
+        writeln!(teams_file, "Team Name,To Email,CC Email").unwrap();
+        writeln!(teams_file, "Team A,test@example.com,cc@example.com").unwrap();
+
+        let email_config = EmailConfig {
+            team_mapping_file: teams_file.path().to_str().unwrap().to_string(),
+            body_template_file: None,
+            initial_cc: "".to_string(),
+            ending_cc: "".to_string(),
+            send_emails: Some(true), // this will trigger run_powershell
+            default_to_email: "def@example.com".to_string(),
+            send_per_team_all_branches: vec!["Team A".to_string()],
+            send_per_branch_branches: vec![],
+            send_per_team_branches: None,
+            send_call_center: Some(false),
+            send_exceptions: Some(false),
+            indentation_spaces: None,
+            save_attachment_as_csv: Some(false),
+            save_email_as_html: Some(false),
+        };
+
+        let result = process_emails_with_runner(
+            download_dir.path().join("results.csv").to_str().unwrap(),
+            &email_config,
+            false,
+            false,
+            download_dir.path().to_str().unwrap(),
+            60,
+            None,
+            &[],
+            |_| anyhow::bail!("PowerShell execution failed: Simulated failure"),
+        );
+
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("PowerShell execution failed"));
+        assert!(!err_msg.contains("Failed to send error notification email"));
     }
 }

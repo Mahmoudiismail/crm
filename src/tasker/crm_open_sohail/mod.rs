@@ -1,4 +1,5 @@
 use crate::tasker::config::CrmOpenSohailConfig;
+use crate::tasker::utils::with_retry;
 use anyhow::Result;
 use tracing::{error, info};
 
@@ -21,11 +22,11 @@ pub fn run(config: &CrmOpenSohailConfig) -> Result<()> {
     let mut dash_config = config.dashboard_config.clone();
     dash_config.email_to = None;
     dash_config.email_cc = None;
-    crate::tasker::dashboard_updater::run(&dash_config)?;
+    with_retry(|| crate::tasker::dashboard_updater::run(&dash_config))?;
     tracing::info!("DashboardUpdater logic completed successfully.");
 
     // Step 2-4: Extract Pivot Data via Slicers
-    let extracted_data = powershell::extract_data(config)?;
+    let extracted_data = with_retry(|| powershell::extract_data(config))?;
 
     // Step 5: Process Data & Enrich OUL Column
     let final_datasets = processing::process_extracted_data(config, extracted_data)?;
