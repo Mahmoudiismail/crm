@@ -12,7 +12,7 @@ use crate::runner::engine::state::{ExecutionPolicy, RunnerStatus};
 
 use crate::runner::engine::app_lock::AppLockManager;
 
-async fn execute_action(
+async fn execute_action_inner(
     action: &ActionSpec,
     logger: &TaskLogger,
     policy: &ExecutionPolicy,
@@ -121,27 +121,8 @@ async fn execute_step(
         ExecutionMode::Sequential => {
             let mut step_result = Ok(());
             for action in &step.actions {
-                let mut attempts = 0;
-                let mut action_success = false;
-                while attempts < 2 {
-                    attempts += 1;
-                    match execute_action(action, logger, policy, timeout_seconds).await {
-                        Ok(_) => {
-                            action_success = true;
-                            break;
-                        }
-                        Err(e) => {
-                            logger
-                                .log(&format!("Action failed on attempt {}: {}", attempts, e))
-                                .await;
-                            if attempts >= 2 {
-                                step_result = Err(e);
-                                break;
-                            }
-                        }
-                    }
-                }
-                if !action_success {
+                if let Err(e) = execute_action(action, logger, policy, timeout_seconds).await {
+                    step_result = Err(e);
                     break;
                 }
             }
@@ -155,27 +136,8 @@ async fn execute_step(
                 let policy = policy.clone();
 
                 handles.push(tokio::spawn(async move {
-                    let mut attempts = 0;
-                    let mut final_result = Ok(());
-                    while attempts < 2 {
-                        attempts += 1;
-                        match execute_action(&action, &logger, &policy, timeout_seconds).await {
-                            Ok(_) => {
-                                final_result = Ok(());
-                                break;
-                            }
-                            Err(e) => {
-                                logger
-                                    .log(&format!(
-                                        "Parallel action failed on attempt {}: {}",
-                                        attempts, e
-                                    ))
-                                    .await;
-                                final_result = Err(e);
-                            }
-                        }
-                    }
-                    (action, final_result)
+                    let result = execute_action(&action, &logger, &policy, timeout_seconds).await;
+                    (action, result)
                 }));
             }
 
@@ -363,6 +325,50 @@ pub async fn run_task_inner(
     };
     TaskExecutionResult { success, error }
 }
+
+async fn execute_action(
+    action: &ActionSpec,
+    logger: &TaskLogger,
+    policy: &ExecutionPolicy,
+    timeout_seconds: u64,
+) -> Result<()> {
+    // Determine if this action should be retried at the Runner level.
+    // External apps like 'tasker' handle their own granular internal retries.
+    // Retrying the entire 'tasker' app here would violate the rule against repeating successful side-effects.
+    let should_retry = match action {
+        ActionSpec::ShellCommand(_) => true,
+        ActionSpec::ExternalApp(app) => {
+            // Only retry external apps if they don't explicitly manage their own state.
+            // For this repository, 'tasker' and 'crm' manage their own retries.
+            app.app_id != "tasker" && app.app_id != "crm"
+        }
+    };
+
+    let mut attempts = 0;
+    loop {
+        attempts += 1;
+        match execute_action_inner(action, logger, policy, timeout_seconds).await {
+            Ok(_) => return Ok(()),
+            Err(e) => {
+                if !should_retry || attempts >= 2 {
+                    if attempts >= 2 {
+                        logger
+                            .log(&format!("Action failed after 2 attempts: {}", e))
+                            .await;
+                    }
+                    return Err(e);
+                }
+                logger
+                    .log(&format!(
+                        "Action failed on attempt {}: {}. Retrying...",
+                        attempts, e
+                    ))
+                    .await;
+            }
+        }
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
