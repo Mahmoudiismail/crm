@@ -18,6 +18,10 @@ async fn test_crm_signed_url_retry_and_fresh_url() {
     let fetch_attempt_clone = fetch_attempt.clone();
     let download_attempt_clone = download_attempt.clone();
 
+    // Track requested paths
+    let requested_fetch_paths = Arc::new(Mutex::new(Vec::new()));
+    let requested_fetch_paths_clone = requested_fetch_paths.clone();
+
     // Spawn mock server
     tokio::spawn(async move {
         loop {
@@ -30,7 +34,17 @@ async fn test_crm_signed_url_retry_and_fresh_url() {
                 .unwrap();
             let req_str = String::from_utf8_lossy(&buf);
 
-            if req_str.contains("GET /task/download-ticket-data") {
+            if req_str.starts_with("GET /task/download-ticket-data") {
+                // Extract the exact path and query string requested
+                if let Some(line) = req_str.lines().next() {
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    if parts.len() >= 2 {
+                        let path = parts[1].to_string();
+                        let mut paths = requested_fetch_paths_clone.lock().await;
+                        paths.push(path);
+                    }
+                }
+
                 let current_fetch = fetch_attempt_clone.fetch_add(1, Ordering::SeqCst);
 
                 // Return a signed URL on both fetch attempts.
@@ -106,5 +120,34 @@ async fn test_crm_signed_url_retry_and_fresh_url() {
     assert_eq!(
         download_count, 6,
         "Expected exactly 6 download attempts (3 original + 3 fresh)"
+    );
+
+    // Verify both fetches used EXACTLY the same query parameters.
+    let paths = requested_fetch_paths.lock().await;
+    assert_eq!(
+        paths.len(),
+        2,
+        "Expected exact path logs for the 2 fetch requests"
+    );
+
+    let first_req = &paths[0];
+    let second_req = &paths[1];
+
+    assert!(
+        first_req.contains("from_date=2026-01-01"),
+        "First request must have exact from_date"
+    );
+    assert!(
+        first_req.contains("to_date=2026-01-31"),
+        "First request must have exact to_date"
+    );
+    assert!(
+        first_req.contains("type=ticket_report"),
+        "First request must have exact report type"
+    );
+
+    assert_eq!(
+        first_req, second_req,
+        "The fresh URL fetch must use the exact same parameters as the original fetch, without any date splitting"
     );
 }

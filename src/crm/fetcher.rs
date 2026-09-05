@@ -1414,7 +1414,9 @@ mod tests {
         let old_users = path.join("users_old.csv");
 
         let recent_ticket = path.join("ticket_report_new.csv");
+        let recent_lead = path.join("lead_report_new.csv");
         let recent_call = path.join("call_logs_new.csv");
+        let recent_users = path.join("users_new.csv");
 
         let other_csv = path.join("other_data.csv");
         let other_txt = path.join("ticket_report_123.txt");
@@ -1425,7 +1427,9 @@ mod tests {
         std::fs::write(&old_users, "dummy").unwrap();
 
         std::fs::write(&recent_ticket, "dummy").unwrap();
+        std::fs::write(&recent_lead, "dummy").unwrap();
         std::fs::write(&recent_call, "dummy").unwrap();
+        std::fs::write(&recent_users, "dummy").unwrap();
 
         std::fs::write(&other_csv, "dummy").unwrap();
         std::fs::write(&other_txt, "dummy").unwrap();
@@ -1458,7 +1462,9 @@ mod tests {
 
         // Recent reports and unrelated files should be kept
         assert!(recent_ticket.exists());
+        assert!(recent_lead.exists());
         assert!(recent_call.exists());
+        assert!(recent_users.exists());
         assert!(other_csv.exists());
         assert!(other_txt.exists());
     }
