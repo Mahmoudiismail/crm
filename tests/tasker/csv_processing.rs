@@ -323,10 +323,17 @@ fn test_task1_only_call_center() {
         "CSV tickets attachment should be generated"
     );
 
-    let leads_attachment = temp_dir.join("Call_Center_Leads.xlsx");
-    // We modified the mock leads data to contain a 'new' status so it will be generated correctly.
+    // Find the dynamic leads attachment
+    let mut found_leads = false;
+    for entry in std::fs::read_dir(&temp_dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.to_string_lossy().contains("Call_Center_Leads_") {
+            found_leads = true;
+            let _ = std::fs::remove_file(path);
+        }
+    }
     assert!(
-        leads_attachment.exists(),
+        found_leads,
         "Leads file should be generated for Call Center team"
     );
 
@@ -336,9 +343,6 @@ fn test_task1_only_call_center() {
 
     let _ = std::fs::remove_file(html_path);
     let _ = std::fs::remove_file(csv_attachment);
-    if leads_attachment.exists() {
-        let _ = std::fs::remove_file(leads_attachment);
-    }
 }
 
 #[test]

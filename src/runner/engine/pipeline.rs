@@ -121,8 +121,27 @@ async fn execute_step(
         ExecutionMode::Sequential => {
             let mut step_result = Ok(());
             for action in &step.actions {
-                if let Err(e) = execute_action(action, logger, policy, timeout_seconds).await {
-                    step_result = Err(e);
+                let mut attempts = 0;
+                let mut action_success = false;
+                while attempts < 2 {
+                    attempts += 1;
+                    match execute_action(action, logger, policy, timeout_seconds).await {
+                        Ok(_) => {
+                            action_success = true;
+                            break;
+                        }
+                        Err(e) => {
+                            logger
+                                .log(&format!("Action failed on attempt {}: {}", attempts, e))
+                                .await;
+                            if attempts >= 2 {
+                                step_result = Err(e);
+                                break;
+                            }
+                        }
+                    }
+                }
+                if !action_success {
                     break;
                 }
             }
@@ -136,8 +155,27 @@ async fn execute_step(
                 let policy = policy.clone();
 
                 handles.push(tokio::spawn(async move {
-                    let result = execute_action(&action, &logger, &policy, timeout_seconds).await;
-                    (action, result)
+                    let mut attempts = 0;
+                    let mut final_result = Ok(());
+                    while attempts < 2 {
+                        attempts += 1;
+                        match execute_action(&action, &logger, &policy, timeout_seconds).await {
+                            Ok(_) => {
+                                final_result = Ok(());
+                                break;
+                            }
+                            Err(e) => {
+                                logger
+                                    .log(&format!(
+                                        "Parallel action failed on attempt {}: {}",
+                                        attempts, e
+                                    ))
+                                    .await;
+                                final_result = Err(e);
+                            }
+                        }
+                    }
+                    (action, final_result)
                 }));
             }
 

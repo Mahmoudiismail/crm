@@ -162,7 +162,11 @@ pub fn generate_leads_report(
     }
 
     let tmp_dir = std::env::temp_dir();
-    let xlsx_path = tmp_dir.join("Call_Center_Leads.xlsx");
+    let unique_id = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let xlsx_path = tmp_dir.join(format!("Call_Center_Leads_{}.xlsx", unique_id));
     let mut workbook = Workbook::new();
     let worksheet = workbook.add_worksheet();
 
@@ -217,7 +221,7 @@ mod tests {
         assert!(result.is_some(), "Leads report should be generated");
         let path = result.unwrap();
         assert!(path.exists());
-        assert!(path.to_string_lossy().contains("Call_Center_Leads.xlsx"));
+        assert!(path.to_string_lossy().contains("Call_Center_Leads_"));
 
         let _ = std::fs::remove_file(path);
     }
