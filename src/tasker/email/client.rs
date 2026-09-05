@@ -1,5 +1,4 @@
 use anyhow::Result;
-use crate::tasker::utils::with_retry;
 use chrono::{Datelike, Local, NaiveDate};
 use std::collections::HashSet;
 use std::fs::File;
@@ -564,7 +563,7 @@ $Mail.Display()
 
     let send_cc = only_call_center || config.send_call_center.unwrap_or(false);
     if send_cc && !effective_send_exceptions {
-        with_retry(|| send_email_for_bucket("Call Center", &buckets.call_center, true))?;
+        send_email_for_bucket("Call Center", &buckets.call_center, true)?;
     }
 
     info!("Email processing complete.");
