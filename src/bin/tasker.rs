@@ -184,38 +184,98 @@ pub fn run_app(options: TaskerCliOptions) -> Result<()> {
             TaskConfig::CsvAnalysis(csv_config) => {
                 tracing::trace!("Executing CsvAnalysis for task #{}.", task_idx);
                 if let Err(e) = csv_task::run(csv_config, only_call_center, send_exceptions) {
-                    error!("Error running CsvAnalysis task #{}: {:?}", task_idx, e);
+                    error!(
+                        "Attempt 1 failed for CsvAnalysis task #{}: {:?}",
+                        task_idx, e
+                    );
+                    info!("Retrying CsvAnalysis task #{}", task_idx);
+                    if let Err(e2) = csv_task::run(csv_config, only_call_center, send_exceptions) {
+                        error!(
+                            "Attempt 2 failed for CsvAnalysis task #{}: {:?}",
+                            task_idx, e2
+                        );
+                        anyhow::bail!("CsvAnalysis task {} failed after retry: {}", task_idx, e2);
+                    }
                 }
                 tracing::trace!("CsvAnalysis for task #{} finished.", task_idx);
             }
             TaskConfig::DashboardUpdater(dash_config) => {
                 tracing::trace!("Executing DashboardUpdater for task #{}.", task_idx);
                 if let Err(e) = dashboard_updater::run(dash_config) {
-                    error!("Error running DashboardUpdater task #{}: {:?}", task_idx, e);
+                    error!(
+                        "Attempt 1 failed for DashboardUpdater task #{}: {:?}",
+                        task_idx, e
+                    );
+                    info!("Retrying DashboardUpdater task #{}", task_idx);
+                    if let Err(e2) = dashboard_updater::run(dash_config) {
+                        error!(
+                            "Attempt 2 failed for DashboardUpdater task #{}: {:?}",
+                            task_idx, e2
+                        );
+                        anyhow::bail!(
+                            "DashboardUpdater task {} failed after retry: {}",
+                            task_idx,
+                            e2
+                        );
+                    }
                 }
                 tracing::trace!("DashboardUpdater for task #{} finished.", task_idx);
             }
             TaskConfig::CrmOpenSohail(sohail_config) => {
                 tracing::trace!("Executing CrmOpenSohail for task #{}.", task_idx);
                 if let Err(e) = crm_tool::tasker::crm_open_sohail::run(sohail_config) {
-                    error!("Error running CrmOpenSohail task #{}: {:?}", task_idx, e);
-                    anyhow::bail!("CrmOpenSohail task {} failed: {}", task_idx, e);
+                    error!(
+                        "Attempt 1 failed for CrmOpenSohail task #{}: {:?}",
+                        task_idx, e
+                    );
+                    info!("Retrying CrmOpenSohail task #{}", task_idx);
+                    if let Err(e2) = crm_tool::tasker::crm_open_sohail::run(sohail_config) {
+                        error!(
+                            "Attempt 2 failed for CrmOpenSohail task #{}: {:?}",
+                            task_idx, e2
+                        );
+                        anyhow::bail!("CrmOpenSohail task {} failed after retry: {}", task_idx, e2);
+                    }
                 }
                 tracing::trace!("CrmOpenSohail for task #{} finished.", task_idx);
             }
             TaskConfig::DepartmentSplit(split_config) => {
                 tracing::trace!("Executing DepartmentSplit for task #{}.", task_idx);
                 if let Err(e) = crm_tool::tasker::department_split::run(split_config) {
-                    error!("Error running DepartmentSplit task #{}: {:?}", task_idx, e);
-                    anyhow::bail!("DepartmentSplit task {} failed: {}", task_idx, e);
+                    error!(
+                        "Attempt 1 failed for DepartmentSplit task #{}: {:?}",
+                        task_idx, e
+                    );
+                    info!("Retrying DepartmentSplit task #{}", task_idx);
+                    if let Err(e2) = crm_tool::tasker::department_split::run(split_config) {
+                        error!(
+                            "Attempt 2 failed for DepartmentSplit task #{}: {:?}",
+                            task_idx, e2
+                        );
+                        anyhow::bail!(
+                            "DepartmentSplit task {} failed after retry: {}",
+                            task_idx,
+                            e2
+                        );
+                    }
                 }
                 tracing::trace!("DepartmentSplit for task #{} finished.", task_idx);
             }
             TaskConfig::OpdAnalysis(opd_config) => {
                 tracing::trace!("Executing OpdAnalysis for task #{}.", task_idx);
                 if let Err(e) = opd_task::run(opd_config) {
-                    error!("Error running OpdAnalysis task #{}: {:?}", task_idx, e);
-                    anyhow::bail!("OpdAnalysis task {} failed: {}", task_idx, e);
+                    error!(
+                        "Attempt 1 failed for OpdAnalysis task #{}: {:?}",
+                        task_idx, e
+                    );
+                    info!("Retrying OpdAnalysis task #{}", task_idx);
+                    if let Err(e2) = opd_task::run(opd_config) {
+                        error!(
+                            "Attempt 2 failed for OpdAnalysis task #{}: {:?}",
+                            task_idx, e2
+                        );
+                        anyhow::bail!("OpdAnalysis task {} failed after retry: {}", task_idx, e2);
+                    }
                 }
                 tracing::trace!("OpdAnalysis for task #{} finished.", task_idx);
             }
@@ -363,12 +423,12 @@ mod tests {
         let options = TaskerCliOptions::parse_from(args);
 
         // We know it won't bail on BoundsCheck.
-        // It will return Ok(()) but inside `csv_task::run` it logs an error if path2 doesn't exist.
-        // run_app itself returns Ok(()) if internal task errors are caught and logged.
+        // It used to return Ok(()) if internal task errors are caught and logged,
+        // but now it bails out on the second failure (retry propagation).
         let res = run_app(options);
         assert!(
-            res.is_ok(),
-            "run_app should successfully route the valid task filter"
+            res.is_err(),
+            "run_app should fail because path2 does not exist, and failure is now propagated after retry"
         );
     }
 

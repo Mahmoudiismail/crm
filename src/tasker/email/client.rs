@@ -760,4 +760,59 @@ mod tests {
         let _ = std::fs::remove_file(attachment_csv);
         let _ = std::fs::remove_file(email_html);
     }
+
+    #[test]
+    fn test_email_outlook_error_cascade_removal() {
+        // We will call process_emails with an configuration that causes
+        // run_powershell to fail (by trying to send email on linux test env)
+        let download_dir = tempfile::tempdir().unwrap();
+        let mut ticket_file = File::create(download_dir.path().join("results.csv")).unwrap();
+        writeln!(
+            ticket_file,
+            "Ticket Id,Branch Name,Category,Type,Subtype,Status,Creation Date,Assignee,Position,team,Is Exception"
+        )
+        .unwrap();
+        writeln!(
+            ticket_file,
+            "1001,Main Branch,Cat1,Type1,Sub1,open,01/01/2026 12:00:00,alice,Pos1,Team A,No"
+        )
+        .unwrap();
+
+        let mut teams_file = NamedTempFile::new().unwrap();
+        writeln!(teams_file, "Team Name,To Email,CC Email").unwrap();
+        writeln!(teams_file, "Team A,test@example.com,cc@example.com").unwrap();
+
+        let email_config = EmailConfig {
+            team_mapping_file: teams_file.path().to_str().unwrap().to_string(),
+            body_template_file: None,
+            initial_cc: "".to_string(),
+            ending_cc: "".to_string(),
+            send_emails: Some(true), // this will trigger run_powershell
+            default_to_email: "def@example.com".to_string(),
+            send_per_team_all_branches: vec!["Team A".to_string()],
+            send_per_branch_branches: vec![],
+            send_per_team_branches: None,
+            send_call_center: Some(false),
+            send_exceptions: Some(false),
+            indentation_spaces: None,
+            save_attachment_as_csv: Some(false),
+            save_email_as_html: Some(false),
+        };
+
+        let result = process_emails(
+            download_dir.path().join("results.csv").to_str().unwrap(),
+            &email_config,
+            false,
+            false,
+            download_dir.path().to_str().unwrap(),
+            60,
+            None,
+            &[],
+        );
+
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("PowerShell execution failed"));
+        assert!(!err_msg.contains("Failed to send error notification email"));
+    }
 }
