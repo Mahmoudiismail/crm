@@ -8,7 +8,6 @@ use crate::tasker::config::EmailConfig;
 use crate::tasker::email::attachments::generate_ticket_attachment;
 use crate::tasker::email::html::generate_pivot_html;
 use crate::tasker::email::message::TicketRow;
-use crate::tasker::email::outlook::run_powershell;
 use crate::tasker::email::recipients::{
     group_tickets_into_buckets, load_team_mappings, resolve_recipients,
 };
@@ -25,6 +24,34 @@ pub fn process_emails(
     category_exceptions: Option<&[crate::tasker::config::CategoryException]>,
     exclude_branches: &[String],
 ) -> Result<()> {
+    process_emails_with_runner(
+        results_file,
+        config,
+        only_call_center,
+        send_exceptions,
+        download_dir,
+        minutes_ago,
+        category_exceptions,
+        exclude_branches,
+        crate::tasker::email::outlook::run_powershell,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn process_emails_with_runner<F>(
+    results_file: &str,
+    config: &EmailConfig,
+    only_call_center: bool,
+    send_exceptions: bool,
+    download_dir: &str,
+    minutes_ago: i64,
+    category_exceptions: Option<&[crate::tasker::config::CategoryException]>,
+    exclude_branches: &[String],
+    mut run_powershell_fn: F,
+) -> Result<()>
+where
+    F: FnMut(&str) -> Result<()>,
+{
     info!(
         "Starting email processing module. Reading output from {} (only_call_center: {}, send_exceptions: {})",
         results_file, only_call_center, send_exceptions
@@ -227,9 +254,9 @@ pub fn process_emails(
     );
     let today_str = Local::now().format("%d %b %Y").to_string();
 
-    let send_email_for_bucket = |raw_bucket_name: &str,
-                                 rows: &[TicketRow],
-                                 is_branch: bool|
+    let mut send_email_for_bucket = |raw_bucket_name: &str,
+                                     rows: &[TicketRow],
+                                     is_branch: bool|
      -> Result<()> {
         let bucket_name_cleaned = raw_bucket_name.replace('\u{FFFD}', "").replace("ï¿½", "");
         let bucket_name = bucket_name_cleaned.as_str();
@@ -517,7 +544,7 @@ $Mail.HTMLBody = '{}'
             return Ok(());
         }
 
-        if let Err(e) = run_powershell(&ps_script) {
+        if let Err(e) = run_powershell_fn(&ps_script) {
             error!("Failed to send email for {}: {}", bucket_name, e);
             anyhow::bail!(
                 "PowerShell execution failed for email bucket {}: {}",
@@ -597,7 +624,7 @@ mod tests {
             save_email_as_html: None,
         };
 
-        let result = process_emails(
+        let result = process_emails_with_runner(
             download_dir.path().join("results.csv").to_str().unwrap(),
             &email_config,
             false,
@@ -606,6 +633,7 @@ mod tests {
             60,
             None,
             &[],
+            |_| anyhow::bail!("PowerShell execution failed: Simulated failure"),
         );
 
         assert!(result.is_ok());
@@ -782,7 +810,7 @@ mod tests {
             save_email_as_html: Some(false),
         };
 
-        let result = process_emails(
+        let result = process_emails_with_runner(
             download_dir.path().join("results.csv").to_str().unwrap(),
             &email_config,
             false,
@@ -791,6 +819,7 @@ mod tests {
             60,
             None,
             &[],
+            |_| anyhow::bail!("PowerShell execution failed: Simulated failure"),
         );
 
         assert!(result.is_err());
