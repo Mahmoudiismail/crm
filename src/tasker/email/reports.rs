@@ -164,8 +164,8 @@ pub fn generate_leads_report(
     let tmp_dir = std::env::temp_dir();
     let unique_id = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
+        .map(|d| d.as_nanos())
+        .unwrap_or(0); // Fallback to 0 if time went backwards
     let xlsx_path = tmp_dir.join(format!("Call_Center_Leads_{}.xlsx", unique_id));
     let mut workbook = Workbook::new();
     let worksheet = workbook.add_worksheet();
@@ -254,11 +254,9 @@ mod tests {
         assert!(path.is_some());
 
         let out_path = path.unwrap();
-        if out_path.exists() {
-            let out_bytes = std::fs::read(&out_path).unwrap();
-            assert!(out_bytes.len() > 100);
-        } else {
-            // It could be missing in parallel tests if another test deleted it since they both use tmp_dir/Call_Center_Leads.xlsx
-        }
+        assert!(out_path.exists(), "The leads output file must exist");
+        let out_bytes = std::fs::read(&out_path).unwrap();
+        assert!(out_bytes.len() > 100);
+        let _ = std::fs::remove_file(out_path);
     }
 }

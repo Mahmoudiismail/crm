@@ -519,23 +519,6 @@ $Mail.HTMLBody = '{}'
 
         if let Err(e) = run_powershell(&ps_script) {
             error!("Failed to send email for {}: {}", bucket_name, e);
-            let err_script = format!(
-                r#"
-$Outlook = New-Object -ComObject Outlook.Application
-$Mail = $Outlook.CreateItem(0)
-$Mail.To = "{}"
-$Mail.Subject = "Error generating email for {}"
-$Mail.Body = "An error occurred while generating or sending the email for {}. Error: {}"
-$Mail.Display()
-"#,
-                config.default_to_email,
-                bucket_name,
-                bucket_name,
-                e.to_string().replace("\"", "'")
-            );
-            if let Err(e2) = run_powershell(&err_script) {
-                error!("Failed to send error notification email: {}", e2);
-            }
             anyhow::bail!(
                 "PowerShell execution failed for email bucket {}: {}",
                 bucket_name,
