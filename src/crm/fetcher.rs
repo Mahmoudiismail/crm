@@ -147,18 +147,27 @@ pub async fn fetch_reports(
                 let current_url = task.url.clone();
                 let mut download_success = false;
 
-                for _attempt in 1..=3 {
-                    if crate::crm::downloader::download_csv(
+                for attempt in 1..=3 {
+                    match crate::crm::downloader::download_csv(
                         &task.client,
                         &current_url,
                         &task.report_key,
                         &task.dir,
                     )
                     .await
-                    .is_ok()
                     {
-                        download_success = true;
-                        break;
+                        Ok(_) => {
+                            download_success = true;
+                            break;
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                "Download attempt {} for {} failed: {:#}",
+                                attempt,
+                                task.report_key,
+                                e
+                            );
+                        }
                     }
                 }
 
@@ -202,18 +211,27 @@ pub async fn fetch_reports(
 
                     if let Some(url) = fresh_url {
                         let mut fresh_success = false;
-                        for _attempt in 1..=3 {
-                            if crate::crm::downloader::download_csv(
+                        for attempt in 1..=3 {
+                            match crate::crm::downloader::download_csv(
                                 &task.client,
                                 &url,
                                 &task.report_key,
                                 &task.dir,
                             )
                             .await
-                            .is_ok()
                             {
-                                fresh_success = true;
-                                break;
+                                Ok(_) => {
+                                    fresh_success = true;
+                                    break;
+                                }
+                                Err(e) => {
+                                    tracing::warn!(
+                                        "Fresh URL download attempt {} for {} failed: {:#}",
+                                        attempt,
+                                        task.report_key,
+                                        e
+                                    );
+                                }
                             }
                         }
                         if !fresh_success {
