@@ -68,9 +68,10 @@ try {{
 Write-Output "TRACE: Searching for original message with sender: '$SenderToMatch' and subject prefix: '$PrefixToMatch'"
 
 function Find-OriginalMessage ($FolderItems, $SortProperty) {{
-    if (-not $FolderItems) {{ return $null }}
+    if (-not $FolderItems) {{ return }}
     $FolderItems.Sort($SortProperty, $true)
 
+    $Matches = @()
     foreach ($Item in $FolderItems) {{
         if (-not $Item.Subject -or -not $Item.Subject.StartsWith($PrefixToMatch, [System.StringComparison]::InvariantCultureIgnoreCase)) {{
             continue
@@ -112,25 +113,38 @@ function Find-OriginalMessage ($FolderItems, $SortProperty) {{
         }}
 
         if ([string]::Equals($SenderAddress.Trim(), $SenderToMatch.Trim(), [System.StringComparison]::OrdinalIgnoreCase)) {{
-            Write-Output "TRACE: Sender match successful ($SenderAddress). Selected as original message."
-            return $Item
+            Write-Output "TRACE: Sender match successful ($SenderAddress)."
+            $Matches += $Item
         }} else {{
             Write-Output "TRACE: Candidate rejected. Sender '$SenderAddress' does not match '$SenderToMatch'."
         }}
     }}
 
-    return $null
+    if ($Matches.Count -gt 0) {{
+        if ($Matches.Count -gt 1) {{
+            Write-Output "TRACE: Found $($Matches.Count) matches in folder. Logging all matches:"
+            foreach ($m in $Matches) {{
+                Write-Output "TRACE: Match - Subject: $($m.Subject), Received: $($m.ReceivedTime)"
+            }}
+            Write-Output "TRACE: Selecting the latest match."
+        }}
+        $script:OriginalMail = $Matches[0]
+    }}
 }}
+
+    $script:OriginalMail = $null
 
     # Search Inbox
     Write-Output "TRACE: Searching Inbox..."
-    $OriginalMail = Find-OriginalMessage -FolderItems $Inbox.Items -SortProperty "[ReceivedTime]"
+    Find-OriginalMessage -FolderItems $Inbox.Items -SortProperty "[ReceivedTime]"
 
     # Search Sent Items if not found in Inbox
-    if (-not $OriginalMail) {{
+    if (-not $script:OriginalMail) {{
         Write-Output "TRACE: Not found in Inbox, searching Sent Items..."
-        $OriginalMail = Find-OriginalMessage -FolderItems $SentItems.Items -SortProperty "[SentOn]"
+        Find-OriginalMessage -FolderItems $SentItems.Items -SortProperty "[SentOn]"
     }}
+
+    $OriginalMail = $script:OriginalMail
 
     if (-not $OriginalMail) {{
         throw "Original message with subject prefix '{subject_prefix}' not found in Inbox or Sent Items of '{sender_account}'."
