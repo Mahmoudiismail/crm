@@ -29,6 +29,9 @@ fn test_validate_config_duplicate_task_id() {
         schedules: vec![],
         steps: vec![step.clone()],
         post_run_steps: vec![],
+        period_mode: crm_tool::runner::config::PeriodMode::Custom,
+        start_date: None,
+        end_date: None,
     };
     config.tasks = vec![task.clone(), task.clone()];
 
@@ -78,6 +81,9 @@ fn test_validate_config_empty_steps() {
         schedules: vec![],
         steps: vec![], // Empty steps
         post_run_steps: vec![],
+        period_mode: crm_tool::runner::config::PeriodMode::Custom,
+        start_date: None,
+        end_date: None,
     };
     config.tasks = vec![task];
 
@@ -111,6 +117,9 @@ fn test_validate_config_empty_action_list_in_step() {
         schedules: vec![],
         steps: vec![step],
         post_run_steps: vec![],
+        period_mode: crm_tool::runner::config::PeriodMode::Custom,
+        start_date: None,
+        end_date: None,
     };
     config.tasks = vec![task];
 
@@ -147,6 +156,9 @@ fn test_validate_config_invalid_external_app_reference() {
         schedules: vec![],
         steps: vec![step],
         post_run_steps: vec![],
+        period_mode: crm_tool::runner::config::PeriodMode::Custom,
+        start_date: None,
+        end_date: None,
     };
     config.tasks = vec![task];
     // Notice registered_apps is empty

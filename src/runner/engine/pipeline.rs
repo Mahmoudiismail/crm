@@ -16,6 +16,7 @@ async fn execute_action(
     action: &ActionSpec,
     logger: &TaskLogger,
     policy: &ExecutionPolicy,
+    period: Option<&crate::runner::config::ExecutionPeriod>,
     timeout_seconds: u64,
 ) -> Result<()> {
     match action {
@@ -25,7 +26,13 @@ async fn execute_action(
                     "shell_command tasks are disabled by runner config"
                 ));
             }
-            if let Err(e) = run_shell_command(logger, &spec.command, timeout_seconds).await {
+            let mut cmd = spec.command.clone();
+            if let Some(p) = period {
+                cmd = cmd
+                    .replace("{start_date}", &p.start_date.format("%Y-%m-%d").to_string())
+                    .replace("{end_date}", &p.end_date.format("%Y-%m-%d").to_string());
+            }
+            if let Err(e) = run_shell_command(logger, &cmd, timeout_seconds).await {
                 if !spec.continue_on_error {
                     return Err(anyhow::anyhow!("command failed: {}", e));
                 }
@@ -34,7 +41,7 @@ async fn execute_action(
         }
         ActionSpec::ExternalApp(spec) => {
             if let Some(app) = policy.registered_apps.iter().find(|a| a.id == spec.app_id) {
-                run_external_app(logger, app, &spec.args, timeout_seconds).await
+                run_external_app(logger, app, &spec.args, period, timeout_seconds).await
             } else {
                 Err(anyhow::anyhow!(
                     "Registered app with ID '{}' not found in config",
@@ -45,10 +52,12 @@ async fn execute_action(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn execute_step(
     step: &TaskStep,
     logger: &TaskLogger,
     policy: &ExecutionPolicy,
+    period: Option<&crate::runner::config::ExecutionPeriod>,
     timeout_seconds: u64,
     status: &Arc<Mutex<RunnerStatus>>,
     app_lock_manager: &AppLockManager,
@@ -121,7 +130,9 @@ async fn execute_step(
         ExecutionMode::Sequential => {
             let mut step_result = Ok(());
             for action in &step.actions {
-                if let Err(e) = execute_action(action, logger, policy, timeout_seconds).await {
+                if let Err(e) =
+                    execute_action(action, logger, policy, period, timeout_seconds).await
+                {
                     step_result = Err(e);
                     break;
                 }
@@ -134,9 +145,17 @@ async fn execute_step(
                 let action = action.clone();
                 let logger = logger.clone();
                 let policy = policy.clone();
+                let period_cloned = period.cloned();
 
                 handles.push(tokio::spawn(async move {
-                    let result = execute_action(&action, &logger, &policy, timeout_seconds).await;
+                    let result = execute_action(
+                        &action,
+                        &logger,
+                        &policy,
+                        period_cloned.as_ref(),
+                        timeout_seconds,
+                    )
+                    .await;
                     (action, result)
                 }));
             }
@@ -168,10 +187,12 @@ async fn execute_step(
     result
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn execute_pipeline(
     steps: &[TaskStep],
     logger: &TaskLogger,
     policy: &ExecutionPolicy,
+    period: Option<&crate::runner::config::ExecutionPeriod>,
     timeout_seconds: u64,
     status: &Arc<Mutex<RunnerStatus>>,
     app_lock_manager: &AppLockManager,
@@ -182,6 +203,7 @@ async fn execute_pipeline(
             step,
             logger,
             policy,
+            period,
             timeout_seconds,
             status,
             app_lock_manager,
@@ -226,16 +248,119 @@ pub async fn run_task_inner(
         policy.post_run_timeout_seconds
     };
 
-    let result = execute_pipeline(
-        &task.steps,
-        &logger,
-        policy,
-        effective_shell_timeout,
-        status,
-        app_lock_manager,
-        &task.id,
-    )
-    .await;
+    // Resolve start_date and end_date for execution periods
+    let start_date_str = task.start_date.as_deref().unwrap_or("today");
+    let raw_start = crate::utils::parse_flexible_date(start_date_str)
+        .unwrap_or_else(|| Utc::now().with_timezone(&chrono::Local).date_naive());
+
+    let raw_end = if let Some(ed_str) = task.end_date.as_deref() {
+        crate::utils::parse_flexible_date_with_base(ed_str, Some(start_date_str))
+            .unwrap_or(raw_start)
+    } else {
+        raw_start
+    };
+
+    let periods =
+        crate::runner::config::generate_execution_periods(task.period_mode, raw_start, raw_end);
+
+    let has_non_concurrent_app = task.steps.iter().any(|step| {
+        step.actions.iter().any(|action| {
+            if let ActionSpec::ExternalApp(spec) = action {
+                if let Some(app) = policy.registered_apps.iter().find(|a| a.id == spec.app_id) {
+                    !app.allow_concurrent_tasks
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        })
+    });
+
+    let mut result = Ok(());
+
+    if has_non_concurrent_app {
+        for (idx, period) in periods.iter().enumerate() {
+            logger
+                .log(&format!(
+                    "Executing period {}/{} ({} -> {})...",
+                    idx + 1,
+                    periods.len(),
+                    period.start_date,
+                    period.end_date
+                ))
+                .await;
+
+            let res = execute_pipeline(
+                &task.steps,
+                &logger,
+                policy,
+                Some(period),
+                effective_shell_timeout,
+                status,
+                app_lock_manager,
+                &task.id,
+            )
+            .await;
+
+            if let Err(e) = res {
+                result = Err(e);
+                break;
+            }
+        }
+    } else {
+        let total_periods = periods.len();
+        let mut handles = Vec::new();
+
+        for (idx, period) in periods.into_iter().enumerate() {
+            let logger = logger.clone();
+            let policy = policy.clone();
+            let status = status.clone();
+            let app_lock_manager = app_lock_manager.clone();
+            let steps = task.steps.clone();
+            let task_id = task.id.clone();
+
+            handles.push(tokio::spawn(async move {
+                logger
+                    .log(&format!(
+                        "Executing period {}/{} ({} -> {})...",
+                        idx + 1,
+                        total_periods,
+                        period.start_date,
+                        period.end_date
+                    ))
+                    .await;
+
+                execute_pipeline(
+                    &steps,
+                    &logger,
+                    &policy,
+                    Some(&period),
+                    effective_shell_timeout,
+                    &status,
+                    &app_lock_manager,
+                    &task_id,
+                )
+                .await
+            }));
+        }
+
+        for handle in handles {
+            match handle.await {
+                Ok(Ok(())) => {}
+                Ok(Err(e)) => {
+                    if result.is_ok() {
+                        result = Err(e);
+                    }
+                }
+                Err(join_err) => {
+                    if result.is_ok() {
+                        result = Err(anyhow::anyhow!("Period execution join error: {}", join_err));
+                    }
+                }
+            }
+        }
+    }
 
     match result {
         Ok(_) => {
@@ -250,6 +375,7 @@ pub async fn run_task_inner(
                     &task.post_run_steps,
                     &logger,
                     policy,
+                    None,
                     effective_post_run_timeout,
                     status,
                     app_lock_manager,
@@ -371,6 +497,7 @@ mod tests {
             &step,
             &TaskLogger::new("test", "test"),
             &policy,
+            None,
             5,
             &status,
             &app_lock_mgr,
@@ -414,6 +541,7 @@ mod tests {
             &step,
             &TaskLogger::new("test", "test"),
             &policy,
+            None,
             5,
             &status,
             &app_lock_mgr,
@@ -457,6 +585,7 @@ mod tests {
             &ignored_step,
             &TaskLogger::new("test", "test"),
             &policy,
+            None,
             5,
             &status,
             &app_lock_mgr,
@@ -477,6 +606,7 @@ mod tests {
             &failed_step,
             &TaskLogger::new("test", "test"),
             &policy,
+            None,
             5,
             &status,
             &app_lock_mgr,
@@ -544,6 +674,7 @@ mod tests {
             &steps,
             &TaskLogger::new("test", "test"),
             &policy,
+            None,
             5,
             &status,
             &app_lock_mgr,

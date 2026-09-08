@@ -64,6 +64,9 @@ async fn test_gui_status_waiting_for_app_deterministic() {
         last_run_at: "".to_string(),
         last_status: "".to_string(),
         next_run_at: "".to_string(),
+        period_mode: crm_tool::runner::config::PeriodMode::Custom,
+        start_date: None,
+        end_date: None,
     };
 
     // To test "waiting_for_app", we must make sure another thread holds the lock first.

@@ -96,13 +96,22 @@ impl TaskLoggerInner {
         debug!("[Task:{}] {}", self.task_id, message);
     }
 
+    fn log_file_only(&mut self, message: &str) {
+        let now = Local::now().to_rfc3339();
+        let line = format!("[{}] {}\n", now, message);
+        if let Some(ref mut f) = self.file {
+            let _ = f.write_all(line.as_bytes());
+            let _ = f.flush();
+        }
+    }
+
     fn log_bytes(&mut self, prefix: &str, bytes: &[u8]) {
         if bytes.is_empty() {
             return;
         }
         let text = String::from_utf8_lossy(bytes);
         for line in text.lines() {
-            self.log(&format!("{}: {}", prefix, line));
+            self.log_file_only(&format!("{}: {}", prefix, line));
         }
     }
 }

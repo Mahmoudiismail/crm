@@ -278,6 +278,33 @@ pub(crate) fn render_task_form(
                         <p class='text-xs text-gray-500 mt-1'>Overrides the global timeout.</p>\
                     </label>\
                 </div>\
+                <div class='p-4 bg-gray-50 border border-gray-200 rounded space-y-3'>\
+                    <h3 class='text-md font-semibold text-gray-800'>Periodization & Dates</h3>\
+                    <div class='grid md:grid-cols-3 gap-4'>\
+                        <label class='block'>\
+                            <span class='text-xs font-semibold text-gray-700'>Period Mode</span>\
+                            <select name='period_mode' id='period-mode-select' class='mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm bg-white'>\
+                                <option value='custom' {pm_custom}>Normal / Custom</option>\
+                                <option value='monthly' {pm_monthly}>Monthly</option>\
+                                <option value='quarterly' {pm_quarterly}>Quarterly</option>\
+                                <option value='a_month' {pm_a_month}>A Month</option>\
+                                <option value='a_quarter' {pm_a_quarter}>A Quarter</option>\
+                            </select>\
+                        </label>\
+                        <label class='block'>\
+                            <span class='text-xs font-semibold text-gray-700'>Start Date / Expression</span>\
+                            <input class='mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm' type='text' name='start_date' value='{start_date_val}' placeholder='today, 2026-01-01, next sat...'>\
+                        </label>\
+                        <label class='block'>\
+                            <span class='text-xs font-semibold text-gray-700'>End Date / Expression</span>\
+                            <input class='mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm' type='text' name='end_date' value='{end_date_val}' placeholder='eomonth, 2026-12-31, next sat...'>\
+                        </label>\
+                    </div>\
+                </div>\
+                <div id='execution-preview-box' class='p-4 bg-emerald-50 border border-emerald-200 rounded text-sm text-emerald-900'>\
+                    <h4 class='font-bold text-emerald-800 mb-2'>Live Execution Preview (Next 10 Executions)</h4>\
+                    <div id='preview-contents' class='text-xs font-mono space-y-1 text-emerald-950'>Calculating preview...</div>\
+                </div>\
                 {schedule_editor}\
                 <div class='mb-4'>\
                     <div class='flex items-center justify-between mb-2'>\
@@ -310,6 +337,13 @@ pub(crate) fn render_task_form(
         checked_attr = if enabled { "checked" } else { "" },
         timeout_val = escape_html(&timeout_seconds_str),
         schedule_editor = schedule_editor_html(task, profiles),
+        pm_custom = if task.map(|t| t.period_mode).unwrap_or_default() == PeriodMode::Custom { "selected" } else { "" },
+        pm_monthly = if task.map(|t| t.period_mode).unwrap_or_default() == PeriodMode::Monthly { "selected" } else { "" },
+        pm_quarterly = if task.map(|t| t.period_mode).unwrap_or_default() == PeriodMode::Quarterly { "selected" } else { "" },
+        pm_a_month = if task.map(|t| t.period_mode).unwrap_or_default() == PeriodMode::AMonth { "selected" } else { "" },
+        pm_a_quarter = if task.map(|t| t.period_mode).unwrap_or_default() == PeriodMode::AQuarter { "selected" } else { "" },
+        start_date_val = escape_html(task.and_then(|t| t.start_date.as_deref()).unwrap_or("")),
+        end_date_val = escape_html(task.and_then(|t| t.end_date.as_deref()).unwrap_or("")),
         steps_val = escape_html(&steps_json),
         post_run_steps_val = escape_html(&post_run_steps_json),
         submit_label = escape_html(submit_label)

@@ -120,6 +120,10 @@ pub(crate) async fn route_request(
     if request.method == "GET" && route_path == "/api/apps/list" {
         return handle_api_apps_list(handle).await;
     }
+    if request.method == "POST" && route_path == "/api/tasks/preview" {
+        let values = parse_query_string(&request.body);
+        return handle_api_task_preview(handle, &values).await;
+    }
     if request.method == "GET" && route_path == "/api/apps/manifest" {
         let app_id = query.get("app_id").map(|s| s.as_str()).unwrap_or("");
         return handle_api_apps_manifest(handle, app_id).await;

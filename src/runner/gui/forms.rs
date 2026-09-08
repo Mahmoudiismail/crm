@@ -60,6 +60,27 @@ pub(crate) fn build_task_from_values(
     let post_run_steps: Vec<TaskStep> = serde_json::from_str(post_run_steps_json)
         .with_context(|| format!("Invalid post_run_steps JSON: {}", post_run_steps_json))?;
 
+    let period_mode_str = values
+        .get("period_mode")
+        .map(|s| s.trim().to_lowercase())
+        .unwrap_or_default();
+    let period_mode = match period_mode_str.as_str() {
+        "monthly" => PeriodMode::Monthly,
+        "quarterly" => PeriodMode::Quarterly,
+        "a_month" => PeriodMode::AMonth,
+        "a_quarter" => PeriodMode::AQuarter,
+        _ => PeriodMode::Custom,
+    };
+
+    let start_date = values
+        .get("start_date")
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    let end_date = values
+        .get("end_date")
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+
     let task = RunnerTask {
         id,
         name,
@@ -73,6 +94,9 @@ pub(crate) fn build_task_from_values(
         last_run_at: String::new(),
         last_status: String::new(),
         timeout_seconds,
+        period_mode,
+        start_date,
+        end_date,
     };
 
     Ok(task)

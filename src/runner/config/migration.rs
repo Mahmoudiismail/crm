@@ -37,6 +37,12 @@ pub struct RunnerTaskLegacy {
     pub post_run_app_args: Option<std::collections::HashMap<String, String>>,
     #[serde(default)]
     pub timeout_seconds: u64,
+    #[serde(default)]
+    pub period_mode: PeriodMode,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_date: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end_date: Option<String>,
 }
 
 impl From<RunnerTaskLegacy> for RunnerTask {
@@ -117,6 +123,9 @@ impl From<RunnerTaskLegacy> for RunnerTask {
             timeout_seconds: legacy.timeout_seconds,
             steps,
             post_run_steps,
+            period_mode: legacy.period_mode,
+            start_date: legacy.start_date,
+            end_date: legacy.end_date,
         }
     }
 }
@@ -141,6 +150,9 @@ impl From<RunnerTask> for RunnerTaskLegacy {
             post_run_script: None,
             post_run_app_id: None,
             post_run_app_args: None,
+            period_mode: task.period_mode,
+            start_date: task.start_date,
+            end_date: task.end_date,
         }
     }
 }

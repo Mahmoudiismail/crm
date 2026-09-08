@@ -352,6 +352,7 @@ pub async fn delete_task(path: &str, task_id: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::runner::config::PeriodMode;
     use crate::runner::config::{RunnerConfig, RunnerTask, TaskSchedule};
     use crate::runner::engine::state::{ExecutionManagerCommand, RunnerStatus};
     use chrono::{TimeDelta, Utc};
@@ -386,6 +387,9 @@ mod tests {
             last_run_at: String::new(),
             last_status: String::new(),
             timeout_seconds: 3600,
+            period_mode: PeriodMode::Custom,
+            start_date: None,
+            end_date: None,
         };
 
         let mut cfg = RunnerConfig::default();
@@ -498,6 +502,9 @@ mod tests {
             last_run_at: String::new(),
             last_status: String::new(),
             timeout_seconds: 3600,
+            period_mode: PeriodMode::Custom,
+            start_date: None,
+            end_date: None,
         };
 
         let mut cfg = RunnerConfig::default();
