@@ -279,47 +279,15 @@ pub fn generate_and_email_image(cus_file_path: &Path, config: &OpdAnalysisConfig
     if let (Some(email_to), Some(email_subject)) = (&config.email_to, &config.email_subject) {
         let ps_script = generate_powershell_script(cus_file_path, config, email_to, email_subject)?;
 
-        let mut temp_file = tempfile::Builder::new()
-            .prefix("opd_analysis_email_")
-            .suffix(".ps1")
-            .tempfile()?;
-
-        use std::io::Write;
-        temp_file.write_all(ps_script.as_bytes())?;
-        temp_file.as_file().sync_all()?;
-
-        let (file, path) = temp_file.keep()?;
-        drop(file);
+        let script_manager = crate::tasker::script_manager::ScriptManager::new();
+        let script_path = script_manager.get_or_create_script(
+            "OPD Analysis",
+            "opd_analysis_email.ps1",
+            &ps_script,
+        )?;
 
         info!("Running PowerShell for generating and emailing image...");
-        let output = std::process::Command::new("powershell")
-            .arg("-ExecutionPolicy")
-            .arg("Bypass")
-            .arg("-File")
-            .arg(&path)
-            .output()?;
-
-        let stdout_str = String::from_utf8_lossy(&output.stdout);
-        if !stdout_str.trim().is_empty() {
-            for line in stdout_str.lines() {
-                if line.starts_with("TRACE:") {
-                    tracing::trace!("PS: {}", line.strip_prefix("TRACE:").unwrap().trim());
-                } else if !line.trim().is_empty() {
-                    tracing::info!("PS: {}", line.trim());
-                }
-            }
-        }
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            tracing::error!("PowerShell script failed:\n{}", stderr);
-            anyhow::bail!("Failed to generate/email image. PS Error: {}", stderr);
-        } else {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            info!("PowerShell email success: {}", stdout);
-        }
-
-        let _ = std::fs::remove_file(path);
+        script_manager.execute_script(&script_path)?;
     }
 
     Ok(())

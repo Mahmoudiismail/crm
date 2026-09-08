@@ -2,10 +2,8 @@ use crate::tasker::config::DepartmentSplitConfig;
 use anyhow::{Context, Result};
 use calamine::{open_workbook, DataType, Reader, Xlsx};
 use std::collections::HashMap;
-use std::io::Write;
 use std::path::{Path, PathBuf};
-use tempfile::Builder;
-use tracing::{error, info};
+use tracing::info;
 
 pub fn run(config: &DepartmentSplitConfig) -> Result<()> {
     info!(
@@ -367,54 +365,14 @@ try {{
         mapping_file = mapping_file_str.replace('\'', "''")
     );
 
-    let ps_script_path = Builder::new()
-        .prefix("dept_split_")
-        .suffix(".ps1")
-        .tempfile()
-        .context("Failed to create temporary powershell script")?;
+    let script_manager = crate::tasker::script_manager::ScriptManager::new();
+    let script_path = script_manager.get_or_create_script(
+        "Department Split",
+        "department_split.ps1",
+        &ps_script,
+    )?;
 
-    let (mut file, script_path) = ps_script_path.keep().unwrap();
-    file.write_all(ps_script.as_bytes())?;
-    file.sync_all()?;
-    drop(file);
-
-    let _guard = crate::utils::FileCleanupGuard::new(&script_path);
-
-    info!("Executing PowerShell script...");
-    let output = std::process::Command::new("powershell")
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-            script_path.to_str().unwrap(),
-        ])
-        .output()
-        .context("Failed to spawn PowerShell process")?;
-
-    let stdout_str = String::from_utf8_lossy(&output.stdout);
-    let stderr_str = String::from_utf8_lossy(&output.stderr);
-
-    if !stdout_str.is_empty() {
-        for line in stdout_str.lines() {
-            if line.starts_with("TRACE:") {
-                tracing::trace!("PS: {}", line.strip_prefix("TRACE:").unwrap().trim());
-            } else {
-                info!("PS: {}", line);
-            }
-        }
-    }
-
-    if !stderr_str.is_empty() {
-        for line in stderr_str.lines() {
-            error!("PS ERROR: {}", line);
-        }
-    }
-
-    if !output.status.success() {
-        anyhow::bail!("PowerShell script failed with exit code: {}", output.status);
-    }
+    script_manager.execute_script(&script_path)?;
 
     // Clean up temporary mapping file
     let _ = std::fs::remove_file(&mapping_file);

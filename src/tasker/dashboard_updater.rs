@@ -4,68 +4,14 @@ use std::fs::File;
 use std::io::Write;
 use tracing::{error, info};
 
-use std::io::{BufRead, BufReader};
-use std::process::Stdio;
-
-fn run_powershell(script: &str) -> Result<()> {
-    let mut temp_file = tempfile::Builder::new()
-        .prefix("dashboard_updater_")
-        .suffix(".ps1")
-        .tempfile()?;
-
-    temp_file.write_all(script.as_bytes())?;
-    temp_file.as_file().sync_all()?;
-
-    let (file, path) = temp_file.keep()?;
-    drop(file);
-
-    let mut child = std::process::Command::new("powershell")
-        .arg("-ExecutionPolicy")
-        .arg("Bypass")
-        .arg("-File")
-        .arg(&path)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
-
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| anyhow::anyhow!("Failed to open stdout"))?;
-    let stderr = child
-        .stderr
-        .take()
-        .ok_or_else(|| anyhow::anyhow!("Failed to open stderr"))?;
-
-    let stdout_thread = std::thread::spawn(move || {
-        let reader = BufReader::new(stdout);
-        for l in reader.lines().map_while(Result::ok) {
-            if !l.trim().is_empty() {
-                info!("PowerShell: {}", l);
-            }
-        }
-    });
-
-    let stderr_thread = std::thread::spawn(move || {
-        let reader = BufReader::new(stderr);
-        for l in reader.lines().map_while(Result::ok) {
-            if !l.trim().is_empty() {
-                error!("PowerShell Error: {}", l);
-            }
-        }
-    });
-
-    let status = child.wait()?;
-    let _ = stdout_thread.join();
-    let _ = stderr_thread.join();
-
-    let _ = std::fs::remove_file(&path);
-
-    if !status.success() {
-        anyhow::bail!("PowerShell script exited with status: {}", status);
-    }
-
-    Ok(())
+fn run_persistent_powershell(logical_name: &str, script: &str) -> Result<()> {
+    let script_manager = crate::tasker::script_manager::ScriptManager::new();
+    let script_path = script_manager.get_or_create_script(
+        "Dashboard Updater",
+        logical_name,
+        script,
+    )?;
+    script_manager.execute_script(&script_path)
 }
 
 pub fn run(config: &DashboardUpdaterConfig) -> Result<()> {
@@ -225,7 +171,7 @@ try {{
         return Ok(());
     }
 
-    let ps_result = run_powershell(&ps_script);
+    let ps_result = run_persistent_powershell("dashboard_update.ps1", &ps_script);
 
     if let Err(e) = ps_result {
         error!("Error executing dashboard update PowerShell script: {}", e);
@@ -270,7 +216,7 @@ $Mail.Send()
             dashboard_path_str.replace("'", "''")
         );
 
-        if let Err(e) = run_powershell(&ps_email_script) {
+        if let Err(e) = run_persistent_powershell("dashboard_email.ps1", &ps_email_script) {
             error!("Failed to send dashboard email: {}", e);
             // Optionally, try a fallback email or bubble up
         } else {

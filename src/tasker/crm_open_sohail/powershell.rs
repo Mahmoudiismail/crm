@@ -1,50 +1,16 @@
 use crate::tasker::config::CrmOpenSohailConfig;
 use crate::tasker::crm_open_sohail::models::ExtractedSlicerDataset;
 use anyhow::Result;
-use std::io::Write;
 use tracing::{debug, error, info};
 
-pub fn run_powershell(script: &str) -> Result<()> {
-    let mut temp_file = tempfile::Builder::new()
-        .prefix("crm_open_sohail_")
-        .suffix(".ps1")
-        .tempfile()?;
-
-    temp_file.write_all(script.as_bytes())?;
-    temp_file.as_file().sync_all()?;
-
-    let (file, path) = temp_file.keep()?;
-    drop(file);
-    let _cleanup_guard = crate::utils::FileCleanupGuard::new(&path);
-
-    let output = std::process::Command::new("powershell")
-        .arg("-ExecutionPolicy")
-        .arg("Bypass")
-        .arg("-File")
-        .arg(&path)
-        .output()?;
-
-    let stdout_str = String::from_utf8_lossy(&output.stdout);
-    let stderr_str = String::from_utf8_lossy(&output.stderr);
-
-    if !stdout_str.trim().is_empty() {
-        for line in stdout_str.lines() {
-            if line.starts_with("TRACE:") {
-                tracing::trace!("PS: {}", line.strip_prefix("TRACE:").unwrap().trim());
-            } else if !line.trim().is_empty() {
-                tracing::info!("PS: {}", line.trim());
-            }
-        }
-    }
-    if !stderr_str.trim().is_empty() {
-        tracing::error!("PowerShell error output:\n{}", stderr_str.trim());
-    }
-
-    if !output.status.success() {
-        anyhow::bail!("PowerShell script exited with status: {}", output.status);
-    }
-
-    Ok(())
+pub fn run_powershell(logical_name: &str, script: &str) -> Result<()> {
+    let script_manager = crate::tasker::script_manager::ScriptManager::new();
+    let script_path = script_manager.get_or_create_script(
+        "CRM Open Sohail",
+        logical_name,
+        script,
+    )?;
+    script_manager.execute_script(&script_path)
 }
 
 pub fn extract_data(config: &CrmOpenSohailConfig) -> Result<Vec<ExtractedSlicerDataset>> {
@@ -555,7 +521,7 @@ try {{
         // We write an empty JSON array for tests so it doesn't crash
         std::fs::write(&json_output_path, "[]")?;
     } else {
-        if let Err(e) = run_powershell(&ps_script) {
+        if let Err(e) = run_powershell("slicer_extract.ps1", &ps_script) {
             error!("Error executing pivot extraction PowerShell script: {}", e);
             anyhow::bail!(e);
         }
