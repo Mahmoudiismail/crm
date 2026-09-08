@@ -816,10 +816,16 @@ pub fn generate_upcoming_executions(
         return Ok(Vec::new());
     }
 
-    // 1. Resolve start_date and end_date if present
+    let base_now_str = now
+        .with_timezone(&chrono::Local)
+        .format("%Y-%m-%d")
+        .to_string();
+
+    // 1. Resolve start_date and end_date using `now` date as base
     let start_date_str = task.start_date.as_deref().unwrap_or("today");
-    let raw_start_date = crate::utils::parse_flexible_date(start_date_str)
-        .unwrap_or_else(|| now.with_timezone(&chrono::Local).date_naive());
+    let raw_start_date =
+        crate::utils::parse_flexible_date_with_base(start_date_str, Some(&base_now_str))
+            .unwrap_or_else(|| now.with_timezone(&chrono::Local).date_naive());
 
     let end_date_str = task.end_date.as_deref();
     let raw_end_date = if let Some(ed_str) = end_date_str {
@@ -941,9 +947,6 @@ pub fn generate_upcoming_executions(
                                 period: period.clone(),
                                 scheduled_at: cursor,
                             });
-                            if results.len() >= limit {
-                                return Ok(results);
-                            }
                         }
 
                         cursor += chrono::TimeDelta::seconds(interval as i64);
@@ -1101,6 +1104,10 @@ pub fn generate_upcoming_executions(
             }
         }
     }
+
+    results.sort_by_key(|occ| occ.scheduled_at);
+    results.dedup_by_key(|occ| (occ.period.clone(), occ.scheduled_at));
+    results.truncate(limit);
 
     Ok(results)
 }

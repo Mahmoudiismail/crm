@@ -22,11 +22,27 @@ pub async fn run_external_app(
         command.arg("--config").arg(&resolved_config);
     }
 
-    let mut effective_args = args.clone();
-    if let Some(p) = period {
-        let start_str = p.start_date.format("%Y-%m-%d").to_string();
-        let end_str = p.end_date.format("%Y-%m-%d").to_string();
+    let mut effective_args = HashMap::new();
+    let (start_str, end_str) = if let Some(p) = period {
+        (
+            p.start_date.format("%Y-%m-%d").to_string(),
+            p.end_date.format("%Y-%m-%d").to_string(),
+        )
+    } else {
+        (String::new(), String::new())
+    };
 
+    for (k, v) in args {
+        let mut new_v = v.clone();
+        if period.is_some() {
+            new_v = new_v
+                .replace("{start_date}", &start_str)
+                .replace("{end_date}", &end_str);
+        }
+        effective_args.insert(k.clone(), new_v);
+    }
+
+    if period.is_some() {
         if effective_args.contains_key("--start-date") || effective_args.contains_key("start_date")
         {
             effective_args.insert("--start-date".to_string(), start_str.clone());
