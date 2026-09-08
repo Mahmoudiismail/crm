@@ -105,7 +105,12 @@ fn generate_candidate_filename(base: &str, index: usize) -> String {
 async fn create_unique_temp_file(
     target_dir: &Path,
     raw_filename: &str,
-) -> Result<(String, std::path::PathBuf, std::path::PathBuf, tokio::fs::File)> {
+) -> Result<(
+    String,
+    std::path::PathBuf,
+    std::path::PathBuf,
+    tokio::fs::File,
+)> {
     for index in 0..1000 {
         let candidate_name = generate_candidate_filename(raw_filename, index);
         let dest_path = target_dir.join(&candidate_name);
@@ -411,19 +416,22 @@ mod tests {
         let raw_name = "ticket_report_1788814899432.csv";
 
         // Create first file
-        let (name1, tmp_path1, dest_path1, file1) = create_unique_temp_file(target_dir, raw_name).await.unwrap();
+        let (name1, tmp_path1, dest_path1, file1) =
+            create_unique_temp_file(target_dir, raw_name).await.unwrap();
         assert_eq!(name1, "ticket_report_1788814899432.csv");
         drop(file1);
         tokio::fs::rename(&tmp_path1, &dest_path1).await.unwrap();
 
         // Create second file with identical raw name - should get collision suffix _1
-        let (name2, tmp_path2, dest_path2, file2) = create_unique_temp_file(target_dir, raw_name).await.unwrap();
+        let (name2, tmp_path2, dest_path2, file2) =
+            create_unique_temp_file(target_dir, raw_name).await.unwrap();
         assert_eq!(name2, "ticket_report_1788814899432_1.csv");
         drop(file2);
         tokio::fs::rename(&tmp_path2, &dest_path2).await.unwrap();
 
         // Create third file - should get collision suffix _2
-        let (name3, _tmp_path3, _dest_path3, file3) = create_unique_temp_file(target_dir, raw_name).await.unwrap();
+        let (name3, _tmp_path3, _dest_path3, file3) =
+            create_unique_temp_file(target_dir, raw_name).await.unwrap();
         assert_eq!(name3, "ticket_report_1788814899432_2.csv");
         drop(file3);
 
