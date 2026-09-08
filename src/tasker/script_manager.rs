@@ -6,7 +6,20 @@ use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::sync::{Arc, Mutex};
 use tracing::{error, info, trace};
+
+lazy_static::lazy_static! {
+    static ref TASK_LOCKS: Mutex<HashMap<String, Arc<Mutex<()>>>> = Mutex::new(HashMap::new());
+}
+
+fn get_task_lock(clean_task_name: &str) -> Arc<Mutex<()>> {
+    let mut locks = TASK_LOCKS.lock().unwrap_or_else(|e| e.into_inner());
+    locks
+        .entry(clean_task_name.to_string())
+        .or_insert_with(|| Arc::new(Mutex::new(())))
+        .clone()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScriptEntry {
@@ -87,6 +100,11 @@ impl ScriptManager {
         canonical_content: &str,
     ) -> Result<PathBuf> {
         let clean_task_name = Self::sanitize_task_name(task_name);
+
+        // Acquire process-wide task lock to prevent thread races
+        let task_lock = get_task_lock(&clean_task_name);
+        let _lock_guard = task_lock.lock().unwrap_or_else(|e| e.into_inner());
+
         let task_dir = self.scripts_dir()?.join(&clean_task_name);
 
         if !task_dir.exists() {
@@ -426,5 +444,34 @@ mod tests {
             "CRM Open Sohail"
         );
         assert_eq!(ScriptManager::sanitize_task_name("   "), "unnamed_task");
+    }
+
+    #[test]
+    fn test_concurrent_script_access() {
+        use std::thread;
+
+        let temp_dir = tempdir().unwrap();
+        let manager = Arc::new(ScriptManager::with_root_dir(temp_dir.path()));
+
+        let mut handles = vec![];
+        for _ in 0..10 {
+            let mgr = Arc::clone(&manager);
+            handles.push(thread::spawn(move || {
+                let script = "Write-Output 'concurrent test'";
+                mgr.get_or_create_script("Department Split", "department_split.ps1", script)
+                    .unwrap()
+            }));
+        }
+
+        let mut results = vec![];
+        for h in handles {
+            results.push(h.join().unwrap());
+        }
+
+        let first_path = &results[0];
+        assert_eq!(first_path.file_name().unwrap(), "department_split.ps1");
+        for p in &results {
+            assert_eq!(p, first_path);
+        }
     }
 }
