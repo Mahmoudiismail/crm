@@ -2,11 +2,7 @@ use anyhow::Result;
 
 pub fn run_powershell(script: &str) -> Result<()> {
     let script_manager = crate::tasker::script_manager::ScriptManager::new();
-    let script_path = script_manager.get_or_create_script(
-        "Email",
-        "send_email.ps1",
-        script,
-    )?;
+    let script_path = script_manager.get_or_create_script("Email", "send_email.ps1", script)?;
     script_manager.execute_script(&script_path)
 }
 

@@ -6,11 +6,8 @@ use tracing::{error, info};
 
 fn run_persistent_powershell(logical_name: &str, script: &str) -> Result<()> {
     let script_manager = crate::tasker::script_manager::ScriptManager::new();
-    let script_path = script_manager.get_or_create_script(
-        "Dashboard Updater",
-        logical_name,
-        script,
-    )?;
+    let script_path =
+        script_manager.get_or_create_script("Dashboard Updater", logical_name, script)?;
     script_manager.execute_script(&script_path)
 }
 

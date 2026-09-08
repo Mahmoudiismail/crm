@@ -347,7 +347,10 @@ mod tests {
         assert!(v2_filename.ends_with(".ps1"));
 
         // Assert v1 script is untouched
-        assert_eq!(fs::read_to_string(&path_v1).unwrap(), "Write-Output 'v1 user edit'");
+        assert_eq!(
+            fs::read_to_string(&path_v1).unwrap(),
+            "Write-Output 'v1 user edit'"
+        );
 
         // Assert v2 script has new generator content
         assert_eq!(fs::read_to_string(&path_v2).unwrap(), script_v2);
@@ -369,10 +372,18 @@ mod tests {
         let manager = ScriptManager::with_root_dir(temp_dir.path());
 
         let path1 = manager
-            .get_or_create_script("Dashboard Updater", "dashboard_update.ps1", "Write-Output 'update'")
+            .get_or_create_script(
+                "Dashboard Updater",
+                "dashboard_update.ps1",
+                "Write-Output 'update'",
+            )
             .unwrap();
         let path2 = manager
-            .get_or_create_script("Dashboard Updater", "dashboard_email.ps1", "Write-Output 'email'")
+            .get_or_create_script(
+                "Dashboard Updater",
+                "dashboard_email.ps1",
+                "Write-Output 'email'",
+            )
             .unwrap();
 
         assert_eq!(path1.file_name().unwrap(), "dashboard_update.ps1");
@@ -386,8 +397,22 @@ mod tests {
         let metadata: TaskMetadata = serde_json::from_str(&metadata_str).unwrap();
 
         assert_eq!(metadata.scripts.len(), 2);
-        assert_eq!(metadata.scripts.get("dashboard_update.ps1").unwrap().active_script, "dashboard_update.ps1");
-        assert_eq!(metadata.scripts.get("dashboard_email.ps1").unwrap().active_script, "dashboard_email.ps1");
+        assert_eq!(
+            metadata
+                .scripts
+                .get("dashboard_update.ps1")
+                .unwrap()
+                .active_script,
+            "dashboard_update.ps1"
+        );
+        assert_eq!(
+            metadata
+                .scripts
+                .get("dashboard_email.ps1")
+                .unwrap()
+                .active_script,
+            "dashboard_email.ps1"
+        );
     }
 
     #[test]
@@ -400,9 +425,6 @@ mod tests {
             ScriptManager::sanitize_task_name("CRM Open Sohail"),
             "CRM Open Sohail"
         );
-        assert_eq!(
-            ScriptManager::sanitize_task_name("   "),
-            "unnamed_task"
-        );
+        assert_eq!(ScriptManager::sanitize_task_name("   "), "unnamed_task");
     }
 }
