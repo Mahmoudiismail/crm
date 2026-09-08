@@ -695,11 +695,11 @@ pub fn generate_execution_periods(
             let end_month = end_date.month();
 
             loop {
-                let period_start = NaiveDate::from_ymd_opt(cur_year, cur_month, 1)
-                    .unwrap_or(start_date);
+                let period_start =
+                    NaiveDate::from_ymd_opt(cur_year, cur_month, 1).unwrap_or(start_date);
                 let last_day = days_in_month(cur_year, cur_month);
-                let period_end = NaiveDate::from_ymd_opt(cur_year, cur_month, last_day)
-                    .unwrap_or(end_date);
+                let period_end =
+                    NaiveDate::from_ymd_opt(cur_year, cur_month, last_day).unwrap_or(end_date);
 
                 periods.push(ExecutionPeriod {
                     start_date: period_start,
@@ -730,20 +730,18 @@ pub fn generate_execution_periods(
 
             loop {
                 let q_end_month = quarter_end_month(cur_q_start_month);
-                let period_start = NaiveDate::from_ymd_opt(cur_year, cur_q_start_month, 1)
-                    .unwrap_or(start_date);
+                let period_start =
+                    NaiveDate::from_ymd_opt(cur_year, cur_q_start_month, 1).unwrap_or(start_date);
                 let last_day = days_in_month(cur_year, q_end_month);
-                let period_end = NaiveDate::from_ymd_opt(cur_year, q_end_month, last_day)
-                    .unwrap_or(end_date);
+                let period_end =
+                    NaiveDate::from_ymd_opt(cur_year, q_end_month, last_day).unwrap_or(end_date);
 
                 periods.push(ExecutionPeriod {
                     start_date: period_start,
                     end_date: period_end,
                 });
 
-                if cur_year > end_year
-                    || (cur_year == end_year && q_end_month >= end_q_end_month)
-                {
+                if cur_year > end_year || (cur_year == end_year && q_end_month >= end_q_end_month) {
                     break;
                 }
 
@@ -764,11 +762,11 @@ pub fn generate_execution_periods(
             let end_year = end_date.year();
 
             for yr in start_year..=end_year {
-                let period_start = NaiveDate::from_ymd_opt(yr, target_month, 1)
-                    .unwrap_or(start_date);
+                let period_start =
+                    NaiveDate::from_ymd_opt(yr, target_month, 1).unwrap_or(start_date);
                 let last_day = days_in_month(yr, target_month);
-                let period_end = NaiveDate::from_ymd_opt(yr, target_month, last_day)
-                    .unwrap_or(end_date);
+                let period_end =
+                    NaiveDate::from_ymd_opt(yr, target_month, last_day).unwrap_or(end_date);
 
                 periods.push(ExecutionPeriod {
                     start_date: period_start,
@@ -786,11 +784,9 @@ pub fn generate_execution_periods(
             let end_year = end_date.year();
 
             for yr in start_year..=end_year {
-                let period_start = NaiveDate::from_ymd_opt(yr, q_start, 1)
-                    .unwrap_or(start_date);
+                let period_start = NaiveDate::from_ymd_opt(yr, q_start, 1).unwrap_or(start_date);
                 let last_day = days_in_month(yr, q_end);
-                let period_end = NaiveDate::from_ymd_opt(yr, q_end, last_day)
-                    .unwrap_or(end_date);
+                let period_end = NaiveDate::from_ymd_opt(yr, q_end, last_day).unwrap_or(end_date);
 
                 periods.push(ExecutionPeriod {
                     start_date: period_start,
@@ -915,7 +911,12 @@ pub fn generate_upcoming_executions(
                             if let Ok(st_time) = NaiveTime::parse_from_str(st.trim(), "%H:%M") {
                                 let local_cursor = cursor.with_timezone(&Local);
                                 if local_cursor.time() < st_time {
-                                    if let Some(naive_dt) = local_cursor.date_naive().and_time(st_time).and_local_timezone(Local).single() {
+                                    if let Some(naive_dt) = local_cursor
+                                        .date_naive()
+                                        .and_time(st_time)
+                                        .and_local_timezone(Local)
+                                        .single()
+                                    {
                                         let candidate = naive_dt.with_timezone(&Utc);
                                         if candidate > cursor {
                                             cursor = candidate;
@@ -962,7 +963,9 @@ pub fn generate_upcoming_executions(
                     while cur_date <= period.end_date && results.len() < limit {
                         for raw_time in times {
                             if let Ok(time) = NaiveTime::parse_from_str(raw_time.trim(), "%H:%M") {
-                                if let Some(local_dt) = cur_date.and_time(time).and_local_timezone(Local).single() {
+                                if let Some(local_dt) =
+                                    cur_date.and_time(time).and_local_timezone(Local).single()
+                                {
                                     let dt = local_dt.with_timezone(&Utc);
                                     if dt >= now && dt >= period_start_utc && dt <= period_end_utc {
                                         let is_wh_ok = if let Some(wh) = working_hours {
@@ -1006,12 +1009,15 @@ pub fn generate_upcoming_executions(
                     let time = if at_time.is_empty() {
                         NaiveTime::from_hms_opt(0, 0, 0).unwrap()
                     } else {
-                        NaiveTime::parse_from_str(at_time.trim(), "%H:%M").unwrap_or_else(|_| NaiveTime::from_hms_opt(0, 0, 0).unwrap())
+                        NaiveTime::parse_from_str(at_time.trim(), "%H:%M")
+                            .unwrap_or_else(|_| NaiveTime::from_hms_opt(0, 0, 0).unwrap())
                     };
 
                     while cur_date <= period.end_date && results.len() < limit {
                         if cur_date.weekday() == target_weekday {
-                            if let Some(local_dt) = cur_date.and_time(time).and_local_timezone(Local).single() {
+                            if let Some(local_dt) =
+                                cur_date.and_time(time).and_local_timezone(Local).single()
+                            {
                                 let dt = local_dt.with_timezone(&Utc);
                                 if dt >= now && dt >= period_start_utc && dt <= period_end_utc {
                                     let is_wh_ok = if let Some(wh) = working_hours {
@@ -1048,14 +1054,17 @@ pub fn generate_upcoming_executions(
                     let time = if at_time.is_empty() {
                         NaiveTime::from_hms_opt(0, 0, 0).unwrap()
                     } else {
-                        NaiveTime::parse_from_str(at_time.trim(), "%H:%M").unwrap_or_else(|_| NaiveTime::from_hms_opt(0, 0, 0).unwrap())
+                        NaiveTime::parse_from_str(at_time.trim(), "%H:%M")
+                            .unwrap_or_else(|_| NaiveTime::from_hms_opt(0, 0, 0).unwrap())
                     };
 
                     loop {
                         let day = (*day_of_month).min(days_in_month(cur_year, cur_month));
                         if let Some(cur_date) = NaiveDate::from_ymd_opt(cur_year, cur_month, day) {
                             if cur_date >= period.start_date && cur_date <= period.end_date {
-                                if let Some(local_dt) = cur_date.and_time(time).and_local_timezone(Local).single() {
+                                if let Some(local_dt) =
+                                    cur_date.and_time(time).and_local_timezone(Local).single()
+                                {
                                     let dt = local_dt.with_timezone(&Utc);
                                     if dt >= now && dt >= period_start_utc && dt <= period_end_utc {
                                         let is_wh_ok = if let Some(wh) = working_hours {
@@ -1131,31 +1140,73 @@ mod tests {
         // 2. Monthly mode (Jan 15 to Sep 10 => 9 full months)
         let monthly = generate_execution_periods(PeriodMode::Monthly, jan15, sep10);
         assert_eq!(monthly.len(), 9);
-        assert_eq!(monthly[0].start_date, NaiveDate::from_ymd_opt(2026, 1, 1).unwrap());
-        assert_eq!(monthly[0].end_date, NaiveDate::from_ymd_opt(2026, 1, 31).unwrap());
-        assert_eq!(monthly[1].start_date, NaiveDate::from_ymd_opt(2026, 2, 1).unwrap());
-        assert_eq!(monthly[1].end_date, NaiveDate::from_ymd_opt(2026, 2, 28).unwrap());
-        assert_eq!(monthly[8].start_date, NaiveDate::from_ymd_opt(2026, 9, 1).unwrap());
-        assert_eq!(monthly[8].end_date, NaiveDate::from_ymd_opt(2026, 9, 30).unwrap());
+        assert_eq!(
+            monthly[0].start_date,
+            NaiveDate::from_ymd_opt(2026, 1, 1).unwrap()
+        );
+        assert_eq!(
+            monthly[0].end_date,
+            NaiveDate::from_ymd_opt(2026, 1, 31).unwrap()
+        );
+        assert_eq!(
+            monthly[1].start_date,
+            NaiveDate::from_ymd_opt(2026, 2, 1).unwrap()
+        );
+        assert_eq!(
+            monthly[1].end_date,
+            NaiveDate::from_ymd_opt(2026, 2, 28).unwrap()
+        );
+        assert_eq!(
+            monthly[8].start_date,
+            NaiveDate::from_ymd_opt(2026, 9, 1).unwrap()
+        );
+        assert_eq!(
+            monthly[8].end_date,
+            NaiveDate::from_ymd_opt(2026, 9, 30).unwrap()
+        );
 
         // Single day monthly
         let sep1 = NaiveDate::from_ymd_opt(2026, 9, 1).unwrap();
         let single_m = generate_execution_periods(PeriodMode::Monthly, sep1, sep1);
         assert_eq!(single_m.len(), 1);
-        assert_eq!(single_m[0].start_date, NaiveDate::from_ymd_opt(2026, 9, 1).unwrap());
-        assert_eq!(single_m[0].end_date, NaiveDate::from_ymd_opt(2026, 9, 30).unwrap());
+        assert_eq!(
+            single_m[0].start_date,
+            NaiveDate::from_ymd_opt(2026, 9, 1).unwrap()
+        );
+        assert_eq!(
+            single_m[0].end_date,
+            NaiveDate::from_ymd_opt(2026, 9, 30).unwrap()
+        );
 
         // 3. Quarterly mode (Feb 15 to Aug 10 => Q1, Q2, Q3)
         let feb15 = NaiveDate::from_ymd_opt(2026, 2, 15).unwrap();
         let aug10 = NaiveDate::from_ymd_opt(2026, 8, 10).unwrap();
         let quarterly = generate_execution_periods(PeriodMode::Quarterly, feb15, aug10);
         assert_eq!(quarterly.len(), 3);
-        assert_eq!(quarterly[0].start_date, NaiveDate::from_ymd_opt(2026, 1, 1).unwrap());
-        assert_eq!(quarterly[0].end_date, NaiveDate::from_ymd_opt(2026, 3, 31).unwrap());
-        assert_eq!(quarterly[1].start_date, NaiveDate::from_ymd_opt(2026, 4, 1).unwrap());
-        assert_eq!(quarterly[1].end_date, NaiveDate::from_ymd_opt(2026, 6, 30).unwrap());
-        assert_eq!(quarterly[2].start_date, NaiveDate::from_ymd_opt(2026, 7, 1).unwrap());
-        assert_eq!(quarterly[2].end_date, NaiveDate::from_ymd_opt(2026, 9, 30).unwrap());
+        assert_eq!(
+            quarterly[0].start_date,
+            NaiveDate::from_ymd_opt(2026, 1, 1).unwrap()
+        );
+        assert_eq!(
+            quarterly[0].end_date,
+            NaiveDate::from_ymd_opt(2026, 3, 31).unwrap()
+        );
+        assert_eq!(
+            quarterly[1].start_date,
+            NaiveDate::from_ymd_opt(2026, 4, 1).unwrap()
+        );
+        assert_eq!(
+            quarterly[1].end_date,
+            NaiveDate::from_ymd_opt(2026, 6, 30).unwrap()
+        );
+        assert_eq!(
+            quarterly[2].start_date,
+            NaiveDate::from_ymd_opt(2026, 7, 1).unwrap()
+        );
+        assert_eq!(
+            quarterly[2].end_date,
+            NaiveDate::from_ymd_opt(2026, 9, 30).unwrap()
+        );
 
         // 4. A Month mode (Sep 15, 2022 to Sep 20, 2026)
         let start_2022 = NaiveDate::from_ymd_opt(2022, 9, 15).unwrap();
@@ -1163,8 +1214,14 @@ mod tests {
         let a_month = generate_execution_periods(PeriodMode::AMonth, start_2022, end_2026);
         assert_eq!(a_month.len(), 5);
         for (i, yr) in (2022..=2026).enumerate() {
-            assert_eq!(a_month[i].start_date, NaiveDate::from_ymd_opt(yr, 9, 1).unwrap());
-            assert_eq!(a_month[i].end_date, NaiveDate::from_ymd_opt(yr, 9, 30).unwrap());
+            assert_eq!(
+                a_month[i].start_date,
+                NaiveDate::from_ymd_opt(yr, 9, 1).unwrap()
+            );
+            assert_eq!(
+                a_month[i].end_date,
+                NaiveDate::from_ymd_opt(yr, 9, 30).unwrap()
+            );
         }
 
         // 5. A Quarter mode (Aug 15, 2022 to Sep 20, 2026 => Q3 for every year)
@@ -1172,8 +1229,14 @@ mod tests {
         let a_quarter = generate_execution_periods(PeriodMode::AQuarter, start_q3, end_2026);
         assert_eq!(a_quarter.len(), 5);
         for (i, yr) in (2022..=2026).enumerate() {
-            assert_eq!(a_quarter[i].start_date, NaiveDate::from_ymd_opt(yr, 7, 1).unwrap());
-            assert_eq!(a_quarter[i].end_date, NaiveDate::from_ymd_opt(yr, 9, 30).unwrap());
+            assert_eq!(
+                a_quarter[i].start_date,
+                NaiveDate::from_ymd_opt(yr, 7, 1).unwrap()
+            );
+            assert_eq!(
+                a_quarter[i].end_date,
+                NaiveDate::from_ymd_opt(yr, 9, 30).unwrap()
+            );
         }
 
         // 6. Leap year February test
@@ -1181,7 +1244,10 @@ mod tests {
         let feb_leap_end = NaiveDate::from_ymd_opt(2024, 2, 20).unwrap();
         let leap_m = generate_execution_periods(PeriodMode::Monthly, feb_leap_start, feb_leap_end);
         assert_eq!(leap_m.len(), 1);
-        assert_eq!(leap_m[0].end_date, NaiveDate::from_ymd_opt(2024, 2, 29).unwrap());
+        assert_eq!(
+            leap_m[0].end_date,
+            NaiveDate::from_ymd_opt(2024, 2, 29).unwrap()
+        );
     }
 
     #[test]
@@ -1217,7 +1283,10 @@ mod tests {
         let occurrences = generate_upcoming_executions(&task, now, 10).unwrap();
         assert_eq!(occurrences.len(), 10);
         assert_eq!(occurrences[0].scheduled_at, now);
-        assert_eq!(occurrences[1].scheduled_at, now + chrono::TimeDelta::hours(1));
+        assert_eq!(
+            occurrences[1].scheduled_at,
+            now + chrono::TimeDelta::hours(1)
+        );
 
         // Historical date test (0 results)
         let past_task = RunnerTask {

@@ -349,8 +349,13 @@ pub(crate) fn resolve_date_var(val: &str, base_date: Option<&str>) -> Result<chr
                         if days_to_add == 0 {
                             days_to_add = 7;
                         }
-                        let res = now_dt + chrono::TimeDelta::try_days(days_to_add as i64).context("valid days")?;
-                        debug!("Resolved value (same variable base match): {} (Original: {})", res, val);
+                        let res = now_dt
+                            + chrono::TimeDelta::try_days(days_to_add as i64)
+                                .context("valid days")?;
+                        debug!(
+                            "Resolved value (same variable base match): {} (Original: {})",
+                            res, val
+                        );
                         return Ok(res);
                     }
                 }

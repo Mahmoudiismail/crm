@@ -27,7 +27,8 @@ pub async fn run_external_app(
         let start_str = p.start_date.format("%Y-%m-%d").to_string();
         let end_str = p.end_date.format("%Y-%m-%d").to_string();
 
-        if effective_args.contains_key("--start-date") || effective_args.contains_key("start_date") {
+        if effective_args.contains_key("--start-date") || effective_args.contains_key("start_date")
+        {
             effective_args.insert("--start-date".to_string(), start_str.clone());
         }
         if effective_args.contains_key("--end-date") || effective_args.contains_key("end_date") {

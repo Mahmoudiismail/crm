@@ -52,6 +52,7 @@ async fn execute_action(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn execute_step(
     step: &TaskStep,
     logger: &TaskLogger,
@@ -129,7 +130,9 @@ async fn execute_step(
         ExecutionMode::Sequential => {
             let mut step_result = Ok(());
             for action in &step.actions {
-                if let Err(e) = execute_action(action, logger, policy, period, timeout_seconds).await {
+                if let Err(e) =
+                    execute_action(action, logger, policy, period, timeout_seconds).await
+                {
                     step_result = Err(e);
                     break;
                 }
@@ -145,7 +148,14 @@ async fn execute_step(
                 let period_cloned = period.cloned();
 
                 handles.push(tokio::spawn(async move {
-                    let result = execute_action(&action, &logger, &policy, period_cloned.as_ref(), timeout_seconds).await;
+                    let result = execute_action(
+                        &action,
+                        &logger,
+                        &policy,
+                        period_cloned.as_ref(),
+                        timeout_seconds,
+                    )
+                    .await;
                     (action, result)
                 }));
             }
@@ -177,6 +187,7 @@ async fn execute_step(
     result
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn execute_pipeline(
     steps: &[TaskStep],
     logger: &TaskLogger,
@@ -249,11 +260,8 @@ pub async fn run_task_inner(
         raw_start
     };
 
-    let periods = crate::runner::config::generate_execution_periods(
-        task.period_mode,
-        raw_start,
-        raw_end,
-    );
+    let periods =
+        crate::runner::config::generate_execution_periods(task.period_mode, raw_start, raw_end);
 
     let mut result = Ok(());
     for (idx, period) in periods.iter().enumerate() {
