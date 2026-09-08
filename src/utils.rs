@@ -322,21 +322,41 @@ pub(crate) fn resolve_date_var(val: &str, base_date: Option<&str>) -> Result<chr
 
         v if v.starts_with("next ") => {
             info!("Variable detected: {}", val);
-            let base_dt = if let Some(bd) = base_date {
-                parse_flexible_date_impl(bd, None)
-            } else {
-                None
+            let parse_weekday = |s: &str| -> Option<chrono::Weekday> {
+                match s.trim().to_lowercase().as_str() {
+                    "next mon" | "next monday" => Some(chrono::Weekday::Mon),
+                    "next tue" | "next tuesday" => Some(chrono::Weekday::Tue),
+                    "next wed" | "next wednesday" => Some(chrono::Weekday::Wed),
+                    "next thu" | "next thursday" => Some(chrono::Weekday::Thu),
+                    "next fri" | "next friday" => Some(chrono::Weekday::Fri),
+                    "next sat" | "next saturday" => Some(chrono::Weekday::Sat),
+                    "next sun" | "next sunday" => Some(chrono::Weekday::Sun),
+                    _ => None,
+                }
             };
-            let dt = base_dt.unwrap_or_else(|| Local::now().date_naive());
-            let target_weekday = match v {
-                "next mon" => chrono::Weekday::Mon,
-                "next tue" => chrono::Weekday::Tue,
-                "next wed" => chrono::Weekday::Wed,
-                "next thu" => chrono::Weekday::Thu,
-                "next fri" => chrono::Weekday::Fri,
-                "next sat" => chrono::Weekday::Sat,
-                "next sun" => chrono::Weekday::Sun,
-                _ => anyhow::bail!("Invalid next weekday variable: {}", val),
+
+            let target_weekday = parse_weekday(v)
+                .ok_or_else(|| anyhow::anyhow!("Invalid next weekday variable: {}", val))?;
+
+            let dt = if let Some(bd) = base_date {
+                if let Some(base_weekday) = parse_weekday(bd) {
+                    if base_weekday == target_weekday {
+                        let now_dt = Local::now().date_naive();
+                        let current_weekday = now_dt.weekday();
+                        let mut days_to_add = (target_weekday.num_days_from_monday() + 7
+                            - current_weekday.num_days_from_monday())
+                            % 7;
+                        if days_to_add == 0 {
+                            days_to_add = 7;
+                        }
+                        let res = now_dt + chrono::TimeDelta::try_days(days_to_add as i64).context("valid days")?;
+                        debug!("Resolved value (same variable base match): {} (Original: {})", res, val);
+                        return Ok(res);
+                    }
+                }
+                parse_flexible_date_impl(bd, None).unwrap_or_else(|| Local::now().date_naive())
+            } else {
+                Local::now().date_naive()
             };
 
             // Calculate next occurrence STRICTLY AFTER the base date

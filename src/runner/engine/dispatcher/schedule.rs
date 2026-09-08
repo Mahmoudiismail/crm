@@ -254,6 +254,7 @@ pub fn update_next_run(task: &mut RunnerTask, now: DateTime<Utc>, min_task_inter
 mod tests {
     use super::*;
     use crate::runner::config::{next_daily_run_after, Repetition};
+    use crate::runner::config::PeriodMode;
 
     #[test]
     fn legacy_repeat_task_is_due_without_next_run() {
@@ -270,6 +271,9 @@ mod tests {
             last_run_at: String::new(),
             last_status: String::new(),
             timeout_seconds: 0,
+            period_mode: PeriodMode::Custom,
+            start_date: None,
+            end_date: None,
         };
 
         assert!(task.due_now(Utc::now()));

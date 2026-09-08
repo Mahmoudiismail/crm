@@ -72,6 +72,23 @@ pub struct ExternalAppSpec {
     pub args: std::collections::HashMap<String, String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum PeriodMode {
+    #[default]
+    Custom,
+    Monthly,
+    Quarterly,
+    AMonth,
+    AQuarter,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExecutionPeriod {
+    pub start_date: chrono::NaiveDate,
+    pub end_date: chrono::NaiveDate,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(
     from = "crate::runner::config::migration::RunnerTaskLegacy",
@@ -91,6 +108,13 @@ pub struct RunnerTask {
     pub last_run_at: String,
     pub last_status: String,
     pub timeout_seconds: u64,
+
+    #[serde(default)]
+    pub period_mode: PeriodMode,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_date: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end_date: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

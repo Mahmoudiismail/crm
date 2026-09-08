@@ -11,6 +11,7 @@ pub async fn run_external_app(
     logger: &TaskLogger,
     app: &RegisteredApp,
     args: &HashMap<String, String>,
+    period: Option<&crate::runner::config::ExecutionPeriod>,
     timeout_seconds: u64,
 ) -> Result<()> {
     let resolved_executable = resolve_executable(&app.executable_path);
@@ -21,7 +22,26 @@ pub async fn run_external_app(
         command.arg("--config").arg(&resolved_config);
     }
 
-    for (k, v) in args {
+    let mut effective_args = args.clone();
+    if let Some(p) = period {
+        let start_str = p.start_date.format("%Y-%m-%d").to_string();
+        let end_str = p.end_date.format("%Y-%m-%d").to_string();
+
+        if effective_args.contains_key("--start-date") || effective_args.contains_key("start_date") {
+            effective_args.insert("--start-date".to_string(), start_str.clone());
+        }
+        if effective_args.contains_key("--end-date") || effective_args.contains_key("end_date") {
+            effective_args.insert("--end-date".to_string(), end_str.clone());
+        }
+        if effective_args.contains_key("--from-date") || effective_args.contains_key("from_date") {
+            effective_args.insert("--from-date".to_string(), start_str.clone());
+        }
+        if effective_args.contains_key("--to-date") || effective_args.contains_key("to_date") {
+            effective_args.insert("--to-date".to_string(), end_str.clone());
+        }
+    }
+
+    for (k, v) in &effective_args {
         if k == "--config" && !app.config_path.trim().is_empty() {
             // Do not allow task arguments to override the app's registered config path if the app already has one defined
             continue;
@@ -31,10 +51,8 @@ pub async fn run_external_app(
         } else if v.eq_ignore_ascii_case("false") || v.eq_ignore_ascii_case("off") {
             // omit
         } else if v.trim().is_empty() {
-            // Do not add the flag at all if its value is empty, this prevents passing empty filters like `--filters ""` or empty `--config ""`
+            // Do not add the flag at all if its value is empty
         } else {
-            // The UI form_script.js joins arrays with comma for MultiList so this will correctly pass `--arg a,b,c`
-            // Clap handles this when `value_delimiter = ','` is set on the arg.
             command.arg(k).arg(v);
         }
     }

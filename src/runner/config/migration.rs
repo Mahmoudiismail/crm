@@ -117,6 +117,9 @@ impl From<RunnerTaskLegacy> for RunnerTask {
             timeout_seconds: legacy.timeout_seconds,
             steps,
             post_run_steps,
+            period_mode: PeriodMode::Custom,
+            start_date: None,
+            end_date: None,
         }
     }
 }

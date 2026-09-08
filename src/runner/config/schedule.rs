@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Datelike, Local, NaiveTime, TimeZone, Utc};
+use serde::{Deserialize, Serialize};
 
 use crate::runner::config::models::*;
 
@@ -641,7 +642,461 @@ pub fn next_monthly_run_after(
     ))
 }
 
-fn days_in_month(year: i32, month: u32) -> u32 {
+pub fn quarter_start_month(month: u32) -> u32 {
+    match month {
+        1..=3 => 1,
+        4..=6 => 4,
+        7..=9 => 7,
+        10..=12 => 10,
+        _ => 1,
+    }
+}
+
+pub fn quarter_end_month(month: u32) -> u32 {
+    match month {
+        1..=3 => 3,
+        4..=6 => 6,
+        7..=9 => 9,
+        10..=12 => 12,
+        _ => 12,
+    }
+}
+
+/// Generates execution periods according to the specified `PeriodMode`.
+///
+/// Converts resolved `start_date` and `end_date` into concrete `ExecutionPeriod`s.
+pub fn generate_execution_periods(
+    mode: PeriodMode,
+    start_date: chrono::NaiveDate,
+    end_date: chrono::NaiveDate,
+) -> Vec<ExecutionPeriod> {
+    use chrono::{Datelike, NaiveDate};
+
+    if start_date > end_date && mode == PeriodMode::Custom {
+        return vec![ExecutionPeriod {
+            start_date,
+            end_date,
+        }];
+    }
+
+    match mode {
+        PeriodMode::Custom => {
+            vec![ExecutionPeriod {
+                start_date,
+                end_date,
+            }]
+        }
+        PeriodMode::Monthly => {
+            let mut periods = Vec::new();
+            let mut cur_year = start_date.year();
+            let mut cur_month = start_date.month();
+
+            let end_year = end_date.year();
+            let end_month = end_date.month();
+
+            loop {
+                let period_start = NaiveDate::from_ymd_opt(cur_year, cur_month, 1)
+                    .unwrap_or(start_date);
+                let last_day = days_in_month(cur_year, cur_month);
+                let period_end = NaiveDate::from_ymd_opt(cur_year, cur_month, last_day)
+                    .unwrap_or(end_date);
+
+                periods.push(ExecutionPeriod {
+                    start_date: period_start,
+                    end_date: period_end,
+                });
+
+                if cur_year > end_year || (cur_year == end_year && cur_month >= end_month) {
+                    break;
+                }
+
+                if cur_month == 12 {
+                    cur_year += 1;
+                    cur_month = 1;
+                } else {
+                    cur_month += 1;
+                }
+            }
+
+            periods
+        }
+        PeriodMode::Quarterly => {
+            let mut periods = Vec::new();
+            let mut cur_year = start_date.year();
+            let mut cur_q_start_month = quarter_start_month(start_date.month());
+
+            let end_year = end_date.year();
+            let end_q_end_month = quarter_end_month(end_date.month());
+
+            loop {
+                let q_end_month = quarter_end_month(cur_q_start_month);
+                let period_start = NaiveDate::from_ymd_opt(cur_year, cur_q_start_month, 1)
+                    .unwrap_or(start_date);
+                let last_day = days_in_month(cur_year, q_end_month);
+                let period_end = NaiveDate::from_ymd_opt(cur_year, q_end_month, last_day)
+                    .unwrap_or(end_date);
+
+                periods.push(ExecutionPeriod {
+                    start_date: period_start,
+                    end_date: period_end,
+                });
+
+                if cur_year > end_year
+                    || (cur_year == end_year && q_end_month >= end_q_end_month)
+                {
+                    break;
+                }
+
+                if cur_q_start_month >= 10 {
+                    cur_year += 1;
+                    cur_q_start_month = 1;
+                } else {
+                    cur_q_start_month += 3;
+                }
+            }
+
+            periods
+        }
+        PeriodMode::AMonth => {
+            let mut periods = Vec::new();
+            let target_month = start_date.month();
+            let start_year = start_date.year();
+            let end_year = end_date.year();
+
+            for yr in start_year..=end_year {
+                let period_start = NaiveDate::from_ymd_opt(yr, target_month, 1)
+                    .unwrap_or(start_date);
+                let last_day = days_in_month(yr, target_month);
+                let period_end = NaiveDate::from_ymd_opt(yr, target_month, last_day)
+                    .unwrap_or(end_date);
+
+                periods.push(ExecutionPeriod {
+                    start_date: period_start,
+                    end_date: period_end,
+                });
+            }
+
+            periods
+        }
+        PeriodMode::AQuarter => {
+            let mut periods = Vec::new();
+            let q_start = quarter_start_month(start_date.month());
+            let q_end = quarter_end_month(start_date.month());
+            let start_year = start_date.year();
+            let end_year = end_date.year();
+
+            for yr in start_year..=end_year {
+                let period_start = NaiveDate::from_ymd_opt(yr, q_start, 1)
+                    .unwrap_or(start_date);
+                let last_day = days_in_month(yr, q_end);
+                let period_end = NaiveDate::from_ymd_opt(yr, q_end, last_day)
+                    .unwrap_or(end_date);
+
+                periods.push(ExecutionPeriod {
+                    start_date: period_start,
+                    end_date: period_end,
+                });
+            }
+
+            periods
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExecutionOccurrence {
+    pub period: ExecutionPeriod,
+    pub scheduled_at: DateTime<Utc>,
+}
+
+pub fn generate_upcoming_executions(
+    task: &RunnerTask,
+    now: DateTime<Utc>,
+    limit: usize,
+) -> Result<Vec<ExecutionOccurrence>> {
+    use chrono::{NaiveDate, TimeZone};
+
+    if limit == 0 {
+        return Ok(Vec::new());
+    }
+
+    // 1. Resolve start_date and end_date if present
+    let start_date_str = task.start_date.as_deref().unwrap_or("today");
+    let raw_start_date = crate::utils::parse_flexible_date(start_date_str)
+        .unwrap_or_else(|| now.with_timezone(&chrono::Local).date_naive());
+
+    let end_date_str = task.end_date.as_deref();
+    let raw_end_date = if let Some(ed_str) = end_date_str {
+        crate::utils::parse_flexible_date_with_base(ed_str, Some(start_date_str))
+            .unwrap_or(raw_start_date)
+    } else {
+        raw_start_date
+    };
+
+    // 2. Generate execution periods using task.period_mode
+    let periods = generate_execution_periods(task.period_mode, raw_start_date, raw_end_date);
+
+    let mut results = Vec::new();
+
+    // 3. Evaluate schedule over periods
+    for period in periods {
+        let period_start_utc = Local
+            .from_local_datetime(&period.start_date.and_hms_opt(0, 0, 0).unwrap())
+            .earliest()
+            .unwrap_or_else(|| Utc::now().with_timezone(&Local))
+            .with_timezone(&Utc);
+
+        let period_end_utc = Local
+            .from_local_datetime(&period.end_date.and_hms_opt(23, 59, 59).unwrap())
+            .latest()
+            .unwrap_or_else(|| Utc::now().with_timezone(&Local))
+            .with_timezone(&Utc);
+
+        if period_end_utc < now {
+            continue;
+        }
+
+        if task.schedules.is_empty() {
+            let scheduled_at = if period_start_utc > now {
+                period_start_utc
+            } else {
+                now
+            };
+            results.push(ExecutionOccurrence {
+                period,
+                scheduled_at,
+            });
+            if results.len() >= limit {
+                break;
+            }
+            continue;
+        }
+
+        for schedule in &task.schedules {
+            if !schedule.enabled() {
+                continue;
+            }
+
+            match schedule {
+                TaskSchedule::Once { next_run_at, .. } => {
+                    let dt = if next_run_at.is_empty() {
+                        period_start_utc
+                    } else if let Ok(parsed) = parse_rfc3339_utc(next_run_at) {
+                        parsed
+                    } else {
+                        period_start_utc
+                    };
+
+                    if dt >= now && dt >= period_start_utc && dt <= period_end_utc {
+                        results.push(ExecutionOccurrence {
+                            period: period.clone(),
+                            scheduled_at: dt,
+                        });
+                        if results.len() >= limit {
+                            return Ok(results);
+                        }
+                    }
+                }
+                TaskSchedule::Interval {
+                    every_seconds,
+                    working_hours,
+                    start_time,
+                    ..
+                } => {
+                    let interval = (*every_seconds).max(1);
+                    let mut cursor = if period_start_utc > now {
+                        period_start_utc
+                    } else {
+                        now
+                    };
+
+                    if let Some(st) = start_time {
+                        if !st.is_empty() {
+                            if let Ok(st_time) = NaiveTime::parse_from_str(st.trim(), "%H:%M") {
+                                let local_cursor = cursor.with_timezone(&Local);
+                                if local_cursor.time() < st_time {
+                                    if let Some(naive_dt) = local_cursor.date_naive().and_time(st_time).and_local_timezone(Local).single() {
+                                        let candidate = naive_dt.with_timezone(&Utc);
+                                        if candidate > cursor {
+                                            cursor = candidate;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    let mut steps_count = 0;
+                    while cursor <= period_end_utc && results.len() < limit && steps_count < 1000 {
+                        steps_count += 1;
+                        let is_wh_ok = if let Some(wh) = working_hours {
+                            is_within_working_hours(wh, cursor)
+                        } else {
+                            true
+                        };
+
+                        if is_wh_ok && cursor >= now {
+                            results.push(ExecutionOccurrence {
+                                period: period.clone(),
+                                scheduled_at: cursor,
+                            });
+                            if results.len() >= limit {
+                                return Ok(results);
+                            }
+                        }
+
+                        cursor += chrono::TimeDelta::seconds(interval as i64);
+                        if let Some(wh) = working_hours {
+                            if !is_within_working_hours(wh, cursor) {
+                                cursor = next_working_time(wh, cursor);
+                            }
+                        }
+                    }
+                }
+                TaskSchedule::DailyTimes {
+                    times,
+                    working_hours,
+                    ..
+                } => {
+                    let mut cur_date = period.start_date;
+                    while cur_date <= period.end_date && results.len() < limit {
+                        for raw_time in times {
+                            if let Ok(time) = NaiveTime::parse_from_str(raw_time.trim(), "%H:%M") {
+                                if let Some(local_dt) = cur_date.and_time(time).and_local_timezone(Local).single() {
+                                    let dt = local_dt.with_timezone(&Utc);
+                                    if dt >= now && dt >= period_start_utc && dt <= period_end_utc {
+                                        let is_wh_ok = if let Some(wh) = working_hours {
+                                            is_working_day(wh, dt)
+                                        } else {
+                                            true
+                                        };
+                                        if is_wh_ok {
+                                            results.push(ExecutionOccurrence {
+                                                period: period.clone(),
+                                                scheduled_at: dt,
+                                            });
+                                            if results.len() >= limit {
+                                                return Ok(results);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        cur_date += chrono::TimeDelta::days(1);
+                    }
+                }
+                TaskSchedule::Weekly {
+                    day_of_week,
+                    at_time,
+                    working_hours,
+                    ..
+                } => {
+                    let mut cur_date = period.start_date;
+                    let target_weekday = match day_of_week.trim().to_lowercase().as_str() {
+                        "sunday" | "sun" | "0" => chrono::Weekday::Sun,
+                        "monday" | "mon" | "1" => chrono::Weekday::Mon,
+                        "tuesday" | "tue" | "2" => chrono::Weekday::Tue,
+                        "wednesday" | "wed" | "3" => chrono::Weekday::Wed,
+                        "thursday" | "thu" | "4" => chrono::Weekday::Thu,
+                        "friday" | "fri" | "5" => chrono::Weekday::Fri,
+                        "saturday" | "sat" | "6" => chrono::Weekday::Sat,
+                        _ => chrono::Weekday::Mon,
+                    };
+                    let time = if at_time.is_empty() {
+                        NaiveTime::from_hms_opt(0, 0, 0).unwrap()
+                    } else {
+                        NaiveTime::parse_from_str(at_time.trim(), "%H:%M").unwrap_or_else(|_| NaiveTime::from_hms_opt(0, 0, 0).unwrap())
+                    };
+
+                    while cur_date <= period.end_date && results.len() < limit {
+                        if cur_date.weekday() == target_weekday {
+                            if let Some(local_dt) = cur_date.and_time(time).and_local_timezone(Local).single() {
+                                let dt = local_dt.with_timezone(&Utc);
+                                if dt >= now && dt >= period_start_utc && dt <= period_end_utc {
+                                    let is_wh_ok = if let Some(wh) = working_hours {
+                                        is_working_day(wh, dt)
+                                    } else {
+                                        true
+                                    };
+                                    if is_wh_ok {
+                                        results.push(ExecutionOccurrence {
+                                            period: period.clone(),
+                                            scheduled_at: dt,
+                                        });
+                                        if results.len() >= limit {
+                                            return Ok(results);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        cur_date += chrono::TimeDelta::days(1);
+                    }
+                }
+                TaskSchedule::Monthly {
+                    day_of_month,
+                    at_time,
+                    working_hours,
+                    ..
+                } => {
+                    let mut cur_year = period.start_date.year();
+                    let mut cur_month = period.start_date.month();
+                    let end_year = period.end_date.year();
+                    let end_month = period.end_date.month();
+
+                    let time = if at_time.is_empty() {
+                        NaiveTime::from_hms_opt(0, 0, 0).unwrap()
+                    } else {
+                        NaiveTime::parse_from_str(at_time.trim(), "%H:%M").unwrap_or_else(|_| NaiveTime::from_hms_opt(0, 0, 0).unwrap())
+                    };
+
+                    loop {
+                        let day = (*day_of_month).min(days_in_month(cur_year, cur_month));
+                        if let Some(cur_date) = NaiveDate::from_ymd_opt(cur_year, cur_month, day) {
+                            if cur_date >= period.start_date && cur_date <= period.end_date {
+                                if let Some(local_dt) = cur_date.and_time(time).and_local_timezone(Local).single() {
+                                    let dt = local_dt.with_timezone(&Utc);
+                                    if dt >= now && dt >= period_start_utc && dt <= period_end_utc {
+                                        let is_wh_ok = if let Some(wh) = working_hours {
+                                            is_working_day(wh, dt)
+                                        } else {
+                                            true
+                                        };
+                                        if is_wh_ok {
+                                            results.push(ExecutionOccurrence {
+                                                period: period.clone(),
+                                                scheduled_at: dt,
+                                            });
+                                            if results.len() >= limit {
+                                                return Ok(results);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if cur_year > end_year || (cur_year == end_year && cur_month >= end_month) {
+                            break;
+                        }
+
+                        if cur_month == 12 {
+                            cur_year += 1;
+                            cur_month = 1;
+                        } else {
+                            cur_month += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(results)
+}
+
+pub fn days_in_month(year: i32, month: u32) -> u32 {
     match month {
         1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
         4 | 6 | 9 | 11 => 30,
@@ -659,6 +1114,133 @@ fn days_in_month(year: i32, month: u32) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_generate_execution_periods() {
+        use chrono::NaiveDate;
+
+        let jan15 = NaiveDate::from_ymd_opt(2026, 1, 15).unwrap();
+        let sep10 = NaiveDate::from_ymd_opt(2026, 9, 10).unwrap();
+
+        // 1. Custom mode
+        let custom = generate_execution_periods(PeriodMode::Custom, jan15, sep10);
+        assert_eq!(custom.len(), 1);
+        assert_eq!(custom[0].start_date, jan15);
+        assert_eq!(custom[0].end_date, sep10);
+
+        // 2. Monthly mode (Jan 15 to Sep 10 => 9 full months)
+        let monthly = generate_execution_periods(PeriodMode::Monthly, jan15, sep10);
+        assert_eq!(monthly.len(), 9);
+        assert_eq!(monthly[0].start_date, NaiveDate::from_ymd_opt(2026, 1, 1).unwrap());
+        assert_eq!(monthly[0].end_date, NaiveDate::from_ymd_opt(2026, 1, 31).unwrap());
+        assert_eq!(monthly[1].start_date, NaiveDate::from_ymd_opt(2026, 2, 1).unwrap());
+        assert_eq!(monthly[1].end_date, NaiveDate::from_ymd_opt(2026, 2, 28).unwrap());
+        assert_eq!(monthly[8].start_date, NaiveDate::from_ymd_opt(2026, 9, 1).unwrap());
+        assert_eq!(monthly[8].end_date, NaiveDate::from_ymd_opt(2026, 9, 30).unwrap());
+
+        // Single day monthly
+        let sep1 = NaiveDate::from_ymd_opt(2026, 9, 1).unwrap();
+        let single_m = generate_execution_periods(PeriodMode::Monthly, sep1, sep1);
+        assert_eq!(single_m.len(), 1);
+        assert_eq!(single_m[0].start_date, NaiveDate::from_ymd_opt(2026, 9, 1).unwrap());
+        assert_eq!(single_m[0].end_date, NaiveDate::from_ymd_opt(2026, 9, 30).unwrap());
+
+        // 3. Quarterly mode (Feb 15 to Aug 10 => Q1, Q2, Q3)
+        let feb15 = NaiveDate::from_ymd_opt(2026, 2, 15).unwrap();
+        let aug10 = NaiveDate::from_ymd_opt(2026, 8, 10).unwrap();
+        let quarterly = generate_execution_periods(PeriodMode::Quarterly, feb15, aug10);
+        assert_eq!(quarterly.len(), 3);
+        assert_eq!(quarterly[0].start_date, NaiveDate::from_ymd_opt(2026, 1, 1).unwrap());
+        assert_eq!(quarterly[0].end_date, NaiveDate::from_ymd_opt(2026, 3, 31).unwrap());
+        assert_eq!(quarterly[1].start_date, NaiveDate::from_ymd_opt(2026, 4, 1).unwrap());
+        assert_eq!(quarterly[1].end_date, NaiveDate::from_ymd_opt(2026, 6, 30).unwrap());
+        assert_eq!(quarterly[2].start_date, NaiveDate::from_ymd_opt(2026, 7, 1).unwrap());
+        assert_eq!(quarterly[2].end_date, NaiveDate::from_ymd_opt(2026, 9, 30).unwrap());
+
+        // 4. A Month mode (Sep 15, 2022 to Sep 20, 2026)
+        let start_2022 = NaiveDate::from_ymd_opt(2022, 9, 15).unwrap();
+        let end_2026 = NaiveDate::from_ymd_opt(2026, 9, 20).unwrap();
+        let a_month = generate_execution_periods(PeriodMode::AMonth, start_2022, end_2026);
+        assert_eq!(a_month.len(), 5);
+        for (i, yr) in (2022..=2026).enumerate() {
+            assert_eq!(a_month[i].start_date, NaiveDate::from_ymd_opt(yr, 9, 1).unwrap());
+            assert_eq!(a_month[i].end_date, NaiveDate::from_ymd_opt(yr, 9, 30).unwrap());
+        }
+
+        // 5. A Quarter mode (Aug 15, 2022 to Sep 20, 2026 => Q3 for every year)
+        let start_q3 = NaiveDate::from_ymd_opt(2022, 8, 15).unwrap();
+        let a_quarter = generate_execution_periods(PeriodMode::AQuarter, start_q3, end_2026);
+        assert_eq!(a_quarter.len(), 5);
+        for (i, yr) in (2022..=2026).enumerate() {
+            assert_eq!(a_quarter[i].start_date, NaiveDate::from_ymd_opt(yr, 7, 1).unwrap());
+            assert_eq!(a_quarter[i].end_date, NaiveDate::from_ymd_opt(yr, 9, 30).unwrap());
+        }
+
+        // 6. Leap year February test
+        let feb_leap_start = NaiveDate::from_ymd_opt(2024, 2, 10).unwrap();
+        let feb_leap_end = NaiveDate::from_ymd_opt(2024, 2, 20).unwrap();
+        let leap_m = generate_execution_periods(PeriodMode::Monthly, feb_leap_start, feb_leap_end);
+        assert_eq!(leap_m.len(), 1);
+        assert_eq!(leap_m[0].end_date, NaiveDate::from_ymd_opt(2024, 2, 29).unwrap());
+    }
+
+    #[test]
+    fn test_generate_upcoming_executions_limit_and_bounded() {
+        use chrono::TimeZone;
+
+        let now = Utc.with_ymd_and_hms(2026, 1, 1, 10, 0, 0).unwrap();
+        let task = RunnerTask {
+            id: "t1".to_string(),
+            name: "Interval Task".to_string(),
+            enabled: true,
+            repetition: Repetition::Repeat,
+            frequency_seconds: 3600,
+            next_run_at: String::new(),
+            schedules: vec![TaskSchedule::Interval {
+                enabled: true,
+                every_seconds: 3600,
+                next_run_at: String::new(),
+                working_hours: None,
+                working_hours_profile_id: None,
+                start_time: None,
+            }],
+            steps: vec![],
+            post_run_steps: vec![],
+            last_run_at: String::new(),
+            last_status: String::new(),
+            timeout_seconds: 0,
+            period_mode: PeriodMode::Monthly,
+            start_date: Some("2026-01-01".to_string()),
+            end_date: Some("2026-12-31".to_string()),
+        };
+
+        let occurrences = generate_upcoming_executions(&task, now, 10).unwrap();
+        assert_eq!(occurrences.len(), 10);
+        assert_eq!(occurrences[0].scheduled_at, now);
+        assert_eq!(occurrences[1].scheduled_at, now + chrono::TimeDelta::hours(1));
+
+        // Historical date test (0 results)
+        let past_task = RunnerTask {
+            id: "t2".to_string(),
+            name: "Past Task".to_string(),
+            enabled: true,
+            repetition: Repetition::Once,
+            frequency_seconds: 0,
+            next_run_at: String::new(),
+            schedules: vec![],
+            steps: vec![],
+            post_run_steps: vec![],
+            last_run_at: String::new(),
+            last_status: String::new(),
+            timeout_seconds: 0,
+            period_mode: PeriodMode::Custom,
+            start_date: Some("2020-01-01".to_string()),
+            end_date: Some("2020-01-05".to_string()),
+        };
+
+        let past_occurrences = generate_upcoming_executions(&past_task, now, 10).unwrap();
+        assert!(past_occurrences.is_empty());
+    }
 
     #[test]
     fn human_duration_uses_largest_units() {

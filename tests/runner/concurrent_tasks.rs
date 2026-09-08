@@ -32,6 +32,9 @@ fn base_task(id: &str) -> RunnerTask {
         last_run_at: "".to_string(),
         last_status: "".to_string(),
         next_run_at: "".to_string(),
+        period_mode: crm_tool::runner::config::PeriodMode::Custom,
+        start_date: None,
+        end_date: None,
     }
 }
 

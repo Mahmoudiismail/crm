@@ -457,6 +457,54 @@ pub(crate) async fn handle_api_apps_list(
     Ok((200, "application/json", body))
 }
 
+pub(crate) async fn handle_api_task_preview(
+    handle: &RunnerHandle,
+    values: &HashMap<String, String>,
+) -> Result<(u16, &'static str, String)> {
+    let cfg = RunnerConfig::load(&handle.runner_config_path).unwrap_or_default();
+    let task = match build_task_from_values(values, None, &cfg.working_hours_profiles) {
+        Ok(t) => t,
+        Err(e) => {
+            let json_err = serde_json::json!({
+                "success": false,
+                "error": format!("Task validation error: {}", e)
+            });
+            return Ok((200, "application/json", json_err.to_string()));
+        }
+    };
+
+    let now = Utc::now();
+    match generate_upcoming_executions(&task, now, 10) {
+        Ok(occurrences) => {
+            let items: Vec<_> = occurrences
+                .into_iter()
+                .map(|occ| {
+                    let local_dt = occ.scheduled_at.with_timezone(&Local);
+                    serde_json::json!({
+                        "period_start": occ.period.start_date.format("%Y-%m-%d").to_string(),
+                        "period_end": occ.period.end_date.format("%Y-%m-%d").to_string(),
+                        "scheduled_at_iso": occ.scheduled_at.to_rfc3339(),
+                        "scheduled_at_formatted": local_dt.format("%b %d, %Y %I:%M %p local").to_string(),
+                    })
+                })
+                .collect();
+
+            let res = serde_json::json!({
+                "success": true,
+                "executions": items
+            });
+            Ok((200, "application/json", res.to_string()))
+        }
+        Err(e) => {
+            let json_err = serde_json::json!({
+                "success": false,
+                "error": format!("Preview calculation error: {}", e)
+            });
+            Ok((200, "application/json", json_err.to_string()))
+        }
+    }
+}
+
 pub(crate) async fn handle_api_apps_manifest(
     handle: &RunnerHandle,
     app_id: &str,

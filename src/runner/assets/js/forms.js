@@ -816,8 +816,86 @@
   initSteps("steps-container", "steps-hidden", false);
   initSteps("post-run-steps-container", "post-run-steps-hidden", true);
 
+  // Live Execution Preview update logic
+  let previewDebounceTimer = null;
+
+  function updateLivePreview() {
+    const previewContainer = document.getElementById("preview-contents");
+    if (!previewContainer) return;
+
+    if (schedulesHidden) schedulesHidden.value = buildSchedules();
+
+    let stepsJson = "[]";
+    let postRunStepsJson = "[]";
+    try {
+        stepsJson = JSON.stringify(serializeSteps("steps-container"));
+    } catch(e) {}
+    try {
+        postRunStepsJson = JSON.stringify(serializeSteps("post-run-steps-container"));
+    } catch(e) {}
+
+    const formData = new URLSearchParams();
+    const nameInput = document.querySelector("input[name='name']");
+    const idInput = document.querySelector("input[name='id']");
+    const pmSelect = document.querySelector("select[name='period_mode']");
+    const sdInput = document.querySelector("input[name='start_date']");
+    const edInput = document.querySelector("input[name='end_date']");
+    const enabledCheck = document.querySelector("input[name='enabled']");
+    const timeoutInput = document.querySelector("input[name='timeout_seconds']");
+
+    if (nameInput) formData.append("name", nameInput.value);
+    if (idInput) formData.append("id", idInput.value);
+    if (pmSelect) formData.append("period_mode", pmSelect.value);
+    if (sdInput) formData.append("start_date", sdInput.value);
+    if (edInput) formData.append("end_date", edInput.value);
+    if (enabledCheck && enabledCheck.checked) formData.append("enabled", "on");
+    if (timeoutInput) formData.append("timeout_seconds", timeoutInput.value);
+    if (schedulesHidden) formData.append("schedules", schedulesHidden.value);
+    formData.append("steps", stepsJson);
+    formData.append("post_run_steps", postRunStepsJson);
+
+    fetch("/api/tasks/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: formData.toString()
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (!data.success) {
+            previewContainer.innerHTML = `<span class='text-red-600 font-semibold'>${data.error || "Validation error"}</span>`;
+            return;
+        }
+
+        if (!data.executions || data.executions.length === 0) {
+            previewContainer.innerHTML = "<span class='text-gray-500 italic'>No upcoming executions</span>";
+            return;
+        }
+
+        let html = "<ul class='list-disc list-inside space-y-1'>";
+        data.executions.forEach((item, idx) => {
+            html += `<li><span class='font-semibold text-emerald-900'>#${idx + 1}:</span> ${item.scheduled_at_formatted} <span class='text-gray-500'>(Period: ${item.period_start} &rarr; ${item.period_end})</span></li>`;
+        });
+        html += "</ul>";
+        previewContainer.innerHTML = html;
+    })
+    .catch(err => {
+        previewContainer.innerHTML = `<span class='text-amber-600'>Error loading preview: ${err.message}</span>`;
+    });
+  }
+
+  function schedulePreviewUpdate() {
+    if (previewDebounceTimer) clearTimeout(previewDebounceTimer);
+    previewDebounceTimer = setTimeout(updateLivePreview, 300);
+  }
+
   const form = document.querySelector("form");
   if (form) {
+    form.addEventListener("input", schedulePreviewUpdate);
+    form.addEventListener("change", schedulePreviewUpdate);
+
+    // Initial preview trigger
+    schedulePreviewUpdate();
+
     form.addEventListener("submit", function (e) {
       if (schedulesHidden) schedulesHidden.value = buildSchedules();
 
