@@ -16,41 +16,45 @@ pub async fn download_csv(
     report_key: &str,
     target_dir: &Path,
 ) -> Result<String> {
-    let filename = extract_filename(url)?;
-    let dest_path = target_dir.join(&filename);
-    info!(
-        "[{}] Downloading CSV: {} → {:?}",
-        report_key, url, dest_path
-    );
+    let raw_filename = extract_filename(url)?;
 
     // Ensure the directory exists
     tokio::fs::create_dir_all(target_dir)
         .await
         .with_context(|| format!("Failed to create download directory: {:?}", target_dir))?;
 
-    let resp = client
+    let (filename, temp_dest_path, dest_path, file) =
+        create_unique_temp_file(target_dir, &raw_filename).await?;
+
+    info!(
+        "[{}] Downloading CSV: {} → {:?}",
+        report_key, url, dest_path
+    );
+
+    let resp = match client
         .get(url)
         .header("accept-encoding", "identity")
         .timeout(Duration::from_secs(60))
         .send()
         .await
-        .with_context(|| format!("Failed to GET {}", url))?;
+    {
+        Ok(r) => r,
+        Err(e) => {
+            let _ = tokio::fs::remove_file(&temp_dest_path).await;
+            anyhow::bail!("Failed to GET {}: {}", url, e);
+        }
+    };
 
     let status = resp.status();
     if !status.is_success() {
         let body = resp.text().await.unwrap_or_default();
+        let _ = tokio::fs::remove_file(&temp_dest_path).await;
         anyhow::bail!("[{}] Download HTTP {}: {}", report_key, status, body);
     }
 
     let content_length = resp.content_length();
     debug!("[{}] Content-Length: {:?}", report_key, content_length);
 
-    let temp_filename = format!("{}.tmp", filename);
-    let temp_dest_path = target_dir.join(&temp_filename);
-
-    let file = tokio::fs::File::create(&temp_dest_path)
-        .await
-        .with_context(|| format!("Failed to create temp file: {:?}", temp_dest_path))?;
     let mut writer = BufWriter::with_capacity(128 * 1024, file);
 
     let mut stream = resp.bytes_stream();
@@ -86,6 +90,54 @@ pub async fn download_csv(
         report_key, filename, downloaded
     );
     Ok(filename)
+}
+
+fn generate_candidate_filename(base: &str, index: usize) -> String {
+    if index == 0 {
+        base.to_string()
+    } else if let Some(dot_pos) = base.rfind('.') {
+        format!("{}_{}{}", &base[..dot_pos], index, &base[dot_pos..])
+    } else {
+        format!("{}_{}", base, index)
+    }
+}
+
+async fn create_unique_temp_file(
+    target_dir: &Path,
+    raw_filename: &str,
+) -> Result<(String, std::path::PathBuf, std::path::PathBuf, tokio::fs::File)> {
+    for index in 0..1000 {
+        let candidate_name = generate_candidate_filename(raw_filename, index);
+        let dest_path = target_dir.join(&candidate_name);
+        let temp_filename = format!("{}.tmp", candidate_name);
+        let temp_dest_path = target_dir.join(&temp_filename);
+
+        if tokio::fs::metadata(&dest_path).await.is_ok() {
+            continue;
+        }
+
+        match tokio::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp_dest_path)
+            .await
+        {
+            Ok(file) => {
+                return Ok((candidate_name, temp_dest_path, dest_path, file));
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                continue;
+            }
+            Err(e) => {
+                return Err(e)
+                    .with_context(|| format!("Failed to create temp file {:?}", temp_dest_path));
+            }
+        }
+    }
+    anyhow::bail!(
+        "Failed to allocate a unique filename for {} after 1000 attempts",
+        raw_filename
+    );
 }
 
 /// Extract a human-readable filename from a URL, URL-decoding it and sanitizing to prevent path traversal.
@@ -350,5 +402,36 @@ mod tests {
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(err_msg.contains("Invalid CSV payload"));
+    }
+
+    #[tokio::test]
+    async fn test_create_unique_temp_file_collisions() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let target_dir = temp_dir.path();
+        let raw_name = "ticket_report_1788814899432.csv";
+
+        // Create first file
+        let (name1, tmp_path1, dest_path1, file1) = create_unique_temp_file(target_dir, raw_name).await.unwrap();
+        assert_eq!(name1, "ticket_report_1788814899432.csv");
+        drop(file1);
+        tokio::fs::rename(&tmp_path1, &dest_path1).await.unwrap();
+
+        // Create second file with identical raw name - should get collision suffix _1
+        let (name2, tmp_path2, dest_path2, file2) = create_unique_temp_file(target_dir, raw_name).await.unwrap();
+        assert_eq!(name2, "ticket_report_1788814899432_1.csv");
+        drop(file2);
+        tokio::fs::rename(&tmp_path2, &dest_path2).await.unwrap();
+
+        // Create third file - should get collision suffix _2
+        let (name3, _tmp_path3, _dest_path3, file3) = create_unique_temp_file(target_dir, raw_name).await.unwrap();
+        assert_eq!(name3, "ticket_report_1788814899432_2.csv");
+        drop(file3);
+
+        assert!(name1.starts_with("ticket_report_"));
+        assert!(name2.starts_with("ticket_report_"));
+        assert!(name3.starts_with("ticket_report_"));
+        assert!(name1.ends_with(".csv"));
+        assert!(name2.ends_with(".csv"));
+        assert!(name3.ends_with(".csv"));
     }
 }
