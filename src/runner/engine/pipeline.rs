@@ -263,54 +263,100 @@ pub async fn run_task_inner(
     let periods =
         crate::runner::config::generate_execution_periods(task.period_mode, raw_start, raw_end);
 
-    let total_periods = periods.len();
-    let mut handles = Vec::new();
+    let has_non_concurrent_app = task.steps.iter().any(|step| {
+        step.actions.iter().any(|action| {
+            if let ActionSpec::ExternalApp(spec) = action {
+                if let Some(app) = policy.registered_apps.iter().find(|a| a.id == spec.app_id) {
+                    !app.allow_concurrent_tasks
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        })
+    });
 
-    for (idx, period) in periods.into_iter().enumerate() {
-        let logger = logger.clone();
-        let policy = policy.clone();
-        let status = status.clone();
-        let app_lock_manager = app_lock_manager.clone();
-        let steps = task.steps.clone();
-        let task_id = task.id.clone();
+    let mut result = Ok(());
 
-        handles.push(tokio::spawn(async move {
+    if has_non_concurrent_app {
+        for (idx, period) in periods.iter().enumerate() {
             logger
                 .log(&format!(
                     "Executing period {}/{} ({} -> {})...",
                     idx + 1,
-                    total_periods,
+                    periods.len(),
                     period.start_date,
                     period.end_date
                 ))
                 .await;
 
-            execute_pipeline(
-                &steps,
+            let res = execute_pipeline(
+                &task.steps,
                 &logger,
-                &policy,
-                Some(&period),
+                policy,
+                Some(period),
                 effective_shell_timeout,
-                &status,
-                &app_lock_manager,
-                &task_id,
+                status,
+                app_lock_manager,
+                &task.id,
             )
-            .await
-        }));
-    }
+            .await;
 
-    let mut result = Ok(());
-    for handle in handles {
-        match handle.await {
-            Ok(Ok(())) => {}
-            Ok(Err(e)) => {
-                if result.is_ok() {
-                    result = Err(e);
-                }
+            if let Err(e) = res {
+                result = Err(e);
+                break;
             }
-            Err(join_err) => {
-                if result.is_ok() {
-                    result = Err(anyhow::anyhow!("Period execution join error: {}", join_err));
+        }
+    } else {
+        let total_periods = periods.len();
+        let mut handles = Vec::new();
+
+        for (idx, period) in periods.into_iter().enumerate() {
+            let logger = logger.clone();
+            let policy = policy.clone();
+            let status = status.clone();
+            let app_lock_manager = app_lock_manager.clone();
+            let steps = task.steps.clone();
+            let task_id = task.id.clone();
+
+            handles.push(tokio::spawn(async move {
+                logger
+                    .log(&format!(
+                        "Executing period {}/{} ({} -> {})...",
+                        idx + 1,
+                        total_periods,
+                        period.start_date,
+                        period.end_date
+                    ))
+                    .await;
+
+                execute_pipeline(
+                    &steps,
+                    &logger,
+                    &policy,
+                    Some(&period),
+                    effective_shell_timeout,
+                    &status,
+                    &app_lock_manager,
+                    &task_id,
+                )
+                .await
+            }));
+        }
+
+        for handle in handles {
+            match handle.await {
+                Ok(Ok(())) => {}
+                Ok(Err(e)) => {
+                    if result.is_ok() {
+                        result = Err(e);
+                    }
+                }
+                Err(join_err) => {
+                    if result.is_ok() {
+                        result = Err(anyhow::anyhow!("Period execution join error: {}", join_err));
+                    }
                 }
             }
         }
