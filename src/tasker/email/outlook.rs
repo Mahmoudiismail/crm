@@ -1,54 +1,9 @@
 use anyhow::Result;
-use std::io::Write;
 
 pub fn run_powershell(script: &str) -> Result<()> {
-    let mut temp_file = tempfile::Builder::new()
-        .prefix("send_email_")
-        .suffix(".ps1")
-        .tempfile()?;
-
-    temp_file.write_all(script.as_bytes())?;
-    temp_file.as_file().sync_all()?;
-
-    let (file, path) = temp_file.keep()?;
-    drop(file);
-
-    let output = std::process::Command::new("powershell")
-        .arg("-ExecutionPolicy")
-        .arg("Bypass")
-        .arg("-File")
-        .arg(&path)
-        .output()?;
-
-    if let Err(e) = std::fs::remove_file(&path) {
-        tracing::warn!(
-            "Failed to delete temporary PowerShell script at {}: {}",
-            path.display(),
-            e
-        );
-    }
-
-    let stdout_str = String::from_utf8_lossy(&output.stdout);
-    let stderr_str = String::from_utf8_lossy(&output.stderr);
-
-    if !stdout_str.trim().is_empty() {
-        for line in stdout_str.lines() {
-            if line.starts_with("TRACE:") {
-                tracing::trace!("PS: {}", line.strip_prefix("TRACE:").unwrap().trim());
-            } else if !line.trim().is_empty() {
-                tracing::info!("PS: {}", line.trim());
-            }
-        }
-    }
-    if !stderr_str.trim().is_empty() {
-        tracing::error!("PowerShell error output:\n{}", stderr_str.trim());
-    }
-
-    if !output.status.success() {
-        anyhow::bail!("PowerShell script exited with status: {}", output.status);
-    }
-
-    Ok(())
+    let script_manager = crate::tasker::script_manager::ScriptManager::new();
+    let script_path = script_manager.get_or_create_script("Email", "send_email.ps1", script)?;
+    script_manager.execute_script(&script_path)
 }
 
 #[cfg(test)]

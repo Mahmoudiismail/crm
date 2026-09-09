@@ -235,6 +235,40 @@ The `crm_open_sohail` task automates the generation and delivery of Branch & Mon
 * **CRM Open Sohail Grouping & Styling:** Modified Slicer extraction logic to query "All Months Except Current" and "Current Month" directly from PowerShell. Executive Clinic extracts all months combined. The HTML styling uses a fixed layout with configurable column widths, 5px padding, center alignment, and no background color for data rows.
 
 
+## Persistent Versioned PowerShell Scripts
+
+Tasker stores PowerShell scripts persistently in a `scripts/` folder located directly next to the Tasker executable (`<exe_dir>/scripts/<Task Name>/`), eliminating repetitive temporary script creation in `%TEMP%`.
+
+### Folder Structure & Task Grouping
+Scripts are grouped into task-specific subdirectories sanitized for Windows filesystem path compatibility:
+```
+<Tasker Executable Directory>/
+└── scripts/
+    ├── Department Split/
+    │   ├── .metadata.json
+    │   └── department_split.ps1
+    ├── Dashboard Updater/
+    │   ├── .metadata.json
+    │   ├── dashboard_update.ps1
+    │   └── dashboard_email.ps1
+    ├── CRM Open Sohail/
+    │   ├── .metadata.json
+    │   ├── slicer_extract.ps1
+    │   └── reply_email.ps1
+    ├── OPD Analysis/
+    │   ├── .metadata.json
+    │   └── opd_analysis_email.ps1
+    └── Email/
+        ├── .metadata.json
+        └── send_email.ps1
+```
+
+### Fingerprint Tracking & User Edit Preservation
+1. **Fingerprint Hash**: Every execution computes a deterministic SHA-256 fingerprint of the canonical PowerShell script generated from Rust code.
+2. **Sidecar Metadata**: Each task folder contains a `.metadata.json` file tracking the active script filename and `generator_hash` for each script independently.
+3. **Preservation of Manual Edits**: On execution, if the Rust-generated fingerprint matches `generator_hash` in `.metadata.json`, Tasker reuses the active `.ps1` file without overwriting it. Any manual modifications or debugging tweaks made by operators directly to the `.ps1` file are preserved.
+4. **Automatic Versioning**: If the Rust generator code changes (yielding a different SHA-256 hash), Tasker leaves all previous script files untouched on disk and creates a new timestamped version (`<logical_name>_YYYY-MM-DD_HH-MM-SS.ps1`), atomically updating `.metadata.json` so the new script becomes the active version.
+
 ## Dashboard Update Script Execution
 The `DashboardUpdater` script explicitly optimizes Excel interactions by:
 - Disabling `ScreenUpdating` and `EnableEvents`.

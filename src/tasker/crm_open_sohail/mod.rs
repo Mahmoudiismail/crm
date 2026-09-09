@@ -183,7 +183,7 @@ function Find-OriginalMessage ($FolderItems, $SortProperty) {{
         info!("save_email_as_html is true. Saved email body to {}. Skipping PowerShell send for testing.", html_path.display());
     } else {
         info!("Creating/saving reply draft via Outlook COM...");
-        if let Err(e) = powershell::run_powershell(&ps_email_script) {
+        if let Err(e) = powershell::run_powershell("reply_email.ps1", &ps_email_script) {
             error!("Failed to create/save reply draft: {}", e);
             anyhow::bail!("Failed to create/save reply draft");
         }
