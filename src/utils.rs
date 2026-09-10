@@ -431,6 +431,9 @@ fn parse_flexible_date_impl(val: &str, base_date: Option<&str>) -> Option<chrono
     for fmt in formats {
         if let Ok(dt) = NaiveDate::parse_from_str(val, fmt) {
             use chrono::Datelike;
+            if fmt.contains("%Y") && dt.year() < 1000 {
+                continue;
+            }
             let dt = if dt.year() < 100 {
                 dt.with_year(dt.year() + 2000).unwrap_or(dt)
             } else {
