@@ -213,10 +213,13 @@ fn extract_zip(zip_path: &Path, extract_dir: &Path, password: &[u8]) -> Result<V
 }
 
 fn unblock_file(path: &Path) {
-    let ps_cmd = format!("Unblock-File -Path '{}'", path.display());
     let _ = std::process::Command::new("powershell")
+        .arg("-NoProfile")
+        .arg("-ExecutionPolicy")
+        .arg("Bypass")
         .arg("-Command")
-        .arg(&ps_cmd)
+        .arg("param([string]$Path) Unblock-File -LiteralPath $Path")
+        .arg(path)
         .status();
 }
 
@@ -678,5 +681,22 @@ mod tests {
         assert!(script_content.contains("exit 1"));
 
         assert!(script_content.contains("SUCCESS: Update completed successfully."));
+    }
+
+    #[test]
+    fn test_unblock_file_injection_safety() {
+        let src = include_str!("update.rs");
+        // Ensure format! + Unblock-File interpolation is not present in update.rs
+        let bad_pattern = format!("{}{}", "Unblock-File -Path '", "{}'");
+        assert!(
+            !src.contains(&bad_pattern),
+            "Found vulnerable string interpolation in unblock_file"
+        );
+
+        // Test unblock_file with spaces and special characters in path
+        let malicious_path =
+            Path::new("C:\\temp\\file_with 'single quote' & command; calc.exe.txt");
+        // unblock_file should execute without panic or error (returns () and ignores status)
+        unblock_file(malicious_path);
     }
 }
