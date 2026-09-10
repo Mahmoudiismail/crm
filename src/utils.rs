@@ -419,10 +419,26 @@ fn parse_flexible_date_impl(val: &str, base_date: Option<&str>) -> Option<chrono
         "%d-%b-%Y",  // 01-May-2026
         "%d %b %Y",  // 01 May 2026
         "%b %d, %Y", // May 01, 2026
+        "%d-%b-%y",  // 01-May-26
+        "%d %b %y",  // 01 May 26
+        "%b %d, %y", // May 01, 26
+        "%y-%m-%d",  // 26-05-01
+        "%y/%m/%d",  // 26/05/01
+        "%d-%m-%y",  // 01-05-26
+        "%d/%m/%y",  // 01/05/26
     ];
 
     for fmt in formats {
         if let Ok(dt) = NaiveDate::parse_from_str(val, fmt) {
+            use chrono::Datelike;
+            if fmt.contains("%Y") && dt.year() < 1000 {
+                continue;
+            }
+            let dt = if dt.year() < 100 {
+                dt.with_year(dt.year() + 2000).unwrap_or(dt)
+            } else {
+                dt
+            };
             return Some(dt);
         }
     }
@@ -574,7 +590,11 @@ mod tests {
         assert_eq!(to_iso_date("01-May-2026"), "2026-05-01");
         assert_eq!(to_iso_date("01 May 2026"), "2026-05-01");
         assert_eq!(to_iso_date("May 01, 2026"), "2026-05-01");
-        // assert_eq!(to_iso_date("01-May-26"), "2026-05-01"); // %y is tricky with chrono, skip for now or fix
+        assert_eq!(to_iso_date("01-May-26"), "2026-05-01");
+        assert_eq!(to_iso_date("01 May 26"), "2026-05-01");
+        assert_eq!(to_iso_date("May 01, 26"), "2026-05-01");
+        assert_eq!(to_iso_date("26-05-01"), "2026-05-01");
+        assert_eq!(to_iso_date("26/05/01"), "2026-05-01");
         assert_eq!(to_iso_date("invalid"), "invalid");
         assert_eq!(to_iso_date(""), "");
     }
