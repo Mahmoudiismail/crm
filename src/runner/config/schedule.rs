@@ -1606,21 +1606,24 @@ mod tests {
         // 5. Invalid string / format errors
         let err1 = parse_rfc3339_utc("not-a-date").unwrap_err();
         assert!(
-            err1.to_string().contains("Invalid RFC3339 timestamp 'not-a-date'"),
+            err1.to_string()
+                .contains("Invalid RFC3339 timestamp 'not-a-date'"),
             "Error string was: {}",
             err1
         );
 
         let err2 = parse_rfc3339_utc("2024-13-45T12:00:00Z").unwrap_err();
         assert!(
-            err2.to_string().contains("Invalid RFC3339 timestamp '2024-13-45T12:00:00Z'"),
+            err2.to_string()
+                .contains("Invalid RFC3339 timestamp '2024-13-45T12:00:00Z'"),
             "Error string was: {}",
             err2
         );
 
         let err3 = parse_rfc3339_utc("2024/01/15 12:00:00").unwrap_err();
         assert!(
-            err3.to_string().contains("Invalid RFC3339 timestamp '2024/01/15 12:00:00'"),
+            err3.to_string()
+                .contains("Invalid RFC3339 timestamp '2024/01/15 12:00:00'"),
             "Error string was: {}",
             err3
         );
