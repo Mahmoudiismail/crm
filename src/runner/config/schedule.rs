@@ -1581,4 +1581,89 @@ mod tests {
         assert!(is_within_working_hours(&working_hours, dt_fri_10am));
         assert!(!is_within_working_hours(&working_hours, dt_fri_8am));
     }
+
+    #[test]
+    fn test_next_monthly_run_after() {
+        use chrono::TimeZone;
+        use std::collections::HashMap;
+
+        // Base date: Jan 15, 2024 12:00:00 UTC
+        let base_now = Utc.with_ymd_and_hms(2024, 1, 15, 12, 0, 0).unwrap();
+
+        // 1. Same month, future time/day
+        let res = next_monthly_run_after(20, "15:00", base_now, None).unwrap();
+        let dt = DateTime::parse_from_rfc3339(&res).unwrap();
+        assert_eq!(dt.with_timezone(&Utc).year(), 2024);
+        assert_eq!(dt.with_timezone(&Utc).month(), 1);
+        assert_eq!(dt.with_timezone(&Utc).day(), 20);
+        assert!(dt.with_timezone(&Utc) > base_now);
+
+        // 2. Same month, past time/day (moves to next month)
+        let res = next_monthly_run_after(10, "10:00", base_now, None).unwrap();
+        let dt = DateTime::parse_from_rfc3339(&res).unwrap();
+        assert_eq!(dt.with_timezone(&Utc).year(), 2024);
+        assert_eq!(dt.with_timezone(&Utc).month(), 2);
+        assert_eq!(dt.with_timezone(&Utc).day(), 10);
+        assert!(dt.with_timezone(&Utc) > base_now);
+
+        // 3. Day 31 clamping for shorter months
+        // In April (30 days) from March 31
+        let mar_31 = Utc.with_ymd_and_hms(2024, 3, 31, 23, 0, 0).unwrap();
+        let res = next_monthly_run_after(31, "12:00", mar_31, None).unwrap();
+        let dt = DateTime::parse_from_rfc3339(&res).unwrap();
+        assert_eq!(dt.with_timezone(&Utc).month(), 4);
+        assert_eq!(dt.with_timezone(&Utc).day(), 30); // clamped to April 30
+
+        // In Feb leap year (2024, 29 days)
+        let jan_31 = Utc.with_ymd_and_hms(2024, 1, 31, 23, 0, 0).unwrap();
+        let res = next_monthly_run_after(31, "12:00", jan_31, None).unwrap();
+        let dt = DateTime::parse_from_rfc3339(&res).unwrap();
+        assert_eq!(dt.with_timezone(&Utc).month(), 2);
+        assert_eq!(dt.with_timezone(&Utc).day(), 29); // clamped to Feb 29
+
+        // In Feb non-leap year (2025, 28 days)
+        let jan_31_2025 = Utc.with_ymd_and_hms(2025, 1, 31, 23, 0, 0).unwrap();
+        let res = next_monthly_run_after(31, "12:00", jan_31_2025, None).unwrap();
+        let dt = DateTime::parse_from_rfc3339(&res).unwrap();
+        assert_eq!(dt.with_timezone(&Utc).year(), 2025);
+        assert_eq!(dt.with_timezone(&Utc).month(), 2);
+        assert_eq!(dt.with_timezone(&Utc).day(), 28); // clamped to Feb 28
+
+        // 4. Year boundary crossing (Dec -> Jan)
+        let dec_20 = Utc.with_ymd_and_hms(2024, 12, 20, 12, 0, 0).unwrap();
+        let res = next_monthly_run_after(15, "12:00", dec_20, None).unwrap();
+        let dt = DateTime::parse_from_rfc3339(&res).unwrap();
+        assert_eq!(dt.with_timezone(&Utc).year(), 2025);
+        assert_eq!(dt.with_timezone(&Utc).month(), 1);
+        assert_eq!(dt.with_timezone(&Utc).day(), 15);
+
+        // 5. Empty time string defaults to 00:00:00
+        let res = next_monthly_run_after(20, "", base_now, None).unwrap();
+        let dt = DateTime::parse_from_rfc3339(&res).unwrap();
+        assert_eq!(dt.with_timezone(&Utc).day(), 20);
+
+        // 6. Invalid time strings
+        assert!(next_monthly_run_after(15, "25:00", base_now, None).is_err());
+        assert!(next_monthly_run_after(15, "invalid", base_now, None).is_err());
+
+        // 7. Working hours filtering
+        let mut working_hours = HashMap::new();
+        // Mon-Fri working days
+        working_hours.insert(
+            "Mon-Fri".to_string(),
+            WorkingHours {
+                start: "00:00".to_string(),
+                end: "23:59".to_string(),
+            },
+        );
+
+        // March 30, 2024 is Saturday. If day_of_month = 30 in March (March 30), it is a Saturday (non-working).
+        // March 30 past time: from March 30 18:00 UTC, target day_of_month 30 at 12:00 UTC.
+        // In April 2024, April 30 is Tuesday (working day).
+        let mar_30_sat = Utc.with_ymd_and_hms(2024, 3, 30, 18, 0, 0).unwrap();
+        let res = next_monthly_run_after(30, "12:00", mar_30_sat, Some(&working_hours)).unwrap();
+        let dt = DateTime::parse_from_rfc3339(&res).unwrap();
+        assert_eq!(dt.with_timezone(&Utc).month(), 4);
+        assert_eq!(dt.with_timezone(&Utc).day(), 30);
+    }
 }
