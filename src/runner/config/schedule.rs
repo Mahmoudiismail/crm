@@ -1581,4 +1581,109 @@ mod tests {
         assert!(is_within_working_hours(&working_hours, dt_fri_10am));
         assert!(!is_within_working_hours(&working_hours, dt_fri_8am));
     }
+
+    #[test]
+    fn test_next_working_time() {
+        use chrono::{Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone};
+        use std::collections::HashMap;
+
+        let mut working_hours = HashMap::new();
+        working_hours.insert(
+            "Mon-Fri".to_string(),
+            WorkingHours {
+                start: "09:00".to_string(),
+                end: "17:00".to_string(),
+            },
+        );
+
+        // Monday 2026-06-15
+        let date_mon = NaiveDate::from_ymd_opt(2026, 6, 15).unwrap();
+        // Saturday 2026-06-20
+        let date_sat = NaiveDate::from_ymd_opt(2026, 6, 20).unwrap();
+
+        // 1. Already within working hours (Monday 10:00) -> returns now unchanged
+        let dt_mon_10am = Local
+            .from_local_datetime(&NaiveDateTime::new(date_mon, NaiveTime::from_hms_opt(10, 0, 0).unwrap()))
+            .single()
+            .unwrap()
+            .with_timezone(&Utc);
+        assert_eq!(next_working_time(&working_hours, dt_mon_10am), dt_mon_10am);
+
+        // 2. Before working hours (Monday 08:00) -> advances to Monday 09:00
+        let dt_mon_8am = Local
+            .from_local_datetime(&NaiveDateTime::new(date_mon, NaiveTime::from_hms_opt(8, 0, 0).unwrap()))
+            .single()
+            .unwrap()
+            .with_timezone(&Utc);
+        let expected_mon_9am = Local
+            .from_local_datetime(&NaiveDateTime::new(date_mon, NaiveTime::from_hms_opt(9, 0, 0).unwrap()))
+            .single()
+            .unwrap()
+            .with_timezone(&Utc);
+        assert_eq!(next_working_time(&working_hours, dt_mon_8am), expected_mon_9am);
+
+        // 3. After working hours (Monday 18:00) -> advances to Tuesday 09:00
+        let dt_mon_6pm = Local
+            .from_local_datetime(&NaiveDateTime::new(date_mon, NaiveTime::from_hms_opt(18, 0, 0).unwrap()))
+            .single()
+            .unwrap()
+            .with_timezone(&Utc);
+        let date_tue = NaiveDate::from_ymd_opt(2026, 6, 16).unwrap();
+        let expected_tue_9am = Local
+            .from_local_datetime(&NaiveDateTime::new(date_tue, NaiveTime::from_hms_opt(9, 0, 0).unwrap()))
+            .single()
+            .unwrap()
+            .with_timezone(&Utc);
+        assert_eq!(next_working_time(&working_hours, dt_mon_6pm), expected_tue_9am);
+
+        // 4. Over weekend (Saturday 10:00) -> advances to Monday 09:00
+        let dt_sat_10am = Local
+            .from_local_datetime(&NaiveDateTime::new(date_sat, NaiveTime::from_hms_opt(10, 0, 0).unwrap()))
+            .single()
+            .unwrap()
+            .with_timezone(&Utc);
+        let date_next_mon = NaiveDate::from_ymd_opt(2026, 6, 22).unwrap();
+        let expected_next_mon_9am = Local
+            .from_local_datetime(&NaiveDateTime::new(date_next_mon, NaiveTime::from_hms_opt(9, 0, 0).unwrap()))
+            .single()
+            .unwrap()
+            .with_timezone(&Utc);
+        assert_eq!(next_working_time(&working_hours, dt_sat_10am), expected_next_mon_9am);
+
+        // 5. Empty working hours -> returns now unchanged
+        let empty_wh = HashMap::new();
+        assert_eq!(next_working_time(&empty_wh, dt_sat_10am), dt_sat_10am);
+
+        // 6. Overnight shift (22:00 - 06:00) starting at 12:00 -> advances to 22:00
+        let mut overnight_wh = HashMap::new();
+        overnight_wh.insert(
+            "Mon-Fri".to_string(),
+            WorkingHours {
+                start: "22:00".to_string(),
+                end: "06:00".to_string(),
+            },
+        );
+        let dt_mon_12pm = Local
+            .from_local_datetime(&NaiveDateTime::new(date_mon, NaiveTime::from_hms_opt(12, 0, 0).unwrap()))
+            .single()
+            .unwrap()
+            .with_timezone(&Utc);
+        let expected_mon_10pm = Local
+            .from_local_datetime(&NaiveDateTime::new(date_mon, NaiveTime::from_hms_opt(22, 0, 0).unwrap()))
+            .single()
+            .unwrap()
+            .with_timezone(&Utc);
+        assert_eq!(next_working_time(&overnight_wh, dt_mon_12pm), expected_mon_10pm);
+
+        // 7. Invalid time strings / unreachable working hours -> fallback returns original now
+        let mut invalid_wh = HashMap::new();
+        invalid_wh.insert(
+            "Mon-Fri".to_string(),
+            WorkingHours {
+                start: "invalid".to_string(),
+                end: "time".to_string(),
+            },
+        );
+        assert_eq!(next_working_time(&invalid_wh, dt_mon_10am), dt_mon_10am);
+    }
 }
