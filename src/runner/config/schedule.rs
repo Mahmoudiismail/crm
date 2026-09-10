@@ -1581,4 +1581,58 @@ mod tests {
         assert!(is_within_working_hours(&working_hours, dt_fri_10am));
         assert!(!is_within_working_hours(&working_hours, dt_fri_8am));
     }
+
+    #[test]
+    fn test_parse_rfc3339_utc() {
+        use chrono::TimeZone;
+
+        // 1. Valid RFC3339 with 'Z' suffix
+        let parsed = parse_rfc3339_utc("2024-01-15T12:00:00Z").unwrap();
+        let expected = Utc.with_ymd_and_hms(2024, 1, 15, 12, 0, 0).unwrap();
+        assert_eq!(parsed, expected);
+
+        // 2. Valid RFC3339 with positive offset (+03:00)
+        let parsed_pos = parse_rfc3339_utc("2024-01-15T15:00:00+03:00").unwrap();
+        assert_eq!(parsed_pos, expected);
+
+        // 3. Valid RFC3339 with negative offset (-05:00)
+        let parsed_neg = parse_rfc3339_utc("2024-01-15T07:00:00-05:00").unwrap();
+        assert_eq!(parsed_neg, expected);
+
+        // 4. Valid RFC3339 with fractional seconds
+        let parsed_frac = parse_rfc3339_utc("2024-01-15T12:00:00.123456Z").unwrap();
+        assert_eq!(parsed_frac.timestamp_subsec_micros(), 123_456);
+
+        // 5. Invalid string / format errors
+        let err1 = parse_rfc3339_utc("not-a-date").unwrap_err();
+        assert!(
+            err1.to_string()
+                .contains("Invalid RFC3339 timestamp 'not-a-date'"),
+            "Error string was: {}",
+            err1
+        );
+
+        let err2 = parse_rfc3339_utc("2024-13-45T12:00:00Z").unwrap_err();
+        assert!(
+            err2.to_string()
+                .contains("Invalid RFC3339 timestamp '2024-13-45T12:00:00Z'"),
+            "Error string was: {}",
+            err2
+        );
+
+        let err3 = parse_rfc3339_utc("2024/01/15 12:00:00").unwrap_err();
+        assert!(
+            err3.to_string()
+                .contains("Invalid RFC3339 timestamp '2024/01/15 12:00:00'"),
+            "Error string was: {}",
+            err3
+        );
+
+        let err4 = parse_rfc3339_utc("").unwrap_err();
+        assert!(
+            err4.to_string().contains("Invalid RFC3339 timestamp ''"),
+            "Error string was: {}",
+            err4
+        );
+    }
 }
