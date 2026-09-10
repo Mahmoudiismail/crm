@@ -694,7 +694,8 @@ mod tests {
         );
 
         // Test unblock_file with spaces and special characters in path
-        let malicious_path = Path::new("C:\\temp\\file_with 'single quote' & command; calc.exe.txt");
+        let malicious_path =
+            Path::new("C:\\temp\\file_with 'single quote' & command; calc.exe.txt");
         // unblock_file should execute without panic or error (returns () and ignores status)
         unblock_file(malicious_path);
     }
