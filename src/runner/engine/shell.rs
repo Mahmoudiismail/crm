@@ -115,8 +115,9 @@ pub async fn run_shell_command(
     command: &str,
     shell_timeout_seconds: u64,
 ) -> Result<()> {
-    let args = parse_command_args(command)
-        .ok_or_else(|| anyhow::anyhow!("Failed to parse command string: invalid quoting or syntax"))?;
+    let args = parse_command_args(command).ok_or_else(|| {
+        anyhow::anyhow!("Failed to parse command string: invalid quoting or syntax")
+    })?;
 
     #[cfg(target_os = "windows")]
     let cmd = {
@@ -157,7 +158,9 @@ mod tests {
 
     #[test]
     fn test_parse_command_args_windows_paths() {
-        let parsed = parse_command_args(r#""C:\Program Files\App\app.exe" --file "C:\data\file.txt""#).unwrap();
+        let parsed =
+            parse_command_args(r#""C:\Program Files\App\app.exe" --file "C:\data\file.txt""#)
+                .unwrap();
         assert_eq!(
             parsed,
             vec![
@@ -173,7 +176,10 @@ mod tests {
         let logger = TaskLogger::new("test_task", "Test Task");
         let result = run_shell_command(&logger, "   ", 5).await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("invalid quoting or syntax"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("invalid quoting or syntax"));
     }
 
     #[tokio::test]
@@ -181,7 +187,10 @@ mod tests {
         let logger = TaskLogger::new("test_task", "Test Task");
         let result = run_shell_command(&logger, "echo 'unclosed quote", 5).await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("invalid quoting or syntax"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("invalid quoting or syntax"));
     }
 
     #[tokio::test]
