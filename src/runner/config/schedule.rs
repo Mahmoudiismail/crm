@@ -1581,4 +1581,126 @@ mod tests {
         assert!(is_within_working_hours(&working_hours, dt_fri_10am));
         assert!(!is_within_working_hours(&working_hours, dt_fri_8am));
     }
+
+    #[test]
+    fn test_is_working_day() {
+        use chrono::{Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone};
+        use std::collections::HashMap;
+
+        let make_local_dt = |year: i32, month: u32, day: u32| {
+            let naive_date = NaiveDate::from_ymd_opt(year, month, day).unwrap();
+            let naive_time = NaiveTime::from_hms_opt(12, 0, 0).unwrap();
+            Local
+                .from_local_datetime(&NaiveDateTime::new(naive_date, naive_time))
+                .single()
+                .unwrap()
+                .with_timezone(&Utc)
+        };
+
+        // Dates for June 2026:
+        // June 15 = Mon, June 16 = Tue, June 17 = Wed, June 18 = Thu, June 19 = Fri, June 20 = Sat, June 21 = Sun
+        let dt_mon = make_local_dt(2026, 6, 15);
+        let dt_tue = make_local_dt(2026, 6, 16);
+        let dt_wed = make_local_dt(2026, 6, 17);
+        let dt_thu = make_local_dt(2026, 6, 18);
+        let dt_fri = make_local_dt(2026, 6, 19);
+        let dt_sat = make_local_dt(2026, 6, 20);
+        let dt_sun = make_local_dt(2026, 6, 21);
+
+        // 1. Empty working_hours map -> defaults to true for all days
+        let empty_wh = HashMap::new();
+        assert!(is_working_day(&empty_wh, dt_mon));
+        assert!(is_working_day(&empty_wh, dt_sat));
+
+        // 2. Single day matching (various string formats)
+        let mut single_day_wh = HashMap::new();
+        single_day_wh.insert(
+            "Monday".to_string(),
+            WorkingHours {
+                start: "00:00".to_string(),
+                end: "23:59".to_string(),
+            },
+        );
+        assert!(is_working_day(&single_day_wh, dt_mon));
+        assert!(!is_working_day(&single_day_wh, dt_tue));
+
+        let mut single_day_abbr_wh = HashMap::new();
+        single_day_abbr_wh.insert(
+            "mon".to_string(),
+            WorkingHours {
+                start: "00:00".to_string(),
+                end: "23:59".to_string(),
+            },
+        );
+        assert!(is_working_day(&single_day_abbr_wh, dt_mon));
+        assert!(!is_working_day(&single_day_abbr_wh, dt_tue));
+
+        // 3. Standard range (Mon-Fri)
+        let mut range_wh = HashMap::new();
+        range_wh.insert(
+            "Mon - Fri".to_string(),
+            WorkingHours {
+                start: "09:00".to_string(),
+                end: "17:00".to_string(),
+            },
+        );
+        assert!(is_working_day(&range_wh, dt_mon));
+        assert!(is_working_day(&range_wh, dt_wed));
+        assert!(is_working_day(&range_wh, dt_fri));
+        assert!(!is_working_day(&range_wh, dt_sat));
+        assert!(!is_working_day(&range_wh, dt_sun));
+
+        // 4. Wrap-around range (Fri-Mon)
+        let mut wrap_range_wh = HashMap::new();
+        wrap_range_wh.insert(
+            "Fri-Mon".to_string(),
+            WorkingHours {
+                start: "09:00".to_string(),
+                end: "17:00".to_string(),
+            },
+        );
+        assert!(is_working_day(&wrap_range_wh, dt_fri));
+        assert!(is_working_day(&wrap_range_wh, dt_sat));
+        assert!(is_working_day(&wrap_range_wh, dt_sun));
+        assert!(is_working_day(&wrap_range_wh, dt_mon));
+        assert!(!is_working_day(&wrap_range_wh, dt_tue));
+        assert!(!is_working_day(&wrap_range_wh, dt_wed));
+        assert!(!is_working_day(&wrap_range_wh, dt_thu));
+
+        // 5. Multiple range / day entries
+        let mut multi_wh = HashMap::new();
+        multi_wh.insert(
+            "Mon-Wed".to_string(),
+            WorkingHours {
+                start: "09:00".to_string(),
+                end: "17:00".to_string(),
+            },
+        );
+        multi_wh.insert(
+            "Fri".to_string(),
+            WorkingHours {
+                start: "09:00".to_string(),
+                end: "17:00".to_string(),
+            },
+        );
+        assert!(is_working_day(&multi_wh, dt_mon));
+        assert!(is_working_day(&multi_wh, dt_tue));
+        assert!(is_working_day(&multi_wh, dt_wed));
+        assert!(!is_working_day(&multi_wh, dt_thu));
+        assert!(is_working_day(&multi_wh, dt_fri));
+        assert!(!is_working_day(&multi_wh, dt_sat));
+        assert!(!is_working_day(&multi_wh, dt_sun));
+
+        // 6. Unrecognized or invalid keys -> returns false when map is non-empty
+        let mut invalid_wh = HashMap::new();
+        invalid_wh.insert(
+            "Invalid-Day".to_string(),
+            WorkingHours {
+                start: "09:00".to_string(),
+                end: "17:00".to_string(),
+            },
+        );
+        assert!(!is_working_day(&invalid_wh, dt_mon));
+        assert!(!is_working_day(&invalid_wh, dt_sat));
+    }
 }
