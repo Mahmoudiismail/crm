@@ -814,6 +814,47 @@ mod tests {
         assert_eq!(ctx_late_lines[20].trim(), ">>>   45 | Line 45");
         assert_eq!(ctx_late_lines[25].trim(), "50 | Line 50");
     }
+
+    #[test]
+    fn test_parse_log_level_valid() {
+        use tracing_subscriber::filter::LevelFilter;
+
+        assert_eq!(parse_log_level("trace").unwrap(), LevelFilter::TRACE);
+        assert_eq!(parse_log_level("debug").unwrap(), LevelFilter::DEBUG);
+        assert_eq!(parse_log_level("info").unwrap(), LevelFilter::INFO);
+        assert_eq!(parse_log_level("warn").unwrap(), LevelFilter::WARN);
+        assert_eq!(parse_log_level("error").unwrap(), LevelFilter::ERROR);
+        assert_eq!(parse_log_level("off").unwrap(), LevelFilter::OFF);
+    }
+
+    #[test]
+    fn test_parse_log_level_case_insensitive() {
+        use tracing_subscriber::filter::LevelFilter;
+
+        assert_eq!(parse_log_level("TRACE").unwrap(), LevelFilter::TRACE);
+        assert_eq!(parse_log_level("Debug").unwrap(), LevelFilter::DEBUG);
+        assert_eq!(parse_log_level("InFo").unwrap(), LevelFilter::INFO);
+        assert_eq!(parse_log_level("WaRn").unwrap(), LevelFilter::WARN);
+        assert_eq!(parse_log_level("ERROR").unwrap(), LevelFilter::ERROR);
+        assert_eq!(parse_log_level("Off").unwrap(), LevelFilter::OFF);
+    }
+
+    #[test]
+    fn test_parse_log_level_invalid() {
+        let invalid_cases = ["invalid", "verbose", "", " info ", "123", "warning"];
+
+        for case in invalid_cases {
+            let res = parse_log_level(case);
+            assert!(res.is_err(), "Expected error for input '{}'", case);
+            let err_msg = res.unwrap_err().to_string();
+            assert!(
+                err_msg.contains(&format!("Invalid log level \"{}\"", case)),
+                "Unexpected error message for '{}': {}",
+                case,
+                err_msg
+            );
+        }
+    }
 }
 
 /// A guard that automatically removes a file when it goes out of scope.
