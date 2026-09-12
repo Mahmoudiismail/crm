@@ -1,4 +1,5 @@
 use chrono::{Local, NaiveDate, TimeZone, Timelike, Utc};
+use crm_tool::runner::config::RunnerConfig;
 use crm_tool::runner::config::{
     generate_execution_periods, generate_upcoming_executions_for_app,
     resolve_and_generate_execution_periods, ActionSpec, ExecutionMode, ExternalAppSpec, PeriodMode,
@@ -575,6 +576,319 @@ fn test_migration_test_e_post_run_steps() {
         assert_eq!(spec2.period_mode, PeriodMode::Custom);
         assert_eq!(spec2.start_date.as_deref(), Some("2026-01-01"));
         assert_eq!(spec2.end_date.as_deref(), Some("2026-09-30"));
+    } else {
+        panic!("Expected ExternalApp");
+    }
+}
+
+fn load_config_from_json(json_str: &str) -> (RunnerConfig, tempfile::NamedTempFile) {
+    use std::io::Write;
+    let mut temp = tempfile::NamedTempFile::new().unwrap();
+    temp.write_all(json_str.as_bytes()).unwrap();
+    temp.flush().unwrap();
+    let cfg = RunnerConfig::load(temp.path().to_str().unwrap()).unwrap();
+    (cfg, temp)
+}
+
+#[test]
+fn test_loader_migration_a_legacy_inheritance() {
+    let json = r#"{
+        "tasks": [{
+            "id": "task_a",
+            "name": "Task A",
+            "enabled": true,
+            "repetition": "once",
+            "frequency_seconds": 0,
+            "next_run_at": "",
+            "schedules": [],
+            "steps": [{
+                "mode": "sequential",
+                "actions": [{ "type": "external_app", "app_id": "app_a", "args": {} }]
+            }],
+            "post_run_steps": [],
+            "last_run_at": "",
+            "last_status": "",
+            "timeout_seconds": 0,
+            "period_mode": "monthly",
+            "start_date": "2026-01-01",
+            "end_date": "2026-09-30"
+        }]
+    }"#;
+
+    let (cfg, _file) = load_config_from_json(json);
+    assert_eq!(cfg.tasks.len(), 1);
+    if let ActionSpec::ExternalApp(ref spec) = cfg.tasks[0].steps[0].actions[0] {
+        assert_eq!(spec.period_mode, PeriodMode::Monthly);
+        assert_eq!(spec.start_date.as_deref(), Some("2026-01-01"));
+        assert_eq!(spec.end_date.as_deref(), Some("2026-09-30"));
+    } else {
+        panic!("Expected ExternalApp");
+    }
+}
+
+#[test]
+fn test_loader_migration_b_explicit_custom_must_win() {
+    let json = r#"{
+        "tasks": [{
+            "id": "task_b",
+            "name": "Task B",
+            "enabled": true,
+            "repetition": "once",
+            "frequency_seconds": 0,
+            "next_run_at": "",
+            "schedules": [],
+            "steps": [{
+                "mode": "sequential",
+                "actions": [{
+                    "type": "external_app",
+                    "app_id": "app_b",
+                    "args": {},
+                    "period_mode": "custom"
+                }]
+            }],
+            "post_run_steps": [],
+            "last_run_at": "",
+            "last_status": "",
+            "timeout_seconds": 0,
+            "period_mode": "monthly"
+        }]
+    }"#;
+
+    let (cfg, _file) = load_config_from_json(json);
+    if let ActionSpec::ExternalApp(ref spec) = cfg.tasks[0].steps[0].actions[0] {
+        assert_eq!(spec.period_mode, PeriodMode::Custom);
+    } else {
+        panic!("Expected ExternalApp");
+    }
+}
+
+#[test]
+fn test_loader_migration_c_explicit_dates_must_win() {
+    let json = r#"{
+        "tasks": [{
+            "id": "task_c",
+            "name": "Task C",
+            "enabled": true,
+            "repetition": "once",
+            "frequency_seconds": 0,
+            "next_run_at": "",
+            "schedules": [],
+            "steps": [{
+                "mode": "sequential",
+                "actions": [{
+                    "type": "external_app",
+                    "app_id": "app_c",
+                    "args": {},
+                    "start_date": "2026-02-01",
+                    "end_date": "2026-02-28"
+                }]
+            }],
+            "post_run_steps": [],
+            "last_run_at": "",
+            "last_status": "",
+            "timeout_seconds": 0,
+            "start_date": "2026-01-01",
+            "end_date": "2026-09-30"
+        }]
+    }"#;
+
+    let (cfg, _file) = load_config_from_json(json);
+    if let ActionSpec::ExternalApp(ref spec) = cfg.tasks[0].steps[0].actions[0] {
+        assert_eq!(spec.start_date.as_deref(), Some("2026-02-01"));
+        assert_eq!(spec.end_date.as_deref(), Some("2026-02-28"));
+    } else {
+        panic!("Expected ExternalApp");
+    }
+}
+
+#[test]
+fn test_loader_migration_d_mixed_inheritance() {
+    let json = r#"{
+        "tasks": [{
+            "id": "task_d",
+            "name": "Task D",
+            "enabled": true,
+            "repetition": "once",
+            "frequency_seconds": 0,
+            "next_run_at": "",
+            "schedules": [],
+            "steps": [{
+                "mode": "sequential",
+                "actions": [{
+                    "type": "external_app",
+                    "app_id": "app_d",
+                    "args": {},
+                    "period_mode": "custom",
+                    "end_date": "2026-03-31"
+                }]
+            }],
+            "post_run_steps": [],
+            "last_run_at": "",
+            "last_status": "",
+            "timeout_seconds": 0,
+            "period_mode": "monthly",
+            "start_date": "2026-01-01",
+            "end_date": "2026-09-30"
+        }]
+    }"#;
+
+    let (cfg, _file) = load_config_from_json(json);
+    if let ActionSpec::ExternalApp(ref spec) = cfg.tasks[0].steps[0].actions[0] {
+        assert_eq!(spec.period_mode, PeriodMode::Custom);
+        assert_eq!(spec.start_date.as_deref(), Some("2026-01-01"));
+        assert_eq!(spec.end_date.as_deref(), Some("2026-03-31"));
+    } else {
+        panic!("Expected ExternalApp");
+    }
+}
+
+#[test]
+fn test_loader_migration_e_post_run_steps() {
+    let json = r#"{
+        "tasks": [{
+            "id": "task_e",
+            "name": "Task E",
+            "enabled": true,
+            "repetition": "once",
+            "frequency_seconds": 0,
+            "next_run_at": "",
+            "schedules": [],
+            "steps": [],
+            "post_run_steps": [{
+                "mode": "sequential",
+                "actions": [{
+                    "type": "external_app",
+                    "app_id": "app_e_1",
+                    "args": {}
+                }, {
+                    "type": "external_app",
+                    "app_id": "app_e_2",
+                    "args": {},
+                    "period_mode": "custom"
+                }]
+            }],
+            "last_run_at": "",
+            "last_status": "",
+            "timeout_seconds": 0,
+            "period_mode": "monthly",
+            "start_date": "2026-01-01",
+            "end_date": "2026-09-30"
+        }]
+    }"#;
+
+    let (cfg, _file) = load_config_from_json(json);
+    if let ActionSpec::ExternalApp(ref spec1) = cfg.tasks[0].post_run_steps[0].actions[0] {
+        assert_eq!(spec1.period_mode, PeriodMode::Monthly);
+        assert_eq!(spec1.start_date.as_deref(), Some("2026-01-01"));
+        assert_eq!(spec1.end_date.as_deref(), Some("2026-09-30"));
+    } else {
+        panic!("Expected ExternalApp");
+    }
+
+    if let ActionSpec::ExternalApp(ref spec2) = cfg.tasks[0].post_run_steps[0].actions[1] {
+        assert_eq!(spec2.period_mode, PeriodMode::Custom);
+        assert_eq!(spec2.start_date.as_deref(), Some("2026-01-01"));
+        assert_eq!(spec2.end_date.as_deref(), Some("2026-09-30"));
+    } else {
+        panic!("Expected ExternalApp");
+    }
+}
+
+#[test]
+fn test_loader_migration_f_multiple_apps_independence() {
+    let json = r#"{
+        "tasks": [{
+            "id": "task_f",
+            "name": "Task F",
+            "enabled": true,
+            "repetition": "once",
+            "frequency_seconds": 0,
+            "next_run_at": "",
+            "schedules": [],
+            "steps": [{
+                "mode": "sequential",
+                "actions": [
+                    { "type": "external_app", "app_id": "app_f_1", "args": {} },
+                    {
+                        "type": "external_app",
+                        "app_id": "app_f_2",
+                        "args": {},
+                        "period_mode": "quarterly",
+                        "start_date": "2026-02-01",
+                        "end_date": "2026-06-30"
+                    }
+                ]
+            }],
+            "post_run_steps": [],
+            "last_run_at": "",
+            "last_status": "",
+            "timeout_seconds": 0,
+            "period_mode": "monthly",
+            "start_date": "2026-01-01",
+            "end_date": "2026-09-30"
+        }]
+    }"#;
+
+    let (cfg, _file) = load_config_from_json(json);
+    if let ActionSpec::ExternalApp(ref spec1) = cfg.tasks[0].steps[0].actions[0] {
+        assert_eq!(spec1.period_mode, PeriodMode::Monthly);
+        assert_eq!(spec1.start_date.as_deref(), Some("2026-01-01"));
+        assert_eq!(spec1.end_date.as_deref(), Some("2026-09-30"));
+    }
+    if let ActionSpec::ExternalApp(ref spec2) = cfg.tasks[0].steps[0].actions[1] {
+        assert_eq!(spec2.period_mode, PeriodMode::Quarterly);
+        assert_eq!(spec2.start_date.as_deref(), Some("2026-02-01"));
+        assert_eq!(spec2.end_date.as_deref(), Some("2026-06-30"));
+    }
+}
+
+#[test]
+fn test_loader_migration_g_save_and_reload_roundtrip() {
+    let json = r#"{
+        "tasks": [{
+            "id": "task_g",
+            "name": "Task G",
+            "enabled": true,
+            "repetition": "once",
+            "frequency_seconds": 0,
+            "next_run_at": "",
+            "schedules": [],
+            "steps": [{
+                "mode": "sequential",
+                "actions": [{
+                    "type": "external_app",
+                    "app_id": "app_g",
+                    "args": {},
+                    "period_mode": "custom"
+                }]
+            }],
+            "post_run_steps": [],
+            "last_run_at": "",
+            "last_status": "",
+            "timeout_seconds": 0,
+            "period_mode": "monthly"
+        }]
+    }"#;
+
+    let (cfg, temp_file) = load_config_from_json(json);
+    let path_str = temp_file.path().to_str().unwrap().to_string();
+
+    // Save migrated config back to file
+    cfg.save(&path_str).expect("Failed to save config");
+
+    // Read saved file content to verify task-level period/date fields are NOT persisted
+    let file_content = std::fs::read_to_string(&path_str).unwrap();
+    let json_val: serde_json::Value = serde_json::from_str(&file_content).unwrap();
+    let task_obj = &json_val["tasks"][0];
+
+    assert!(task_obj.get("period_mode").is_none());
+    assert!(task_obj.get("start_date").is_none());
+    assert!(task_obj.get("end_date").is_none());
+
+    // Reload saved file and verify explicit Custom period_mode survives
+    let reloaded_cfg = RunnerConfig::load(&path_str).unwrap();
+    if let ActionSpec::ExternalApp(ref spec) = reloaded_cfg.tasks[0].steps[0].actions[0] {
+        assert_eq!(spec.period_mode, PeriodMode::Custom);
     } else {
         panic!("Expected ExternalApp");
     }
