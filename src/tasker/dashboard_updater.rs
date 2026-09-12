@@ -4,11 +4,20 @@ use std::fs::File;
 use std::io::Write;
 use tracing::{error, info};
 
-fn run_persistent_powershell(logical_name: &str, script: &str) -> Result<()> {
+fn run_persistent_powershell_with_args(
+    logical_name: &str,
+    script_template: &str,
+    args: &[(&str, &str)],
+) -> Result<()> {
     let script_manager = crate::tasker::script_manager::ScriptManager::new();
     let script_path =
-        script_manager.get_or_create_script("Dashboard Updater", logical_name, script)?;
-    script_manager.execute_script(&script_path)
+        script_manager.get_or_create_script("Dashboard Updater", logical_name, script_template)?;
+    script_manager.execute_script_with_args(&script_path, args)
+}
+
+#[allow(dead_code)]
+fn run_persistent_powershell(logical_name: &str, script: &str) -> Result<()> {
+    run_persistent_powershell_with_args(logical_name, script, &[])
 }
 
 pub fn run(config: &DashboardUpdaterConfig) -> Result<()> {
@@ -37,12 +46,13 @@ pub fn run(config: &DashboardUpdaterConfig) -> Result<()> {
     info!("Dashboard update started.");
     info!("Directly refreshing data model in '{}'", dashboard_path_str);
 
-    let ps_script = format!(
-        r#"
+    let ps_script = r#"
+param(
+    [string]$DashboardPath
+)
 
 $ErrorActionPreference = "Stop"
-
-$dashboardPath = '{dashboard_path}'
+$dashboardPath = $DashboardPath
 
 Write-Output "Starting Excel automation to update dashboard..."
 
@@ -56,16 +66,13 @@ $Excel.EnableEvents = $false
 
 $processId = $null
 
-try {{
-    # Attempt to capture the Process ID so we can forcefully kill it later if needed
-    try {{
-        # Try getting process by HWND
+try {
+    try {
         [int]$handle = $Excel.Hwnd
-        $processId = (Get-Process | Where-Object {{ $_.MainWindowHandle -eq $handle }}).Id
-    }} catch {{
-        # Fallback to getting most recent EXCEL process created by this user
+        $processId = (Get-Process | Where-Object { $_.MainWindowHandle -eq $handle }).Id
+    } catch {
         $processId = (Get-Process -Name EXCEL | Sort-Object StartTime -Descending | Select-Object -First 1).Id
-    }}
+    }
 
     Write-Output "Opening dashboard workbook at: $dashboardPath"
     $Workbook = $Excel.Workbooks.Open($dashboardPath)
@@ -74,76 +81,71 @@ try {{
     $originalCalculation = $Excel.Calculation
     $Excel.Calculation = -4135 # xlCalculationManual
 
-    # Restore calculation before refreshing connections
     Write-Output "Restoring Excel calculation mode..."
-    try {{
+    try {
         $Excel.Calculation = $originalCalculation
-    }} catch {{
+    } catch {
         Write-Output "Warning: Could not restore calculation mode."
-    }}
+    }
 
     Write-Output "Refreshing Workbook connections/Model..."
-    try {{
+    try {
         $Workbook.RefreshAll()
-    }} catch {{
+    } catch {
         Write-Output "Warning: Could not RefreshAll."
-    }}
+    }
 
-    # Refresh Data Model and PivotTables
     Write-Output "Refreshing Data Model..."
-    if ($Workbook.Model) {{
+    if ($Workbook.Model) {
         $Workbook.Model.Refresh()
-    }}
+    }
 
     Write-Output "Refreshing PivotTables..."
-    foreach ($Sheet in $Workbook.Worksheets) {{
-        foreach ($PivotTable in $Sheet.PivotTables()) {{
+    foreach ($Sheet in $Workbook.Worksheets) {
+        foreach ($PivotTable in $Sheet.PivotTables()) {
             $PivotTable.RefreshTable()
-        }}
-    }}
+        }
+    }
 
     Write-Output "Saving workbook..."
     $Workbook.Save()
     $Workbook.Close($true)
     Write-Output "Dashboard update completed successfully."
 
-}} catch {{
+} catch {
     Write-Error "Failed to update Excel file: $_"
-    if ($Workbook) {{ try {{ $Workbook.Close($false) }} catch {{}} }}
+    if ($Workbook) { try { $Workbook.Close($false) } catch {} }
     [System.Environment]::ExitCode = 1
-}} finally {{
+} finally {
     Write-Output "Cleaning up Excel COM object..."
-    try {{
-        if ($Excel) {{
+    try {
+        if ($Excel) {
             $Excel.ScreenUpdating = $true
             $Excel.EnableEvents = $true
-            if ($originalCalculation) {{ $Excel.Calculation = $originalCalculation }}
+            if ($originalCalculation) { $Excel.Calculation = $originalCalculation }
             $Excel.Quit()
             [System.Runtime.InteropServices.Marshal]::ReleaseComObject($Excel) | Out-Null
-        }}
-    }} catch {{
+        }
+    } catch {
         Write-Output "Warning: Failed to cleanly quit Excel."
-    }}
+    }
 
     [System.GC]::Collect()
     [System.GC]::WaitForPendingFinalizers()
 
-    # Forcefully kill process if it still exists
-    if ($processId) {{
-        try {{
+    if ($processId) {
+        try {
             $proc = Get-Process -Id $processId -ErrorAction SilentlyContinue
-            if ($proc) {{
+            if ($proc) {
                 Write-Output "Force killing Excel process ID $processId"
                 $proc.Kill()
-            }}
-        }} catch {{
+            }
+        } catch {
             Write-Output "Warning: Failed to forcefully kill Excel process."
-        }}
-    }}
-}}
-"#,
-        dashboard_path = dashboard_path_str.replace('\'', "''"),
-    );
+        }
+    }
+}
+"#;
 
     if config.save_email_as_html.unwrap_or(false) {
         info!("save_email_as_html is true, skipping actual dashboard update via powershell.");
@@ -168,7 +170,11 @@ try {{
         return Ok(());
     }
 
-    let ps_result = run_persistent_powershell("dashboard_update.ps1", &ps_script);
+    let ps_result = run_persistent_powershell_with_args(
+        "dashboard_update.ps1",
+        ps_script,
+        &[("-DashboardPath", &dashboard_path_str)],
+    );
 
     if let Err(e) = ps_result {
         error!("Error executing dashboard update PowerShell script: {}", e);
@@ -191,29 +197,43 @@ try {{
         );
         info!("Email generation completed");
 
-        let ps_email_script = format!(
-            r#"
+        let ps_email_script = r#"
+param(
+    [string]$EmailTo,
+    [string]$EmailCc,
+    [string]$Subject,
+    [string]$HtmlBody,
+    [string]$AttachmentPath
+)
+
 $Outlook = New-Object -ComObject Outlook.Application
 $Mail = $Outlook.CreateItem(0)
-$Mail.To = "{}"
-$Mail.CC = "{}"
-$Mail.Subject = "CRM Tickets Dashboard"
-$Mail.HTMLBody = "{}"
-try {{
-    $Mail.Attachments.Add("{}")
-}} catch {{
-    Write-Warning "Attachment too large, sending without attachment."
-    $Mail.HTMLBody += "<br><br><span style='color:red;'><b>Note:</b> The Dashboard file was too large to attach to this email. Please access it from the shared network drive.</span>"
-}}
+if ($EmailTo) { $Mail.To = $EmailTo }
+if ($EmailCc) { $Mail.CC = $EmailCc }
+if ($Subject) { $Mail.Subject = $Subject }
+if ($HtmlBody) { $Mail.HTMLBody = $HtmlBody }
+if ($AttachmentPath -and (Test-Path $AttachmentPath)) {
+    try {
+        $Mail.Attachments.Add($AttachmentPath)
+    } catch {
+        Write-Warning "Attachment too large, sending without attachment."
+        $Mail.HTMLBody += "<br><br><span style='color:red;'><b>Note:</b> The Dashboard file was too large to attach to this email. Please access it from the shared network drive.</span>"
+    }
+}
 $Mail.Send()
-"#,
-            email_to.replace("\"", "'"),
-            email_cc.replace("\"", "'"),
-            html_body.replace("\"", "''"),
-            dashboard_path_str.replace("'", "''")
-        );
+"#;
 
-        if let Err(e) = run_persistent_powershell("dashboard_email.ps1", &ps_email_script) {
+        if let Err(e) = run_persistent_powershell_with_args(
+            "dashboard_email.ps1",
+            ps_email_script,
+            &[
+                ("-EmailTo", email_to.as_str()),
+                ("-EmailCc", email_cc.as_str()),
+                ("-Subject", "CRM Tickets Dashboard"),
+                ("-HtmlBody", html_body.as_str()),
+                ("-AttachmentPath", dashboard_path_str.as_str()),
+            ],
+        ) {
             error!("Failed to send dashboard email: {}", e);
             // Optionally, try a fallback email or bubble up
         } else {

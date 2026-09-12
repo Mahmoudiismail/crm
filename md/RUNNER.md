@@ -32,3 +32,9 @@ When you manually trigger a task from the GUI (e.g. clicking **Run Now** or **Ru
 ## API Endpoints
 - `/run/{task_id}` (POST) - Forces immediate execution of the given task ID (Manual mode).
 - `/run-all` (POST) - Enqueues all tasks for immediate execution (Manual mode).
+
+
+## Security Model
+
+- **Loopback Enforcement**: Runner GUI binds to `127.0.0.1` (localhost loopback). Binding to non-loopback `gui_host` addresses (such as `0.0.0.0` or local network interfaces) without protection is rejected on startup to prevent unauthenticated remote control.
+- **HTTP GET Safety**: State-changing operations (`/create`, `/update/...`, `/delete/...`, `/run/...`, `/enable/...`, `/disable/...`, `/run-all`, `/working-hours/create`, `/apps/create`, etc.) strictly require `POST` requests. `GET` requests to state-changing endpoints are rejected with `HTTP 405 Method Not Allowed`.

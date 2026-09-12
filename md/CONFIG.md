@@ -76,3 +76,9 @@ Specific to the `crm_open_sohail` task. Inherits all fields from `DashboardUpdat
 | `branch_filter` | Option<Vec<String>> | Filter applied to Slicers to restrict the parsed branches. |
 | `month_filter` | Option<Vec<String>> | Filter applied to Slicers to restrict parsed months. |
 | `fallback_oul` | Option<String> | Value mapped in the OUL column when a team is missing from the mapping file. |
+
+
+## Security Model
+
+- **Loopback Enforcement**: Runner GUI binds to `127.0.0.1` (localhost loopback). Binding to non-loopback `gui_host` addresses (such as `0.0.0.0` or local network interfaces) without protection is rejected on startup to prevent unauthenticated remote control.
+- **HTTP GET Safety**: State-changing operations (`/create`, `/update/...`, `/delete/...`, `/run/...`, `/enable/...`, `/disable/...`, `/run-all`, `/working-hours/create`, `/apps/create`, etc.) strictly require `POST` requests. `GET` requests to state-changing endpoints are rejected with `HTTP 405 Method Not Allowed`.

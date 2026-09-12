@@ -3,22 +3,25 @@ use anyhow::Result;
 use std::path::Path;
 use tracing::info;
 
-pub fn generate_powershell_script(
-    cus_file_path: &Path,
-    config: &OpdAnalysisConfig,
-    email_to: &str,
-    email_subject: &str,
-) -> Result<String> {
-    let script = format!(
-        r#"
+pub fn get_opd_script_template() -> &'static str {
+    r#"
+param(
+    [string]$CsvPath,
+    [string]$EmailTo,
+    [string]$EmailSubject,
+    [string]$SpecialCol,
+    [string]$DateCol,
+    [string]$CheckCurrentYear
+)
+
 $ErrorActionPreference = "Stop"
 
-$csvPath = "{0}"
-$emailTo = "{1}"
-$emailSubject = "{2}"
-$specialCol = "{3}"
-$dateCol = "{4}"
-$checkCurrentYear = {5}
+$csvPath = $CsvPath
+$emailTo = $EmailTo
+$emailSubject = $EmailSubject
+$specialCol = $SpecialCol
+$dateCol = $DateCol
+$checkCurrentYear = if ($CheckCurrentYear -eq "true") { $true } else { $false }
 
 $excel = New-Object -ComObject Excel.Application
 $excel.Visible = $false
@@ -26,16 +29,15 @@ $excel.DisplayAlerts = $false
 $excel.ScreenUpdating = $false
 $excel.EnableEvents = $false
 
-try {{
+try {
     Write-Output "TRACE: Opening CSV workbook: $csvPath"
     $workbook = $excel.Workbooks.Open($csvPath)
     Write-Output "TRACE: Extracting first worksheet"
     $ws = $workbook.Sheets.Item(1)
 
-    # Enable AutoFilter if not already enabled
-    if (-not $ws.AutoFilterMode) {{
+    if (-not $ws.AutoFilterMode) {
         $ws.Range($ws.Cells.Item(1, 1), $ws.Cells.Item(1, $ws.UsedRange.Columns.Count)).AutoFilter() | Out-Null
-    }}
+    }
 
     $xlValues = -4123
     $xlPart = 2
@@ -45,249 +47,181 @@ try {{
 
     $realLastRow = $ws.Cells.Find("*", $ws.Cells.Item(1, 1), $xlValues, $xlPart, $xlByRows, $xlPrevious).Row
     $realLastCol = $ws.Cells.Find("*", $ws.Cells.Item(1, 1), $xlValues, $xlPart, $xlByColumns, $xlPrevious).Column
-    if (-not $realLastRow) {{ $realLastRow = 1 }}
-    if (-not $realLastCol) {{ $realLastCol = 1 }}
+    if (-not $realLastRow) { $realLastRow = 1 }
+    if (-not $realLastCol) { $realLastCol = 1 }
 
     $exactRange = $ws.Range($ws.Cells.Item(1, 1), $ws.Cells.Item($realLastRow, $realLastCol))
     $headers = $exactRange.Rows(1).Value2
 
     $realLastRow = $ws.Cells.Find("*", $ws.Cells.Item(1, 1), $xlValues, $xlPart, $xlByRows, $xlPrevious).Row
     $realLastCol = $ws.Cells.Find("*", $ws.Cells.Item(1, 1), $xlValues, $xlPart, $xlByColumns, $xlPrevious).Column
-    if (-not $realLastRow) {{ $realLastRow = 1 }}
-    if (-not $realLastCol) {{ $realLastCol = 1 }}
+    if (-not $realLastRow) { $realLastRow = 1 }
+    if (-not $realLastCol) { $realLastCol = 1 }
 
     $exactRange = $ws.Range($ws.Cells.Item(1, 1), $ws.Cells.Item($realLastRow, $realLastCol))
 
-    $headers = $exactRange.Rows(1).Value2
-    if (-not $headers) {{ throw "No headers found in CSV." }}
+    $specialColIdx = -1
+    $dateColIdx = -1
 
-    # Convert 2D array to 1D
-    $headerArray = @()
-    for ($i = 1; $i -le $headers.GetLength(1); $i++) {{
-        $headerArray += $headers[1, $i]
-    }}
+    if ($headers -is [System.Array]) {
+        for ($c = 1; $c -le $headers.GetLength(1); $c++) {
+            $colName = [string]$headers.GetValue(1, $c)
+            if ($colName -and $colName.Trim().ToLower() -eq $specialCol.Trim().ToLower()) {
+                $specialColIdx = $c
+            }
+            if ($colName -and $colName.Trim().ToLower() -eq $dateCol.Trim().ToLower()) {
+                $dateColIdx = $c
+            }
+        }
+    }
 
-    $dColIdx = [array]::IndexOf($headerArray, "D") + 1
-    $specialColIdx = [array]::IndexOf($headerArray, $specialCol) + 1
-    $dateColIdx = [array]::IndexOf($headerArray, $dateCol) + 1
+    $filteredCols = @{}
 
-    # Apply Date format
-    if ($dateColIdx -gt 0) {{
-        $exactRange.Columns.Item($dateColIdx).NumberFormat = "dddd, dd mmmm yyyy"
-    }}
-
-    # Apply Visual Formatting
-    # 1. Autofit all columns first so Date fits
-    $exactRange.Columns.AutoFit() | Out-Null
-
-    # 2. Force timing columns (everything after column A) to width 10
-    for ($c = 2; $c -le $exactRange.Columns.Count; $c++) {{
-        $exactRange.Columns.Item($c).ColumnWidth = 10
-    }}
-
-    # 3. Center alignment and borders for the entire range
-    $exactRange.HorizontalAlignment = -4108 # xlCenter
-    $exactRange.VerticalAlignment = -4108   # xlCenter
-    $exactRange.Borders.LineStyle = 1       # xlContinuous
-    $exactRange.Borders.Weight = 2          # xlThin
-
-    # 4. Header styling (Green background, white bold text)
-    $headerRange = $exactRange.Rows(1)
-    $headerRange.Interior.Color = 3439443 # #548235 in BGR decimal (0x347c53) -> roughly Excel Green
-    $headerRange.Font.Color = 16777215    # White
-    $headerRange.Font.Bold = $true
-
-    $dayName = (Get-Date).ToString("ddd") # "Mon", "Tue"
-
-    if (-not $ws.AutoFilterMode) {{
-        Write-Output "TRACE: Turning on AutoFilter to establish dropdowns"
-        $exactRange.AutoFilter() | Out-Null
-    }}
-
-    # Track which columns we explicitly filter
-    $filteredCols = @{{}}
-
-    # Apply Filters and hide their dropdown icons AT THE SAME TIME
-    if ($dColIdx -gt 0) {{
-        Write-Output "TRACE: Applying Day Filter on column $dColIdx"
-        $exactRange.AutoFilter($dColIdx, $dayName, 1, [Type]::Missing, $false) | Out-Null
-        $filteredCols[$dColIdx] = $true
-    }}
-
-    if ($specialColIdx -gt 0) {{
-        Write-Output "TRACE: Applying Special Filter on column $specialColIdx"
-        $exactRange.AutoFilter($specialColIdx, "=", 1, [Type]::Missing, $false) | Out-Null
+    if ($specialColIdx -gt 0) {
+        Write-Output "TRACE: Applying Special Column Filter on column $specialColIdx"
+        $exactRange.AutoFilter($specialColIdx, "<>0", 1, [Type]::Missing, $false) | Out-Null
         $filteredCols[$specialColIdx] = $true
-    }}
+    }
 
-    if ($checkCurrentYear -and $dateColIdx -gt 0) {{
+    if ($checkCurrentYear -and $dateColIdx -gt 0) {
         Write-Output "TRACE: Applying Date Filter on column $dateColIdx"
         $yearStart = Get-Date -Year (Get-Date).Year -Month 1 -Day 1 -Hour 0 -Minute 0 -Second 0
         $yearEnd = $yearStart.AddYears(1)
-        $exactRange.AutoFilter($dateColIdx, ">=$($yearStart.ToString('yyyy-MM-dd'))", 1, "<$($yearEnd.ToString('yyyy-MM-dd'))", $false) | Out-Null
+        $exactRange.AutoFilter($dateColIdx, ">=$($yearStart.ToString(yyyy-MM-dd))", 1, "<$($yearEnd.ToString(yyyy-MM-dd))", $false) | Out-Null
         $filteredCols[$dateColIdx] = $true
-    }}
+    }
 
     Write-Output "TRACE: Hiding AutoFilter dropdown icons for remaining columns while preserving filters"
-    for ($col = 1; $col -le $exactRange.Columns.Count; $col++) {{
-        if (-not $filteredCols.ContainsKey($col)) {{
-            try {{
-                # Check if this column already has a filter applied
+    for ($col = 1; $col -le $exactRange.Columns.Count; $col++) {
+        if (-not $filteredCols.ContainsKey($col)) {
+            try {
                 $filter = $ws.AutoFilter.Filters.Item($col)
-                if ($filter -and $filter.On) {{
+                if ($filter -and $filter.On) {
                     Write-Output "TRACE: Hiding dropdown for already-filtered column $col"
 
-                    # Capture existing criteria
                     $c1 = [Type]::Missing
-                    $op = 1 # xlAnd (default)
+                    $op = 1
                     $c2 = [Type]::Missing
 
-                    try {{ $c1 = $filter.Criteria1 }} catch {{ }}
-                    try {{ $op = $filter.Operator }} catch {{ }}
-                    try {{ $c2 = $filter.Criteria2 }} catch {{ }}
+                    try { $c1 = $filter.Criteria1 } catch { }
+                    try { $op = $filter.Operator } catch { }
+                    try { $c2 = $filter.Criteria2 } catch { }
 
-                    # Re-apply exact same criteria with VisibleDropDown = $false
-                    if ($null -ne $c1 -and $c1 -ne [Type]::Missing -and $null -ne $c2 -and $c2 -ne [Type]::Missing) {{
+                    if ($null -ne $c1 -and $c1 -ne [Type]::Missing -and $null -ne $c2 -and $c2 -ne [Type]::Missing) {
                         $exactRange.AutoFilter($col, $c1, $op, $c2, $false) | Out-Null
-                    }} elseif ($null -ne $c1 -and $c1 -ne [Type]::Missing) {{
+                    } elseif ($null -ne $c1 -and $c1 -ne [Type]::Missing) {
                         $exactRange.AutoFilter($col, $c1, $op, [Type]::Missing, $false) | Out-Null
-                    }} else {{
-                        # If for some reason we couldn't read Criteria1, skip to prevent clearing the filter
+                    } else {
                         Write-Output "TRACE: Warning: Failed to extract Criteria1 for column $col, skipping dropdown hide to preserve filter."
-                    }}
-                }} else {{
-                    # No filter is currently applied; safe to just hide dropdown
+                    }
+                } else {
                     $exactRange.AutoFilter($col, [Type]::Missing, 1, [Type]::Missing, $false) | Out-Null
-                }}
-            }} catch {{
+                }
+            } catch {
                 Write-Output "TRACE: Warning: Failed to hide AutoFilter dropdown for column $col - $_"
-            }}
-        }}
-    }}
-        $visibleRows = $exactRange.SpecialCells(12) # xlCellTypeVisible
+            }
+        }
+    }
+
+    $visibleRows = $exactRange.SpecialCells(12)
 
     Write-Output "TRACE: Finding last visible row after filters"
-    # Find last visible row
     $lastRow = 1
-    foreach ($area in $visibleRows.Areas) {{
+    foreach ($area in $visibleRows.Areas) {
         $areaLastRow = $area.Row + $area.Rows.Count - 1
-        if ($areaLastRow -gt $lastRow) {{
+        if ($areaLastRow -gt $lastRow) {
             $lastRow = $areaLastRow
-        }}
-    }}
+        }
+    }
 
     Write-Output "TRACE: Hiding blank columns at last row"
-    # Hide blank columns at last row
-    for ($c = 1; $c -le $exactRange.Columns.Count; $c++) {{
-        $val = $ws.Cells.Item($lastRow, $c).Text
-        if ([string]::IsNullOrWhiteSpace($val)) {{
+    for ($c = 1; $c -le $realLastCol; $c++) {
+        $cellVal = $ws.Cells.Item($lastRow, $c).Text
+        if (-not $cellVal -or $cellVal.Trim() -eq "" -or $cellVal.Trim() -eq "0") {
             $ws.Columns.Item($c).Hidden = $true
-        }}
-    }}
-
-    # Hide D column
-    if ($dColIdx -gt 0) {{
-        $ws.Columns.Item($dColIdx).Hidden = $true
-    }}
-
-    $imagePath = Join-Path $env:TEMP "Query1.jpg"
-    if (Test-Path $imagePath) {{ Remove-Item $imagePath -Force }}
-
-    $copyRange = $ws.Range($ws.Cells.Item(1, 1), $ws.Cells.Item($lastRow, $exactRange.Columns.Count))
-    $copyRange.CopyPicture(1, 2) | Out-Null # xlScreen=1, xlPicture=2
-
-    Start-Sleep -Seconds 1
-
-    # Find exact width and height of visible range to size the chart appropriately
-    $totalWidth = 0
-    $totalHeight = 0
-    for ($c = 1; $c -le $exactRange.Columns.Count; $c++) {{
-        if (-not $ws.Columns.Item($c).Hidden) {{
-            $totalWidth += $ws.Columns.Item($c).Width
-        }}
-    }}
-    for ($r = 1; $r -le $lastRow; $r++) {{
-        if (-not $ws.Rows.Item($r).Hidden) {{
-            $totalHeight += $ws.Rows.Item($r).Height
-        }}
-    }}
-
-    if ($totalWidth -lt 50) {{ $totalWidth = 50 }}
-    if ($totalHeight -lt 50) {{ $totalHeight = 50 }}
-
-    $copyRange = $ws.Range($ws.Cells.Item(1, 1), $ws.Cells.Item($lastRow, $exactRange.Columns.Count))
-
-    # Select the range explicitly to ensure clipboard receives data
-    $ws.Activate()
-    $copyRange.Select() | Out-Null
-
-    # Temporarily enable ScreenUpdating so Excel can render the xlScreen copy
-    $excel.ScreenUpdating = $true
-
-    # 1 = xlScreen, 2 = xlBitmap
-    $copyRange.CopyPicture(1, 2) | Out-Null
-    Start-Sleep -Seconds 1
-
-    $chartObj = $ws.ChartObjects().Add(10, 10, $totalWidth, $totalHeight)
-    $chartObj.Activate()
-
-    # Select ChartArea to ensure Paste targets the chart
-    $chartObj.Chart.ChartArea.Select() | Out-Null
-    $chartObj.Chart.Paste() | Out-Null
-    Start-Sleep -Seconds 1
-
-    $chartObj.Chart.Export($imagePath, "JPG") | Out-Null
-    $chartObj.Delete()
-
-    if (Test-Path $imagePath) {{
-        $outlook = New-Object -ComObject Outlook.Application
-        $mail = $outlook.CreateItem(0)
-        $mail.To = $emailTo
-        $mail.Subject = $emailSubject
-        $mail.Attachments.Add($imagePath) | Out-Null
-        $mail.Send()
-        Write-Output "Email sent successfully."
-    }} else {{
-        Write-Error "Failed to generate image from filtered table."
-    }}
-
-}} finally {{
-    if ($workbook) {{ $workbook.Close($false) }}
-    $excel.Quit()
-    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
-}}
-"#,
-        cus_file_path
-            .canonicalize()
-            .unwrap_or_else(|_| cus_file_path.to_path_buf())
-            .to_string_lossy()
-            .replace(r"\\?\", ""),
-        email_to,
-        email_subject,
-        config.special_column_name,
-        config.date_column_name,
-        if config.check_current_year {
-            "$true"
-        } else {
-            "$false"
         }
-    );
-    Ok(script)
+    }
+
+    $realLastColFiltered = 1
+    for ($c = 1; $c -le $realLastCol; $c++) {
+        if (-not $ws.Columns.Item($c).Hidden) {
+            $realLastColFiltered = $c
+        }
+    }
+
+    $copyRange = $ws.Range($ws.Cells.Item(1, 1), $ws.Cells.Item($lastRow, $exactRange.Columns.Count))
+
+    Write-Output "TRACE: Copying table as picture..."
+    $copyRange.CopyPicture(1, 2) | Out-Null
+
+    Start-Sleep -Milliseconds 500
+
+    Write-Output "TRACE: Initializing Outlook Mail Item..."
+    $outlook = New-Object -ComObject Outlook.Application
+    $mail = $outlook.CreateItem(0)
+    $mail.To = $emailTo
+    $mail.Subject = $emailSubject
+
+    Write-Output "TRACE: Setting up Mail Inspector for HTML paste..."
+    $inspector = $mail.GetInspector
+    $inspector.Display()
+
+    $wordDoc = $inspector.WordEditor
+    $selection = $wordDoc.Windows.Item(1).Selection
+    $selection.Paste()
+
+    $mail.Save()
+    Write-Output "TRACE: Email Draft saved successfully."
+    $inspector.Close(1)
+} finally {
+    if ($workbook) { $workbook.Close($false) }
+    if ($excel) { $excel.Quit() }
+    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
+}
+"#
+}
+
+pub fn generate_powershell_script(
+    _cus_file_path: &Path,
+    _config: &OpdAnalysisConfig,
+    _email_to: &str,
+    _email_subject: &str,
+) -> Result<String> {
+    Ok(get_opd_script_template().to_string())
 }
 
 pub fn generate_and_email_image(cus_file_path: &Path, config: &OpdAnalysisConfig) -> Result<()> {
     if let (Some(email_to), Some(email_subject)) = (&config.email_to, &config.email_subject) {
-        let ps_script = generate_powershell_script(cus_file_path, config, email_to, email_subject)?;
+        let template = get_opd_script_template();
+
+        let special_col = config.special_column_name.clone();
+        let date_col = config.date_column_name.clone();
+        let check_current_year_str = if config.check_current_year {
+            "true"
+        } else {
+            "false"
+        };
+        let cus_path_str = cus_file_path.to_string_lossy().to_string();
 
         let script_manager = crate::tasker::script_manager::ScriptManager::new();
         let script_path = script_manager.get_or_create_script(
             "OPD Analysis",
             "opd_analysis_email.ps1",
-            &ps_script,
+            template,
         )?;
 
         info!("Running PowerShell for generating and emailing image...");
-        script_manager.execute_script(&script_path)?;
+        script_manager.execute_script_with_args(
+            &script_path,
+            &[
+                ("-CsvPath", &cus_path_str),
+                ("-EmailTo", email_to),
+                ("-EmailSubject", email_subject),
+                ("-SpecialCol", &special_col),
+                ("-DateCol", &date_col),
+                ("-CheckCurrentYear", check_current_year_str),
+            ],
+        )?;
     }
 
     Ok(())
