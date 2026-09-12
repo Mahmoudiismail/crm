@@ -1,11 +1,102 @@
-fn is_default_period_mode(pm: &PeriodMode) -> bool {
-    *pm == PeriodMode::Custom
-}
-
 use serde::{Deserialize, Serialize};
 
 use crate::runner::config::defaults::*;
 use crate::runner::config::models::*;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExternalAppSpecLegacy {
+    pub app_id: String,
+    #[serde(default)]
+    pub args: std::collections::HashMap<String, String>,
+    #[serde(default)]
+    pub period_mode: Option<PeriodMode>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_date: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end_date: Option<String>,
+}
+
+impl From<ExternalAppSpecLegacy> for ExternalAppSpec {
+    fn from(legacy: ExternalAppSpecLegacy) -> Self {
+        ExternalAppSpec {
+            app_id: legacy.app_id,
+            args: legacy.args,
+            period_mode: legacy.period_mode.unwrap_or(PeriodMode::Custom),
+            start_date: legacy.start_date,
+            end_date: legacy.end_date,
+        }
+    }
+}
+
+impl From<ExternalAppSpec> for ExternalAppSpecLegacy {
+    fn from(spec: ExternalAppSpec) -> Self {
+        ExternalAppSpecLegacy {
+            app_id: spec.app_id,
+            args: spec.args,
+            period_mode: Some(spec.period_mode),
+            start_date: spec.start_date,
+            end_date: spec.end_date,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ActionSpecLegacy {
+    ShellCommand(ShellCommandSpec),
+    ExternalApp(ExternalAppSpecLegacy),
+}
+
+impl From<ActionSpecLegacy> for ActionSpec {
+    fn from(legacy: ActionSpecLegacy) -> Self {
+        match legacy {
+            ActionSpecLegacy::ShellCommand(spec) => ActionSpec::ShellCommand(spec),
+            ActionSpecLegacy::ExternalApp(spec) => ActionSpec::ExternalApp(spec.into()),
+        }
+    }
+}
+
+impl From<ActionSpec> for ActionSpecLegacy {
+    fn from(action: ActionSpec) -> Self {
+        match action {
+            ActionSpec::ShellCommand(spec) => ActionSpecLegacy::ShellCommand(spec),
+            ActionSpec::ExternalApp(spec) => ActionSpecLegacy::ExternalApp(spec.into()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskStepLegacy {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    pub mode: ExecutionMode,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub actions: Vec<ActionSpecLegacy>,
+}
+
+impl From<TaskStepLegacy> for TaskStep {
+    fn from(legacy: TaskStepLegacy) -> Self {
+        TaskStep {
+            name: legacy.name,
+            mode: legacy.mode,
+            actions: legacy.actions.into_iter().map(ActionSpec::from).collect(),
+        }
+    }
+}
+
+impl From<TaskStep> for TaskStepLegacy {
+    fn from(step: TaskStep) -> Self {
+        TaskStepLegacy {
+            name: step.name,
+            mode: step.mode,
+            actions: step
+                .actions
+                .into_iter()
+                .map(ActionSpecLegacy::from)
+                .collect(),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunnerTaskLegacy {
@@ -24,9 +115,9 @@ pub struct RunnerTaskLegacy {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub schedules: Vec<TaskSchedule>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub steps: Vec<TaskStep>,
+    pub steps: Vec<TaskStepLegacy>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub post_run_steps: Vec<TaskStep>,
+    pub post_run_steps: Vec<TaskStepLegacy>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kind: Option<TaskKind>,
     #[serde(default)]
@@ -41,8 +132,8 @@ pub struct RunnerTaskLegacy {
     pub post_run_app_args: Option<std::collections::HashMap<String, String>>,
     #[serde(default)]
     pub timeout_seconds: u64,
-    #[serde(default, skip_serializing_if = "is_default_period_mode")]
-    pub period_mode: PeriodMode,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub period_mode: Option<PeriodMode>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub start_date: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -51,6 +142,10 @@ pub struct RunnerTaskLegacy {
 
 impl From<RunnerTaskLegacy> for RunnerTask {
     fn from(legacy: RunnerTaskLegacy) -> Self {
+        let legacy_period_mode = legacy.period_mode.unwrap_or(PeriodMode::Custom);
+        let legacy_start_date = legacy.start_date.clone();
+        let legacy_end_date = legacy.end_date.clone();
+
         let mut steps = legacy.steps;
         let mut post_run_steps = legacy.post_run_steps;
 
@@ -62,11 +157,13 @@ impl From<RunnerTaskLegacy> for RunnerTask {
                             ShellCommandMode::Sequential => ExecutionMode::Sequential,
                             ShellCommandMode::Parallel => ExecutionMode::Parallel,
                         };
-                        let actions: Vec<ActionSpec> =
-                            commands.into_iter().map(ActionSpec::ShellCommand).collect();
+                        let actions: Vec<ActionSpecLegacy> = commands
+                            .into_iter()
+                            .map(ActionSpecLegacy::ShellCommand)
+                            .collect();
 
                         if !actions.is_empty() {
-                            steps.push(TaskStep {
+                            steps.push(TaskStepLegacy {
                                 name: Some("Legacy Shell Command".to_string()),
                                 mode: execution_mode,
                                 actions,
@@ -74,13 +171,13 @@ impl From<RunnerTaskLegacy> for RunnerTask {
                         }
                     }
                     TaskKind::ExternalApp { app_id, args } => {
-                        steps.push(TaskStep {
+                        steps.push(TaskStepLegacy {
                             name: Some("Legacy External App".to_string()),
                             mode: ExecutionMode::Sequential,
-                            actions: vec![ActionSpec::ExternalApp(ExternalAppSpec {
+                            actions: vec![ActionSpecLegacy::ExternalApp(ExternalAppSpecLegacy {
                                 app_id,
                                 args,
-                                period_mode: PeriodMode::Custom,
+                                period_mode: None,
                                 start_date: None,
                                 end_date: None,
                             })],
@@ -94,7 +191,7 @@ impl From<RunnerTaskLegacy> for RunnerTask {
             let mut post_actions = Vec::new();
             if let Some(script) = legacy.post_run_script {
                 if !script.is_empty() {
-                    post_actions.push(ActionSpec::ShellCommand(ShellCommandSpec {
+                    post_actions.push(ActionSpecLegacy::ShellCommand(ShellCommandSpec {
                         command: script,
                         continue_on_error: false,
                     }));
@@ -102,17 +199,17 @@ impl From<RunnerTaskLegacy> for RunnerTask {
             }
             if let Some(app_id) = legacy.post_run_app_id {
                 if !app_id.is_empty() {
-                    post_actions.push(ActionSpec::ExternalApp(ExternalAppSpec {
+                    post_actions.push(ActionSpecLegacy::ExternalApp(ExternalAppSpecLegacy {
                         app_id,
                         args: legacy.post_run_app_args.unwrap_or_default(),
-                        period_mode: PeriodMode::Custom,
+                        period_mode: None,
                         start_date: None,
                         end_date: None,
                     }));
                 }
             }
             if !post_actions.is_empty() {
-                post_run_steps.push(TaskStep {
+                post_run_steps.push(TaskStepLegacy {
                     name: Some("Legacy Post-Run".to_string()),
                     mode: ExecutionMode::Sequential,
                     actions: post_actions,
@@ -120,23 +217,38 @@ impl From<RunnerTaskLegacy> for RunnerTask {
             }
         }
 
-        for step in steps.iter_mut().chain(post_run_steps.iter_mut()) {
-            for action in &mut step.actions {
-                if let ActionSpec::ExternalApp(spec) = action {
-                    if spec.start_date.is_none() {
-                        spec.start_date = legacy.start_date.clone();
+        let convert_step = |step_legacy: TaskStepLegacy| -> TaskStep {
+            let actions = step_legacy
+                .actions
+                .into_iter()
+                .map(|action_legacy| match action_legacy {
+                    ActionSpecLegacy::ShellCommand(spec) => ActionSpec::ShellCommand(spec),
+                    ActionSpecLegacy::ExternalApp(spec_legacy) => {
+                        let period_mode = spec_legacy.period_mode.unwrap_or(legacy_period_mode);
+                        let start_date =
+                            spec_legacy.start_date.or_else(|| legacy_start_date.clone());
+                        let end_date = spec_legacy.end_date.or_else(|| legacy_end_date.clone());
+
+                        ActionSpec::ExternalApp(ExternalAppSpec {
+                            app_id: spec_legacy.app_id,
+                            args: spec_legacy.args,
+                            period_mode,
+                            start_date,
+                            end_date,
+                        })
                     }
-                    if spec.end_date.is_none() {
-                        spec.end_date = legacy.end_date.clone();
-                    }
-                    if spec.period_mode == PeriodMode::Custom
-                        && legacy.period_mode != PeriodMode::Custom
-                    {
-                        spec.period_mode = legacy.period_mode;
-                    }
-                }
+                })
+                .collect();
+
+            TaskStep {
+                name: step_legacy.name,
+                mode: step_legacy.mode,
+                actions,
             }
-        }
+        };
+
+        let converted_steps = steps.into_iter().map(convert_step).collect();
+        let converted_post_steps = post_run_steps.into_iter().map(convert_step).collect();
 
         RunnerTask {
             id: legacy.id,
@@ -149,14 +261,21 @@ impl From<RunnerTaskLegacy> for RunnerTask {
             last_run_at: legacy.last_run_at,
             last_status: legacy.last_status,
             timeout_seconds: legacy.timeout_seconds,
-            steps,
-            post_run_steps,
+            steps: converted_steps,
+            post_run_steps: converted_post_steps,
         }
     }
 }
 
 impl From<RunnerTask> for RunnerTaskLegacy {
     fn from(task: RunnerTask) -> Self {
+        let steps = task.steps.into_iter().map(TaskStepLegacy::from).collect();
+        let post_run_steps = task
+            .post_run_steps
+            .into_iter()
+            .map(TaskStepLegacy::from)
+            .collect();
+
         RunnerTaskLegacy {
             id: task.id,
             name: task.name,
@@ -165,17 +284,16 @@ impl From<RunnerTask> for RunnerTaskLegacy {
             frequency_seconds: task.frequency_seconds,
             next_run_at: task.next_run_at,
             schedules: task.schedules,
-            steps: task.steps,
-            post_run_steps: task.post_run_steps,
+            steps,
+            post_run_steps,
             kind: None,
             last_run_at: task.last_run_at,
             last_status: task.last_status,
-
             timeout_seconds: task.timeout_seconds,
             post_run_script: None,
             post_run_app_id: None,
             post_run_app_args: None,
-            period_mode: PeriodMode::Custom,
+            period_mode: None,
             start_date: None,
             end_date: None,
         }

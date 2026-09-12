@@ -386,3 +386,196 @@ fn test_preview_interval_grid_alignment() {
     assert_eq!(local_first.hour(), 11);
     assert_eq!(local_first.minute(), 0);
 }
+
+#[test]
+fn test_migration_test_a_legacy_inheritance() {
+    let json = r#"{
+        "id": "task_a",
+        "name": "Task A",
+        "enabled": true,
+        "repetition": "once",
+        "frequency_seconds": 0,
+        "next_run_at": "",
+        "schedules": [],
+        "steps": [{
+            "mode": "sequential",
+            "actions": [{ "type": "external_app", "app_id": "app_a", "args": {} }]
+        }],
+        "post_run_steps": [],
+        "last_run_at": "",
+        "last_status": "",
+        "timeout_seconds": 0,
+        "period_mode": "monthly",
+        "start_date": "2026-01-01",
+        "end_date": "2026-09-30"
+    }"#;
+
+    let task: RunnerTask = serde_json::from_str(json).unwrap();
+    if let ActionSpec::ExternalApp(ref spec) = task.steps[0].actions[0] {
+        assert_eq!(spec.period_mode, PeriodMode::Monthly);
+        assert_eq!(spec.start_date.as_deref(), Some("2026-01-01"));
+        assert_eq!(spec.end_date.as_deref(), Some("2026-09-30"));
+    } else {
+        panic!("Expected ExternalApp");
+    }
+}
+
+#[test]
+fn test_migration_test_b_explicit_custom_must_win() {
+    let json = r#"{
+        "id": "task_b",
+        "name": "Task B",
+        "enabled": true,
+        "repetition": "once",
+        "frequency_seconds": 0,
+        "next_run_at": "",
+        "schedules": [],
+        "steps": [{
+            "mode": "sequential",
+            "actions": [{
+                "type": "external_app",
+                "app_id": "app_b",
+                "args": {},
+                "period_mode": "custom"
+            }]
+        }],
+        "post_run_steps": [],
+        "last_run_at": "",
+        "last_status": "",
+        "timeout_seconds": 0,
+        "period_mode": "monthly"
+    }"#;
+
+    let task: RunnerTask = serde_json::from_str(json).unwrap();
+    if let ActionSpec::ExternalApp(ref spec) = task.steps[0].actions[0] {
+        assert_eq!(spec.period_mode, PeriodMode::Custom);
+    } else {
+        panic!("Expected ExternalApp");
+    }
+}
+
+#[test]
+fn test_migration_test_c_explicit_dates_must_win() {
+    let json = r#"{
+        "id": "task_c",
+        "name": "Task C",
+        "enabled": true,
+        "repetition": "once",
+        "frequency_seconds": 0,
+        "next_run_at": "",
+        "schedules": [],
+        "steps": [{
+            "mode": "sequential",
+            "actions": [{
+                "type": "external_app",
+                "app_id": "app_c",
+                "args": {},
+                "start_date": "2026-02-01",
+                "end_date": "2026-02-28"
+            }]
+        }],
+        "post_run_steps": [],
+        "last_run_at": "",
+        "last_status": "",
+        "timeout_seconds": 0,
+        "start_date": "2026-01-01",
+        "end_date": "2026-09-30"
+    }"#;
+
+    let task: RunnerTask = serde_json::from_str(json).unwrap();
+    if let ActionSpec::ExternalApp(ref spec) = task.steps[0].actions[0] {
+        assert_eq!(spec.start_date.as_deref(), Some("2026-02-01"));
+        assert_eq!(spec.end_date.as_deref(), Some("2026-02-28"));
+    } else {
+        panic!("Expected ExternalApp");
+    }
+}
+
+#[test]
+fn test_migration_test_d_mixed_inheritance() {
+    let json = r#"{
+        "id": "task_d",
+        "name": "Task D",
+        "enabled": true,
+        "repetition": "once",
+        "frequency_seconds": 0,
+        "next_run_at": "",
+        "schedules": [],
+        "steps": [{
+            "mode": "sequential",
+            "actions": [{
+                "type": "external_app",
+                "app_id": "app_d",
+                "args": {},
+                "period_mode": "custom",
+                "end_date": "2026-03-31"
+            }]
+        }],
+        "post_run_steps": [],
+        "last_run_at": "",
+        "last_status": "",
+        "timeout_seconds": 0,
+        "period_mode": "monthly",
+        "start_date": "2026-01-01",
+        "end_date": "2026-09-30"
+    }"#;
+
+    let task: RunnerTask = serde_json::from_str(json).unwrap();
+    if let ActionSpec::ExternalApp(ref spec) = task.steps[0].actions[0] {
+        assert_eq!(spec.period_mode, PeriodMode::Custom);
+        assert_eq!(spec.start_date.as_deref(), Some("2026-01-01"));
+        assert_eq!(spec.end_date.as_deref(), Some("2026-03-31"));
+    } else {
+        panic!("Expected ExternalApp");
+    }
+}
+
+#[test]
+fn test_migration_test_e_post_run_steps() {
+    let json = r#"{
+        "id": "task_e",
+        "name": "Task E",
+        "enabled": true,
+        "repetition": "once",
+        "frequency_seconds": 0,
+        "next_run_at": "",
+        "schedules": [],
+        "steps": [],
+        "post_run_steps": [{
+            "mode": "sequential",
+            "actions": [{
+                "type": "external_app",
+                "app_id": "app_e_1",
+                "args": {}
+            }, {
+                "type": "external_app",
+                "app_id": "app_e_2",
+                "args": {},
+                "period_mode": "custom"
+            }]
+        }],
+        "last_run_at": "",
+        "last_status": "",
+        "timeout_seconds": 0,
+        "period_mode": "monthly",
+        "start_date": "2026-01-01",
+        "end_date": "2026-09-30"
+    }"#;
+
+    let task: RunnerTask = serde_json::from_str(json).unwrap();
+    if let ActionSpec::ExternalApp(ref spec1) = task.post_run_steps[0].actions[0] {
+        assert_eq!(spec1.period_mode, PeriodMode::Monthly);
+        assert_eq!(spec1.start_date.as_deref(), Some("2026-01-01"));
+        assert_eq!(spec1.end_date.as_deref(), Some("2026-09-30"));
+    } else {
+        panic!("Expected ExternalApp");
+    }
+
+    if let ActionSpec::ExternalApp(ref spec2) = task.post_run_steps[0].actions[1] {
+        assert_eq!(spec2.period_mode, PeriodMode::Custom);
+        assert_eq!(spec2.start_date.as_deref(), Some("2026-01-01"));
+        assert_eq!(spec2.end_date.as_deref(), Some("2026-09-30"));
+    } else {
+        panic!("Expected ExternalApp");
+    }
+}
