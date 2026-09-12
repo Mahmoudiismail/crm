@@ -8,8 +8,13 @@ async fn test_process_timeout_terminates_child_and_tree() {
 
     #[cfg(target_os = "windows")]
     let cmd = {
-        let mut c = tokio::process::Command::new("cmd");
-        c.args(["/C", "timeout 10"]);
+        let mut c = tokio::process::Command::new("powershell");
+        c.args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "Start-Sleep -Seconds 10",
+        ]);
         c
     };
 
