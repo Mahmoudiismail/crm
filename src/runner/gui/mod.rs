@@ -23,10 +23,11 @@ use templates::render_error_page;
 
 pub(crate) const TAILWIND_CDN: &str = "https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4";
 
-pub(crate) struct HttpRequest {
-    pub(crate) method: String,
-    pub(crate) path: String,
-    pub(crate) body: String,
+#[derive(Debug)]
+pub struct HttpRequest {
+    pub method: String,
+    pub path: String,
+    pub body: String,
 }
 
 pub fn start_gui_server(handle: RunnerHandle) {

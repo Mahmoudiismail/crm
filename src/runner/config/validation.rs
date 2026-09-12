@@ -11,6 +11,17 @@ impl RunnerConfig {
         if self.poll_interval_seconds == 0 {
             anyhow::bail!("poll_interval_seconds cannot be 0");
         }
+
+        let host = self.gui_host.trim().to_lowercase();
+        let is_loopback =
+            host == "127.0.0.1" || host == "localhost" || host == "::1" || host == "[::1]";
+        if !is_loopback {
+            anyhow::bail!(
+                "Security error: Binding to non-loopback gui_host '{}' without protection is disabled.",
+                self.gui_host
+            );
+        }
+
         Ok(())
     }
 }

@@ -12,12 +12,35 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tracing::{error, info};
 
-pub(crate) async fn route_request(
+pub async fn route_request(
     request: &HttpRequest,
     handle: &RunnerHandle,
 ) -> Result<(u16, &'static str, String)> {
     let (route_path, query_string) = split_path_and_query(&request.path);
     let query = parse_query_string(query_string);
+
+    let is_mutation_route = route_path == "/create"
+        || route_path.starts_with("/update/")
+        || route_path.starts_with("/delete/")
+        || route_path == "/run-all"
+        || route_path.starts_with("/run/")
+        || route_path.starts_with("/enable/")
+        || route_path.starts_with("/disable/")
+        || route_path == "/reload"
+        || route_path == "/working-hours/create"
+        || route_path.starts_with("/working-hours/update/")
+        || route_path.starts_with("/working-hours/delete/")
+        || route_path == "/apps/create"
+        || route_path.starts_with("/apps/update/")
+        || route_path.starts_with("/apps/delete/");
+
+    if request.method == "GET" && is_mutation_route {
+        return Ok((
+            405,
+            "text/plain; charset=utf-8",
+            "Method Not Allowed".to_string(),
+        ));
+    }
 
     if request.method == "GET" && route_path == "/" {
         return handle_dashboard(handle, &query).await;
@@ -44,14 +67,7 @@ pub(crate) async fn route_request(
         let values = parse_query_string(&request.body);
         return handle_update_task(handle, task_id, &values).await;
     }
-    if request.method == "GET" && route_path == "/create" {
-        return handle_create_task(handle, &query).await;
-    }
-    if request.method == "GET" && route_path.starts_with("/update/") {
-        let task_id = route_path.trim_start_matches("/update/");
-        return handle_update_task(handle, task_id, &query).await;
-    }
-    if request.method == "GET" && route_path.starts_with("/delete/") {
+    if request.method == "POST" && route_path.starts_with("/delete/") {
         let task_id = route_path.trim_start_matches("/delete/");
         return handle_delete_task(handle, task_id).await;
     }
@@ -70,7 +86,7 @@ pub(crate) async fn route_request(
         let task_id = route_path.trim_start_matches("/disable/");
         return handle_enable_task(handle, task_id, false).await;
     }
-    if request.method == "GET" && route_path == "/reload" {
+    if request.method == "POST" && route_path == "/reload" {
         return handle_reload(handle).await;
     }
 
@@ -113,7 +129,7 @@ pub(crate) async fn route_request(
         let values = parse_query_string(&request.body);
         return handle_apps_update(handle, app_id, &values).await;
     }
-    if request.method == "GET" && route_path.starts_with("/apps/delete/") {
+    if request.method == "POST" && route_path.starts_with("/apps/delete/") {
         let app_id = route_path.trim_start_matches("/apps/delete/");
         return handle_apps_delete(handle, app_id).await;
     }
@@ -161,6 +177,14 @@ pub(crate) async fn route_request(
             200,
             "application/javascript",
             include_str!("../assets/js/forms.js").to_string(),
+        ));
+    }
+
+    if is_mutation_route {
+        return Ok((
+            405,
+            "text/plain; charset=utf-8",
+            "Method Not Allowed".to_string(),
         ));
     }
 
