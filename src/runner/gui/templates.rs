@@ -192,7 +192,7 @@ pub(crate) fn render_task_row(
             <td class='px-6 py-4 align-top'>{}</td>
             <td class='px-6 py-4 align-top whitespace-nowrap text-sm font-medium'>
                 <a href='/edit/{}' class='text-emerald-600 hover:text-emerald-900 mr-4 inline-flex items-center'>{} Edit</a>
-                <a href='/delete/{}' class='text-red-600 hover:text-red-900 inline-flex items-center'>{} Delete</a>
+                <form action='/delete/{}' method='POST' class='inline'><button type='submit' onclick='return confirm(\"Delete task?\")' class='text-red-600 hover:text-red-900 inline-flex items-center font-medium'>{} Delete</button></form>
             </td>
             <td class='px-6 py-4 align-top whitespace-nowrap space-x-2'>
                 <form action='/run/{}' method='POST' class='inline-block'>

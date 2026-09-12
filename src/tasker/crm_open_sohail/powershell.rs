@@ -3,11 +3,19 @@ use crate::tasker::crm_open_sohail::models::ExtractedSlicerDataset;
 use anyhow::Result;
 use tracing::{debug, error, info};
 
-pub fn run_powershell(logical_name: &str, script: &str) -> Result<()> {
+pub fn run_powershell_with_args(
+    logical_name: &str,
+    script_template: &str,
+    args: &[(&str, &str)],
+) -> Result<()> {
     let script_manager = crate::tasker::script_manager::ScriptManager::new();
     let script_path =
-        script_manager.get_or_create_script("CRM Open Sohail", logical_name, script)?;
-    script_manager.execute_script(&script_path)
+        script_manager.get_or_create_script("CRM Open Sohail", logical_name, script_template)?;
+    script_manager.execute_script_with_args(&script_path, args)
+}
+
+pub fn run_powershell(logical_name: &str, script: &str) -> Result<()> {
+    run_powershell_with_args(logical_name, script, &[])
 }
 
 pub fn extract_data(config: &CrmOpenSohailConfig) -> Result<Vec<ExtractedSlicerDataset>> {
@@ -32,7 +40,7 @@ pub fn extract_data(config: &CrmOpenSohailConfig) -> Result<Vec<ExtractedSlicerD
     let dashboard_path_str = dashboard_file_path.to_string_lossy().to_string();
     let json_path_str = json_output_path.to_string_lossy().to_string();
 
-    let branch_filter_ps = if let Some(branches) = &config.branch_filter {
+    let _branch_filter_ps = if let Some(branches) = &config.branch_filter {
         let joined = branches
             .iter()
             .map(|b| format!("'{}'", b.replace("'", "''")))
@@ -43,7 +51,7 @@ pub fn extract_data(config: &CrmOpenSohailConfig) -> Result<Vec<ExtractedSlicerD
         "$null".to_string()
     };
 
-    let month_filter_ps = if let Some(months) = &config.month_filter {
+    let _month_filter_ps = if let Some(months) = &config.month_filter {
         let joined = months
             .iter()
             .map(|m| format!("'{}'", m.replace("'", "''")))
@@ -65,17 +73,26 @@ pub fn extract_data(config: &CrmOpenSohailConfig) -> Result<Vec<ExtractedSlicerD
 
     let current_month = chrono::Local::now().format("%b-%Y").to_string();
 
-    let ps_script = format!(
-        r#"
+    let ps_script = r#"
+param(
+    [string]$DashboardPath,
+    [string]$JsonOutputPath,
+    [string]$TargetSheetName,
+    [string]$TargetPivotName,
+    [string]$BranchFilterCsv,
+    [string]$MonthFilterCsv,
+    [string]$CurrentMonth
+)
+
 $ErrorActionPreference = "Stop"
 
-$dashboardPath = '{dashboard_path}'
-$jsonOutputPath = '{json_path}'
-$targetSheetName = '{target_sheet}'
-$targetPivotName = '{target_pivot}'
-$branchFilter = {branch_filter}
-$monthFilter = {month_filter}
-$currentMonth = '{current_month}'
+$dashboardPath = $DashboardPath
+$jsonOutputPath = $JsonOutputPath
+$targetSheetName = $TargetSheetName
+$targetPivotName = $TargetPivotName
+$branchFilter = if ($BranchFilterCsv) { $BranchFilterCsv -split "," } else { $null }
+$monthFilter = if ($MonthFilterCsv) { $MonthFilterCsv -split "," } else { $null }
+$currentMonth = $CurrentMonth
 
 $Excel = New-Object -ComObject Excel.Application
 $Excel.Visible = $false
@@ -83,173 +100,170 @@ $Excel.DisplayAlerts = $false
 
 $processId = $null
 
-try {{
-    try {{
+try {
+    try {
         [int]$handle = $Excel.Hwnd
-        $processId = (Get-Process | Where-Object {{ $_.MainWindowHandle -eq $handle }}).Id
-    }} catch {{
+        $processId = (Get-Process | Where-Object { $_.MainWindowHandle -eq $handle }).Id
+    } catch {
         $processId = (Get-Process -Name EXCEL | Sort-Object StartTime -Descending | Select-Object -First 1).Id
-    }}
+    }
 
     Write-Output "Opening workbook..."
     $Workbook = $Excel.Workbooks.Open($dashboardPath, $null, $true) # open read-only
     Write-Output "Workbook opened"
 
     $Sheet = $null
-    foreach ($ws in $Workbook.Worksheets) {{
-        if ($ws.Name -eq $targetSheetName) {{
+    foreach ($ws in $Workbook.Worksheets) {
+        if ($ws.Name -eq $targetSheetName) {
             $Sheet = $ws
             break
-        }}
-    }}
-    if (-not $Sheet) {{ throw "Sheet '$targetSheetName' not found" }}
+        }
+    }
+    if (-not $Sheet) { throw "Sheet '$targetSheetName' not found" }
 
     $Pivot = $null
-    foreach ($pt in $Sheet.PivotTables()) {{
-        if ($pt.Name -eq $targetPivotName) {{
+    foreach ($pt in $Sheet.PivotTables()) {
+        if ($pt.Name -eq $targetPivotName) {
             $Pivot = $pt
             break
-        }}
-    }}
-    if (-not $Pivot) {{ throw "PivotTable '$targetPivotName' not found in '$targetSheetName'" }}
+        }
+    }
+    if (-not $Pivot) { throw "PivotTable '$targetPivotName' not found in '$targetSheetName'" }
 
     # Identify slicer caches
     $branchSlicerCache = $null
     $monthSlicerCache = $null
 
-    foreach ($cache in $Workbook.SlicerCaches) {{
-        if ($cache.Name -match "Branch" -or $cache.SourceName -match "Branch") {{
+    foreach ($cache in $Workbook.SlicerCaches) {
+        if ($cache.Name -match "Branch" -or $cache.SourceName -match "Branch") {
             $branchSlicerCache = $cache
-        }}
-        if ($cache.Name -match "Month" -or $cache.SourceName -match "Month") {{
+        }
+        if ($cache.Name -match "Month" -or $cache.SourceName -match "Month") {
             $monthSlicerCache = $cache
-        }}
-    }}
+        }
+    }
 
-    if (-not $branchSlicerCache) {{ throw "Branch slicer cache not found" }}
-    if (-not $monthSlicerCache) {{ throw "Month slicer cache not found" }}
+    if (-not $branchSlicerCache) { throw "Branch slicer cache not found" }
+    if (-not $monthSlicerCache) { throw "Month slicer cache not found" }
 
     Write-Output "Clearing saved filters..."
     $Pivot.ClearAllFilters()
     $branchSlicerCache.ClearAllFilters()
     $monthSlicerCache.ClearAllFilters()
 
-    function Get-SlicerItems {{
+    function Get-SlicerItems {
         param ($cache)
         $items = @()
-        if ($cache.Olap) {{
+        if ($cache.Olap) {
             $level = $cache.SlicerCacheLevels.Item(1)
-            foreach ($item in $level.SlicerItems) {{
-                if ($item.HasData) {{
-                    $items += @{{
+            foreach ($item in $level.SlicerItems) {
+                if ($item.HasData) {
+                    $items += @{
                         Name = $item.Name
                         Caption = $item.Caption
-                    }}
-                }}
-            }}
-        }} else {{
-            foreach ($item in $cache.SlicerItems) {{
-                if ($item.HasData) {{
-                    $items += @{{
+                    }
+                }
+            }
+        } else {
+            foreach ($item in $cache.SlicerItems) {
+                if ($item.HasData) {
+                    $items += @{
                         Name = $item.Name
                         Caption = $item.Name
-                    }}
-                }}
-            }}
-        }}
+                    }
+                }
+            }
+        }
         return $items
-    }}
+    }
 
     $branchItemsRaw = Get-SlicerItems -cache $branchSlicerCache
     $branchItems = @()
-    foreach ($item in $branchItemsRaw) {{
-        if ($branchFilter) {{
+    foreach ($item in $branchItemsRaw) {
+        if ($branchFilter) {
             $found = $false
-            foreach ($f in $branchFilter) {{
-                if ($item.Caption.Trim() -match "^$([regex]::Escape($f.Trim()))$") {{
+            foreach ($f in $branchFilter) {
+                if ($item.Caption.Trim() -match "^$([regex]::Escape($f.Trim()))$") {
                     $found = $true
                     break
-                }}
-            }}
-            if (-not $found) {{ continue }}
-        }}
+                }
+            }
+            if (-not $found) { continue }
+        }
         $branchItems += $item
-    }}
+    }
 
     $monthItemsRaw = Get-SlicerItems -cache $monthSlicerCache
     $monthItems = @()
-    foreach ($item in $monthItemsRaw) {{
-        if ($monthFilter) {{
+    foreach ($item in $monthItemsRaw) {
+        if ($monthFilter) {
             $found = $false
-            foreach ($f in $monthFilter) {{
-                if ($item.Caption.Trim() -match "^$([regex]::Escape($f.Trim()))$") {{
+            foreach ($f in $monthFilter) {
+                if ($item.Caption.Trim() -match "^$([regex]::Escape($f.Trim()))$") {
                     $found = $true
                     break
-                }}
-            }}
-            if (-not $found) {{ continue }}
-        }}
+                }
+            }
+            if (-not $found) { continue }
+        }
         $monthItems += $item
-    }}
+    }
 
     Write-Output "Discovered $($branchItems.Count) branches and $($monthItems.Count) months."
 
     $AllData = @()
 
-    foreach ($b in $branchItems) {{
+    foreach ($b in $branchItems) {
         $bName = $b.Name
         $bCaption = $b.Caption
-        if ($branchSlicerCache.Olap) {{
-            try {{
+        if ($branchSlicerCache.Olap) {
+            try {
                 $branchSlicerCache.VisibleSlicerItemsList = @($bName)
-            }} catch {{
+            } catch {
                 Write-Output "Warning: Could not set branch OLAP slicer for $($bName) - $_. Skipping."
                 continue
-            }}
-        }} else {{
-            # Must select the target item first to prevent COM exception where all items are deselected
+            }
+        } else {
             $branchSlicerCache.SlicerItems($bName).Selected = $true
-            foreach ($item in $branchSlicerCache.SlicerItems) {{
-                if ($item.Name -ne $bName) {{ $item.Selected = $false }}
-            }}
-        }}
+            foreach ($item in $branchSlicerCache.SlicerItems) {
+                if ($item.Name -ne $bName) { $item.Selected = $false }
+            }
+        }
 
         $isExecutiveClinic = $bCaption.ToLower() -match "executive clinic"
 
-        if ($isExecutiveClinic) {{
-            # Select all months
-            if ($monthSlicerCache.Olap) {{
+        if ($isExecutiveClinic) {
+            if ($monthSlicerCache.Olap) {
                 $visibleList = @()
-                foreach ($m in $monthItems) {{
+                foreach ($m in $monthItems) {
                     $visibleList += $m.Name
-                }}
-                if ($visibleList.Count -gt 0) {{
-                    try {{
+                }
+                if ($visibleList.Count -gt 0) {
+                    try {
                         $monthSlicerCache.VisibleSlicerItemsList = $visibleList
-                    }} catch {{
+                    } catch {
                         Write-Output "Warning: Could not set month OLAP slicer list - $_. Skipping executive clinic extraction for branch $bCaption."
                         continue
-                    }}
-                }}
-            }} else {{
-                # Select the first item to avoid deselecting all
-                if ($monthItems.Count -gt 0) {{
+                    }
+                }
+            } else {
+                if ($monthItems.Count -gt 0) {
                     $firstM = $monthItems[0]
                     $monthSlicerCache.SlicerItems($firstM.Name).Selected = $true
-                    foreach ($item in $monthSlicerCache.SlicerItems) {{
+                    foreach ($item in $monthSlicerCache.SlicerItems) {
                         $shouldSelect = $false
-                        foreach ($m in $monthItems) {{
-                            if ($m.Name -eq $item.Name) {{
+                        foreach ($m in $monthItems) {
+                            if ($m.Name -eq $item.Name) {
                                 $shouldSelect = $true
                                 break
-                            }}
-                        }}
-                        if ($item.Name -ne $firstM.Name) {{
+                            }
+                        }
+                        if ($item.Name -ne $firstM.Name) {
                             $item.Selected = $shouldSelect
-                        }}
-                    }}
-                }}
-            }}
+                        }
+                    }
+                }
+            }
 
             Write-Output "Extracting data for Branch: $bCaption (All Months Combined)"
             $Pivot.RefreshTable()
@@ -257,111 +271,107 @@ try {{
             $RowRange = $Pivot.RowRange
             $ColumnRange = $Pivot.ColumnRange
 
-            if ($null -ne $DataBody) {{
-                $colHeaders = @{{}}
+            if ($null -ne $DataBody) {
+                $colHeaders = @{}
                 $colCount = $DataBody.Columns.Count
                 $headerRow = $ColumnRange.Rows.Count
-                for ($c = 1; $c -le $colCount; $c++) {{
+                for ($c = 1; $c -le $colCount; $c++) {
                     $h = $ColumnRange.Cells.Item($headerRow, $c).Text
                     $colHeaders[$c] = $h
-                }}
+                }
                 $rowCount = $DataBody.Rows.Count
                 $DatasetData = @()
-                for ($r = 1; $r -le $rowCount; $r++) {{
+                for ($r = 1; $r -le $rowCount; $r++) {
                     $teamName = $RowRange.Cells.Item($r + ($RowRange.Rows.Count - $rowCount), 1).Text
-                    if ($teamName -eq "Grand Total") {{ continue }}
-                    $rowObj = [PSCustomObject]@{{
+                    if ($teamName -eq "Grand Total") { continue }
+                    $rowObj = [PSCustomObject]@{
                         team = $teamName
                         closed = 0
                         open = 0
                         "% of closed" = "0%"
                         "% of open" = "0%"
                         "Grand Total" = 0
-                    }}
-                    for ($c = 1; $c -le $colCount; $c++) {{
+                    }
+                    for ($c = 1; $c -le $colCount; $c++) {
                         $header = $colHeaders[$c]
                         $val = $DataBody.Cells.Item($r, $c).Value2
                         $text = $DataBody.Cells.Item($r, $c).Text
-                        if ($header -eq "closed") {{ $rowObj.closed = if ($val -as [double]) {{ $val -as [double] }} elseif ([double]::TryParse($val, [ref]$null)) {{ [double]$val }} else {{ 0 }} }}
-                        if ($header -eq "open") {{ $rowObj.open = if ($val -as [double]) {{ $val -as [double] }} elseif ([double]::TryParse($val, [ref]$null)) {{ [double]$val }} else {{ 0 }} }}
-                        if ($header -eq "% of closed") {{ $rowObj."% of closed" = if ($text) {{ $text }} else {{ "0%" }} }}
-                        if ($header -eq "% of open") {{ $rowObj."% of open" = if ($text) {{ $text }} else {{ "0%" }} }}
-                        if ($header -match "Grand Total") {{ $rowObj."Grand Total" = if ($val -as [double]) {{ $val -as [double] }} elseif ([double]::TryParse($val, [ref]$null)) {{ [double]$val }} else {{ 0 }} }}
-                    }}
+                        if ($header -eq "closed") { $rowObj.closed = if ($val -as [double]) { $val -as [double] } elseif ([double]::TryParse($val, [ref]$null)) { [double]$val } else { 0 } }
+                        if ($header -eq "open") { $rowObj.open = if ($val -as [double]) { $val -as [double] } elseif ([double]::TryParse($val, [ref]$null)) { [double]$val } else { 0 } }
+                        if ($header -eq "% of closed") { $rowObj."% of closed" = if ($text) { $text } else { "0%" } }
+                        if ($header -eq "% of open") { $rowObj."% of open" = if ($text) { $text } else { "0%" } }
+                        if ($header -match "Grand Total") { $rowObj."Grand Total" = if ($val -as [double]) { $val -as [double] } elseif ([double]::TryParse($val, [ref]$null)) { [double]$val } else { 0 } }
+                    }
                     $DatasetData += $rowObj
-                }}
+                }
                 $DatasetDataArray = @($DatasetData)
-                if ($DatasetDataArray.Count -gt 0) {{
-                    $AllData += [PSCustomObject]@{{
+                if ($DatasetDataArray.Count -gt 0) {
+                    $AllData += [PSCustomObject]@{
                         branch = $bCaption
                         month = "All Months"
                         data = $DatasetDataArray
-                    }}
-                }}
-            }}
-        }} else {{
-            # Other branches: Combine all months EXCEPT current month
-            # And also current month separate
+                    }
+                }
+            }
+        } else {
             $otherMonths = @()
             $currentMonthItem = $null
 
-            foreach ($m in $monthItems) {{
-                if ($m.Caption -eq $currentMonth) {{
+            foreach ($m in $monthItems) {
+                if ($m.Caption -eq $currentMonth) {
                     $currentMonthItem = $m
-                }} else {{
+                } else {
                     $otherMonths += $m
-                }}
-            }}
+                }
+            }
 
-            if ($otherMonths.Count -gt 0) {{
+            if ($otherMonths.Count -gt 0) {
                 $otherMonthsTitle = "All Months (Except Current)"
-                if ($otherMonths.Count -ge 2) {{
-                    # Extract string format like "Jan" or "Jan-2026"
+                if ($otherMonths.Count -ge 2) {
                     $firstMName = $otherMonths[0].Caption
                     $lastMName = $otherMonths[$otherMonths.Count - 1].Caption
 
-                    # Ensure year is present or use string manipulation
-                    if ($firstMName -match "-") {{
+                    if ($firstMName -match "-") {
                         $firstPart = $firstMName.Split("-")[0]
-                    }} else {{
+                    } else {
                         $firstPart = $firstMName
-                    }}
+                    }
                     $otherMonthsTitle = "from ($firstPart to $lastMName)"
-                }} elseif ($otherMonths.Count -eq 1) {{
+                } elseif ($otherMonths.Count -eq 1) {
                     $otherMonthsTitle = $otherMonths[0].Caption
-                }}
+                }
 
-                if ($monthSlicerCache.Olap) {{
+                if ($monthSlicerCache.Olap) {
                     $visibleList = @()
-                    foreach ($m in $otherMonths) {{
+                    foreach ($m in $otherMonths) {
                         $visibleList += $m.Name
-                    }}
+                    }
                     $failedOlap = $false
-                    if ($visibleList.Count -gt 0) {{
-                        try {{
+                    if ($visibleList.Count -gt 0) {
+                        try {
                             $monthSlicerCache.VisibleSlicerItemsList = $visibleList
-                        }} catch {{
+                        } catch {
                             Write-Output "Warning: Could not set month OLAP slicer for 'other months' - $_. Skipping."
                             $failedOlap = $true
-                        }}
-                    }}
-                    if ($failedOlap) {{ continue }}
-                }} else {{
+                        }
+                    }
+                    if ($failedOlap) { continue }
+                } else {
                     $firstM = $otherMonths[0]
                     $monthSlicerCache.SlicerItems($firstM.Name).Selected = $true
-                    foreach ($item in $monthSlicerCache.SlicerItems) {{
+                    foreach ($item in $monthSlicerCache.SlicerItems) {
                         $shouldSelect = $false
-                        foreach ($m in $otherMonths) {{
-                            if ($m.Name -eq $item.Name) {{
+                        foreach ($m in $otherMonths) {
+                            if ($m.Name -eq $item.Name) {
                                 $shouldSelect = $true
                                 break
-                            }}
-                        }}
-                        if ($item.Name -ne $firstM.Name) {{
+                            }
+                        }
+                        if ($item.Name -ne $firstM.Name) {
                             $item.Selected = $shouldSelect
-                        }}
-                    }}
-                }}
+                        }
+                    }
+                }
 
                 Write-Output "Extracting data for Branch: $bCaption (All Months Except Current)"
                 $Pivot.RefreshTable()
@@ -369,68 +379,68 @@ try {{
                 $RowRange = $Pivot.RowRange
                 $ColumnRange = $Pivot.ColumnRange
 
-                if ($null -ne $DataBody) {{
-                    $colHeaders = @{{}}
+                if ($null -ne $DataBody) {
+                    $colHeaders = @{}
                     $colCount = $DataBody.Columns.Count
                     $headerRow = $ColumnRange.Rows.Count
-                    for ($c = 1; $c -le $colCount; $c++) {{
+                    for ($c = 1; $c -le $colCount; $c++) {
                         $h = $ColumnRange.Cells.Item($headerRow, $c).Text
                         $colHeaders[$c] = $h
-                    }}
+                    }
                     $rowCount = $DataBody.Rows.Count
                     $DatasetData = @()
-                    for ($r = 1; $r -le $rowCount; $r++) {{
+                    for ($r = 1; $r -le $rowCount; $r++) {
                         $teamName = $RowRange.Cells.Item($r + ($RowRange.Rows.Count - $rowCount), 1).Text
-                        if ($teamName -eq "Grand Total") {{ continue }}
-                        $rowObj = [PSCustomObject]@{{
+                        if ($teamName -eq "Grand Total") { continue }
+                        $rowObj = [PSCustomObject]@{
                             team = $teamName
                             closed = 0
                             open = 0
                             "% of closed" = "0%"
                             "% of open" = "0%"
                             "Grand Total" = 0
-                        }}
-                        for ($c = 1; $c -le $colCount; $c++) {{
+                        }
+                        for ($c = 1; $c -le $colCount; $c++) {
                             $header = $colHeaders[$c]
                             $val = $DataBody.Cells.Item($r, $c).Value2
                             $text = $DataBody.Cells.Item($r, $c).Text
-                            if ($header -eq "closed") {{ $rowObj.closed = if ($val -as [double]) {{ $val -as [double] }} elseif ([double]::TryParse($val, [ref]$null)) {{ [double]$val }} else {{ 0 }} }}
-                            if ($header -eq "open") {{ $rowObj.open = if ($val -as [double]) {{ $val -as [double] }} elseif ([double]::TryParse($val, [ref]$null)) {{ [double]$val }} else {{ 0 }} }}
-                            if ($header -eq "% of closed") {{ $rowObj."% of closed" = if ($text) {{ $text }} else {{ "0%" }} }}
-                            if ($header -eq "% of open") {{ $rowObj."% of open" = if ($text) {{ $text }} else {{ "0%" }} }}
-                            if ($header -match "Grand Total") {{ $rowObj."Grand Total" = if ($val -as [double]) {{ $val -as [double] }} elseif ([double]::TryParse($val, [ref]$null)) {{ [double]$val }} else {{ 0 }} }}
-                        }}
+                            if ($header -eq "closed") { $rowObj.closed = if ($val -as [double]) { $val -as [double] } elseif ([double]::TryParse($val, [ref]$null)) { [double]$val } else { 0 } }
+                            if ($header -eq "open") { $rowObj.open = if ($val -as [double]) { $val -as [double] } elseif ([double]::TryParse($val, [ref]$null)) { [double]$val } else { 0 } }
+                            if ($header -eq "% of closed") { $rowObj."% of closed" = if ($text) { $text } else { "0%" } }
+                            if ($header -eq "% of open") { $rowObj."% of open" = if ($text) { $text } else { "0%" } }
+                            if ($header -match "Grand Total") { $rowObj."Grand Total" = if ($val -as [double]) { $val -as [double] } elseif ([double]::TryParse($val, [ref]$null)) { [double]$val } else { 0 } }
+                        }
                         $DatasetData += $rowObj
-                    }}
+                    }
                     $DatasetDataArray = @($DatasetData)
-                    if ($DatasetDataArray.Count -gt 0) {{
-                        $AllData += [PSCustomObject]@{{
+                    if ($DatasetDataArray.Count -gt 0) {
+                        $AllData += [PSCustomObject]@{
                             branch = $bCaption
                             month = $otherMonthsTitle
                             data = $DatasetDataArray
-                        }}
-                    }}
-                }}
-            }}
+                        }
+                    }
+                }
+            }
 
-            if ($null -ne $currentMonthItem) {{
+            if ($null -ne $currentMonthItem) {
                 $failedOlap = $false
-                if ($monthSlicerCache.Olap) {{
-                    try {{
+                if ($monthSlicerCache.Olap) {
+                    try {
                         $monthSlicerCache.VisibleSlicerItemsList = @($currentMonthItem.Name)
-                    }} catch {{
+                    } catch {
                         Write-Output "Warning: Could not set month OLAP slicer for '$($currentMonthItem.Name)' - $_. Skipping current month extraction for branch $bCaption."
                         $failedOlap = $true
-                    }}
-                }} else {{
+                    }
+                } else {
                     $mName = $currentMonthItem.Name
                     $monthSlicerCache.SlicerItems($mName).Selected = $true
-                    foreach ($item in $monthSlicerCache.SlicerItems) {{
-                        if ($item.Name -ne $mName) {{ $item.Selected = $false }}
-                    }}
-                }}
+                    foreach ($item in $monthSlicerCache.SlicerItems) {
+                        if ($item.Name -ne $mName) { $item.Selected = $false }
+                    }
+                }
 
-                if ($failedOlap) {{ continue }}
+                if ($failedOlap) { continue }
 
                 Write-Output "Extracting data for Branch: $bCaption (Current Month)"
                 $Pivot.RefreshTable()
@@ -438,87 +448,100 @@ try {{
                 $RowRange = $Pivot.RowRange
                 $ColumnRange = $Pivot.ColumnRange
 
-                if ($null -ne $DataBody) {{
-                    $colHeaders = @{{}}
+                if ($null -ne $DataBody) {
+                    $colHeaders = @{}
                     $colCount = $DataBody.Columns.Count
                     $headerRow = $ColumnRange.Rows.Count
-                    for ($c = 1; $c -le $colCount; $c++) {{
+                    for ($c = 1; $c -le $colCount; $c++) {
                         $h = $ColumnRange.Cells.Item($headerRow, $c).Text
                         $colHeaders[$c] = $h
-                    }}
+                    }
                     $rowCount = $DataBody.Rows.Count
                     $DatasetData = @()
-                    for ($r = 1; $r -le $rowCount; $r++) {{
+                    for ($r = 1; $r -le $rowCount; $r++) {
                         $teamName = $RowRange.Cells.Item($r + ($RowRange.Rows.Count - $rowCount), 1).Text
-                        if ($teamName -eq "Grand Total") {{ continue }}
-                        $rowObj = [PSCustomObject]@{{
+                        if ($teamName -eq "Grand Total") { continue }
+                        $rowObj = [PSCustomObject]@{
                             team = $teamName
                             closed = 0
                             open = 0
                             "% of closed" = "0%"
                             "% of open" = "0%"
                             "Grand Total" = 0
-                        }}
-                        for ($c = 1; $c -le $colCount; $c++) {{
+                        }
+                        for ($c = 1; $c -le $colCount; $c++) {
                             $header = $colHeaders[$c]
                             $val = $DataBody.Cells.Item($r, $c).Value2
                             $text = $DataBody.Cells.Item($r, $c).Text
-                            if ($header -eq "closed") {{ $rowObj.closed = if ($val -as [double]) {{ $val -as [double] }} elseif ([double]::TryParse($val, [ref]$null)) {{ [double]$val }} else {{ 0 }} }}
-                            if ($header -eq "open") {{ $rowObj.open = if ($val -as [double]) {{ $val -as [double] }} elseif ([double]::TryParse($val, [ref]$null)) {{ [double]$val }} else {{ 0 }} }}
-                            if ($header -eq "% of closed") {{ $rowObj."% of closed" = if ($text) {{ $text }} else {{ "0%" }} }}
-                            if ($header -eq "% of open") {{ $rowObj."% of open" = if ($text) {{ $text }} else {{ "0%" }} }}
-                            if ($header -match "Grand Total") {{ $rowObj."Grand Total" = if ($val -as [double]) {{ $val -as [double] }} elseif ([double]::TryParse($val, [ref]$null)) {{ [double]$val }} else {{ 0 }} }}
-                        }}
+                            if ($header -eq "closed") { $rowObj.closed = if ($val -as [double]) { $val -as [double] } elseif ([double]::TryParse($val, [ref]$null)) { [double]$val } else { 0 } }
+                            if ($header -eq "open") { $rowObj.open = if ($val -as [double]) { $val -as [double] } elseif ([double]::TryParse($val, [ref]$null)) { [double]$val } else { 0 } }
+                            if ($header -eq "% of closed") { $rowObj."% of closed" = if ($text) { $text } else { "0%" } }
+                            if ($header -eq "% of open") { $rowObj."% of open" = if ($text) { $text } else { "0%" } }
+                            if ($header -match "Grand Total") { $rowObj."Grand Total" = if ($val -as [double]) { $val -as [double] } elseif ([double]::TryParse($val, [ref]$null)) { [double]$val } else { 0 } }
+                        }
                         $DatasetData += $rowObj
-                    }}
+                    }
                     $DatasetDataArray = @($DatasetData)
-                    if ($DatasetDataArray.Count -gt 0) {{
-                        $AllData += [PSCustomObject]@{{
+                    if ($DatasetDataArray.Count -gt 0) {
+                        $AllData += [PSCustomObject]@{
                             branch = $bCaption
                             month = $currentMonth
                             data = $DatasetDataArray
-                        }}
-                    }}
-                }}
-            }}
-        }}
-    }}
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     Write-Output "Table extraction completed. Total combinations extracted: $($AllData.Count)"
     $Workbook.Close($false)
 
     Write-Output "Converting AllData to JSON..."
-    # Wrap $AllData explicitly in an array to avoid formatting quirks on single-item outputs
     [System.IO.File]::WriteAllText($jsonOutputPath, (ConvertTo-Json -InputObject @($AllData) -Depth 100 -Compress), (New-Object System.Text.UTF8Encoding $False))
     Write-Output "JSON saved to $jsonOutputPath"
-}} catch {{
+} catch {
     Write-Error $_.Exception.Message
-    if ($Workbook) {{ $Workbook.Close($false) }}
+    if ($Workbook) { $Workbook.Close($false) }
     throw $_
-}} finally {{
+} finally {
     $Excel.Quit()
     [System.Runtime.Interopservices.Marshal]::ReleaseComObject($Excel) | Out-Null
-    if ($processId) {{
+    if ($processId) {
         Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
-    }}
-}}
-"#,
-        dashboard_path = dashboard_path_str,
-        json_path = json_path_str,
-        target_sheet = target_sheet_name.replace("'", "''"),
-        target_pivot = target_pivot_name.replace("'", "''"),
-        branch_filter = branch_filter_ps,
-        month_filter = month_filter_ps,
-        current_month = current_month
-    );
+    }
+}
+"#;
 
-    // Run powershell but check if we should skip due to test mode
     if config.dashboard_config.save_email_as_html.unwrap_or(false) {
         info!("save_email_as_html is true, skipping actual slicer execution via powershell for testing.");
         // We write an empty JSON array for tests so it doesn't crash
         std::fs::write(&json_output_path, "[]")?;
     } else {
-        if let Err(e) = run_powershell("slicer_extract.ps1", &ps_script) {
+        let branch_filter_csv = config
+            .branch_filter
+            .as_ref()
+            .map(|b| b.join(","))
+            .unwrap_or_default();
+        let month_filter_csv = config
+            .month_filter
+            .as_ref()
+            .map(|m| m.join(","))
+            .unwrap_or_default();
+
+        if let Err(e) = run_powershell_with_args(
+            "slicer_extract.ps1",
+            ps_script,
+            &[
+                ("-DashboardPath", &dashboard_path_str),
+                ("-JsonOutputPath", &json_path_str),
+                ("-TargetSheetName", target_sheet_name),
+                ("-TargetPivotName", target_pivot_name),
+                ("-BranchFilterCsv", &branch_filter_csv),
+                ("-MonthFilterCsv", &month_filter_csv),
+                ("-CurrentMonth", &current_month),
+            ],
+        ) {
             error!("Error executing pivot extraction PowerShell script: {}", e);
             anyhow::bail!(e);
         }

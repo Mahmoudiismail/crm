@@ -204,25 +204,38 @@ impl ScriptManager {
         Ok(target_path)
     }
 
-    /// Executes a persistent PowerShell script file and logs stdout/stderr appropriately.
-    pub fn execute_script(&self, script_path: &Path) -> Result<()> {
+    /// Executes a persistent PowerShell script file with CLI parameter arguments and logs stdout/stderr appropriately.
+    pub fn execute_script_with_args(
+        &self,
+        script_path: &Path,
+        args: &[(&str, &str)],
+    ) -> Result<()> {
         if !script_path.exists() {
             anyhow::bail!("PowerShell script file does not exist at {:?}", script_path);
         }
 
-        info!("Executing persistent PowerShell script: {:?}", script_path);
+        info!(
+            "Executing persistent PowerShell script: {:?} with args {:?}",
+            script_path, args
+        );
 
-        let output = std::process::Command::new("powershell")
-            .args([
-                "-NoProfile",
-                "-NonInteractive",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-File",
-                script_path.to_str().ok_or_else(|| {
-                    anyhow::anyhow!("Invalid unicode path for script {:?}", script_path)
-                })?,
-            ])
+        let mut cmd = std::process::Command::new("powershell");
+        cmd.args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            script_path.to_str().ok_or_else(|| {
+                anyhow::anyhow!("Invalid unicode path for script {:?}", script_path)
+            })?,
+        ]);
+
+        for (k, v) in args {
+            cmd.arg(k).arg(v);
+        }
+
+        let output = cmd
             .stdin(Stdio::null())
             .output()
             .context("Failed to spawn PowerShell process")?;
@@ -255,6 +268,11 @@ impl ScriptManager {
         }
 
         Ok(())
+    }
+
+    /// Executes a persistent PowerShell script file and logs stdout/stderr appropriately.
+    pub fn execute_script(&self, script_path: &Path) -> Result<()> {
+        self.execute_script_with_args(script_path, &[])
     }
 }
 
@@ -473,5 +491,39 @@ mod tests {
         for p in &results {
             assert_eq!(p, first_path);
         }
+    }
+
+    #[test]
+    fn test_runtime_argument_changes_do_not_change_script_hash() {
+        let temp_dir = tempdir().unwrap();
+        let manager = ScriptManager::with_root_dir(temp_dir.path());
+
+        let parameterized_template = r#"
+param(
+    [string]$Email,
+    [string]$Subject
+)
+Write-Output "To: $Email, Subject: $Subject"
+"#;
+
+        let path1 = manager
+            .get_or_create_script("Email Task", "send_email.ps1", parameterized_template)
+            .unwrap();
+
+        let path2 = manager
+            .get_or_create_script("Email Task", "send_email.ps1", parameterized_template)
+            .unwrap();
+
+        assert_eq!(path1, path2);
+
+        let task_dir = temp_dir.path().join("Email Task");
+        let entries: Vec<_> = fs::read_dir(&task_dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .filter(|name| name.ends_with(".ps1"))
+            .collect();
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0], "send_email.ps1");
     }
 }
