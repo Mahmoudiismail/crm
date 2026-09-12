@@ -4,24 +4,36 @@ use crm_tool::runner::gui::HttpRequest;
 
 #[test]
 fn test_non_loopback_gui_host_rejected() {
-    let mut cfg = RunnerConfig::default();
+    let cfg1 = RunnerConfig {
+        gui_host: "127.0.0.1".to_string(),
+        ..Default::default()
+    };
+    assert!(cfg1.validate().is_ok());
 
-    // Loopback hosts must succeed
-    cfg.gui_host = "127.0.0.1".to_string();
-    assert!(cfg.validate().is_ok());
+    let cfg2 = RunnerConfig {
+        gui_host: "localhost".to_string(),
+        ..Default::default()
+    };
+    assert!(cfg2.validate().is_ok());
 
-    cfg.gui_host = "localhost".to_string();
-    assert!(cfg.validate().is_ok());
+    let cfg3 = RunnerConfig {
+        gui_host: "::1".to_string(),
+        ..Default::default()
+    };
+    assert!(cfg3.validate().is_ok());
 
-    cfg.gui_host = "::1".to_string();
-    assert!(cfg.validate().is_ok());
-
-    cfg.gui_host = "[::1]".to_string();
-    assert!(cfg.validate().is_ok());
+    let cfg4 = RunnerConfig {
+        gui_host: "[::1]".to_string(),
+        ..Default::default()
+    };
+    assert!(cfg4.validate().is_ok());
 
     // Non-loopback hosts must fail validation with security error
-    cfg.gui_host = "0.0.0.0".to_string();
-    let err = cfg.validate().unwrap_err();
+    let cfg_invalid1 = RunnerConfig {
+        gui_host: "0.0.0.0".to_string(),
+        ..Default::default()
+    };
+    let err = cfg_invalid1.validate().unwrap_err();
     assert!(
         err.to_string()
             .contains("Security error: Binding to non-loopback gui_host '0.0.0.0'"),
@@ -29,8 +41,11 @@ fn test_non_loopback_gui_host_rejected() {
         err
     );
 
-    cfg.gui_host = "192.168.1.50".to_string();
-    let err2 = cfg.validate().unwrap_err();
+    let cfg_invalid2 = RunnerConfig {
+        gui_host: "192.168.1.50".to_string(),
+        ..Default::default()
+    };
+    let err2 = cfg_invalid2.validate().unwrap_err();
     assert!(err2
         .to_string()
         .contains("Security error: Binding to non-loopback gui_host"));
