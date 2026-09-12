@@ -359,7 +359,14 @@ pub(crate) fn resolve_date_var(val: &str, base_date: Option<&str>) -> Result<chr
                         return Ok(res);
                     }
                 }
-                parse_flexible_date_impl(bd, None).unwrap_or_else(|| Local::now().date_naive())
+                if let Some(base_dt) = parse_flexible_date_impl(bd, None) {
+                    if base_dt.weekday() == target_weekday {
+                        return Ok(base_dt);
+                    }
+                    base_dt
+                } else {
+                    Local::now().date_naive()
+                }
             } else {
                 Local::now().date_naive()
             };

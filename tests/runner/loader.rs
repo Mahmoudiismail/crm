@@ -24,9 +24,6 @@ fn test_interval_schedule_persistence() {
         last_run_at: String::new(),
         last_status: String::new(),
         timeout_seconds: 0,
-        period_mode: crm_tool::runner::config::PeriodMode::Custom,
-        start_date: None,
-        end_date: None,
     };
 
     let cfg = RunnerConfig {
@@ -89,9 +86,6 @@ fn test_shell_command_persistence() {
         post_run_steps: Vec::new(),
         last_status: String::new(),
         timeout_seconds: 0,
-        period_mode: crm_tool::runner::config::PeriodMode::Custom,
-        start_date: None,
-        end_date: None,
     };
 
     let cfg = RunnerConfig {
@@ -139,9 +133,6 @@ fn test_empty_schedule_is_manual_persistence() {
         last_run_at: String::new(),
         last_status: String::new(),
         timeout_seconds: 0,
-        period_mode: crm_tool::runner::config::PeriodMode::Custom,
-        start_date: None,
-        end_date: None,
     };
 
     let legacy_val = serde_json::to_value(
@@ -182,9 +173,6 @@ fn test_mixed_tasks_persistence() {
             last_run_at: String::new(),
             last_status: String::new(),
             timeout_seconds: 0,
-            period_mode: crm_tool::runner::config::PeriodMode::Custom,
-            start_date: None,
-            end_date: None,
         },
         RunnerTask {
             id: "shell_task".to_string(),
@@ -209,9 +197,6 @@ fn test_mixed_tasks_persistence() {
             last_run_at: String::new(),
             last_status: String::new(),
             timeout_seconds: 0,
-            period_mode: crm_tool::runner::config::PeriodMode::Custom,
-            start_date: None,
-            end_date: None,
         },
     ];
 

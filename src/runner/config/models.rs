@@ -70,6 +70,12 @@ pub struct ExternalAppSpec {
     pub app_id: String,
     #[serde(default)]
     pub args: std::collections::HashMap<String, String>,
+    #[serde(default)]
+    pub period_mode: PeriodMode,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_date: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end_date: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -108,13 +114,6 @@ pub struct RunnerTask {
     pub last_run_at: String,
     pub last_status: String,
     pub timeout_seconds: u64,
-
-    #[serde(default)]
-    pub period_mode: PeriodMode,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub start_date: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub end_date: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

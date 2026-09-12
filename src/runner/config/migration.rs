@@ -1,3 +1,7 @@
+fn is_default_period_mode(pm: &PeriodMode) -> bool {
+    *pm == PeriodMode::Custom
+}
+
 use serde::{Deserialize, Serialize};
 
 use crate::runner::config::defaults::*;
@@ -37,7 +41,7 @@ pub struct RunnerTaskLegacy {
     pub post_run_app_args: Option<std::collections::HashMap<String, String>>,
     #[serde(default)]
     pub timeout_seconds: u64,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_default_period_mode")]
     pub period_mode: PeriodMode,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub start_date: Option<String>,
@@ -76,6 +80,9 @@ impl From<RunnerTaskLegacy> for RunnerTask {
                             actions: vec![ActionSpec::ExternalApp(ExternalAppSpec {
                                 app_id,
                                 args,
+                                period_mode: PeriodMode::Custom,
+                                start_date: None,
+                                end_date: None,
                             })],
                         });
                     }
@@ -98,6 +105,9 @@ impl From<RunnerTaskLegacy> for RunnerTask {
                     post_actions.push(ActionSpec::ExternalApp(ExternalAppSpec {
                         app_id,
                         args: legacy.post_run_app_args.unwrap_or_default(),
+                        period_mode: PeriodMode::Custom,
+                        start_date: None,
+                        end_date: None,
                     }));
                 }
             }
@@ -107,6 +117,24 @@ impl From<RunnerTaskLegacy> for RunnerTask {
                     mode: ExecutionMode::Sequential,
                     actions: post_actions,
                 });
+            }
+        }
+
+        for step in steps.iter_mut().chain(post_run_steps.iter_mut()) {
+            for action in &mut step.actions {
+                if let ActionSpec::ExternalApp(spec) = action {
+                    if spec.start_date.is_none() {
+                        spec.start_date = legacy.start_date.clone();
+                    }
+                    if spec.end_date.is_none() {
+                        spec.end_date = legacy.end_date.clone();
+                    }
+                    if spec.period_mode == PeriodMode::Custom
+                        && legacy.period_mode != PeriodMode::Custom
+                    {
+                        spec.period_mode = legacy.period_mode;
+                    }
+                }
             }
         }
 
@@ -123,9 +151,6 @@ impl From<RunnerTaskLegacy> for RunnerTask {
             timeout_seconds: legacy.timeout_seconds,
             steps,
             post_run_steps,
-            period_mode: legacy.period_mode,
-            start_date: legacy.start_date,
-            end_date: legacy.end_date,
         }
     }
 }
@@ -150,9 +175,9 @@ impl From<RunnerTask> for RunnerTaskLegacy {
             post_run_script: None,
             post_run_app_id: None,
             post_run_app_args: None,
-            period_mode: task.period_mode,
-            start_date: task.start_date,
-            end_date: task.end_date,
+            period_mode: PeriodMode::Custom,
+            start_date: None,
+            end_date: None,
         }
     }
 }
@@ -241,7 +266,13 @@ impl RunnerTask {
                 self.steps.push(TaskStep {
                     name: Some("Legacy External App".to_string()),
                     mode: ExecutionMode::Sequential,
-                    actions: vec![ActionSpec::ExternalApp(ExternalAppSpec { app_id, args })],
+                    actions: vec![ActionSpec::ExternalApp(ExternalAppSpec {
+                        app_id,
+                        args,
+                        period_mode: PeriodMode::Custom,
+                        start_date: None,
+                        end_date: None,
+                    })],
                 });
             }
         }

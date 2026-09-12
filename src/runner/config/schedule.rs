@@ -805,8 +805,47 @@ pub struct ExecutionOccurrence {
     pub scheduled_at: DateTime<Utc>,
 }
 
-pub fn generate_upcoming_executions(
+pub fn resolve_and_generate_execution_periods(
+    mode: PeriodMode,
+    start_date_str: Option<&str>,
+    end_date_str: Option<&str>,
+    now: DateTime<Utc>,
+) -> Result<Vec<ExecutionPeriod>> {
+    let base_now_str = now
+        .with_timezone(&chrono::Local)
+        .format("%Y-%m-%d")
+        .to_string();
+
+    let start_str = start_date_str.unwrap_or("today");
+    let raw_start_date =
+        crate::utils::parse_flexible_date_with_base(start_str, Some(&base_now_str))
+            .ok_or_else(|| anyhow::anyhow!("Invalid start date expression '{}'", start_str))?;
+
+    let raw_start_fmt = raw_start_date.format("%Y-%m-%d").to_string();
+    let raw_end_date = if let Some(ed_str) = end_date_str {
+        crate::utils::parse_flexible_date_with_base(ed_str, Some(&raw_start_fmt))
+            .ok_or_else(|| anyhow::anyhow!("Invalid end date expression '{}'", ed_str))?
+    } else {
+        raw_start_date
+    };
+
+    if raw_start_date > raw_end_date {
+        return Err(anyhow::anyhow!(
+            "Invalid date range: start date ({}) is after end date ({})",
+            raw_start_date,
+            raw_end_date
+        ));
+    }
+
+    Ok(generate_execution_periods(
+        mode,
+        raw_start_date,
+        raw_end_date,
+    ))
+}
+pub fn generate_upcoming_executions_for_app(
     task: &RunnerTask,
+    app_spec: &ExternalAppSpec,
     now: DateTime<Utc>,
     limit: usize,
 ) -> Result<Vec<ExecutionOccurrence>> {
@@ -816,27 +855,12 @@ pub fn generate_upcoming_executions(
         return Ok(Vec::new());
     }
 
-    let base_now_str = now
-        .with_timezone(&chrono::Local)
-        .format("%Y-%m-%d")
-        .to_string();
-
-    // 1. Resolve start_date and end_date using `now` date as base
-    let start_date_str = task.start_date.as_deref().unwrap_or("today");
-    let raw_start_date =
-        crate::utils::parse_flexible_date_with_base(start_date_str, Some(&base_now_str))
-            .unwrap_or_else(|| now.with_timezone(&chrono::Local).date_naive());
-
-    let end_date_str = task.end_date.as_deref();
-    let raw_end_date = if let Some(ed_str) = end_date_str {
-        crate::utils::parse_flexible_date_with_base(ed_str, Some(start_date_str))
-            .unwrap_or(raw_start_date)
-    } else {
-        raw_start_date
-    };
-
-    // 2. Generate execution periods using task.period_mode
-    let periods = generate_execution_periods(task.period_mode, raw_start_date, raw_end_date);
+    let periods = resolve_and_generate_execution_periods(
+        app_spec.period_mode,
+        app_spec.start_date.as_deref(),
+        app_spec.end_date.as_deref(),
+        now,
+    )?;
 
     let mut results = Vec::new();
 
@@ -916,16 +940,23 @@ pub fn generate_upcoming_executions(
                         if !st.is_empty() {
                             if let Ok(st_time) = NaiveTime::parse_from_str(st.trim(), "%H:%M") {
                                 let local_cursor = cursor.with_timezone(&Local);
-                                if local_cursor.time() < st_time {
-                                    if let Some(naive_dt) = local_cursor
-                                        .date_naive()
-                                        .and_time(st_time)
-                                        .and_local_timezone(Local)
-                                        .single()
-                                    {
-                                        let candidate = naive_dt.with_timezone(&Utc);
-                                        if candidate > cursor {
-                                            cursor = candidate;
+                                if let Some(st_dt_local) = local_cursor
+                                    .date_naive()
+                                    .and_time(st_time)
+                                    .and_local_timezone(Local)
+                                    .single()
+                                {
+                                    let st_dt = st_dt_local.with_timezone(&Utc);
+                                    if st_dt > cursor {
+                                        cursor = st_dt;
+                                    } else {
+                                        let elapsed = (cursor - st_dt).num_seconds();
+                                        if elapsed > 0 {
+                                            let remainder = elapsed % (interval as i64);
+                                            if remainder != 0 {
+                                                let add_sec = (interval as i64) - remainder;
+                                                cursor += chrono::TimeDelta::seconds(add_sec);
+                                            }
                                         }
                                     }
                                 }
@@ -1127,6 +1158,31 @@ pub fn days_in_month(year: i32, month: u32) -> u32 {
     }
 }
 
+pub fn generate_upcoming_executions(
+    task: &RunnerTask,
+    now: DateTime<Utc>,
+    limit: usize,
+) -> Result<Vec<ExecutionOccurrence>> {
+    let app_spec = task
+        .steps
+        .iter()
+        .chain(task.post_run_steps.iter())
+        .flat_map(|step| step.actions.iter())
+        .find_map(|action| match action {
+            ActionSpec::ExternalApp(spec) => Some(spec.clone()),
+            _ => None,
+        })
+        .unwrap_or_else(|| ExternalAppSpec {
+            app_id: String::new(),
+            args: std::collections::HashMap::new(),
+            period_mode: PeriodMode::Custom,
+            start_date: None,
+            end_date: None,
+        });
+
+    generate_upcoming_executions_for_app(task, &app_spec, now, limit)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1277,14 +1333,21 @@ mod tests {
                 working_hours_profile_id: None,
                 start_time: None,
             }],
-            steps: vec![],
+            steps: vec![TaskStep {
+                name: None,
+                mode: ExecutionMode::Sequential,
+                actions: vec![ActionSpec::ExternalApp(ExternalAppSpec {
+                    app_id: "test_app".to_string(),
+                    args: std::collections::HashMap::new(),
+                    period_mode: PeriodMode::Monthly,
+                    start_date: Some("2026-01-01".to_string()),
+                    end_date: Some("2026-12-31".to_string()),
+                })],
+            }],
             post_run_steps: vec![],
             last_run_at: String::new(),
             last_status: String::new(),
             timeout_seconds: 0,
-            period_mode: PeriodMode::Monthly,
-            start_date: Some("2026-01-01".to_string()),
-            end_date: Some("2026-12-31".to_string()),
         };
 
         let occurrences = generate_upcoming_executions(&task, now, 10).unwrap();
@@ -1304,14 +1367,21 @@ mod tests {
             frequency_seconds: 0,
             next_run_at: String::new(),
             schedules: vec![],
-            steps: vec![],
+            steps: vec![TaskStep {
+                name: None,
+                mode: ExecutionMode::Sequential,
+                actions: vec![ActionSpec::ExternalApp(ExternalAppSpec {
+                    app_id: "test_app".to_string(),
+                    args: std::collections::HashMap::new(),
+                    period_mode: PeriodMode::Custom,
+                    start_date: Some("2020-01-01".to_string()),
+                    end_date: Some("2020-01-05".to_string()),
+                })],
+            }],
             post_run_steps: vec![],
             last_run_at: String::new(),
             last_status: String::new(),
             timeout_seconds: 0,
-            period_mode: PeriodMode::Custom,
-            start_date: Some("2020-01-01".to_string()),
-            end_date: Some("2020-01-05".to_string()),
         };
 
         let past_occurrences = generate_upcoming_executions(&past_task, now, 10).unwrap();
