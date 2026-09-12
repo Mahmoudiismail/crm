@@ -80,18 +80,23 @@ pub fn run(config: &DepartmentSplitConfig) -> Result<()> {
 
     let mapping_file_str = mapping_file.to_str().unwrap();
 
-    let ps_script = format!(
-        r#"
-$ErrorActionPreference = "Stop"
-$dashboardPath = '{dashboard_path}'
-$outDir = '{out_dir}'
-$mappingFile = '{mapping_file}'
+    let ps_script = r#"
+param(
+    [string]$DashboardPath,
+    [string]$OutputDir,
+    [string]$MappingFile
+)
 
-function Write-Log {{
+$ErrorActionPreference = "Stop"
+$dashboardPath = $DashboardPath
+$outDir = $OutputDir
+$mappingFile = $MappingFile
+
+function Write-Log {
     param([string]$message)
     $timestamp = (Get-Date).ToString("HH:mm:ss.fff")
     Write-Output "TRACE: [$timestamp] $message"
-}}
+}
 
 $scriptTimer = [System.Diagnostics.Stopwatch]::StartNew()
 
@@ -103,106 +108,108 @@ $Excel.DisplayAlerts = $false
 $Excel.ScreenUpdating = $false
 $Excel.EnableEvents = $false
 $originalCalculation = $Excel.Calculation
-try {{ $Excel.Calculation = -4135 }} catch {{}}
+try { $Excel.Calculation = -4135 } catch {}
 $comTimer.Stop()
 Write-Log "Excel COM Object launched in $($comTimer.ElapsedMilliseconds) ms"
 
 $processId = $null
-try {{
-    [int]$handle = $Excel.Hwnd
-    $processId = (Get-Process | Where-Object {{ $_.MainWindowHandle -eq $handle }}).Id
-}} catch {{
-    $processId = (Get-Process -Name EXCEL | Sort-Object StartTime -Descending | Select-Object -First 1).Id
-}}
 
-$templatePath = $null
+try {
+    try {
+        [int]$handle = $Excel.Hwnd
+        $processId = (Get-Process | Where-Object { $_.MainWindowHandle -eq $handle }).Id
+    } catch {
+        $processId = (Get-Process -Name EXCEL | Sort-Object StartTime -Descending | Select-Object -First 1).Id
+    }
 
-try {{
-    Write-Log "Loading mapping JSON..."
-    $chairTimer = [System.Diagnostics.Stopwatch]::StartNew()
-    $mappingJson = Get-Content $mappingFile -Raw | ConvertFrom-Json
-    $mappingHash = @{{}}
-    foreach ($prop in $mappingJson.psobject.properties) {{
-        $mappingHash[$prop.Name] = $prop.Value
-    }}
-    $chairTimer.Stop()
-    Write-Log "Loaded $($mappingHash.Count) department mappings in $($chairTimer.ElapsedMilliseconds) ms"
+    Write-Log "Loading chair mapping from $mappingFile..."
+    $mappingJson = Get-Content $mappingFile -Raw -Encoding UTF8 | ConvertFrom-Json
+    $mappingHash = @{}
+    foreach ($property in $mappingJson.PSObject.Properties) {
+        $mappingHash[$property.Name.Trim().ToUpper()] = $property.Value.ToString().Trim()
+    }
+    Write-Log "Loaded $($mappingHash.Count) chair mapping rules"
 
-    Write-Log "Opening master dashboard: $dashboardPath"
+    Write-Log "Opening master workbook at: $dashboardPath"
     $openTimer = [System.Diagnostics.Stopwatch]::StartNew()
-    $Workbook = $Excel.Workbooks.Open($dashboardPath)
-    $Sheet = $Workbook.Worksheets.Item("OPD Report")
+    $Workbook = $Excel.Workbooks.Open($dashboardPath, $null, $true) # Read-Only
     $openTimer.Stop()
-    Write-Log "Master dashboard opened in $($openTimer.ElapsedMilliseconds) ms"
+    Write-Log "Master workbook opened in $($openTimer.ElapsedMilliseconds) ms"
 
-    # Find the DEPT column
-    $lastCol = $Sheet.Cells.SpecialCells(11).Column # xlCellTypeLastCell
-    $headerRow = 1
+    $Sheet = $null
+    foreach ($ws in $Workbook.Worksheets) {
+        if ($ws.Name -eq "OPD Report") {
+            $Sheet = $ws
+            break
+        }
+    }
+    if (-not $Sheet) {
+        Write-Error "Worksheet 'OPD Report' not found in $dashboardPath"
+        throw "Worksheet 'OPD Report' not found"
+    }
+
+    $headerRow = -1
     $deptCol = -1
 
-    # Try finding DEPT header in first few rows
-    for ($r = 1; $r -le 5; $r++) {{
-        for ($c = 1; $c -le $lastCol; $c++) {{
-            if ($Sheet.Cells.Item($r, $c).Text -eq "DEPT") {{
-                $deptCol = $c
+    for ($r = 1; $r -le 20; $r++) {
+        for ($c = 1; $c -le 50; $c++) {
+            $cellVal = [string]$Sheet.Cells.Item($r, $c).Value2
+            if ($cellVal -and $cellVal.Trim().ToUpper() -eq "DEPT") {
                 $headerRow = $r
+                $deptCol = $c
                 break
-            }}
-        }}
-        if ($deptCol -ne -1) {{ break }}
-    }}
+            }
+        }
+        if ($deptCol -ne -1) { break }
+    }
 
-    if ($deptCol -eq -1) {{
+    if ($deptCol -eq -1) {
         Write-Error "Could not find 'DEPT' column in 'OPD Report' sheet."
         throw "DEPT column not found"
-    }}
+    }
 
     Write-Log "DEPT column found at index: $deptCol (Header Row: $headerRow)"
 
-    # ACCURATE DATA END ROW DETECTION
     $foundCell = $Sheet.Cells.Find("*", $Sheet.Cells.Item(1, 1), -4163, 2, 1, 2) # xlValues, xlByRows, xlPrevious
-    if ($foundCell -ne $null) {{
+    if ($foundCell -ne $null) {
         $lastRow = $foundCell.Row
-    }} else {{
+    } else {
         $lastRow = $Sheet.Cells.SpecialCells(11).Row
-    }}
+    }
     Write-Log "Total data rows in OPD Report: $lastRow"
 
     $startRow = $headerRow + 1
     $totalDataRows = $lastRow - $headerRow
 
-    # READ DEPT COLUMN INTO MEMORY IN ONE COM CALL
     Write-Log "Scanning DEPT column..."
     $readTimer = [System.Diagnostics.Stopwatch]::StartNew()
     $deptRangeValues = $Sheet.Range($Sheet.Cells.Item($startRow, $deptCol), $Sheet.Cells.Item($lastRow, $deptCol)).Value2
     $readTimer.Stop()
 
-    # GROUP RAW DEPARTMENT NAMES BY TARGET CHIR
-    $targetDeptsMap = @{{}} # CHIR target -> List of raw DEPT names
+    $targetDeptsMap = @{}
     $allRawDepts = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 
-    if ($deptRangeValues -is [System.Array]) {{
+    if ($deptRangeValues -is [System.Array]) {
         $numRows = $deptRangeValues.GetLength(0)
-        for ($r = 1; $r -le $numRows; $r++) {{
+        for ($r = 1; $r -le $numRows; $r++) {
             $val = [string]$deptRangeValues.GetValue($r, 1)
-            if ([string]::IsNullOrWhiteSpace($val)) {{ continue }}
+            if ([string]::IsNullOrWhiteSpace($val)) { continue }
 
             $deptVal = $val.Trim().ToUpper()
             $null = $allRawDepts.Add($deptVal)
 
             $targetChir = "OTHERS"
-            if ($mappingHash.ContainsKey($deptVal)) {{
+            if ($mappingHash.ContainsKey($deptVal)) {
                 $targetChir = $mappingHash[$deptVal]
-            }}
+            }
 
-            if (-not $targetDeptsMap.ContainsKey($targetChir)) {{
+            if (-not $targetDeptsMap.ContainsKey($targetChir)) {
                 $targetDeptsMap[$targetChir] = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-            }}
+            }
             $null = $targetDeptsMap[$targetChir].Add($deptVal)
-        }}
-    }}
+        }
+    }
 
-    # CREATE CLEAN TEMPLATE (Delete body data rows once from a copy)
     $templateTimer = [System.Diagnostics.Stopwatch]::StartNew()
     $templatePath = Join-Path $env:TEMP "OPD_Template_$([Guid]::NewGuid().ToString('N')).xlsm"
     $Workbook.SaveCopyAs($templatePath)
@@ -210,102 +217,71 @@ try {{
     Write-Log "Preparing clean template file..."
     $TemplateWB = $Excel.Workbooks.Open($templatePath)
     $TemplateSheet = $TemplateWB.Worksheets.Item("OPD Report")
-    if ($lastRow -ge $startRow) {{
-        $null = $TemplateSheet.Rows("${{startRow}}:${{lastRow}}").Delete()
-    }}
+    if ($lastRow -ge $startRow) {
+        $null = $TemplateSheet.Rows("${startRow}:${lastRow}").Delete()
+    }
     $TemplateWB.Save()
     $TemplateWB.Close($true)
     $templateTimer.Stop()
     Write-Log "Clean template file created in $($templateTimer.ElapsedMilliseconds) ms at $templatePath"
 
-    # Create output directory if it doesn't exist
-    if (-not (Test-Path $outDir)) {{
-        New-Item -ItemType Directory -Path $outDir -Force | Out-Null
-    }}
-
-    # Loop over each target CHIR department
-    $targetIndex = 0
-    $totalTargetsCount = $targetDeptsMap.Count
-
-    foreach ($target in $targetDeptsMap.Keys) {{
-        $targetIndex++
+    foreach ($target in $targetDeptsMap.Keys) {
         $deptTimer = [System.Diagnostics.Stopwatch]::StartNew()
-        $targetFileName = "$target.xlsm"
-        $targetPath = Join-Path $outDir $targetFileName
+        Write-Log "=================================================="
+        Write-Log "Processing target department group: ${target}"
 
-        Write-Log "[$targetIndex/$totalTargetsCount] Starting processing for target: ${{target}}"
-
-        # Copy clean template
-        $copyTimer = [System.Diagnostics.Stopwatch]::StartNew()
+        $targetPath = Join-Path $outDir "${target}.xlsm"
         Copy-Item $templatePath $targetPath -Force
-        $copyTimer.Stop()
-        Write-Log "  -> Copied clean template in $($copyTimer.ElapsedMilliseconds) ms"
 
-        # Open copied target workbook
-        $openDeptTimer = [System.Diagnostics.Stopwatch]::StartNew()
         $TargetWB = $Excel.Workbooks.Open($targetPath)
         $TargetSheet = $TargetWB.Worksheets.Item("OPD Report")
-        $openDeptTimer.Stop()
-        Write-Log "  -> Opened target workbook in $($openDeptTimer.ElapsedMilliseconds) ms"
 
-        # Determine criteria for AutoFilter on Master Sheet
-        $filterDepts = @()
-        if ($target -eq "OTHERS") {{
-            foreach ($d in $allRawDepts) {{
-                if (-not $mappingHash.ContainsKey($d)) {{
-                    $filterDepts += $d
-                }}
-            }}
-        }} else {{
-            foreach ($d in $targetDeptsMap[$target]) {{
-                $filterDepts += $d
-            }}
-        }}
+        $rawDeptsList = @($targetDeptsMap[$target])
 
-        # FILTER MASTER SHEET AND COPY ALL VISIBLE ROWS IN 1 SINGLE RUN
+        Write-Log "  -> Filtering and copying matching rows in bulk..."
         $copyRowsTimer = [System.Diagnostics.Stopwatch]::StartNew()
-        if ($Sheet.AutoFilterMode) {{
+
+        if ($Sheet.AutoFilterMode) {
             $Sheet.AutoFilterMode = $false
-        }}
+        }
 
-        $fullMasterTableRange = $Sheet.Range($Sheet.Cells.Item($headerRow, 1), $Sheet.Cells.Item($lastRow, $lastCol))
+        $opdRange = $Sheet.Range($Sheet.Cells.Item($headerRow, 1), $Sheet.Cells.Item($lastRow, $Sheet.UsedRange.Columns.Count))
 
-        if ($filterDepts.Count -gt 0) {{
-            # Filter master sheet by department criteria
-            $null = $fullMasterTableRange.AutoFilter($deptCol, [string[]]$filterDepts, 7) # 7 = xlFilterValues
+        if ($rawDeptsList.Count -eq 1) {
+            $opdRange.AutoFilter($deptCol, $rawDeptsList[0]) | Out-Null
+        } else {
+            $opdRange.AutoFilter($deptCol, [string[]]$rawDeptsList, 7) | Out-Null # 7 = xlFilterValues
+        }
 
-            try {{
-                $masterBodyRange = $Sheet.Range($Sheet.Cells.Item($startRow, 1), $Sheet.Cells.Item($lastRow, $lastCol))
-                $visibleRows = $masterBodyRange.SpecialCells(12) # 12 = xlCellTypeVisible
+        try {
+            $dataBodyRange = $Sheet.Range($Sheet.Cells.Item($startRow, 1), $Sheet.Cells.Item($lastRow, $Sheet.UsedRange.Columns.Count))
+            $visibleRows = $dataBodyRange.SpecialCells(12) # xlCellTypeVisible
 
-                if ($null -ne $visibleRows) {{
-                    # COPY ALL VISIBLE MATCHING ROWS IN ONE SINGLE COM CALL!
-                    $null = $visibleRows.Copy($TargetSheet.Cells.Item($startRow, 1))
-                }}
-            }} catch {{
-                Write-Log "  -> Warning: No visible rows found for ${{target}}"
-            }}
+            if ($null -ne $visibleRows) {
+                $null = $visibleRows.Copy($TargetSheet.Cells.Item($startRow, 1))
+            }
+        } catch {
+            Write-Log "  -> Warning: No visible rows found for ${target}"
+        }
 
-            if ($Sheet.AutoFilterMode) {{
-                $Sheet.AutoFilterMode = $false
-            }}
-        }}
+        if ($Sheet.AutoFilterMode) {
+            $Sheet.AutoFilterMode = $false
+        }
         $copyRowsTimer.Stop()
         Write-Log "  -> Filtered and copied all matching rows in $($copyRowsTimer.ElapsedMilliseconds) ms"
 
-        # Refresh PivotCaches directly
         $refreshTimer = [System.Diagnostics.Stopwatch]::StartNew()
-        try {{
-            foreach ($pc in $TargetWB.PivotCaches()) {{
-                try {{ $null = $pc.Refresh() }} catch {{}}
-            }}
-        }} catch {{
-            foreach ($sht in $TargetWB.Worksheets) {{
-                foreach ($pt in $sht.PivotTables()) {{
-                    try {{ $null = $pt.RefreshTable() }} catch {{}}
-                }}
-            }}
-        }}
+        try {
+            foreach ($pc in $TargetWB.PivotCaches()) {
+                try { $null = $pc.Refresh() } catch {}
+            }
+        } catch {
+            foreach ($sht in $TargetWB.Worksheets) {
+                foreach ($pt in $sht.PivotTables()) {
+                    try { $null = $pt.RefreshTable() } catch {}
+                }
+            }
+        }
         $refreshTimer.Stop()
         Write-Log "  -> PivotCaches refreshed in $($refreshTimer.ElapsedMilliseconds) ms"
 
@@ -316,63 +292,66 @@ try {{
         Write-Log "  -> Saved and closed in $($saveTimer.ElapsedMilliseconds) ms"
 
         $deptTimer.Stop()
-        Write-Log "  => Target ${{target}} total processing time: $($deptTimer.ElapsedMilliseconds) ms"
-    }}
+        Write-Log "  => Target ${target} total processing time: $($deptTimer.ElapsedMilliseconds) ms"
+    }
 
     $Workbook.Close($false)
     $scriptTimer.Stop()
     Write-Log "SUCCESS: All $($targetDeptsMap.Count) departments processed in $($scriptTimer.Elapsed.TotalSeconds) seconds!"
 
-}} catch {{
-    Write-Error "Failed to process dashboard (target: ${{target}}): $_"
-    if ($TargetWB) {{ try {{ $TargetWB.Close($false) }} catch {{}} }}
-    if ($Workbook) {{ try {{ $Workbook.Close($false) }} catch {{}} }}
+} catch {
+    Write-Error "Failed to process dashboard (target: ${target}): $_"
+    if ($TargetWB) { try { $TargetWB.Close($false) } catch {} }
+    if ($Workbook) { try { $Workbook.Close($false) } catch {} }
     [System.Environment]::ExitCode = 1
-}} finally {{
+} finally {
     Write-Log "Cleaning up temporary template and Excel COM object..."
-    if ($templatePath -and (Test-Path $templatePath)) {{
-        try {{ Remove-Item $templatePath -Force -ErrorAction SilentlyContinue }} catch {{}}
-    }}
+    if ($templatePath -and (Test-Path $templatePath)) {
+        try { Remove-Item $templatePath -Force -ErrorAction SilentlyContinue } catch {}
+    }
 
-    try {{
-        if ($Excel) {{
+    try {
+        if ($Excel) {
             $Excel.ScreenUpdating = $true
             $Excel.EnableEvents = $true
             $Excel.DisplayAlerts = $true
-            if ($originalCalculation) {{ try {{ $Excel.Calculation = $originalCalculation }} catch {{}} }}
+            if ($originalCalculation) { try { $Excel.Calculation = $originalCalculation } catch {} }
             $Excel.Quit()
             [System.Runtime.InteropServices.Marshal]::ReleaseComObject($Excel) | Out-Null
-        }}
-    }} catch {{
+        }
+    } catch {
         Write-Log "Warning: Failed to cleanly quit Excel."
-    }}
+    }
 
     [System.GC]::Collect()
     [System.GC]::WaitForPendingFinalizers()
 
-    if ($processId) {{
-        try {{
+    if ($processId) {
+        try {
             $proc = Get-Process -Id $processId -ErrorAction SilentlyContinue
-            if ($proc) {{
+            if ($proc) {
                 $proc.Kill()
-            }}
-        }} catch {{}}
-    }}
-}}
-"#,
-        dashboard_path = dashboard_path_str.replace('\'', "''"),
-        out_dir = out_dir_str.replace('\'', "''"),
-        mapping_file = mapping_file_str.replace('\'', "''")
-    );
+            }
+        } catch {}
+    }
+}
+"#;
 
     let script_manager = crate::tasker::script_manager::ScriptManager::new();
     let script_path = script_manager.get_or_create_script(
         "Department Split",
         "department_split.ps1",
-        &ps_script,
+        ps_script,
     )?;
 
-    script_manager.execute_script(&script_path)?;
+    script_manager.execute_script_with_args(
+        &script_path,
+        &[
+            ("-DashboardPath", dashboard_path_str),
+            ("-OutputDir", out_dir_str),
+            ("-MappingFile", mapping_file_str),
+        ],
+    )?;
 
     // Clean up temporary mapping file
     let _ = std::fs::remove_file(&mapping_file);

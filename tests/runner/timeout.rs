@@ -3,14 +3,26 @@ use crm_tool::runner::engine::process::{run_process, ProcessContext};
 use std::time::Duration;
 
 #[tokio::test]
-async fn test_process_timeout_terminates_child() {
+async fn test_process_timeout_terminates_child_and_tree() {
     let logger = TaskLogger::new("timeout_test", "timeout_test");
-    let mut cmd = tokio::process::Command::new("sleep");
-    cmd.arg("10");
+
+    #[cfg(target_os = "windows")]
+    let cmd = {
+        let mut c = tokio::process::Command::new("cmd");
+        c.args(["/C", "timeout 10"]);
+        c
+    };
+
+    #[cfg(not(target_os = "windows"))]
+    let cmd = {
+        let mut c = tokio::process::Command::new("sh");
+        c.args(["-c", "sleep 10 & wait"]);
+        c
+    };
 
     let ctx = ProcessContext {
         logger: &logger,
-        command_str: "sleep 10".to_string(),
+        command_str: "process_tree_timeout_test".to_string(),
         timeout_seconds: 1,
         cmd,
     };
@@ -31,7 +43,7 @@ async fn test_process_timeout_terminates_child() {
     );
     assert!(
         elapsed < Duration::from_secs(5),
-        "Process should have been terminated quickly upon timeout, took {:?}",
+        "Process tree should have been terminated quickly upon timeout, took {:?}",
         elapsed
     );
 }

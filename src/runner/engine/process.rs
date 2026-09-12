@@ -6,6 +6,8 @@ use tokio::io::AsyncReadExt;
 use crate::runner::engine::helpers::excerpt_utf8;
 use crate::runner::engine::logging::TaskLogger;
 
+const MAX_OUTPUT_BYTES: usize = 10 * 1024 * 1024; // 10MB memory cap per stream
+
 #[derive(Debug)]
 pub struct ProcessContext<'a> {
     pub logger: &'a TaskLogger,
@@ -42,26 +44,14 @@ pub async fn run_process(mut ctx: ProcessContext<'_>) -> Result<()> {
         None
     };
 
-    let stdout_handle = child.stdout.take();
-    let stderr_handle = child.stderr.take();
+    let mut stdout_stream = child.stdout.take();
+    let mut stderr_stream = child.stderr.take();
 
     let mut stdout_bytes = Vec::new();
     let mut stderr_bytes = Vec::new();
 
-    let mut stdout_stream = stdout_handle;
-    let mut stderr_stream = stderr_handle;
-
-    let read_stdout = async {
-        if let Some(ref mut stream) = stdout_stream {
-            let _ = stream.read_to_end(&mut stdout_bytes).await;
-        }
-    };
-
-    let read_stderr = async {
-        if let Some(ref mut stream) = stderr_stream {
-            let _ = stream.read_to_end(&mut stderr_bytes).await;
-        }
-    };
+    let read_stdout = read_bounded(stdout_stream.as_mut(), &mut stdout_bytes);
+    let read_stderr = read_bounded(stderr_stream.as_mut(), &mut stderr_bytes);
 
     let status = if let Some(duration) = timeout_duration {
         let wait_child = async {
@@ -114,6 +104,19 @@ STDERR EXCERPT:
     }
 
     Ok(())
+}
+
+async fn read_bounded<R: AsyncReadExt + Unpin>(stream: Option<&mut R>, out: &mut Vec<u8>) {
+    if let Some(s) = stream {
+        let mut buf = [0u8; 8192];
+        while out.len() < MAX_OUTPUT_BYTES {
+            let to_read = (MAX_OUTPUT_BYTES - out.len()).min(buf.len());
+            match s.read(&mut buf[..to_read]).await {
+                Ok(0) | Err(_) => break,
+                Ok(n) => out.extend_from_slice(&buf[..n]),
+            }
+        }
+    }
 }
 
 async fn terminate_process_tree(child_pid: Option<u32>, child: &mut tokio::process::Child) {
