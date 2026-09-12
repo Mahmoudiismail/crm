@@ -581,13 +581,12 @@ fn test_migration_test_e_post_run_steps() {
     }
 }
 
-fn load_config_from_json(json_str: &str) -> (RunnerConfig, tempfile::NamedTempFile) {
-    use std::io::Write;
-    let mut temp = tempfile::NamedTempFile::new().unwrap();
-    temp.write_all(json_str.as_bytes()).unwrap();
-    temp.flush().unwrap();
-    let cfg = RunnerConfig::load(temp.path().to_str().unwrap()).unwrap();
-    (cfg, temp)
+fn load_config_from_json(json_str: &str) -> (RunnerConfig, tempfile::TempDir, std::path::PathBuf) {
+    let dir = tempfile::tempdir().unwrap();
+    let file_path = dir.path().join("runner_config.json");
+    std::fs::write(&file_path, json_str).unwrap();
+    let cfg = RunnerConfig::load(file_path.to_str().unwrap()).unwrap();
+    (cfg, dir, file_path)
 }
 
 #[test]
@@ -615,7 +614,7 @@ fn test_loader_migration_a_legacy_inheritance() {
         }]
     }"#;
 
-    let (cfg, _file) = load_config_from_json(json);
+    let (cfg, _dir, _path) = load_config_from_json(json);
     assert_eq!(cfg.tasks.len(), 1);
     if let ActionSpec::ExternalApp(ref spec) = cfg.tasks[0].steps[0].actions[0] {
         assert_eq!(spec.period_mode, PeriodMode::Monthly);
@@ -654,7 +653,7 @@ fn test_loader_migration_b_explicit_custom_must_win() {
         }]
     }"#;
 
-    let (cfg, _file) = load_config_from_json(json);
+    let (cfg, _dir, _path) = load_config_from_json(json);
     if let ActionSpec::ExternalApp(ref spec) = cfg.tasks[0].steps[0].actions[0] {
         assert_eq!(spec.period_mode, PeriodMode::Custom);
     } else {
@@ -692,7 +691,7 @@ fn test_loader_migration_c_explicit_dates_must_win() {
         }]
     }"#;
 
-    let (cfg, _file) = load_config_from_json(json);
+    let (cfg, _dir, _path) = load_config_from_json(json);
     if let ActionSpec::ExternalApp(ref spec) = cfg.tasks[0].steps[0].actions[0] {
         assert_eq!(spec.start_date.as_deref(), Some("2026-02-01"));
         assert_eq!(spec.end_date.as_deref(), Some("2026-02-28"));
@@ -732,7 +731,7 @@ fn test_loader_migration_d_mixed_inheritance() {
         }]
     }"#;
 
-    let (cfg, _file) = load_config_from_json(json);
+    let (cfg, _dir, _path) = load_config_from_json(json);
     if let ActionSpec::ExternalApp(ref spec) = cfg.tasks[0].steps[0].actions[0] {
         assert_eq!(spec.period_mode, PeriodMode::Custom);
         assert_eq!(spec.start_date.as_deref(), Some("2026-01-01"));
@@ -776,7 +775,7 @@ fn test_loader_migration_e_post_run_steps() {
         }]
     }"#;
 
-    let (cfg, _file) = load_config_from_json(json);
+    let (cfg, _dir, _path) = load_config_from_json(json);
     if let ActionSpec::ExternalApp(ref spec1) = cfg.tasks[0].post_run_steps[0].actions[0] {
         assert_eq!(spec1.period_mode, PeriodMode::Monthly);
         assert_eq!(spec1.start_date.as_deref(), Some("2026-01-01"));
@@ -829,7 +828,7 @@ fn test_loader_migration_f_multiple_apps_independence() {
         }]
     }"#;
 
-    let (cfg, _file) = load_config_from_json(json);
+    let (cfg, _dir, _path) = load_config_from_json(json);
     if let ActionSpec::ExternalApp(ref spec1) = cfg.tasks[0].steps[0].actions[0] {
         assert_eq!(spec1.period_mode, PeriodMode::Monthly);
         assert_eq!(spec1.start_date.as_deref(), Some("2026-01-01"));
@@ -870,8 +869,8 @@ fn test_loader_migration_g_save_and_reload_roundtrip() {
         }]
     }"#;
 
-    let (cfg, temp_file) = load_config_from_json(json);
-    let path_str = temp_file.path().to_str().unwrap().to_string();
+    let (cfg, _dir, file_path) = load_config_from_json(json);
+    let path_str = file_path.to_str().unwrap().to_string();
 
     // Save migrated config back to file
     cfg.save(&path_str).expect("Failed to save config");
