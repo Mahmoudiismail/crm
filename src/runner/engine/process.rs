@@ -109,11 +109,19 @@ STDERR EXCERPT:
 async fn read_bounded<R: AsyncReadExt + Unpin>(stream: Option<&mut R>, out: &mut Vec<u8>) {
     if let Some(s) = stream {
         let mut buf = [0u8; 8192];
-        while out.len() < MAX_OUTPUT_BYTES {
-            let to_read = (MAX_OUTPUT_BYTES - out.len()).min(buf.len());
-            match s.read(&mut buf[..to_read]).await {
-                Ok(0) | Err(_) => break,
-                Ok(n) => out.extend_from_slice(&buf[..n]),
+        loop {
+            if out.len() < MAX_OUTPUT_BYTES {
+                let to_read = (MAX_OUTPUT_BYTES - out.len()).min(buf.len());
+                match s.read(&mut buf[..to_read]).await {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => out.extend_from_slice(&buf[..n]),
+                }
+            } else {
+                // Buffer cap reached: continue draining pipe without storing extra bytes to prevent deadlock
+                match s.read(&mut buf).await {
+                    Ok(0) | Err(_) => break,
+                    Ok(_) => {}
+                }
             }
         }
     }
