@@ -719,8 +719,8 @@ async fn test_concurrent_period_execution_overlapping() {
 
     // Python test script that records start/finish times and argument values
     let py_script = format!(
-        "import sys, time; args = ' '.join(sys.argv); f = open('{}', 'a'); f.write('START ' + args + chr(10)); f.flush(); time.sleep(0.15); f.write('FINISH ' + args + chr(10)); f.close()",
-        log_path_str
+        "import sys, time; args = ' '.join(sys.argv); f = open('{}', 'a'); f.write('START ' + args + chr(10)); f.close(); time.sleep(0.15); f = open('{}', 'a'); f.write('FINISH ' + args + chr(10)); f.close()",
+        log_path_str, log_path_str
     );
 
     let app_concurrent = RegisteredApp {
@@ -824,8 +824,8 @@ async fn test_sequential_period_execution() {
     let log_path_str = log_file.to_str().unwrap().replace("\\", "/");
 
     let py_script = format!(
-        "import sys, time; args = ' '.join(sys.argv); f = open('{}', 'a'); f.write('START ' + args + chr(10)); f.flush(); time.sleep(0.05); f.write('FINISH ' + args + chr(10)); f.close()",
-        log_path_str
+        "import sys, time; args = ' '.join(sys.argv); f = open('{}', 'a'); f.write('START ' + args + chr(10)); f.close(); time.sleep(0.05); f = open('{}', 'a'); f.write('FINISH ' + args + chr(10)); f.close()",
+        log_path_str, log_path_str
     );
 
     let app_seq = RegisteredApp {

@@ -527,7 +527,7 @@ async fn test_multiple_apps_in_one_step_dedup_and_sort() {
 async fn test_prevent_duplicate_task_execution() {
     use crm_tool::runner::config::{RunnerConfig, RunnerTask};
     use crm_tool::runner::engine::dispatcher::task_commands::run_task_by_id;
-    use crm_tool::runner::engine::state::{RunnerStatus};
+    use crm_tool::runner::engine::state::RunnerStatus;
     use std::sync::Arc;
     use tempfile::tempdir;
     use tokio::sync::{mpsc, Mutex};
