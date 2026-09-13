@@ -42,23 +42,60 @@ async fn execute_action(
                     spec.end_date.as_deref(),
                     now,
                 )?;
-                for (idx, period) in periods.iter().enumerate() {
-                    if periods.len() > 1 {
-                        logger
-                            .log(&format!(
-                                "Executing app '{}' period {}/{} ({} -> {})...",
-                                app.name,
-                                idx + 1,
-                                periods.len(),
-                                period.start_date,
-                                period.end_date
-                            ))
-                            .await;
+
+                if app.allow_concurrent_tasks {
+                    let total_periods = periods.len();
+                    let mut handles = Vec::new();
+
+                    for (idx, period) in periods.into_iter().enumerate() {
+                        let logger = logger.clone();
+                        let app = app.clone();
+                        let args = spec.args.clone();
+
+                        handles.push(tokio::spawn(async move {
+                            if total_periods > 1 {
+                                logger
+                                    .log(&format!(
+                                        "Executing app '{}' period {}/{} ({} -> {})...",
+                                        app.name,
+                                        idx + 1,
+                                        total_periods,
+                                        period.start_date,
+                                        period.end_date
+                                    ))
+                                    .await;
+                            }
+                            run_external_app(&logger, &app, &args, Some(&period), timeout_seconds)
+                                .await
+                        }));
                     }
-                    run_external_app(logger, app, &spec.args, Some(period), timeout_seconds)
-                        .await?;
+
+                    for handle in handles {
+                        handle
+                            .await
+                            .context("concurrent period execution join error")??;
+                    }
+                    Ok(())
+                } else {
+                    let total_periods = periods.len();
+                    for (idx, period) in periods.iter().enumerate() {
+                        if total_periods > 1 {
+                            logger
+                                .log(&format!(
+                                    "Executing app '{}' period {}/{} ({} -> {})...",
+                                    app.name,
+                                    idx + 1,
+                                    total_periods,
+                                    period.start_date,
+                                    period.end_date
+                                ))
+                                .await;
+                        }
+                        run_external_app(logger, app, &spec.args, Some(period), timeout_seconds)
+                            .await?;
+                    }
+                    Ok(())
                 }
-                Ok(())
             } else {
                 Err(anyhow::anyhow!(
                     "Registered app with ID '{}' not found in config",

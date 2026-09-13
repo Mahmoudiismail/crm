@@ -607,3 +607,73 @@ fn test_loader_migration_g_save_and_reload_roundtrip() {
         panic!("Expected ExternalApp");
     }
 }
+
+#[tokio::test]
+async fn test_concurrent_period_execution() {
+    use crm_tool::runner::config::RegisteredApp;
+    use crm_tool::runner::engine::pipeline::run_task_inner;
+    use crm_tool::runner::engine::state::RunnerStatus;
+    use crm_tool::runner::engine::{AppLockManager, ExecutionPolicy};
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+
+    let app_concurrent = RegisteredApp {
+        id: "concurrent_app".to_string(),
+        name: "Concurrent App".to_string(),
+        executable_path: "echo".to_string(),
+        config_path: String::new(),
+        allow_concurrent_tasks: true,
+    };
+
+    let policy = ExecutionPolicy {
+        allow_shell_tasks: true,
+        shell_timeout_seconds: 5,
+        post_run_timeout_seconds: 5,
+        min_task_interval_seconds: 1,
+        registered_apps: vec![app_concurrent],
+        log_retention_days: 30,
+    };
+
+    let spec = ExternalAppSpec {
+        app_id: "concurrent_app".to_string(),
+        args: HashMap::new(),
+        period_mode: PeriodMode::Monthly,
+        start_date: Some("2026-01-01".to_string()),
+        end_date: Some("2026-03-31".to_string()),
+    };
+
+    let mut task = RunnerTask {
+        id: "concurrent_task".to_string(),
+        name: "Concurrent Task".to_string(),
+        enabled: true,
+        repetition: crm_tool::runner::config::Repetition::Once,
+        frequency_seconds: 0,
+        next_run_at: String::new(),
+        schedules: vec![],
+        steps: vec![TaskStep {
+            name: None,
+            mode: ExecutionMode::Sequential,
+            actions: vec![ActionSpec::ExternalApp(spec)],
+        }],
+        post_run_steps: vec![],
+        last_run_at: String::new(),
+        last_status: String::new(),
+        timeout_seconds: 0,
+    };
+
+    let status = Arc::new(Mutex::new(RunnerStatus {
+        running_tasks_count: 0,
+        queued_tasks_count: 0,
+        running_task_ids: Vec::new(),
+        queued_task_ids: Vec::new(),
+        last_error: String::new(),
+        last_task_id: String::new(),
+        last_run_at: String::new(),
+        waiting_for_app: HashMap::new(),
+    }));
+    let app_lock_mgr = AppLockManager::new();
+
+    let res = run_task_inner(&mut task, &policy, &status, &app_lock_mgr).await;
+    assert!(res.success);
+    assert_eq!(task.last_status, "ok");
+}
