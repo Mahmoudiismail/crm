@@ -5,18 +5,34 @@ The Runner GUI provides an interface to configure tasks, applications, and pipel
 ## Multiple Steps and Execution Modes
 Tasks inside the Runner support executing multiple sequential or parallel actions within "Steps". You can configure an unlimited number of Steps and Actions inside the GUI by clicking **Add step** or **Add action**.
 
-## Date Periodization Modes
-Tasks can configure optional periodization modes alongside Start Date and End Date inputs:
-- **Normal / Custom**: Standard single date range without period transformation (`[Start, End]`).
+## External Application Date Periodization Modes
+Periodization and dates (`period_mode`, `start_date`, `end_date`) belong exclusively to `ExternalAppSpec`. `RunnerTask` does not own task-level periodization fields.
+
+Each External Application action configures its own periodization mode alongside Start Date and End Date inputs:
+- **Normal / Custom**: Standard single date range without period transformation (`[Start, End]`). Invalid/inverted date ranges (`start_date > end_date`) produce explicit errors.
 - **Monthly**: Normalizes date range to complete calendar months from 1st of Start month to last day of End month.
 - **Quarterly**: Normalizes date range to complete calendar quarters (Q1: Jan-Mar, Q2: Apr-Jun, Q3: Jul-Sep, Q4: Oct-Dec).
 - **A Month**: Repeats the month determined by Start Date for each year between Start Year and End Year.
 - **A Quarter**: Repeats the quarter determined by Start Date for each year between Start Year and End Year.
 
-Date expressions support `today`, `yesterday`, `tomorrow`, `beginning_of_month`, `eomonth`, and `next <weekday>`. If Start and End dates use identical "next weekday" expressions (e.g. `next sat`), both resolve to the exact same upcoming weekday occurrence.
+### Fixed Date vs Dynamic Expression UI
+For each External Application independently, Start Date and End Date support explicit selection between:
+- **Fixed Date**: Specific calendar dates (e.g. `2026-01-01`).
+- **Dynamic Expression**: Relative dynamic expressions (`today`, `yesterday`, `tomorrow`, `beginning_of_month`, `eomonth`, and `next <weekday>`).
+
+### Start-Before-End Resolution Semantics
+Date expressions are evaluated sequentially:
+1. Start Date is resolved first relative to current time.
+2. End Date is then resolved using the resolved Start Date as its contextual base date.
+3. For relative weekday expressions (e.g. `next sat` for both Start and End), date resolution evaluates both to the exact same upcoming occurrence rather than advancing the End Date to the subsequent week.
+4. When Start Date determines a month context (e.g. `beginning_of_month`), `eomonth` for End Date refers to the same resolved month.
+5. Invalid date expressions produce explicit errors without silent fallbacks.
+
+## Legacy Configuration Migration
+When loading legacy configuration files containing task-level `period_mode`, `start_date`, or `end_date`, the migration layer inspects all `ExternalAppSpec` instances in both `steps` and `post_run_steps`. Any `ExternalAppSpec` that does not have explicit period or date values inherits the legacy task-level settings. Explicit `ExternalAppSpec` settings take precedence and remain untouched. Upon re-saving, periodization settings are persisted exclusively under `ExternalAppSpec`.
 
 ## Live Execution Preview
-The Task Create/Edit form features a real-time **Live Execution Preview** displaying the **Next 10 Upcoming Executions**. The preview calls the underlying Runner schedule/period backend engine directly, accurately reflecting schedule times, working hours, and week-off filtering without executing external applications or tasks.
+Each External Application action block inside the task editor features its own dedicated **Live Execution Preview** displaying up to the **Next 10 Upcoming Executions** for that specific application. The preview uses the authoritative backend scheduling, date resolution, working-hours, week-off, and interval grid alignment engine. Changing one External Application's periodization or dates updates its preview box independently without executing applications or tasks.
 
 A single step has an execution mode:
 - **Sequential**: Every action executes in order. The pipeline halts if an action fails.
@@ -32,7 +48,7 @@ When you manually trigger a task from the GUI (e.g. clicking **Run Now** or **Ru
 ## API Endpoints
 - `/run/{task_id}` (POST) - Forces immediate execution of the given task ID (Manual mode).
 - `/run-all` (POST) - Enqueues all tasks for immediate execution (Manual mode).
-
+- `/api/tasks/preview` (POST) - Generates up to 10 future execution occurrences for a specified External Application and schedule configuration.
 
 ## Security Model
 

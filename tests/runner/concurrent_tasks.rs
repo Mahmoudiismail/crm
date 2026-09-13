@@ -32,9 +32,6 @@ fn base_task(id: &str) -> RunnerTask {
         last_run_at: "".to_string(),
         last_status: "".to_string(),
         next_run_at: "".to_string(),
-        period_mode: crm_tool::runner::config::PeriodMode::Custom,
-        start_date: None,
-        end_date: None,
     }
 }
 
@@ -75,6 +72,9 @@ async fn test_different_non_concurrent_apps_do_not_block() {
         actions: vec![ActionSpec::ExternalApp(ExternalAppSpec {
             app_id: "AppA".to_string(),
             args: std::collections::HashMap::new(),
+            period_mode: crm_tool::runner::config::PeriodMode::Custom,
+            start_date: None,
+            end_date: None,
         })],
     });
 
@@ -85,6 +85,9 @@ async fn test_different_non_concurrent_apps_do_not_block() {
         actions: vec![ActionSpec::ExternalApp(ExternalAppSpec {
             app_id: "AppB".to_string(),
             args: std::collections::HashMap::new(),
+            period_mode: crm_tool::runner::config::PeriodMode::Custom,
+            start_date: None,
+            end_date: None,
         })],
     });
 
@@ -149,6 +152,9 @@ async fn test_same_non_concurrent_app_serializes() {
         actions: vec![ActionSpec::ExternalApp(ExternalAppSpec {
             app_id: "AppA".to_string(),
             args: std::collections::HashMap::new(),
+            period_mode: crm_tool::runner::config::PeriodMode::Custom,
+            start_date: None,
+            end_date: None,
         })],
     });
 
@@ -236,6 +242,9 @@ async fn test_same_concurrent_app_runs_concurrently() {
         actions: vec![ActionSpec::ExternalApp(ExternalAppSpec {
             app_id: "AppConcurrent".to_string(),
             args: std::collections::HashMap::new(),
+            period_mode: crm_tool::runner::config::PeriodMode::Custom,
+            start_date: None,
+            end_date: None,
         })],
     });
 
@@ -301,14 +310,23 @@ async fn test_multiple_actions_same_app() {
             ActionSpec::ExternalApp(ExternalAppSpec {
                 app_id: "AppA".to_string(),
                 args: std::collections::HashMap::new(),
+                period_mode: crm_tool::runner::config::PeriodMode::Custom,
+                start_date: None,
+                end_date: None,
             }),
             ActionSpec::ExternalApp(ExternalAppSpec {
                 app_id: "AppA".to_string(),
                 args: std::collections::HashMap::new(),
+                period_mode: crm_tool::runner::config::PeriodMode::Custom,
+                start_date: None,
+                end_date: None,
             }),
             ActionSpec::ExternalApp(ExternalAppSpec {
                 app_id: "AppA".to_string(),
                 args: std::collections::HashMap::new(),
+                period_mode: crm_tool::runner::config::PeriodMode::Custom,
+                start_date: None,
+                end_date: None,
             }),
         ],
     });
@@ -361,6 +379,9 @@ async fn test_future_step_contention() {
         actions: vec![ActionSpec::ExternalApp(ExternalAppSpec {
             app_id: "AppA".to_string(),
             args: std::collections::HashMap::new(),
+            period_mode: crm_tool::runner::config::PeriodMode::Custom,
+            start_date: None,
+            end_date: None,
         })],
     });
     t1.steps.push(TaskStep {
@@ -369,6 +390,9 @@ async fn test_future_step_contention() {
         actions: vec![ActionSpec::ExternalApp(ExternalAppSpec {
             app_id: "AppB".to_string(),
             args: std::collections::HashMap::new(),
+            period_mode: crm_tool::runner::config::PeriodMode::Custom,
+            start_date: None,
+            end_date: None,
         })],
     });
 
@@ -435,10 +459,16 @@ async fn test_multiple_apps_in_one_step_dedup_and_sort() {
             ActionSpec::ExternalApp(ExternalAppSpec {
                 app_id: "AppB".to_string(),
                 args: std::collections::HashMap::new(),
+                period_mode: crm_tool::runner::config::PeriodMode::Custom,
+                start_date: None,
+                end_date: None,
             }),
             ActionSpec::ExternalApp(ExternalAppSpec {
                 app_id: "AppA".to_string(),
                 args: std::collections::HashMap::new(),
+                period_mode: crm_tool::runner::config::PeriodMode::Custom,
+                start_date: None,
+                end_date: None,
             }),
         ],
     });
@@ -452,10 +482,16 @@ async fn test_multiple_apps_in_one_step_dedup_and_sort() {
             ActionSpec::ExternalApp(ExternalAppSpec {
                 app_id: "AppA".to_string(),
                 args: std::collections::HashMap::new(),
+                period_mode: crm_tool::runner::config::PeriodMode::Custom,
+                start_date: None,
+                end_date: None,
             }),
             ActionSpec::ExternalApp(ExternalAppSpec {
                 app_id: "AppB".to_string(),
                 args: std::collections::HashMap::new(),
+                period_mode: crm_tool::runner::config::PeriodMode::Custom,
+                start_date: None,
+                end_date: None,
             }),
         ],
     });

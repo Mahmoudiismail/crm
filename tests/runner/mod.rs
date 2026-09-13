@@ -9,4 +9,5 @@ pub mod working_hours;
 
 mod timeout;
 
+pub mod periodization_tests;
 mod security;

@@ -1,3 +1,75 @@
+  function isFixedDate(str) {
+      return str && /^\d{4}-\d{2}-\d{2}$/.test(str.trim());
+  }
+
+  function updateAppPreview(contentDiv) {
+      const previewContainer = contentDiv.querySelector(".app-preview-contents");
+      if (!previewContainer) return;
+
+      const pmSelect = contentDiv.querySelector(".app-period-mode");
+      const sdModeSelect = contentDiv.querySelector(".app-start-date-mode");
+      const sdFixed = contentDiv.querySelector(".app-start-date-fixed");
+      const sdDyn = contentDiv.querySelector(".app-start-date-dyn");
+
+      const edModeSelect = contentDiv.querySelector(".app-end-date-mode");
+      const edFixed = contentDiv.querySelector(".app-end-date-fixed");
+      const edDyn = contentDiv.querySelector(".app-end-date-dyn");
+
+      const appIdInput = contentDiv.querySelector(".app-id-hidden");
+
+      let startDateVal = "";
+      if (sdModeSelect) {
+          startDateVal = sdModeSelect.value === "fixed" ? (sdFixed ? sdFixed.value : "") : (sdDyn ? sdDyn.value : "");
+      }
+      let endDateVal = "";
+      if (edModeSelect) {
+          endDateVal = edModeSelect.value === "fixed" ? (edFixed ? edFixed.value : "") : (edDyn ? edDyn.value : "");
+      }
+
+      const formData = new URLSearchParams();
+      if (pmSelect) formData.append("period_mode", pmSelect.value);
+      if (startDateVal) formData.append("start_date", startDateVal);
+      if (endDateVal) formData.append("end_date", endDateVal);
+      if (appIdInput) formData.append("app_id", appIdInput.value);
+
+      const schedulesHidden = document.getElementById("schedules-hidden");
+      if (schedulesHidden) {
+          try {
+              if (typeof buildSchedules === "function") schedulesHidden.value = buildSchedules();
+          } catch(e) {}
+          formData.append("schedules", schedulesHidden.value);
+      }
+      const enabledCheck = document.querySelector("input[name='enabled']");
+      if (enabledCheck && enabledCheck.checked) formData.append("enabled", "on");
+      const timeoutInput = document.querySelector("input[name='timeout_seconds']");
+      if (timeoutInput) formData.append("timeout_seconds", timeoutInput.value);
+
+      fetch("/api/tasks/preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: formData.toString()
+      })
+      .then(res => res.json())
+      .then(data => {
+          if (!data.success) {
+              previewContainer.innerHTML = `<span class='text-red-600 font-semibold'>${data.error || "Validation error"}</span>`;
+              return;
+          }
+          if (!data.executions || data.executions.length === 0) {
+              previewContainer.innerHTML = "<span class='text-gray-500 italic'>No upcoming executions</span>";
+              return;
+          }
+          let html = "<ul class='list-disc list-inside space-y-1'>";
+          data.executions.forEach((item, idx) => {
+              html += `<li><span class='font-semibold text-emerald-900'>#${idx + 1}:</span> ${item.scheduled_at_formatted} <span class='text-gray-500'>(Period: ${item.period_start} &rarr; ${item.period_end})</span></li>`;
+          });
+          html += "</ul>";
+          previewContainer.innerHTML = html;
+      })
+      .catch(err => {
+          previewContainer.innerHTML = `<span class='text-amber-600'>Error loading preview: ${err.message}</span>`;
+      });
+  }
 (function () {
   const scheduleRows = document.getElementById("schedule-rows");
   const schedulesHidden = document.getElementById("schedules-hidden");
@@ -388,15 +460,132 @@
               const appId = (action && action.type === "external_app") ? action.app_id : "";
               const appArgs = (action && action.type === "external_app") ? action.args : {};
               const argsJson = JSON.stringify(appArgs).replace(/"/g, '&quot;');
+              const periodMode = (action && action.type === "external_app" && action.period_mode) ? action.period_mode : "custom";
+              const startDate = (action && action.type === "external_app" && action.start_date) ? action.start_date : "";
+              const endDate = (action && action.type === "external_app" && action.end_date) ? action.end_date : "";
 
               contentDiv.innerHTML = `
                   <div class="space-y-3">
                       <div class="app-select-container mb-4"></div>
+                      <div class="app-periodization-container p-3 bg-gray-50 border border-gray-200 rounded space-y-3">
+                          <h4 class="text-xs font-semibold text-gray-800">Periodization & Dates</h4>
+                          <div class="grid md:grid-cols-3 gap-3">
+                              <div>
+                                  <label class="block text-xs font-medium text-gray-700 mb-1">Period Mode</label>
+                                  <select class="app-period-mode block w-full rounded border border-gray-300 px-2 py-1 text-sm bg-white">
+                                      <option value="custom" ${periodMode === 'custom' ? 'selected' : ''}>Normal / Custom</option>
+                                      <option value="monthly" ${periodMode === 'monthly' ? 'selected' : ''}>Monthly</option>
+                                      <option value="quarterly" ${periodMode === 'quarterly' ? 'selected' : ''}>Quarterly</option>
+                                      <option value="a_month" ${periodMode === 'a_month' ? 'selected' : ''}>A Month</option>
+                                      <option value="a_quarter" ${periodMode === 'a_quarter' ? 'selected' : ''}>A Quarter</option>
+                                  </select>
+                              </div>
+                              <div>
+                                  <label class="block text-xs font-medium text-gray-700 mb-1">Start Date</label>
+                                  <div class="flex gap-1 mb-1">
+                                      <select class="app-start-date-mode text-xs rounded border border-gray-300 px-1 py-1 bg-white">
+                                          <option value="dynamic" ${!isFixedDate(startDate) ? 'selected' : ''}>Dynamic Expression</option>
+                                          <option value="fixed" ${isFixedDate(startDate) ? 'selected' : ''}>Fixed Date</option>
+                                      </select>
+                                  </div>
+                                  <input type="date" class="app-start-date-fixed block w-full rounded border border-gray-300 px-2 py-1 text-sm ${!isFixedDate(startDate) ? 'hidden' : ''}" value="${isFixedDate(startDate) ? startDate : ''}">
+                                  <select class="app-start-date-dyn block w-full rounded border border-gray-300 px-2 py-1 text-sm bg-white ${isFixedDate(startDate) ? 'hidden' : ''}">
+                                      <option value="today" ${startDate === 'today' || !startDate ? 'selected' : ''}>Today</option>
+                                      <option value="yesterday" ${startDate === 'yesterday' ? 'selected' : ''}>Yesterday</option>
+                                      <option value="tomorrow" ${startDate === 'tomorrow' ? 'selected' : ''}>Tomorrow</option>
+                                      <option value="beginning_of_month" ${startDate === 'beginning_of_month' ? 'selected' : ''}>Beginning of Month</option>
+                                      <option value="beginning_of_prev_month" ${startDate === 'beginning_of_prev_month' ? 'selected' : ''}>Beginning of Previous Month</option>
+                                      <option value="eomonth" ${startDate === 'eomonth' ? 'selected' : ''}>End of Month</option>
+                                      <optgroup label="Next Weekday">
+                                          <option value="next mon" ${startDate === 'next mon' ? 'selected' : ''}>Next Monday</option>
+                                          <option value="next tue" ${startDate === 'next tue' ? 'selected' : ''}>Next Tuesday</option>
+                                          <option value="next wed" ${startDate === 'next wed' ? 'selected' : ''}>Next Wednesday</option>
+                                          <option value="next thu" ${startDate === 'next thu' ? 'selected' : ''}>Next Thursday</option>
+                                          <option value="next fri" ${startDate === 'next fri' ? 'selected' : ''}>Next Friday</option>
+                                          <option value="next sat" ${startDate === 'next sat' ? 'selected' : ''}>Next Saturday</option>
+                                          <option value="next sun" ${startDate === 'next sun' ? 'selected' : ''}>Next Sunday</option>
+                                      </optgroup>
+                                  </select>
+                              </div>
+                              <div>
+                                  <label class="block text-xs font-medium text-gray-700 mb-1">End Date</label>
+                                  <div class="flex gap-1 mb-1">
+                                      <select class="app-end-date-mode text-xs rounded border border-gray-300 px-1 py-1 bg-white">
+                                          <option value="dynamic" ${!isFixedDate(endDate) ? 'selected' : ''}>Dynamic Expression</option>
+                                          <option value="fixed" ${isFixedDate(endDate) ? 'selected' : ''}>Fixed Date</option>
+                                      </select>
+                                  </div>
+                                  <input type="date" class="app-end-date-fixed block w-full rounded border border-gray-300 px-2 py-1 text-sm ${!isFixedDate(endDate) ? 'hidden' : ''}" value="${isFixedDate(endDate) ? endDate : ''}">
+                                  <select class="app-end-date-dyn block w-full rounded border border-gray-300 px-2 py-1 text-sm bg-white ${isFixedDate(endDate) ? 'hidden' : ''}">
+                                      <option value="today" ${endDate === 'today' ? 'selected' : ''}>Today</option>
+                                      <option value="yesterday" ${endDate === 'yesterday' ? 'selected' : ''}>Yesterday</option>
+                                      <option value="tomorrow" ${endDate === 'tomorrow' ? 'selected' : ''}>Tomorrow</option>
+                                      <option value="beginning_of_month" ${endDate === 'beginning_of_month' ? 'selected' : ''}>Beginning of Month</option>
+                                      <option value="beginning_of_prev_month" ${endDate === 'beginning_of_prev_month' ? 'selected' : ''}>Beginning of Previous Month</option>
+                                      <option value="eomonth" ${endDate === 'eomonth' || !endDate ? 'selected' : ''}>End of Month</option>
+                                      <optgroup label="Next Weekday">
+                                          <option value="next mon" ${endDate === 'next mon' ? 'selected' : ''}>Next Monday</option>
+                                          <option value="next tue" ${endDate === 'next tue' ? 'selected' : ''}>Next Tuesday</option>
+                                          <option value="next wed" ${endDate === 'next wed' ? 'selected' : ''}>Next Wednesday</option>
+                                          <option value="next thu" ${endDate === 'next thu' ? 'selected' : ''}>Next Thursday</option>
+                                          <option value="next fri" ${endDate === 'next fri' ? 'selected' : ''}>Next Friday</option>
+                                          <option value="next sat" ${endDate === 'next sat' ? 'selected' : ''}>Next Saturday</option>
+                                          <option value="next sun" ${endDate === 'next sun' ? 'selected' : ''}>Next Sunday</option>
+                                      </optgroup>
+                                  </select>
+                              </div>
+                          </div>
+                      </div>
+                      <div class="app-preview-box p-3 bg-emerald-50 border border-emerald-200 rounded text-xs text-emerald-900">
+                          <h5 class="font-bold text-emerald-800 mb-1">Live Execution Preview (Next 10 Executions)</h5>
+                          <div class="app-preview-contents font-mono space-y-1 text-emerald-950">Calculating preview...</div>
+                      </div>
                       <div class="app-dynamic-inputs space-y-3"></div>
                       <input type="hidden" class="app-args-hidden" value="${argsJson}">
                       <input type="hidden" class="app-id-hidden" value="${appId}">
                   </div>
               `;
+
+              const sdModeSel = contentDiv.querySelector(".app-start-date-mode");
+              const sdFixedInp = contentDiv.querySelector(".app-start-date-fixed");
+              const sdDynSel = contentDiv.querySelector(".app-start-date-dyn");
+
+              const edModeSel = contentDiv.querySelector(".app-end-date-mode");
+              const edFixedInp = contentDiv.querySelector(".app-end-date-fixed");
+              const edDynSel = contentDiv.querySelector(".app-end-date-dyn");
+
+              if (sdModeSel) {
+                  sdModeSel.addEventListener("change", () => {
+                      if (sdModeSel.value === "fixed") {
+                          sdFixedInp.classList.remove("hidden");
+                          sdDynSel.classList.add("hidden");
+                      } else {
+                          sdFixedInp.classList.add("hidden");
+                          sdDynSel.classList.remove("hidden");
+                      }
+                      updateAppPreview(contentDiv);
+                  });
+              }
+
+              if (edModeSel) {
+                  edModeSel.addEventListener("change", () => {
+                      if (edModeSel.value === "fixed") {
+                          edFixedInp.classList.remove("hidden");
+                          edDynSel.classList.add("hidden");
+                      } else {
+                          edFixedInp.classList.add("hidden");
+                          edDynSel.classList.remove("hidden");
+                      }
+                      updateAppPreview(contentDiv);
+                  });
+              }
+
+              contentDiv.querySelectorAll("select, input").forEach(el => {
+                  el.addEventListener("change", () => updateAppPreview(contentDiv));
+                  el.addEventListener("input", () => updateAppPreview(contentDiv));
+              });
+
+              setTimeout(() => updateAppPreview(contentDiv), 100);
 
               const selContainer = contentDiv.querySelector(".app-select-container");
               const dynContainer = contentDiv.querySelector(".app-dynamic-inputs");
@@ -528,11 +717,34 @@
                       const appId = actionBlock.querySelector(".app-id-hidden").value;
                       let args = {};
                       try { args = JSON.parse(argsHidden.value); } catch(e){}
+
+                      const periodModeEl = actionBlock.querySelector(".app-period-mode");
+                      const periodModeVal = periodModeEl ? periodModeEl.value : "custom";
+
+                      const sdModeEl = actionBlock.querySelector(".app-start-date-mode");
+                      const sdFixedEl = actionBlock.querySelector(".app-start-date-fixed");
+                      const sdDynEl = actionBlock.querySelector(".app-start-date-dyn");
+                      let startDateVal = "";
+                      if (sdModeEl) {
+                          startDateVal = sdModeEl.value === "fixed" ? (sdFixedEl ? sdFixedEl.value : "") : (sdDynEl ? sdDynEl.value : "");
+                      }
+
+                      const edModeEl = actionBlock.querySelector(".app-end-date-mode");
+                      const edFixedEl = actionBlock.querySelector(".app-end-date-fixed");
+                      const edDynEl = actionBlock.querySelector(".app-end-date-dyn");
+                      let endDateVal = "";
+                      if (edModeEl) {
+                          endDateVal = edModeEl.value === "fixed" ? (edFixedEl ? edFixedEl.value : "") : (edDynEl ? edDynEl.value : "");
+                      }
+
                       if (appId) {
                           actions.push({
                               type: "external_app",
                               app_id: appId,
-                              args: args
+                              args: args,
+                              period_mode: periodModeVal,
+                              start_date: startDateVal ? startDateVal : null,
+                              end_date: endDateVal ? endDateVal : null
                           });
                       }
                   } else {

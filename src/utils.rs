@@ -252,31 +252,37 @@ pub(crate) fn resolve_date_var(val: &str, base_date: Option<&str>) -> Result<chr
     use chrono::{Datelike, Local, NaiveDate};
     use tracing::{debug, error, info, trace};
 
+    let base_dt = if let Some(bd) = base_date {
+        parse_flexible_date_impl(bd, None)
+    } else {
+        None
+    };
+    let dt = base_dt.unwrap_or_else(|| Local::now().date_naive());
+
     let val_lower = val.trim().to_lowercase();
     match val_lower.as_str() {
         "today" => {
             info!("Variable detected: {}", val);
-            let dt = Local::now().date_naive();
             debug!("Resolved value: {} (Original: {})", dt, val);
             trace!("Variable resolution path: today");
             Ok(dt)
         }
         "yesterday" => {
             info!("Variable detected: {}", val);
-            let dt =
-                Local::now().date_naive() - chrono::TimeDelta::try_days(1).context("valid days")?;
-            debug!("Resolved value: {} (Original: {})", dt, val);
+            let res = dt - chrono::TimeDelta::try_days(1).context("valid days")?;
+            debug!("Resolved value: {} (Original: {})", res, val);
             trace!("Variable resolution path: yesterday");
-            Ok(dt)
+            Ok(res)
+        }
+        "tomorrow" => {
+            info!("Variable detected: {}", val);
+            let res = dt + chrono::TimeDelta::try_days(1).context("valid days")?;
+            debug!("Resolved value: {} (Original: {})", res, val);
+            trace!("Variable resolution path: tomorrow");
+            Ok(res)
         }
         "this_month" | "beginning_of_month" => {
             info!("Variable detected: {}", val);
-            let base_dt = if let Some(bd) = base_date {
-                parse_flexible_date_impl(bd, None)
-            } else {
-                None
-            };
-            let dt = base_dt.unwrap_or_else(|| Local::now().date_naive());
             let res = NaiveDate::from_ymd_opt(dt.year(), dt.month(), 1)
                 .context("valid first day of month")?;
 
@@ -288,22 +294,23 @@ pub(crate) fn resolve_date_var(val: &str, base_date: Option<&str>) -> Result<chr
             debug!("Resolved value: {} (Original: {})", res, val);
             Ok(res)
         }
-        "tomorrow" => {
+        "beginning_of_prev_month" | "beginning_of_previous_month" | "prev_month" => {
             info!("Variable detected: {}", val);
-            let dt =
-                Local::now().date_naive() + chrono::TimeDelta::try_days(1).context("valid days")?;
-            debug!("Resolved value: {} (Original: {})", dt, val);
-            trace!("Variable resolution path: tomorrow");
-            Ok(dt)
+            let prev = if dt.month() == 1 {
+                NaiveDate::from_ymd_opt(dt.year() - 1, 12, 1).context("valid prev year month")?
+            } else {
+                NaiveDate::from_ymd_opt(dt.year(), dt.month() - 1, 1).context("valid prev month")?
+            };
+            trace!(
+                "Variable resolution path: beginning_of_prev_month. Base: {}, Result: {}",
+                dt,
+                prev
+            );
+            debug!("Resolved value: {} (Original: {})", prev, val);
+            Ok(prev)
         }
         "eomonth" => {
             info!("Variable detected: {}", val);
-            let base_dt = if let Some(bd) = base_date {
-                parse_flexible_date_impl(bd, None)
-            } else {
-                None
-            };
-            let dt = base_dt.unwrap_or_else(|| Local::now().date_naive());
             let next_month = if dt.month() == 12 {
                 NaiveDate::from_ymd_opt(dt.year() + 1, 1, 1).context("valid next year")?
             } else {
@@ -359,7 +366,14 @@ pub(crate) fn resolve_date_var(val: &str, base_date: Option<&str>) -> Result<chr
                         return Ok(res);
                     }
                 }
-                parse_flexible_date_impl(bd, None).unwrap_or_else(|| Local::now().date_naive())
+                if let Some(base_dt) = parse_flexible_date_impl(bd, None) {
+                    if base_dt.weekday() == target_weekday {
+                        return Ok(base_dt);
+                    }
+                    base_dt
+                } else {
+                    Local::now().date_naive()
+                }
             } else {
                 Local::now().date_naive()
             };

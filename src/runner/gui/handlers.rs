@@ -473,8 +473,39 @@ pub(crate) async fn handle_api_task_preview(
         }
     };
 
+    let period_mode_str = values
+        .get("period_mode")
+        .map(|s| s.trim().to_lowercase())
+        .unwrap_or_default();
+    let period_mode = match period_mode_str.as_str() {
+        "monthly" => PeriodMode::Monthly,
+        "quarterly" => PeriodMode::Quarterly,
+        "a_month" => PeriodMode::AMonth,
+        "a_quarter" => PeriodMode::AQuarter,
+        _ => PeriodMode::Custom,
+    };
+
+    let start_date = values
+        .get("start_date")
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    let end_date = values
+        .get("end_date")
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+
+    let app_id = values.get("app_id").cloned().unwrap_or_default();
+
+    let app_spec = ExternalAppSpec {
+        app_id,
+        args: HashMap::new(),
+        period_mode,
+        start_date,
+        end_date,
+    };
+
     let now = Utc::now();
-    match generate_upcoming_executions(&task, now, 10) {
+    match generate_upcoming_executions_for_app(&task, &app_spec, now, 10) {
         Ok(occurrences) => {
             let items: Vec<_> = occurrences
                 .into_iter()
