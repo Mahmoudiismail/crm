@@ -111,3 +111,123 @@ async fn test_get_mutation_rejected_405() {
         assert_eq!(body, "Method Not Allowed");
     }
 }
+
+#[tokio::test]
+async fn test_http_security_and_limits() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpStream;
+
+    let port = std::net::TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let config_path = temp_dir
+        .path()
+        .join("config.json")
+        .to_str()
+        .unwrap()
+        .to_string();
+
+    let cfg = RunnerConfig {
+        gui_port: port,
+        gui_host: "127.0.0.1".to_string(),
+        ..Default::default()
+    };
+    cfg.save(&config_path).unwrap();
+
+    let (tx, _rx) = tokio::sync::mpsc::channel(1);
+    let (exec_tx, _) = tokio::sync::mpsc::channel(128);
+    let status = std::sync::Arc::new(tokio::sync::Mutex::new(
+        crm_tool::runner::engine::RunnerStatus {
+            running_tasks_count: 0,
+            queued_tasks_count: 0,
+            running_task_ids: Vec::new(),
+            queued_task_ids: Vec::new(),
+            last_error: String::new(),
+            last_task_id: String::new(),
+            last_run_at: String::new(),
+            waiting_for_app: std::collections::HashMap::new(),
+        },
+    ));
+
+    let handle = crm_tool::runner::engine::RunnerHandle {
+        command_tx: tx,
+        exec_tx,
+        status,
+        runner_config_path: config_path,
+    };
+
+    crm_tool::runner::gui::start_gui_server(handle);
+    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+
+    // 1. Chunked Transfer-Encoding rejection
+    {
+        let mut stream = TcpStream::connect(format!("127.0.0.1:{}", port))
+            .await
+            .unwrap();
+        let req = "POST /api/tasks/preview HTTP/1.1
+Host: 127.0.0.1
+Transfer-Encoding: chunked
+
+5
+hello
+0
+
+";
+        stream.write_all(req.as_bytes()).await.unwrap();
+        stream.flush().await.unwrap();
+
+        let mut resp = String::new();
+        stream.read_to_string(&mut resp).await.unwrap();
+        assert!(
+            resp.contains("HTTP/1.1 400 Bad Request"),
+            "Expected 400 Bad Request, got: {}",
+            resp
+        );
+    }
+
+    // 2. Content-Length > 2MB limit (413 Payload Too Large)
+    {
+        let mut stream = TcpStream::connect(format!("127.0.0.1:{}", port))
+            .await
+            .unwrap();
+        let req = "POST /create HTTP/1.1
+Host: 127.0.0.1
+Content-Length: 3000000
+
+";
+        stream.write_all(req.as_bytes()).await.unwrap();
+        stream.flush().await.unwrap();
+
+        let mut resp = String::new();
+        stream.read_to_string(&mut resp).await.unwrap();
+        assert!(
+            resp.contains("HTTP/1.1 413 Payload Too Large"),
+            "Expected 413 Payload Too Large, got: {}",
+            resp
+        );
+    }
+
+    // 3. Status reason phrase formatting for 404
+    {
+        let mut stream = TcpStream::connect(format!("127.0.0.1:{}", port))
+            .await
+            .unwrap();
+        let req = "GET /nonexistent_route_test HTTP/1.1
+Host: 127.0.0.1
+
+";
+        stream.write_all(req.as_bytes()).await.unwrap();
+        stream.flush().await.unwrap();
+
+        let mut resp = String::new();
+        stream.read_to_string(&mut resp).await.unwrap();
+        assert!(
+            resp.contains("HTTP/1.1 404 Not Found"),
+            "Expected 404 Not Found, got: {}",
+            resp
+        );
+    }
+}

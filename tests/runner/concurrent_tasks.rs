@@ -522,3 +522,60 @@ async fn test_multiple_apps_in_one_step_dedup_and_sort() {
     assert_eq!(sem_a.available_permits(), 1, "AppA should be released");
     assert_eq!(sem_b.available_permits(), 1, "AppB should be released");
 }
+
+#[tokio::test]
+async fn test_prevent_duplicate_task_execution() {
+    use crm_tool::runner::config::{RunnerConfig, RunnerTask};
+    use crm_tool::runner::engine::dispatcher::task_commands::run_task_by_id;
+    use crm_tool::runner::engine::state::{RunnerStatus};
+    use std::sync::Arc;
+    use tempfile::tempdir;
+    use tokio::sync::{mpsc, Mutex};
+
+    let temp_dir = tempdir().unwrap();
+    let config_path = temp_dir.path().join("runner.json");
+    let path_str = config_path.to_str().unwrap();
+
+    let task = RunnerTask {
+        id: "task_dup_check".to_string(),
+        name: "Duplicate Check Task".to_string(),
+        enabled: true,
+        schedules: vec![],
+        repetition: crm_tool::runner::config::Repetition::Once,
+        frequency_seconds: 0,
+        next_run_at: String::new(),
+        steps: vec![],
+        post_run_steps: vec![],
+        last_run_at: String::new(),
+        last_status: String::new(),
+        timeout_seconds: 3600,
+    };
+
+    let mut cfg = RunnerConfig::default();
+    cfg.tasks.push(task);
+    cfg.save(path_str).unwrap();
+
+    let status = Arc::new(Mutex::new(RunnerStatus {
+        running_tasks_count: 0,
+        queued_tasks_count: 0,
+        running_task_ids: vec!["task_dup_check".to_string()], // Currently running!
+        queued_task_ids: Vec::new(),
+        last_task_id: String::new(),
+        last_error: String::new(),
+        last_run_at: String::new(),
+        waiting_for_app: std::collections::HashMap::new(),
+    }));
+
+    let (exec_tx, mut exec_rx) = mpsc::channel(128);
+
+    // Attempt to run the task while it is already running
+    run_task_by_id(path_str, "task_dup_check", &status, &exec_tx, true)
+        .await
+        .unwrap();
+
+    // Verify nothing was queued
+    assert!(
+        exec_rx.try_recv().is_err(),
+        "Duplicate execution should be rejected when task is running"
+    );
+}

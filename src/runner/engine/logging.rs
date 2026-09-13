@@ -121,40 +121,44 @@ pub async fn cleanup_old_logs(log_retention_days: u64) {
         return; // Disable cleanup if 0
     }
 
-    let log_dir = match std::env::current_exe() {
-        Ok(exe) => exe
-            .parent()
-            .map(|p| p.join("logs"))
-            .unwrap_or_else(|| std::path::PathBuf::from("logs")),
-        Err(_) => std::path::PathBuf::from("logs"),
-    };
+    let _ = tokio::task::spawn_blocking(move || {
+        let log_dir = match std::env::current_exe() {
+            Ok(exe) => exe
+                .parent()
+                .map(|p| p.join("logs"))
+                .unwrap_or_else(|| std::path::PathBuf::from("logs")),
+            Err(_) => std::path::PathBuf::from("logs"),
+        };
 
-    if !log_dir.exists() {
-        return;
-    }
+        if !log_dir.exists() {
+            return;
+        }
 
-    let threshold = chrono::Local::now()
-        - chrono::Duration::try_days(log_retention_days as i64).unwrap_or(chrono::Duration::zero());
+        let threshold = chrono::Local::now()
+            - chrono::Duration::try_days(log_retention_days as i64)
+                .unwrap_or(chrono::Duration::zero());
 
-    let mut walk_dir = walkdir::WalkDir::new(&log_dir).into_iter();
-    while let Some(Ok(entry)) = walk_dir.next() {
-        if entry.file_type().is_file() {
-            if let Some(ext) = entry.path().extension() {
-                if ext == "log" {
-                    if let Ok(metadata) = entry.metadata() {
-                        if let Ok(modified) = metadata.modified() {
-                            let modified_time: chrono::DateTime<chrono::Local> = modified.into();
-                            if modified_time < threshold {
-                                tracing::info!(
-                                    "Cleaning up old log file: {}",
-                                    entry.path().display()
-                                );
-                                if let Err(e) = std::fs::remove_file(entry.path()) {
-                                    tracing::warn!(
-                                        "Failed to remove old log file {}: {}",
-                                        entry.path().display(),
-                                        e
+        let mut walk_dir = walkdir::WalkDir::new(&log_dir).into_iter();
+        while let Some(Ok(entry)) = walk_dir.next() {
+            if entry.file_type().is_file() {
+                if let Some(ext) = entry.path().extension() {
+                    if ext == "log" {
+                        if let Ok(metadata) = entry.metadata() {
+                            if let Ok(modified) = metadata.modified() {
+                                let modified_time: chrono::DateTime<chrono::Local> =
+                                    modified.into();
+                                if modified_time < threshold {
+                                    tracing::info!(
+                                        "Cleaning up old log file: {}",
+                                        entry.path().display()
                                     );
+                                    if let Err(e) = std::fs::remove_file(entry.path()) {
+                                        tracing::warn!(
+                                            "Failed to remove old log file {}: {}",
+                                            entry.path().display(),
+                                            e
+                                        );
+                                    }
                                 }
                             }
                         }
@@ -162,5 +166,6 @@ pub async fn cleanup_old_logs(log_retention_days: u64) {
                 }
             }
         }
-    }
+    })
+    .await;
 }

@@ -1,9 +1,23 @@
-#![allow(unused_imports)]
+const MAX_HEADER_BYTES: usize = 64 * 1024;
+const MAX_BODY_BYTES: usize = 2 * 1024 * 1024;
+
+pub(crate) fn status_reason_phrase(code: u16) -> &'static str {
+    match code {
+        200 => "OK",
+        400 => "Bad Request",
+        404 => "Not Found",
+        405 => "Method Not Allowed",
+        408 => "Request Timeout",
+        413 => "Payload Too Large",
+        500 => "Internal Server Error",
+        _ => "OK",
+    }
+}
+#[allow(unused_imports)]
 use crate::runner::config::*;
 use crate::runner::engine::*;
-use anyhow::{Context, Result};
-use chrono::{Local, Utc};
-use std::collections::HashMap;
+use anyhow::Result;
+
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tracing::{error, info};
@@ -16,8 +30,6 @@ pub mod icons;
 pub mod routes;
 pub mod templates;
 
-use forms::*;
-use helpers::*;
 use routes::route_request;
 use templates::render_error_page;
 
@@ -76,9 +88,11 @@ pub(crate) async fn run_server(handle: RunnerHandle) -> Result<()> {
             } else {
                 "Cache-Control: no-cache\r\n"
             };
+            let reason = status_reason_phrase(status);
             let response = format!(
-                "HTTP/1.1 {} OK\r\nContent-Type: {}\r\nContent-Length: {}\r\n{}Connection: close\r\n\r\n{}",
+                "HTTP/1.1 {} {}\r\nContent-Type: {}\r\nContent-Length: {}\r\n{}Connection: close\r\n\r\n{}",
                 status,
+                reason,
                 content_type,
                 body.len(),
                 cache_header,
@@ -94,23 +108,98 @@ pub(crate) async fn run_server(handle: RunnerHandle) -> Result<()> {
 pub(crate) async fn read_http_request(
     socket: &mut tokio::net::TcpStream,
 ) -> Result<Option<HttpRequest>> {
-    let mut buf = vec![0u8; 8192];
-    let mut read = socket.read(&mut buf).await?;
-    if read == 0 {
-        return Ok(None);
-    }
+    use std::time::Duration;
 
-    let mut content_length = header_content_length(&buf[..read]).unwrap_or(0);
-    while body_len(&buf[..read]) < content_length {
-        if read == buf.len() {
-            buf.resize(buf.len() * 2, 0);
+    let mut buf = vec![0u8; 8192];
+    let mut read = 0;
+
+    loop {
+        if read >= MAX_HEADER_BYTES + MAX_BODY_BYTES {
+            let resp = "HTTP/1.1 413 Payload Too Large\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nPayload Too Large";
+            let _ = socket.write_all(resp.as_bytes()).await;
+            let _ = socket.shutdown().await;
+            return Ok(None);
         }
-        let n = socket.read(&mut buf[read..]).await?;
-        if n == 0 {
-            break;
-        }
+
+        let read_res =
+            tokio::time::timeout(Duration::from_secs(10), socket.read(&mut buf[read..])).await;
+        let n = match read_res {
+            Ok(Ok(0)) => break,
+            Ok(Ok(n)) => n,
+            Ok(Err(_)) => break,
+            Err(_) => {
+                let resp = "HTTP/1.1 408 Request Timeout\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nRequest Timeout";
+                let _ = socket.write_all(resp.as_bytes()).await;
+                let _ = socket.shutdown().await;
+                return Ok(None);
+            }
+        };
+
         read += n;
-        content_length = header_content_length(&buf[..read]).unwrap_or(content_length);
+
+        let req_str = String::from_utf8_lossy(&buf[..read]);
+        if req_str.lines().any(|l| {
+            let mut parts = l.splitn(2, ':');
+            if let (Some(k), Some(v)) = (parts.next(), parts.next()) {
+                k.trim().eq_ignore_ascii_case("transfer-encoding")
+                    && v.to_lowercase().contains("chunked")
+            } else {
+                false
+            }
+        }) {
+            let resp = "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nChunked Transfer-Encoding is not supported";
+            let _ = socket.write_all(resp.as_bytes()).await;
+            let _ = socket.shutdown().await;
+            return Ok(None);
+        }
+
+        let header_end = buf[..read]
+            .windows(4)
+            .position(|w| w == b"\r\n\r\n")
+            .map(|p| (p, 4))
+            .or_else(|| {
+                buf[..read]
+                    .windows(2)
+                    .position(|w| w == b"\n\n")
+                    .map(|p| (p, 2))
+            });
+
+        if let Some((pos, delim_len)) = header_end {
+            if pos + delim_len > MAX_HEADER_BYTES {
+                let resp = "HTTP/1.1 413 Payload Too Large\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nPayload Too Large";
+                let _ = socket.write_all(resp.as_bytes()).await;
+                let _ = socket.shutdown().await;
+                return Ok(None);
+            }
+
+            let cl = header_content_length(&buf[..read]).unwrap_or(0);
+            if cl > MAX_BODY_BYTES {
+                let resp = "HTTP/1.1 413 Payload Too Large\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nPayload Too Large";
+                let _ = socket.write_all(resp.as_bytes()).await;
+                let _ = socket.shutdown().await;
+                return Ok(None);
+            }
+
+            if body_len(&buf[..read]) >= cl {
+                break;
+            }
+        } else if read > MAX_HEADER_BYTES {
+            let resp = "HTTP/1.1 413 Payload Too Large\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nPayload Too Large";
+            let _ = socket.write_all(resp.as_bytes()).await;
+            let _ = socket.shutdown().await;
+            return Ok(None);
+        }
+
+        if read == buf.len() {
+            let next_len = (buf.len() * 2).min(MAX_HEADER_BYTES + MAX_BODY_BYTES + 1024);
+            if next_len <= buf.len() {
+                let resp = "HTTP/1.1 413 Payload Too Large\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nPayload Too Large";
+                let _ = socket.write_all(resp.as_bytes()).await;
+                let _ = socket.shutdown().await;
+                return Ok(None);
+            }
+            buf.resize(next_len, 0);
+        }
     }
 
     let req = String::from_utf8_lossy(&buf[..read]);
@@ -156,6 +245,8 @@ pub(crate) fn body_len(bytes: &[u8]) -> usize {
 
 #[cfg(test)]
 mod tests {
+    use super::forms::*;
+        use chrono::Utc;
     use super::*;
     use crate::runner::engine::RunnerStatus;
     use std::sync::Arc;

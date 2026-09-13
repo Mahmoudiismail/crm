@@ -47,134 +47,128 @@ pub fn run(config: &CrmOpenSohailConfig) -> Result<()> {
     let sender_account_email = config.sender_account_email.clone();
     let reply_subject_prefix = config.reply_subject_prefix.clone();
 
-    let ps_email_script = format!(
-        r#"
-$ErrorActionPreference = "Stop"
+    let ps_email_template = r#"
+param(
+    [string],
+    [string],
+    [string],
+    [string]
+)
 
-try {{
-    Write-Output "TRACE: Acquiring Outlook COM object..."
-    $Outlook = New-Object -ComObject Outlook.Application
-    $Namespace = $Outlook.GetNamespace("MAPI")
+try {
+     = "Stop"
 
-    # Access Inbox and Sent Items to search for the original message
-    Write-Output "TRACE: Accessing Inbox and Sent Items..."
-    $Inbox = $Namespace.GetDefaultFolder(6) # olFolderInbox
-    $SentItems = $Namespace.GetDefaultFolder(5) # olFolderSentMail
+     = New-Object -ComObject Outlook.Application
+     = .GetNamespace("MAPI")
 
-    $OriginalMail = $null
-    $SenderToMatch = "{sender_account}"
-    $PrefixToMatch = "{subject_prefix}"
+     = .GetDefaultFolder(6) # olFolderInbox
+     = .GetDefaultFolder(5) # olFolderSentMail
 
-Write-Output "TRACE: Searching for original message with sender: '$SenderToMatch' and subject prefix: '$PrefixToMatch'"
+     =
 
-function Find-OriginalMessage ($FolderItems, $SortProperty) {{
-    if (-not $FolderItems) {{ return }}
-    $FolderItems.Sort($SortProperty, $true)
+    function Find-OriginalMessage(, ) {
+        .Sort(, )
+         = @()
 
-    $Matches = @()
-    foreach ($Item in $FolderItems) {{
-        if (-not $Item.Subject -or -not $Item.Subject.StartsWith($PrefixToMatch, [System.StringComparison]::InvariantCultureIgnoreCase)) {{
-            continue
-        }}
+        foreach ( in ) {
+            if (-not .Subject -or -not .Subject.StartsWith(, [System.StringComparison]::OrdinalIgnoreCase)) {
+                continue
+            }
 
-        Write-Output "TRACE: Found candidate with matching subject prefix: $($Item.Subject)"
+             =
+            try {
+                 = .SenderEmailAddress
+            } catch {
+                Write-Output "TRACE: Exception reading SenderEmailAddress: "
+            }
 
-        $SenderAddress = $Item.SenderEmailAddress
-        if ($Item.SenderEmailType -eq "EX") {{
-            # Attempt to resolve EX to SMTP
-            Write-Output "TRACE: SenderEmailType is EX, attempting resolution..."
-            try {{
-                $ExchangeUser = $Item.Sender.GetExchangeUser()
-                if ($ExchangeUser) {{
-                    $SenderAddress = $ExchangeUser.PrimarySmtpAddress
-                    Write-Output "TRACE: Resolved via GetExchangeUser to: $SenderAddress"
-                }} else {{
-                    Write-Output "TRACE: GetExchangeUser returned null."
-                }}
-            }} catch {{
-                Write-Output "TRACE: GetExchangeUser failed: $_"
-            }}
+            if (.SenderEmailType -eq "EX") {
+                try {
+                    if (.Sender -and .Sender.GetExchangeUser()) {
+                         = .Sender.GetExchangeUser().PrimarySmtpAddress
+                        Write-Output "TRACE: Resolved via GetExchangeUser to: "
+                    } else {
+                        Write-Output "TRACE: GetExchangeUser returned null."
+                    }
+                } catch {
+                    Write-Output "TRACE: GetExchangeUser failed: "
+                }
 
-            # Fallback to PropertyAccessor if still not resolved or empty
-            if (-not $SenderAddress -or $SenderAddress.IndexOf("@") -eq -1) {{
-                try {{
-                    $PropAccessor = $Item.PropertyAccessor
-                    $SenderAddress = $PropAccessor.GetProperty("http://schemas.microsoft.com/mapi/proptag/0x39FE001E")
-                    Write-Output "TRACE: Resolved via PropertyAccessor to: $SenderAddress"
-                }} catch {{
-                    Write-Output "TRACE: PropertyAccessor 0x39FE001E failed: $_"
-                }}
-            }}
-        }}
+                # Fallback to PropertyAccessor if still not resolved or empty
+                if (-not  -or .IndexOf("@") -eq -1) {
+                    try {
+                         = .PropertyAccessor
+                         = .GetProperty("http://schemas.microsoft.com/mapi/proptag/0x39FE001E")
+                        Write-Output "TRACE: Resolved via PropertyAccessor to: "
+                    } catch {
+                        Write-Output "TRACE: PropertyAccessor 0x39FE001E failed: "
+                    }
+                }
+            }
 
-        if ([string]::IsNullOrWhiteSpace($SenderAddress)) {{
-            Write-Output "TRACE: Candidate rejected. Sender address is empty."
-            continue
-        }}
+            if ([string]::IsNullOrWhiteSpace()) {
+                Write-Output "TRACE: Candidate rejected. Sender address is empty."
+                continue
+            }
 
-        if ([string]::Equals($SenderAddress.Trim(), $SenderToMatch.Trim(), [System.StringComparison]::OrdinalIgnoreCase)) {{
-            Write-Output "TRACE: Sender match successful ($SenderAddress)."
-            $Matches += $Item
-        }} else {{
-            Write-Output "TRACE: Candidate rejected. Sender '$SenderAddress' does not match '$SenderToMatch'."
-        }}
-    }}
+            if ([string]::Equals(.Trim(), .Trim(), [System.StringComparison]::OrdinalIgnoreCase)) {
+                Write-Output "TRACE: Sender match successful ()."
+                 +=
+            } else {
+                Write-Output "TRACE: Candidate rejected. Sender '' does not match ''."
+            }
+        }
 
-    if ($Matches.Count -gt 0) {{
-        if ($Matches.Count -gt 1) {{
-            Write-Output "TRACE: Found $($Matches.Count) matches in folder. Logging all matches:"
-            foreach ($m in $Matches) {{
-                Write-Output "TRACE: Match - Subject: $($m.Subject), Received: $($m.ReceivedTime)"
-            }}
-            Write-Output "TRACE: Selecting the latest match."
-        }}
-        $script:OriginalMail = $Matches[0]
-    }}
-}}
+        if (.Count -gt 0) {
+            if (.Count -gt 1) {
+                Write-Output "TRACE: Found  matches in folder. Logging all matches:"
+                foreach ( in ) {
+                    Write-Output "TRACE: Match - Subject: , Received: "
+                }
+                Write-Output "TRACE: Selecting the latest match."
+            }
+            :OriginalMail = [0]
+        }
+    }
 
-    $script:OriginalMail = $null
+    :OriginalMail =
 
     # Search Inbox
     Write-Output "TRACE: Searching Inbox..."
-    Find-OriginalMessage -FolderItems $Inbox.Items -SortProperty "[ReceivedTime]"
+    Find-OriginalMessage -FolderItems .Items -SortProperty "[ReceivedTime]"
 
     # Search Sent Items if not found in Inbox
-    if (-not $script:OriginalMail) {{
+    if (-not :OriginalMail) {
         Write-Output "TRACE: Not found in Inbox, searching Sent Items..."
-        Find-OriginalMessage -FolderItems $SentItems.Items -SortProperty "[SentOn]"
-    }}
+        Find-OriginalMessage -FolderItems .Items -SortProperty "[SentOn]"
+    }
 
-    $OriginalMail = $script:OriginalMail
+     = :OriginalMail
 
-    if (-not $OriginalMail) {{
-        throw "Original message with subject prefix '{subject_prefix}' not found in Inbox or Sent Items of '{sender_account}'."
-    }}
+    if (-not ) {
+        throw "Original message with subject prefix '' not found in Inbox or Sent Items of ''."
+    }
 
     Write-Output "TRACE: Creating ReplyAll draft..."
-    $ReplyMail = $OriginalMail.ReplyAll()
+     = .ReplyAll()
 
-    if ("{subject}") {{
-        $ReplyMail.Subject = "{subject}"
-    }}
+    if () {
+        .Subject =
+    }
 
     # Prepend the generated dashboard to the HTMLBody
     Write-Output "TRACE: Populating reply draft body..."
-    $ReplyMail.HTMLBody = '{html_body}' + $ReplyMail.HTMLBody
+    .HTMLBody =  + .HTMLBody
 
     Write-Output "TRACE: Saving reply draft..."
-    $ReplyMail.Save()
+    .Save()
     Write-Output "TRACE: Reply draft saved successfully."
 
-}} catch {{
-    Write-Error "Outlook operation failed: $_"
-    exit 1
-}}
-"#,
-        sender_account = sender_account_email.replace("'", "''"),
-        subject_prefix = reply_subject_prefix.replace("'", "''"),
-        subject = subject.replace("'", "''"),
-        html_body = final_html.replace("'", "''")
-    );
+} catch {
+    Write-Error "Outlook operation failed: "
+    throw
+}
+"#;
 
     if config.dashboard_config.save_email_as_html.unwrap_or(false) {
         let tmp_dir = std::env::temp_dir();
@@ -183,7 +177,16 @@ function Find-OriginalMessage ($FolderItems, $SortProperty) {{
         info!("save_email_as_html is true. Saved email body to {}. Skipping PowerShell send for testing.", html_path.display());
     } else {
         info!("Creating/saving reply draft via Outlook COM...");
-        if let Err(e) = powershell::run_powershell("reply_email.ps1", &ps_email_script) {
+        if let Err(e) = powershell::run_powershell_with_args(
+            "reply_email.ps1",
+            ps_email_template,
+            &[
+                ("-SenderAccount", &sender_account_email),
+                ("-SubjectPrefix", &reply_subject_prefix),
+                ("-Subject", &subject),
+                ("-HtmlBody", &final_html),
+            ],
+        ) {
             error!("Failed to create/save reply draft: {}", e);
             anyhow::bail!("Failed to create/save reply draft");
         }
