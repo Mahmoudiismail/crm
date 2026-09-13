@@ -674,6 +674,496 @@ async fn test_concurrent_period_execution() {
     let app_lock_mgr = AppLockManager::new();
 
     let res = run_task_inner(&mut task, &policy, &status, &app_lock_mgr).await;
+
     assert!(res.success);
     assert_eq!(task.last_status, "ok");
+}
+
+#[test]
+fn test_beginning_of_prev_month_resolution() {
+    let now = Utc.with_ymd_and_hms(2026, 3, 15, 12, 0, 0).unwrap(); // March 15, 2026
+
+    let periods = resolve_and_generate_execution_periods(
+        PeriodMode::Custom,
+        Some("beginning_of_prev_month"),
+        Some("eomonth"),
+        now,
+    )
+    .unwrap();
+
+    assert_eq!(periods.len(), 1);
+    // Start Date: Feb 1, 2026
+    assert_eq!(
+        periods[0].start_date,
+        NaiveDate::from_ymd_opt(2026, 2, 1).unwrap()
+    );
+    // End Date (eomonth based on Feb 1): Feb 28, 2026
+    assert_eq!(
+        periods[0].end_date,
+        NaiveDate::from_ymd_opt(2026, 2, 28).unwrap()
+    );
+}
+
+#[tokio::test]
+async fn test_concurrent_period_execution_overlapping() {
+    use crm_tool::runner::config::RegisteredApp;
+    use crm_tool::runner::engine::pipeline::run_task_inner;
+    use crm_tool::runner::engine::state::RunnerStatus;
+    use crm_tool::runner::engine::{AppLockManager, ExecutionPolicy};
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let log_file = temp_dir.path().join("execution_log.txt");
+    let log_path_str = log_file.to_str().unwrap().replace("\\", "/");
+
+    // Python test script that records start/finish times and argument values
+    let py_script = format!(
+        "import sys, time; args = ' '.join(sys.argv); f = open('{}', 'a'); f.write('START ' + args + chr(10)); f.flush(); time.sleep(0.15); f.write('FINISH ' + args + chr(10)); f.close()",
+        log_path_str
+    );
+
+    let app_concurrent = RegisteredApp {
+        id: "concurrent_app".to_string(),
+        name: "Concurrent App".to_string(),
+        executable_path: "python3".to_string(),
+        config_path: String::new(),
+        allow_concurrent_tasks: true,
+    };
+
+    let policy = ExecutionPolicy {
+        allow_shell_tasks: true,
+        shell_timeout_seconds: 5,
+        post_run_timeout_seconds: 5,
+        min_task_interval_seconds: 1,
+        registered_apps: vec![app_concurrent],
+        log_retention_days: 30,
+    };
+
+    let mut args = HashMap::new();
+    args.insert("-c".to_string(), py_script);
+
+    let spec = ExternalAppSpec {
+        app_id: "concurrent_app".to_string(),
+        args,
+        period_mode: PeriodMode::Monthly,
+        start_date: Some("2026-01-01".to_string()),
+        end_date: Some("2026-02-28".to_string()),
+    };
+
+    let mut task = RunnerTask {
+        id: "concurrent_task".to_string(),
+        name: "Concurrent Task".to_string(),
+        enabled: true,
+        repetition: crm_tool::runner::config::Repetition::Once,
+        frequency_seconds: 0,
+        next_run_at: String::new(),
+        schedules: vec![],
+        steps: vec![TaskStep {
+            name: None,
+            mode: ExecutionMode::Sequential,
+            actions: vec![ActionSpec::ExternalApp(spec)],
+        }],
+        post_run_steps: vec![],
+        last_run_at: String::new(),
+        last_status: String::new(),
+        timeout_seconds: 0,
+    };
+
+    let status = Arc::new(Mutex::new(RunnerStatus {
+        running_tasks_count: 0,
+        queued_tasks_count: 0,
+        running_task_ids: Vec::new(),
+        queued_task_ids: Vec::new(),
+        last_error: String::new(),
+        last_task_id: String::new(),
+        last_run_at: String::new(),
+        waiting_for_app: HashMap::new(),
+    }));
+    let app_lock_mgr = AppLockManager::new();
+
+    let res = run_task_inner(&mut task, &policy, &status, &app_lock_mgr).await;
+
+    assert!(res.success);
+    assert_eq!(task.last_status, "ok");
+
+    let log_content = std::fs::read_to_string(&log_file).unwrap_or_default();
+    let lines: Vec<&str> = log_content.lines().collect();
+
+    // Verify both Period 1 (2026-01-01 -> 2026-01-31) and Period 2 (2026-02-01 -> 2026-02-28) executed
+    assert_eq!(lines.len(), 4, "Log output: \n{}", log_content);
+
+    // Concurrency check: Period 2 START occurs before Period 1 FINISH!
+    assert!(lines[0].starts_with("START"));
+    assert!(
+        lines[1].starts_with("START"),
+        "Second line should be START for concurrent execution: {}",
+        log_content
+    );
+    assert!(lines[2].starts_with("FINISH"));
+    assert!(lines[3].starts_with("FINISH"));
+
+    // Verify date substitution in arguments
+    assert!(log_content.contains("2026-01-01"));
+    assert!(log_content.contains("2026-01-31"));
+    assert!(log_content.contains("2026-02-01"));
+    assert!(log_content.contains("2026-02-28"));
+}
+
+#[tokio::test]
+async fn test_sequential_period_execution() {
+    use crm_tool::runner::config::RegisteredApp;
+    use crm_tool::runner::engine::pipeline::run_task_inner;
+    use crm_tool::runner::engine::state::RunnerStatus;
+    use crm_tool::runner::engine::{AppLockManager, ExecutionPolicy};
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let log_file = temp_dir.path().join("seq_log.txt");
+    let log_path_str = log_file.to_str().unwrap().replace("\\", "/");
+
+    let py_script = format!(
+        "import sys, time; args = ' '.join(sys.argv); f = open('{}', 'a'); f.write('START ' + args + chr(10)); f.flush(); time.sleep(0.05); f.write('FINISH ' + args + chr(10)); f.close()",
+        log_path_str
+    );
+
+    let app_seq = RegisteredApp {
+        id: "seq_app".to_string(),
+        name: "Sequential App".to_string(),
+        executable_path: "python3".to_string(),
+        config_path: String::new(),
+        allow_concurrent_tasks: false,
+    };
+
+    let policy = ExecutionPolicy {
+        allow_shell_tasks: true,
+        shell_timeout_seconds: 5,
+        post_run_timeout_seconds: 5,
+        min_task_interval_seconds: 1,
+        registered_apps: vec![app_seq],
+        log_retention_days: 30,
+    };
+
+    let mut args = HashMap::new();
+    args.insert("-c".to_string(), py_script);
+
+    let spec = ExternalAppSpec {
+        app_id: "seq_app".to_string(),
+        args,
+        period_mode: PeriodMode::Monthly,
+        start_date: Some("2026-01-01".to_string()),
+        end_date: Some("2026-02-28".to_string()),
+    };
+
+    let mut task = RunnerTask {
+        id: "seq_task".to_string(),
+        name: "Sequential Task".to_string(),
+        enabled: true,
+        repetition: crm_tool::runner::config::Repetition::Once,
+        frequency_seconds: 0,
+        next_run_at: String::new(),
+        schedules: vec![],
+        steps: vec![TaskStep {
+            name: None,
+            mode: ExecutionMode::Sequential,
+            actions: vec![ActionSpec::ExternalApp(spec)],
+        }],
+        post_run_steps: vec![],
+        last_run_at: String::new(),
+        last_status: String::new(),
+        timeout_seconds: 0,
+    };
+
+    let status = Arc::new(Mutex::new(RunnerStatus {
+        running_tasks_count: 0,
+        queued_tasks_count: 0,
+        running_task_ids: Vec::new(),
+        queued_task_ids: Vec::new(),
+        last_error: String::new(),
+        last_task_id: String::new(),
+        last_run_at: String::new(),
+        waiting_for_app: HashMap::new(),
+    }));
+    let app_lock_mgr = AppLockManager::new();
+
+    let res = run_task_inner(&mut task, &policy, &status, &app_lock_mgr).await;
+
+    assert!(res.success);
+
+    let log_content = std::fs::read_to_string(&log_file).unwrap_or_default();
+    let lines: Vec<&str> = log_content.lines().collect();
+
+    assert_eq!(lines.len(), 4, "Log output: \n{}", log_content);
+
+    // Sequential check: Period 1 START -> Period 1 FINISH -> Period 2 START -> Period 2 FINISH
+    assert!(lines[0].starts_with("START"));
+    assert!(
+        lines[1].starts_with("FINISH"),
+        "Line 1 must be FINISH for sequential execution: {}",
+        log_content
+    );
+    assert!(lines[2].starts_with("START"));
+    assert!(lines[3].starts_with("FINISH"));
+}
+
+#[tokio::test]
+async fn test_concurrent_period_error_propagation() {
+    use crm_tool::runner::config::RegisteredApp;
+    use crm_tool::runner::engine::pipeline::run_task_inner;
+    use crm_tool::runner::engine::state::RunnerStatus;
+    use crm_tool::runner::engine::{AppLockManager, ExecutionPolicy};
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+
+    let app_failing = RegisteredApp {
+        id: "failing_app".to_string(),
+        name: "Failing App".to_string(),
+        executable_path: "python3".to_string(),
+        config_path: String::new(),
+        allow_concurrent_tasks: true,
+    };
+
+    let policy = ExecutionPolicy {
+        allow_shell_tasks: true,
+        shell_timeout_seconds: 5,
+        post_run_timeout_seconds: 5,
+        min_task_interval_seconds: 1,
+        registered_apps: vec![app_failing],
+        log_retention_days: 30,
+    };
+
+    let mut args = HashMap::new();
+    args.insert("-c".to_string(), "import sys; sys.exit(1)".to_string());
+
+    let spec = ExternalAppSpec {
+        app_id: "failing_app".to_string(),
+        args,
+        period_mode: PeriodMode::Monthly,
+        start_date: Some("2026-01-01".to_string()),
+        end_date: Some("2026-02-28".to_string()),
+    };
+
+    let mut task = RunnerTask {
+        id: "failing_task".to_string(),
+        name: "Failing Task".to_string(),
+        enabled: true,
+        repetition: crm_tool::runner::config::Repetition::Once,
+        frequency_seconds: 0,
+        next_run_at: String::new(),
+        schedules: vec![],
+        steps: vec![TaskStep {
+            name: None,
+            mode: ExecutionMode::Sequential,
+            actions: vec![ActionSpec::ExternalApp(spec)],
+        }],
+        post_run_steps: vec![],
+        last_run_at: String::new(),
+        last_status: String::new(),
+        timeout_seconds: 0,
+    };
+
+    let status = Arc::new(Mutex::new(RunnerStatus {
+        running_tasks_count: 0,
+        queued_tasks_count: 0,
+        running_task_ids: Vec::new(),
+        queued_task_ids: Vec::new(),
+        last_error: String::new(),
+        last_task_id: String::new(),
+        last_run_at: String::new(),
+        waiting_for_app: HashMap::new(),
+    }));
+    let app_lock_mgr = AppLockManager::new();
+
+    let res = run_task_inner(&mut task, &policy, &status, &app_lock_mgr).await;
+    assert!(!res.success);
+    assert!(task.last_status.contains("error"));
+}
+
+#[tokio::test]
+async fn test_multiple_external_apps_execution_isolation() {
+    use crm_tool::runner::config::RegisteredApp;
+    use crm_tool::runner::engine::pipeline::run_task_inner;
+    use crm_tool::runner::engine::state::RunnerStatus;
+    use crm_tool::runner::engine::{AppLockManager, ExecutionPolicy};
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let log_file = temp_dir.path().join("iso_log.txt");
+    let log_path_str = log_file.to_str().unwrap().replace("\\", "/");
+
+    let py_script = format!(
+        "import sys; args = ' '.join(sys.argv); f = open('{}', 'a'); f.write(args + chr(10)); f.close()",
+        log_path_str
+    );
+
+    let app_iso = RegisteredApp {
+        id: "iso_app".to_string(),
+        name: "Iso App".to_string(),
+        executable_path: "python3".to_string(),
+        config_path: String::new(),
+        allow_concurrent_tasks: false,
+    };
+
+    let policy = ExecutionPolicy {
+        allow_shell_tasks: true,
+        shell_timeout_seconds: 5,
+        post_run_timeout_seconds: 5,
+        min_task_interval_seconds: 1,
+        registered_apps: vec![app_iso],
+        log_retention_days: 30,
+    };
+
+    let mut args_a = HashMap::new();
+    args_a.insert("-c".to_string(), py_script.clone());
+
+    let app_a_spec = ExternalAppSpec {
+        app_id: "iso_app".to_string(),
+        args: args_a,
+        period_mode: PeriodMode::Monthly,
+        start_date: Some("2026-01-01".to_string()),
+        end_date: Some("2026-01-31".to_string()),
+    };
+
+    let mut args_b = HashMap::new();
+    args_b.insert("-c".to_string(), py_script);
+
+    let app_b_spec = ExternalAppSpec {
+        app_id: "iso_app".to_string(),
+        args: args_b,
+        period_mode: PeriodMode::Quarterly,
+        start_date: Some("2026-04-01".to_string()),
+        end_date: Some("2026-06-30".to_string()),
+    };
+
+    let mut task = RunnerTask {
+        id: "iso_task".to_string(),
+        name: "Iso Task".to_string(),
+        enabled: true,
+        repetition: crm_tool::runner::config::Repetition::Once,
+        frequency_seconds: 0,
+        next_run_at: String::new(),
+        schedules: vec![],
+        steps: vec![TaskStep {
+            name: None,
+            mode: ExecutionMode::Sequential,
+            actions: vec![
+                ActionSpec::ExternalApp(app_a_spec),
+                ActionSpec::ExternalApp(app_b_spec),
+            ],
+        }],
+        post_run_steps: vec![],
+        last_run_at: String::new(),
+        last_status: String::new(),
+        timeout_seconds: 0,
+    };
+
+    let status = Arc::new(Mutex::new(RunnerStatus {
+        running_tasks_count: 0,
+        queued_tasks_count: 0,
+        running_task_ids: Vec::new(),
+        queued_task_ids: Vec::new(),
+        last_error: String::new(),
+        last_task_id: String::new(),
+        last_run_at: String::new(),
+        waiting_for_app: HashMap::new(),
+    }));
+    let app_lock_mgr = AppLockManager::new();
+
+    let res = run_task_inner(&mut task, &policy, &status, &app_lock_mgr).await;
+
+    assert!(res.success);
+
+    let log_content = std::fs::read_to_string(&log_file).unwrap_or_default();
+    assert!(log_content.contains("2026-01-01"));
+    assert!(log_content.contains("2026-01-31"));
+    assert!(log_content.contains("2026-04-01"));
+    assert!(log_content.contains("2026-06-30"));
+}
+
+#[tokio::test]
+async fn test_post_run_external_app_execution() {
+    use crm_tool::runner::config::RegisteredApp;
+    use crm_tool::runner::engine::pipeline::run_task_inner;
+    use crm_tool::runner::engine::state::RunnerStatus;
+    use crm_tool::runner::engine::{AppLockManager, ExecutionPolicy};
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let log_file = temp_dir.path().join("post_log.txt");
+    let log_path_str = log_file.to_str().unwrap().replace("\\", "/");
+
+    let py_script = format!(
+        "import sys; args = ' '.join(sys.argv); f = open('{}', 'a'); f.write(args + chr(10)); f.close()",
+        log_path_str
+    );
+
+    let app_post = RegisteredApp {
+        id: "post_app".to_string(),
+        name: "Post App".to_string(),
+        executable_path: "python3".to_string(),
+        config_path: String::new(),
+        allow_concurrent_tasks: false,
+    };
+
+    let policy = ExecutionPolicy {
+        allow_shell_tasks: true,
+        shell_timeout_seconds: 5,
+        post_run_timeout_seconds: 5,
+        min_task_interval_seconds: 1,
+        registered_apps: vec![app_post],
+        log_retention_days: 30,
+    };
+
+    let mut args_post = HashMap::new();
+    args_post.insert("-c".to_string(), py_script);
+
+    let post_app_spec = ExternalAppSpec {
+        app_id: "post_app".to_string(),
+        args: args_post,
+        period_mode: PeriodMode::Monthly,
+        start_date: Some("2026-05-01".to_string()),
+        end_date: Some("2026-05-31".to_string()),
+    };
+
+    let mut task = RunnerTask {
+        id: "post_task".to_string(),
+        name: "Post Task".to_string(),
+        enabled: true,
+        repetition: crm_tool::runner::config::Repetition::Once,
+        frequency_seconds: 0,
+        next_run_at: String::new(),
+        schedules: vec![],
+        steps: vec![],
+        post_run_steps: vec![TaskStep {
+            name: None,
+            mode: ExecutionMode::Sequential,
+            actions: vec![ActionSpec::ExternalApp(post_app_spec)],
+        }],
+        last_run_at: String::new(),
+        last_status: String::new(),
+        timeout_seconds: 0,
+    };
+
+    let status = Arc::new(Mutex::new(RunnerStatus {
+        running_tasks_count: 0,
+        queued_tasks_count: 0,
+        running_task_ids: Vec::new(),
+        queued_task_ids: Vec::new(),
+        last_error: String::new(),
+        last_task_id: String::new(),
+        last_run_at: String::new(),
+        waiting_for_app: HashMap::new(),
+    }));
+    let app_lock_mgr = AppLockManager::new();
+
+    let res = run_task_inner(&mut task, &policy, &status, &app_lock_mgr).await;
+
+    assert!(res.success);
+
+    let log_content = std::fs::read_to_string(&log_file).unwrap_or_default();
+    assert!(log_content.contains("2026-05-01"));
+    assert!(log_content.contains("2026-05-31"));
 }

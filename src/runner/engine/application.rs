@@ -43,22 +43,23 @@ pub async fn run_external_app(
     }
 
     if period.is_some() {
-        if effective_args.contains_key("--start-date") || effective_args.contains_key("start_date")
-        {
-            effective_args.insert("--start-date".to_string(), start_str.clone());
-        }
-        if effective_args.contains_key("--end-date") || effective_args.contains_key("end_date") {
-            effective_args.insert("--end-date".to_string(), end_str.clone());
-        }
-        if effective_args.contains_key("--from-date") || effective_args.contains_key("from_date") {
-            effective_args.insert("--from-date".to_string(), start_str.clone());
-        }
-        if effective_args.contains_key("--to-date") || effective_args.contains_key("to_date") {
-            effective_args.insert("--to-date".to_string(), end_str.clone());
-        }
+        effective_args.insert("--start-date".to_string(), start_str.clone());
+        effective_args.insert("--end-date".to_string(), end_str.clone());
     }
 
-    for (k, v) in &effective_args {
+    let mut sorted_keys: Vec<&String> = effective_args.keys().collect();
+    sorted_keys.sort_by(|a, b| {
+        if a.as_str() == "-c" {
+            std::cmp::Ordering::Less
+        } else if b.as_str() == "-c" {
+            std::cmp::Ordering::Greater
+        } else {
+            a.cmp(b)
+        }
+    });
+
+    for k in sorted_keys {
+        let v = &effective_args[k];
         if k == "--config" && !app.config_path.trim().is_empty() {
             // Do not allow task arguments to override the app's registered config path if the app already has one defined
             continue;

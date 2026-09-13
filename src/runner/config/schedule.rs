@@ -695,11 +695,11 @@ pub fn generate_execution_periods(
             let end_month = end_date.month();
 
             loop {
-                let period_start =
-                    NaiveDate::from_ymd_opt(cur_year, cur_month, 1).unwrap_or(start_date);
+                let period_start = NaiveDate::from_ymd_opt(cur_year, cur_month, 1)
+                    .expect("first day of month is valid");
                 let last_day = days_in_month(cur_year, cur_month);
-                let period_end =
-                    NaiveDate::from_ymd_opt(cur_year, cur_month, last_day).unwrap_or(end_date);
+                let period_end = NaiveDate::from_ymd_opt(cur_year, cur_month, last_day)
+                    .expect("last day of month is valid");
 
                 periods.push(ExecutionPeriod {
                     start_date: period_start,
@@ -730,11 +730,11 @@ pub fn generate_execution_periods(
 
             loop {
                 let q_end_month = quarter_end_month(cur_q_start_month);
-                let period_start =
-                    NaiveDate::from_ymd_opt(cur_year, cur_q_start_month, 1).unwrap_or(start_date);
+                let period_start = NaiveDate::from_ymd_opt(cur_year, cur_q_start_month, 1)
+                    .expect("first day of month is valid");
                 let last_day = days_in_month(cur_year, q_end_month);
-                let period_end =
-                    NaiveDate::from_ymd_opt(cur_year, q_end_month, last_day).unwrap_or(end_date);
+                let period_end = NaiveDate::from_ymd_opt(cur_year, q_end_month, last_day)
+                    .expect("last day of month is valid");
 
                 periods.push(ExecutionPeriod {
                     start_date: period_start,
@@ -762,11 +762,11 @@ pub fn generate_execution_periods(
             let end_year = end_date.year();
 
             for yr in start_year..=end_year {
-                let period_start =
-                    NaiveDate::from_ymd_opt(yr, target_month, 1).unwrap_or(start_date);
+                let period_start = NaiveDate::from_ymd_opt(yr, target_month, 1)
+                    .expect("first day of month is valid");
                 let last_day = days_in_month(yr, target_month);
-                let period_end =
-                    NaiveDate::from_ymd_opt(yr, target_month, last_day).unwrap_or(end_date);
+                let period_end = NaiveDate::from_ymd_opt(yr, target_month, last_day)
+                    .expect("last day of month is valid");
 
                 periods.push(ExecutionPeriod {
                     start_date: period_start,
@@ -784,9 +784,11 @@ pub fn generate_execution_periods(
             let end_year = end_date.year();
 
             for yr in start_year..=end_year {
-                let period_start = NaiveDate::from_ymd_opt(yr, q_start, 1).unwrap_or(start_date);
+                let period_start =
+                    NaiveDate::from_ymd_opt(yr, q_start, 1).expect("first day of month is valid");
                 let last_day = days_in_month(yr, q_end);
-                let period_end = NaiveDate::from_ymd_opt(yr, q_end, last_day).unwrap_or(end_date);
+                let period_end = NaiveDate::from_ymd_opt(yr, q_end, last_day)
+                    .expect("last day of month is valid");
 
                 periods.push(ExecutionPeriod {
                     start_date: period_start,
@@ -1158,31 +1160,6 @@ pub fn days_in_month(year: i32, month: u32) -> u32 {
     }
 }
 
-pub fn generate_upcoming_executions(
-    task: &RunnerTask,
-    now: DateTime<Utc>,
-    limit: usize,
-) -> Result<Vec<ExecutionOccurrence>> {
-    let app_spec = task
-        .steps
-        .iter()
-        .chain(task.post_run_steps.iter())
-        .flat_map(|step| step.actions.iter())
-        .find_map(|action| match action {
-            ActionSpec::ExternalApp(spec) => Some(spec.clone()),
-            _ => None,
-        })
-        .unwrap_or_else(|| ExternalAppSpec {
-            app_id: String::new(),
-            args: std::collections::HashMap::new(),
-            period_mode: PeriodMode::Custom,
-            start_date: None,
-            end_date: None,
-        });
-
-    generate_upcoming_executions_for_app(task, &app_spec, now, limit)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1350,7 +1327,11 @@ mod tests {
             timeout_seconds: 0,
         };
 
-        let occurrences = generate_upcoming_executions(&task, now, 10).unwrap();
+        let app_spec = match &task.steps[0].actions[0] {
+            ActionSpec::ExternalApp(s) => s.clone(),
+            _ => panic!(),
+        };
+        let occurrences = generate_upcoming_executions_for_app(&task, &app_spec, now, 10).unwrap();
         assert_eq!(occurrences.len(), 10);
         assert_eq!(occurrences[0].scheduled_at, now);
         assert_eq!(
@@ -1384,7 +1365,12 @@ mod tests {
             timeout_seconds: 0,
         };
 
-        let past_occurrences = generate_upcoming_executions(&past_task, now, 10).unwrap();
+        let past_app_spec = match &past_task.steps[0].actions[0] {
+            ActionSpec::ExternalApp(s) => s.clone(),
+            _ => panic!(),
+        };
+        let past_occurrences =
+            generate_upcoming_executions_for_app(&past_task, &past_app_spec, now, 10).unwrap();
         assert!(past_occurrences.is_empty());
     }
 

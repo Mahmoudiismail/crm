@@ -494,6 +494,7 @@
                                       <option value="yesterday" ${startDate === 'yesterday' ? 'selected' : ''}>Yesterday</option>
                                       <option value="tomorrow" ${startDate === 'tomorrow' ? 'selected' : ''}>Tomorrow</option>
                                       <option value="beginning_of_month" ${startDate === 'beginning_of_month' ? 'selected' : ''}>Beginning of Month</option>
+                                      <option value="beginning_of_prev_month" ${startDate === 'beginning_of_prev_month' ? 'selected' : ''}>Beginning of Previous Month</option>
                                       <option value="eomonth" ${startDate === 'eomonth' ? 'selected' : ''}>End of Month</option>
                                       <optgroup label="Next Weekday">
                                           <option value="next mon" ${startDate === 'next mon' ? 'selected' : ''}>Next Monday</option>
@@ -520,6 +521,7 @@
                                       <option value="yesterday" ${endDate === 'yesterday' ? 'selected' : ''}>Yesterday</option>
                                       <option value="tomorrow" ${endDate === 'tomorrow' ? 'selected' : ''}>Tomorrow</option>
                                       <option value="beginning_of_month" ${endDate === 'beginning_of_month' ? 'selected' : ''}>Beginning of Month</option>
+                                      <option value="beginning_of_prev_month" ${endDate === 'beginning_of_prev_month' ? 'selected' : ''}>Beginning of Previous Month</option>
                                       <option value="eomonth" ${endDate === 'eomonth' || !endDate ? 'selected' : ''}>End of Month</option>
                                       <optgroup label="Next Weekday">
                                           <option value="next mon" ${endDate === 'next mon' ? 'selected' : ''}>Next Monday</option>

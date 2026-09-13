@@ -294,6 +294,21 @@ pub(crate) fn resolve_date_var(val: &str, base_date: Option<&str>) -> Result<chr
             debug!("Resolved value: {} (Original: {})", res, val);
             Ok(res)
         }
+        "beginning_of_prev_month" | "beginning_of_previous_month" | "prev_month" => {
+            info!("Variable detected: {}", val);
+            let prev = if dt.month() == 1 {
+                NaiveDate::from_ymd_opt(dt.year() - 1, 12, 1).context("valid prev year month")?
+            } else {
+                NaiveDate::from_ymd_opt(dt.year(), dt.month() - 1, 1).context("valid prev month")?
+            };
+            trace!(
+                "Variable resolution path: beginning_of_prev_month. Base: {}, Result: {}",
+                dt,
+                prev
+            );
+            debug!("Resolved value: {} (Original: {})", prev, val);
+            Ok(prev)
+        }
         "eomonth" => {
             info!("Variable detected: {}", val);
             let next_month = if dt.month() == 12 {
