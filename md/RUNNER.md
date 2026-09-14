@@ -5,6 +5,19 @@ The Runner GUI provides an interface to configure tasks, applications, and pipel
 ## Multiple Steps and Execution Modes
 Tasks inside the Runner support executing multiple sequential or parallel actions within "Steps". You can configure an unlimited number of Steps and Actions inside the GUI by clicking **Add step** or **Add action**.
 
+A single step has an execution mode:
+- **Sequential**: Every action executes in order. The pipeline halts if an action fails.
+- **Parallel**: Every action executes at the same time concurrently. The pipeline halts if any action fails.
+
+Tasks can also configure **Post Run Steps**, which trigger their own isolated step pipeline if and only if the main step pipeline completes successfully.
+
+## Application Concurrency & Lock Management
+Step-level application locking is managed by `AppLockManager`:
+- Non-concurrent applications (`allow_concurrent_tasks = false`) acquire an exclusive semaphore for the step duration.
+- Multiple non-concurrent applications required within a step are sorted deterministically and acquired in order to prevent deadlocks.
+- Semaphores are held for the step duration and automatically released on step completion, error, or cancellation.
+- Tasks waiting for an application lock remain in `running_task_ids` with `waiting_for_app` status reported in the GUI.
+
 ## External Application Date Periodization Modes
 Periodization and dates (`period_mode`, `start_date`, `end_date`) belong exclusively to `ExternalAppSpec`. `RunnerTask` does not own task-level periodization fields.
 
@@ -28,29 +41,24 @@ Date expressions are evaluated sequentially:
 4. When Start Date determines a month context (e.g. `beginning_of_month`), `eomonth` for End Date refers to the same resolved month.
 5. Invalid date expressions produce explicit errors without silent fallbacks.
 
-## Legacy Configuration Migration
-When loading legacy configuration files containing task-level `period_mode`, `start_date`, or `end_date`, the migration layer inspects all `ExternalAppSpec` instances in both `steps` and `post_run_steps`. Any `ExternalAppSpec` that does not have explicit period or date values inherits the legacy task-level settings. Explicit `ExternalAppSpec` settings take precedence and remain untouched. Upon re-saving, periodization settings are persisted exclusively under `ExternalAppSpec`.
-
 ## Live Execution Preview
 Each External Application action block inside the task editor features its own dedicated **Live Execution Preview** displaying up to the **Next 10 Upcoming Executions** for that specific application. The preview uses the authoritative backend scheduling, date resolution, working-hours, week-off, and interval grid alignment engine. Changing one External Application's periodization or dates updates its preview box independently without executing applications or tasks.
 
-A single step has an execution mode:
-- **Sequential**: Every action executes in order. The pipeline halts if an action fails.
-- **Parallel**: Every action executes at the same time concurrently. The pipeline halts if any action fails.
+## Process Execution, Timeout & Output Caps
+- **Process Tree Cleanup**: Process timeouts terminate the entire process tree (`taskkill /F /T /PID` on Windows, `pkill -P` on Unix) to prevent orphan child processes.
+- **Bounded Output**: Stdout and stderr byte streams are bounded at 10 MiB memory caps per stream to prevent unbounded memory growth during heavy output.
 
-Tasks can also configure **Post Run Steps**, which trigger their own isolated step pipeline if and only if the main step pipeline completes successfully.
-
-When configuring an application's actions, the Runner GUI will dynamically inject the available parameters based on the executed application's manifest. This means Runner can seamlessly schedule Yasweb downloads, CRM fetching, or simple Shell Commands out of the box.
-
-## Manual Executions
-When you manually trigger a task from the GUI (e.g. clicking **Run Now** or **Run All**), the task is queued for immediate execution without advancing its `next_run_at` schedule. This ensures that manually forcing a task does not overwrite or skip the originally scheduled automatic run.
+## HTTP Server Hardening & Security Model
+- **Header & Body Limits**: Enforces `MAX_HEADER_BYTES = 64KB` and `MAX_BODY_BYTES = 2MB`. Requests exceeding boundaries return `HTTP 413 Payload Too Large`.
+- **Read Timeout**: Socket read operations enforce a 10-second read timeout, returning `HTTP 408 Request Timeout` and closing stalled connections.
+- **Line Ending Consistency**: Parses HTTP headers and body consistently across both CRLF (`\r\n\r\n`) and LF (`\n\n`) line-ending delimiters.
+- **Chunked Transfer Encoding**: Rejects unsupported `Transfer-Encoding: chunked` with `HTTP 400 Bad Request`.
+- **GET Mutation Protection**: All state-changing endpoints strictly reject `GET` requests with `HTTP 405 Method Not Allowed` and require `POST`.
+- **Loopback Enforcement**: Runner GUI binds to `127.0.0.1` (localhost loopback). Non-loopback `gui_host` bindings (such as `0.0.0.0` or local network interfaces) are rejected on startup.
+- **Non-blocking Async Handlers**: All async HTTP handlers offload blocking process calls using async process execution (`tokio::process::Command`) to keep the Tokio runtime unblocked.
 
 ## API Endpoints
 - `/run/{task_id}` (POST) - Forces immediate execution of the given task ID (Manual mode).
 - `/run-all` (POST) - Enqueues all tasks for immediate execution (Manual mode).
 - `/api/tasks/preview` (POST) - Generates up to 10 future execution occurrences for a specified External Application and schedule configuration.
-
-## Security Model
-
-- **Loopback Enforcement**: Runner GUI binds to `127.0.0.1` (localhost loopback). Binding to non-loopback `gui_host` addresses (such as `0.0.0.0` or local network interfaces) without protection is rejected on startup to prevent unauthenticated remote control.
-- **HTTP GET Safety**: State-changing operations (`/create`, `/update/...`, `/delete/...`, `/run/...`, `/enable/...`, `/disable/...`, `/run-all`, `/working-hours/create`, `/apps/create`, etc.) strictly require `POST` requests. `GET` requests to state-changing endpoints are rejected with `HTTP 405 Method Not Allowed`.
+- `/api/apps/manifest` (GET) - Retrieves JSON manifest for registered application via non-blocking async process invocation.

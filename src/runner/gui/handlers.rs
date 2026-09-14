@@ -550,9 +550,10 @@ pub(crate) async fn handle_api_apps_manifest(
             ));
         }
 
-        let output_res = std::process::Command::new(&app.executable_path)
+        let output_res = tokio::process::Command::new(&app.executable_path)
             .arg("--manifest")
-            .output();
+            .output()
+            .await;
 
         match output_res {
             Ok(output) => {

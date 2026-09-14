@@ -12,7 +12,7 @@ use crate::runner::engine::dispatcher::schedule::schedule_is_due;
 use crate::runner::engine::pipeline::run_task_inner;
 use crate::runner::engine::state::{
     ExecutionManagerCommand, ExecutionPolicy, RunnerCommand, RunnerHandle, RunnerStatus,
-}; // We'll rename handle_command in mod.rs to avoid conflict
+};
 
 use crate::runner::engine::app_lock::AppLockManager;
 
@@ -257,6 +257,9 @@ pub fn start_scheduler(runner_config_path: String) -> RunnerHandle {
 #[cfg(test)]
 mod tests_queue {
     use super::*;
+    use crate::runner::config::Repetition;
+    use crate::runner::engine::dispatcher::run_task_by_id;
+    use tempfile::tempdir;
     use tokio::sync::mpsc;
 
     #[tokio::test]
@@ -295,5 +298,79 @@ mod tests_queue {
             },
         });
         assert!(res.is_err(), "Should fail when capacity reached");
+    }
+
+    #[tokio::test]
+    async fn test_real_duplicate_admission_race() {
+        let temp_dir = tempdir().unwrap();
+        let config_file = temp_dir.path().join("runner.json");
+        let config_path = config_file.to_str().unwrap().to_string();
+
+        let mut cfg = RunnerConfig::default();
+        let task = RunnerTask {
+            id: "race_task".to_string(),
+            name: "Race Task".to_string(),
+            enabled: true,
+            schedules: vec![],
+            repetition: Repetition::Once,
+            frequency_seconds: 0,
+            next_run_at: String::new(),
+            steps: vec![],
+            post_run_steps: vec![],
+            last_run_at: String::new(),
+            last_status: String::new(),
+            timeout_seconds: 3600,
+        };
+        cfg.tasks.push(task);
+        cfg.save(&config_path).unwrap();
+
+        let status = Arc::new(Mutex::new(RunnerStatus {
+            running_tasks_count: 0,
+            queued_tasks_count: 0,
+            running_task_ids: Vec::new(),
+            queued_task_ids: Vec::new(),
+            last_task_id: String::new(),
+            last_error: String::new(),
+            last_run_at: String::new(),
+            waiting_for_app: std::collections::HashMap::new(),
+        }));
+
+        let app_lock_manager = AppLockManager::new();
+        let exec_tx = spawn_execution_manager(status.clone(), config_path.clone(), app_lock_manager);
+
+        let barrier = Arc::new(tokio::sync::Barrier::new(2));
+
+        let path1 = config_path.clone();
+        let status1 = status.clone();
+        let exec_tx1 = exec_tx.clone();
+        let barrier1 = barrier.clone();
+
+        let h1 = tokio::spawn(async move {
+            barrier1.wait().await;
+            run_task_by_id(&path1, "race_task", &status1, &exec_tx1, true).await
+        });
+
+        let path2 = config_path.clone();
+        let status2 = status.clone();
+        let exec_tx2 = exec_tx.clone();
+        let barrier2 = barrier.clone();
+
+        let h2 = tokio::spawn(async move {
+            barrier2.wait().await;
+            run_task_by_id(&path2, "race_task", &status2, &exec_tx2, true).await
+        });
+
+        let (r1, r2) = tokio::join!(h1, h2);
+        assert!(r1.unwrap().is_ok());
+        assert!(r2.unwrap().is_ok());
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        let st = status.lock().await;
+        let queued_count = st.queued_task_ids.iter().filter(|id| **id == "race_task").count();
+        let running_count = st.running_task_ids.iter().filter(|id| **id == "race_task").count();
+        let total_count = queued_count + running_count;
+
+        assert_eq!(total_count, 1, "Exactly one task instance must be admitted during race");
     }
 }
