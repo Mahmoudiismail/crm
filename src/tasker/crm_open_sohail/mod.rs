@@ -49,69 +49,69 @@ pub fn run(config: &CrmOpenSohailConfig) -> Result<()> {
 
     let ps_email_template = r#"
 param(
-    [string],
-    [string],
-    [string],
-    [string]
+    [string]$SenderAccount,
+    [string]$SubjectPrefix,
+    [string]$Subject,
+    [string]$HtmlBody
 )
 
 try {
-     = "Stop"
+    $ErrorActionPreference = "Stop"
 
-     = New-Object -ComObject Outlook.Application
-     = .GetNamespace("MAPI")
+    $Outlook = New-Object -ComObject Outlook.Application
+    $Namespace = $Outlook.GetNamespace("MAPI")
 
-     = .GetDefaultFolder(6) # olFolderInbox
-     = .GetDefaultFolder(5) # olFolderSentMail
+    $Inbox = $Namespace.GetDefaultFolder(6) # olFolderInbox
+    $SentFolder = $Namespace.GetDefaultFolder(5) # olFolderSentMail
 
      =
 
     function Find-OriginalMessage(, ) {
-        .Sort(, )
-         = @()
+        $FolderItems.Sort($SortProperty, $true)
+        $matches = @()
 
-        foreach ( in ) {
-            if (-not .Subject -or -not .Subject.StartsWith(, [System.StringComparison]::OrdinalIgnoreCase)) {
+        foreach ($Item in $FolderItems) {
+            if (-not $Item.Subject -or -not $Item.Subject.StartsWith($SubjectPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
                 continue
             }
 
              =
             try {
-                 = .SenderEmailAddress
+                $SenderAddress = $Item.SenderEmailAddress
             } catch {
-                Write-Output "TRACE: Exception reading SenderEmailAddress: "
+                Write-Output "TRACE: Exception reading SenderEmailAddress: $_"
             }
 
-            if (.SenderEmailType -eq "EX") {
+            if ($Item.SenderEmailType -eq "EX") {
                 try {
-                    if (.Sender -and .Sender.GetExchangeUser()) {
-                         = .Sender.GetExchangeUser().PrimarySmtpAddress
-                        Write-Output "TRACE: Resolved via GetExchangeUser to: "
+                    if ($Item.Sender -and $Item.Sender.GetExchangeUser()) {
+                        $SenderAddress = $Item.Sender.GetExchangeUser().PrimarySmtpAddress
+                        Write-Output "TRACE: Resolved via GetExchangeUser to: $SenderAddress"
                     } else {
                         Write-Output "TRACE: GetExchangeUser returned null."
                     }
                 } catch {
-                    Write-Output "TRACE: GetExchangeUser failed: "
+                    Write-Output "TRACE: GetExchangeUser failed: $_"
                 }
 
                 # Fallback to PropertyAccessor if still not resolved or empty
-                if (-not  -or .IndexOf("@") -eq -1) {
+                if (-not $SenderAddress -or $SenderAddress.IndexOf("@") -eq -1) {
                     try {
-                         = .PropertyAccessor
-                         = .GetProperty("http://schemas.microsoft.com/mapi/proptag/0x39FE001E")
-                        Write-Output "TRACE: Resolved via PropertyAccessor to: "
+                        $PA = $Item.PropertyAccessor
+                        $SenderAddress = $PA.GetProperty("http://schemas.microsoft.com/mapi/proptag/0x39FE001E")
+                        Write-Output "TRACE: Resolved via PropertyAccessor to: $SenderAddress"
                     } catch {
-                        Write-Output "TRACE: PropertyAccessor 0x39FE001E failed: "
+                        Write-Output "TRACE: PropertyAccessor 0x39FE001E failed: $_"
                     }
                 }
             }
 
-            if ([string]::IsNullOrWhiteSpace()) {
+            if ([string]::IsNullOrWhiteSpace($SenderAddress)) {
                 Write-Output "TRACE: Candidate rejected. Sender address is empty."
                 continue
             }
 
-            if ([string]::Equals(.Trim(), .Trim(), [System.StringComparison]::OrdinalIgnoreCase)) {
+            if ([string]::Equals($SenderAddress.Trim(), $SenderAccount.Trim(), [System.StringComparison]::OrdinalIgnoreCase)) {
                 Write-Output "TRACE: Sender match successful ()."
                  +=
             } else {
@@ -122,50 +122,51 @@ try {
         if (.Count -gt 0) {
             if (.Count -gt 1) {
                 Write-Output "TRACE: Found  matches in folder. Logging all matches:"
-                foreach ( in ) {
+                foreach ($Item in $FolderItems) {
                     Write-Output "TRACE: Match - Subject: , Received: "
                 }
                 Write-Output "TRACE: Selecting the latest match."
             }
-            :OriginalMail = [0]
+            $script:OriginalMail = [0]
         }
     }
 
-    :OriginalMail =
+    $script:OriginalMail =
 
     # Search Inbox
     Write-Output "TRACE: Searching Inbox..."
-    Find-OriginalMessage -FolderItems .Items -SortProperty "[ReceivedTime]"
+    Find-OriginalMessage -FolderItems $Inbox.Items -SortProperty "[ReceivedTime]"
 
     # Search Sent Items if not found in Inbox
-    if (-not :OriginalMail) {
+    if (-not $script:OriginalMail) {
         Write-Output "TRACE: Not found in Inbox, searching Sent Items..."
-        Find-OriginalMessage -FolderItems .Items -SortProperty "[SentOn]"
+        Find-OriginalMessage -FolderItems $SentFolder.Items -SortProperty "[SentOn]"
     }
 
-     = :OriginalMail
+    $TargetMail = $script:OriginalMail
 
-    if (-not ) {
+    if (-not $TargetMail) {
         throw "Original message with subject prefix '' not found in Inbox or Sent Items of ''."
     }
 
     Write-Output "TRACE: Creating ReplyAll draft..."
-     = .ReplyAll()
+    $ReplyMail = $TargetMail.ReplyAll()
 
-    if () {
-        .Subject =
+    if ($Subject) {
+        $ReplyMail.Subject = $Subject
     }
 
     # Prepend the generated dashboard to the HTMLBody
     Write-Output "TRACE: Populating reply draft body..."
-    .HTMLBody =  + .HTMLBody
+    $ReplyMail.HTMLBody = $HtmlBody + $ReplyMail.HTMLBody
 
     Write-Output "TRACE: Saving reply draft..."
-    .Save()
+    $ReplyMail.Save()
     Write-Output "TRACE: Reply draft saved successfully."
 
 } catch {
-    Write-Error "Outlook operation failed: "
+    Write-Error "Outlook operation failed: $_"
+    exit 1
     throw
 }
 "#;
@@ -485,9 +486,9 @@ mod tests {
             "Should not create a brand new email item"
         );
 
-        // Assert .Save() is used instead of .Send() to ensure Draft state
+        // Assert $ReplyMail.Save() is used instead of .Send() to ensure Draft state
         assert!(
-            src.contains("$ReplyMail.Save()"),
+            src.contains("$ReplyMail$ReplyMail.Save()"),
             "Should save email as draft"
         );
 

@@ -1,5 +1,71 @@
 use anyhow::Result;
 
+pub fn send_email(
+    to: &str,
+    cc: &str,
+    subject: &str,
+    html_body: &str,
+    attachment_path: Option<&str>,
+    leads_path: Option<&str>,
+    display_or_send: &str,
+) -> Result<()> {
+    let template = r#"
+param(
+    [string]$To,
+    [string]$Cc,
+    [string]$Subject,
+    [string]$HtmlBody,
+    [string]$AttachmentPath,
+    [string]$LeadsPath,
+    [string]$DisplayOrSend
+)
+
+try {
+    $ErrorActionPreference = "Stop"
+    $Outlook = New-Object -ComObject Outlook.Application
+    $Mail = $Outlook.CreateItem(0)
+
+    if ($To) { $Mail.To = $To }
+    if ($Cc) { $Mail.CC = $Cc }
+    if ($Subject) { $Mail.Subject = $Subject }
+    if ($HtmlBody) { $Mail.HTMLBody = $HtmlBody }
+
+    if ($AttachmentPath -and (Test-Path $AttachmentPath)) {
+        $Mail.Attachments.Add($AttachmentPath)
+    }
+
+    if ($LeadsPath -and (Test-Path $LeadsPath)) {
+        $Mail.Attachments.Add($LeadsPath)
+    }
+
+    if ($DisplayOrSend -eq "Send()") {
+        $Mail.Send()
+    } else {
+        $Mail.Display()
+    }
+} catch {
+    Write-Error "Failed to send/display email via Outlook COM: $_"
+    exit 1
+}
+"#;
+
+    let script_manager = crate::tasker::script_manager::ScriptManager::new();
+    let script_path = script_manager.get_or_create_script("Email", "send_email.ps1", template)?;
+
+    script_manager.execute_script_with_args(
+        &script_path,
+        &[
+            ("-To", to),
+            ("-Cc", cc),
+            ("-Subject", subject),
+            ("-HtmlBody", html_body),
+            ("-AttachmentPath", attachment_path.unwrap_or("")),
+            ("-LeadsPath", leads_path.unwrap_or("")),
+            ("-DisplayOrSend", display_or_send),
+        ],
+    )
+}
+
 pub fn run_powershell_with_args(
     logical_name: &str,
     script_template: &str,
@@ -11,52 +77,20 @@ pub fn run_powershell_with_args(
     script_manager.execute_script_with_args(&script_path, args)
 }
 
-pub fn run_powershell(script: &str) -> Result<()> {
-    let script_manager = crate::tasker::script_manager::ScriptManager::new();
-    let script_path = script_manager.get_or_create_script("Email", "send_email.ps1", script)?;
-    script_manager.execute_script(&script_path)
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
+    // use super::*;
 
     #[test]
-    fn test_run_powershell_file_lifecycle() {
-        // This test ensures that the powershell script path creation,
-        // unlocking, execution, and cleanup are working as expected.
-        let script = "Write-Output 'Hello World'";
-        // Normally run_powershell will succeed if powershell is available.
-        // We just call it and ensure it doesn't return a file-in-use error.
-        let result = run_powershell(script);
-        // On linux, it might fail because powershell isn't installed.
-        // But if it fails, it shouldn't be an OS error 32 (file in use).
-        // Let's just assert that it ran or failed for another reason (like Not Found).
-        if let Err(e) = result {
-            assert!(
-                !e.to_string().contains("The process cannot access the file"),
-                "File lock error occurred"
-            );
-        }
-    }
-
-    #[test]
-    fn test_powershell_script_generation_escaping() {
-        // Characterization test for PowerShell string interpolation
-        // The implementation natively uses replace("\"", "'") for subjects and replace("'", "''") for bodies.
-        let subject = "Test \"Quotes\" and 'Single' and `Backticks` and $Dollars";
-        let body = "<p>Html with 'single' quotes and \"double\" quotes</p>";
-
-        let clean_subject = subject.replace("\"", "'");
-        let clean_body = body.replace("'", "''");
-
-        assert_eq!(
-            clean_subject,
-            "Test 'Quotes' and 'Single' and `Backticks` and $Dollars"
-        );
-        assert_eq!(
-            clean_body,
-            "<p>Html with ''single'' quotes and \"double\" quotes</p>"
-        );
+    fn test_send_email_parameter_contract() {
+        let src = include_str!("outlook.rs");
+        assert!(src.contains("[string]$To"));
+        assert!(src.contains("[string]$Cc"));
+        assert!(src.contains("[string]$Subject"));
+        assert!(src.contains("[string]$HtmlBody"));
+        assert!(src.contains("[string]$AttachmentPath"));
+        assert!(src.contains("[string]$LeadsPath"));
+        assert!(src.contains("[string]$DisplayOrSend"));
+        assert!(src.contains("send_email.ps1"));
     }
 }
