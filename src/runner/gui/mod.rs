@@ -237,6 +237,7 @@ pub(crate) fn header_content_length(bytes: &[u8]) -> Option<usize> {
     })
 }
 
+#[allow(dead_code)]
 pub(crate) fn body_len(bytes: &[u8]) -> usize {
     let header_end = bytes
         .windows(4)
@@ -256,10 +257,8 @@ pub(crate) fn body_len(bytes: &[u8]) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::forms::*;
     use super::*;
     use crate::runner::engine::RunnerStatus;
-    use chrono::Utc;
     use std::sync::Arc;
     use std::time::Duration;
     use tokio::sync::{mpsc, Mutex};
@@ -332,7 +331,6 @@ mod tests {
 
         let client = reqwest::Client::new();
 
-        // Test GET /
         let res = client
             .get(format!("http://127.0.0.1:{}/", port))
             .send()
@@ -340,7 +338,6 @@ mod tests {
             .unwrap();
         assert_eq!(res.status().as_u16(), 200);
 
-        // Test GET /status
         let res = client
             .get(format!("http://127.0.0.1:{}/status", port))
             .send()
@@ -348,7 +345,6 @@ mod tests {
             .unwrap();
         assert_eq!(res.status().as_u16(), 200);
 
-        // Test GET on mutation route (rejected with 405 Method Not Allowed)
         let res = client
             .get(format!("http://127.0.0.1:{}/run-all", port))
             .send()
@@ -356,7 +352,6 @@ mod tests {
             .unwrap();
         assert_eq!(res.status().as_u16(), 405);
 
-        // Test Chunked Transfer-Encoding rejection
         let res = client
             .post(format!("http://127.0.0.1:{}/create", port))
             .header("Transfer-Encoding", "chunked")

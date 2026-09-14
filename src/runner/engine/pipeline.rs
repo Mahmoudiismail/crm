@@ -385,7 +385,7 @@ pub async fn run_task_inner(
 mod tests {
     use super::*;
     use crate::runner::config::ShellCommandSpec;
-    use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+    use std::sync::atomic::{AtomicU32, Ordering};
     use tokio::sync::Barrier;
 
     #[tokio::test]
