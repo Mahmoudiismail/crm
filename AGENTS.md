@@ -1,4 +1,3 @@
-
 # Execution Planning Directive
 - **MANDATORY**: Before initiating any work, the agent MUST create a detailed execution plan document (e.g. `plan.md`) explaining the intended changes.
 - The plan file MUST be placed inside the `plan/` directory.
@@ -8,6 +7,75 @@
 # Agent Instructions for This Repository
 
 All AI coding agents must read this file before starting work in this repository and follow these rules.
+
+## Mandatory PR Planning, Review & Verification Workflow
+
+This section establishes mandatory rules for all future non-trivial work sessions and PRs.
+
+1. **Iterative planning is mandatory before implementation**
+   - Before implementation starts, discuss the proposed plan with the user.
+   - Planning may require multiple discussion rounds (2, 3, or more) until the plan is complete and sufficiently detailed.
+   - Discuss important design decisions, scope, edge cases, testing strategy, migration/compatibility concerns, and affected components before implementation.
+   - Do not start implementation while the plan is still being discussed or while additional plan parts/clarifications are expected.
+   - Implementation may begin only after the user explicitly authorizes **START**.
+   - The final agreed plan must cover the entire original request.
+
+2. **The original request is the source of truth**
+   - Every PR must be reviewed against the complete original user request and the final approved plan.
+   - Never consider a PR complete merely because the latest discovered issues were fixed.
+   - Do not narrow the scope to only the most recently discussed bugs.
+
+3. **Plans must not silently reduce scope**
+   - If a plan omits a requirement that exists in the original request, do not silently drop that requirement.
+   - Raise the discrepancy and resolve it before implementation.
+
+4. **Mandatory INTERNAL Code Review before testing**
+   - For every non-trivial PR, use the INTERNAL Code Review capability before running the test suite.
+   - This must be an actual use of the internal Code Review capability, not merely a manual self-review.
+   - Review the complete relevant diff and repository context.
+   - Fix every valid finding before proceeding to testing.
+
+5. **Testing does not replace code review**
+   - Passing tests or CI is not sufficient evidence that the implementation is correct or complete.
+   - Code correctness, architecture, scope coverage, and test quality must still be reviewed against the complete request.
+
+6. **Tests must prove behavior**
+   - Prefer behavioral or integration tests for concurrency, process lifecycle, security/injection, persistence, cross-process behavior, and other runtime guarantees.
+   - Source-text assertions alone are insufficient when the required behavior can be tested at runtime.
+
+7. **Tests must verify the actual invariant**
+   - Tests must verify the actual invariant or failure mode being protected.
+   - Do not accept tests that merely show that an operation completed, returned an error, or produced structurally valid output when stronger behavioral evidence is required.
+
+8. **Fix -> retest -> verify**
+   - After fixing problems discovered during testing, rerun the affected tests.
+   - Then rerun the complete required verification suite.
+   - Do not stop after the first successful test run if fixes were made afterward.
+
+9. **Mandatory FINAL INTERNAL Code Review**
+   - After implementation, testing, and all fixes are complete, use the INTERNAL Code Review capability again on the final diff.
+   - Fix every valid finding from the final internal Code Review.
+   - Rerun affected verification whenever the final review causes code or test changes.
+
+10. **No unsupported completion claims**
+   - Never claim tests, CI, or another verification step passed unless it was actually executed and passed.
+   - Never claim a requirement is complete when it is only partially implemented.
+   - If a required tool, runtime, environment, or verification method is unavailable, explicitly report that limitation and do not claim equivalent verification without justification.
+
+11. **Repository-wide requirements require repository-wide audits**
+   - When a requirement applies to the entire repository or uses terms such as "all", "every", or "repository-wide", perform an explicit repository-wide search/audit.
+   - Do not infer repository-wide coverage from a subset of files.
+
+12. **Do not weaken verification because of inconvenience**
+   - Do not replace a required verification strategy with a weaker approximation merely because the original approach is inconvenient.
+   - If an alternative is proposed as equivalent, verify and explain that it provides equivalent evidence before relying on it.
+
+13. **git reset is prohibited during an active work session**
+   - Do not execute `git reset` in any form during an active work session.
+   - This prohibition applies to `--hard`, `--soft`, `--mixed`, and any other reset mode.
+   - Preserve all work produced during the session.
+   - If rollback or recovery is necessary, use a non-destructive approach that preserves existing work and history.
+   - Do not use git reset as a shortcut for undoing or recovering from implementation mistakes.
 
 ## Documentation Is Mandatory
 
