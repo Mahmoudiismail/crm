@@ -80,6 +80,9 @@ impl ScriptManager {
     }
 
     pub fn is_valid_filename(filename: &str) -> bool {
+        if filename != filename.trim() {
+            return false;
+        }
         let name = filename.trim();
         if name.is_empty() {
             return false;
@@ -747,7 +750,8 @@ Write-Output "To: $Email, Subject: $Subject"
             }
 
             let script_content = "Write-Output 'Child Execution'";
-            let res = manager.get_or_create_script("SharedTask", "shared_script.ps1", script_content);
+            let res =
+                manager.get_or_create_script("SharedTask", "shared_script.ps1", script_content);
             if res.is_ok() {
                 std::process::exit(0);
             } else {

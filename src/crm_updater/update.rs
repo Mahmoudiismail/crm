@@ -480,7 +480,7 @@ fn generate_update_script(
         });
     }
 
-    let apps_to_stop = apps_to_stop_map
+    let mut apps_to_stop: Vec<AppToStop> = apps_to_stop_map
         .into_iter()
         .map(|(app_name, target_paths)| {
             let process_name = app_name
@@ -493,6 +493,8 @@ fn generate_update_script(
             }
         })
         .collect();
+
+    apps_to_stop.sort_by(|a, b| a.process_name.cmp(&b.process_name));
 
     let payload = UpdaterPayload {
         apps_to_stop,
@@ -639,12 +641,10 @@ mod tests {
         let (script_path, args) = generate_update_script(&config, temp_dir.path(), 99999).unwrap();
         let script_content = std::fs::read_to_string(&script_path).unwrap();
 
-        // Verify static template contains param block and JSON parsing
         assert!(script_content.contains("param("));
         assert!(script_content.contains("[string]$ReplacementMapJson"));
         assert!(script_content.contains("ConvertFrom-Json"));
 
-        // Verify arguments passed to script
         assert_eq!(args.len(), 4);
         assert_eq!(args[0].0, "-LogPath");
         assert_eq!(args[1].0, "-DownloadsDir");
