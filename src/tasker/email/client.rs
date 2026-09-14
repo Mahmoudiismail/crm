@@ -33,7 +33,17 @@ pub fn process_emails(
         minutes_ago,
         category_exceptions,
         exclude_branches,
-        crate::tasker::email::outlook::run_powershell,
+        |to, cc, subject, html_body, attachment_path, leads_path, display_or_send| {
+            crate::tasker::email::outlook::send_email(
+                to,
+                cc,
+                subject,
+                html_body,
+                attachment_path,
+                leads_path,
+                display_or_send,
+            )
+        },
     )
 }
 
@@ -47,10 +57,10 @@ pub fn process_emails_with_runner<F>(
     minutes_ago: i64,
     category_exceptions: Option<&[crate::tasker::config::CategoryException]>,
     exclude_branches: &[String],
-    mut run_powershell_fn: F,
+    mut send_email_fn: F,
 ) -> Result<()>
 where
-    F: FnMut(&str) -> Result<()>,
+    F: FnMut(&str, &str, &str, &str, Option<&str>, Option<&str>, &str) -> Result<()>,
 {
     info!(
         "Starting email processing module. Reading output from {} (only_call_center: {}, send_exceptions: {})",
@@ -505,36 +515,6 @@ where
         } else {
             "Display()"
         };
-        let mut ps_script = format!(
-            r#"
-$Outlook = New-Object -ComObject Outlook.Application
-$Mail = $Outlook.CreateItem(0)
-$Mail.To = "{}"
-$Mail.CC = "{}"
-$Mail.Subject = "{}"
-$Mail.HTMLBody = '{}'
-"#,
-            to_emails,
-            cc_list,
-            subject.replace("\"", "'"),
-            body.replace("'", "''")
-        );
-
-        if !all_closed {
-            ps_script.push_str(&format!(
-                "$Mail.Attachments.Add(\"{}\")\n",
-                attachment_path.display()
-            ));
-        }
-
-        if let Some(ref leads_path) = leads_report_path {
-            ps_script.push_str(&format!(
-                "$Mail.Attachments.Add(\"{}\")\n",
-                leads_path.display()
-            ));
-        }
-
-        ps_script.push_str(&format!("$Mail.{}\n", display_or_send));
 
         if config.save_email_as_html.unwrap_or(false)
             && config.save_attachment_as_csv.unwrap_or(false)
@@ -544,7 +524,23 @@ $Mail.HTMLBody = '{}'
             return Ok(());
         }
 
-        if let Err(e) = run_powershell_fn(&ps_script) {
+        let att_str = if !all_closed {
+            Some(attachment_path.to_string_lossy())
+        } else {
+            None
+        };
+
+        let leads_str = leads_report_path.as_ref().map(|p| p.to_string_lossy());
+
+        if let Err(e) = send_email_fn(
+            &to_emails,
+            &cc_list,
+            &subject,
+            &body,
+            att_str.as_deref(),
+            leads_str.as_deref(),
+            display_or_send,
+        ) {
             error!("Failed to send email for {}: {}", bucket_name, e);
             anyhow::bail!(
                 "PowerShell execution failed for email bucket {}: {}",
@@ -633,7 +629,7 @@ mod tests {
             60,
             None,
             &[],
-            |_| anyhow::bail!("PowerShell execution failed: Simulated failure"),
+            |_, _, _, _, _, _, _| anyhow::bail!("PowerShell execution failed: Simulated failure"),
         );
 
         assert!(result.is_ok());
@@ -819,7 +815,7 @@ mod tests {
             60,
             None,
             &[],
-            |_| anyhow::bail!("PowerShell execution failed: Simulated failure"),
+            |_, _, _, _, _, _, _| anyhow::bail!("PowerShell execution failed: Simulated failure"),
         );
 
         assert!(result.is_err());
