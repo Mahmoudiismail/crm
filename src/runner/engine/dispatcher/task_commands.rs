@@ -13,7 +13,7 @@ use crate::runner::engine::state::{ExecutionManagerCommand, RunnerStatus};
 
 pub async fn run_due_tasks(
     path: &str,
-    _status: &Arc<Mutex<RunnerStatus>>,
+    status: &Arc<Mutex<RunnerStatus>>,
     exec_tx: &mpsc::Sender<ExecutionManagerCommand>,
 ) -> Result<()> {
     let mut cfg = load_config(path).await?;
@@ -22,6 +22,16 @@ pub async fn run_due_tasks(
 
     for task in &mut cfg.tasks {
         if task.due_now(now) {
+            {
+                let st = status.lock().await;
+                if st.queued_task_ids.contains(&task.id) || st.running_task_ids.contains(&task.id) {
+                    tracing::warn!(
+                        "Task '{}' is already running or queued; skipping duplicate launch",
+                        task.id
+                    );
+                    continue;
+                }
+            }
             update_next_run(task, now, policy.min_task_interval_seconds);
             let _ = exec_tx
                 .send(ExecutionManagerCommand::QueueTask {
@@ -36,9 +46,9 @@ pub async fn run_due_tasks(
     Ok(())
 }
 
-pub(crate) async fn run_all_tasks_now(
+pub async fn run_all_tasks_now(
     path: &str,
-    _status: &Arc<Mutex<RunnerStatus>>,
+    status: &Arc<Mutex<RunnerStatus>>,
     exec_tx: &mpsc::Sender<ExecutionManagerCommand>,
     is_manual: bool,
 ) -> Result<()> {
@@ -47,6 +57,16 @@ pub(crate) async fn run_all_tasks_now(
     let policy = policy_from_config(&cfg);
     for task in &mut cfg.tasks {
         if task.enabled {
+            {
+                let st = status.lock().await;
+                if st.queued_task_ids.contains(&task.id) || st.running_task_ids.contains(&task.id) {
+                    tracing::warn!(
+                        "Task '{}' is already running or queued; skipping duplicate launch",
+                        task.id
+                    );
+                    continue;
+                }
+            }
             task.last_run_at = now.to_rfc3339();
             if !is_manual {
                 update_next_run(task, now, policy.min_task_interval_seconds);
@@ -63,10 +83,10 @@ pub(crate) async fn run_all_tasks_now(
     Ok(())
 }
 
-pub(crate) async fn run_task_by_id(
+pub async fn run_task_by_id(
     path: &str,
     task_id: &str,
-    _status: &Arc<Mutex<RunnerStatus>>,
+    status: &Arc<Mutex<RunnerStatus>>,
     exec_tx: &mpsc::Sender<ExecutionManagerCommand>,
     is_manual: bool,
 ) -> Result<()> {
@@ -75,6 +95,16 @@ pub(crate) async fn run_task_by_id(
     let policy = policy_from_config(&cfg);
 
     if let Some(task) = cfg.tasks.iter_mut().find(|t| t.id == task_id) {
+        {
+            let st = status.lock().await;
+            if st.queued_task_ids.contains(&task.id) || st.running_task_ids.contains(&task.id) {
+                tracing::warn!(
+                    "Task '{}' is already running or queued; skipping duplicate launch",
+                    task.id
+                );
+                return Ok(());
+            }
+        }
         task.last_run_at = now.to_rfc3339();
 
         if !is_manual {

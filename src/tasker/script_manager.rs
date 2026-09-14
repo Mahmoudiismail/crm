@@ -93,15 +93,30 @@ impl ScriptManager {
     ///    - First run: creates base `<logical_name>` (e.g. `department_split.ps1`).
     ///    - Subsequent Rust generator changes: creates timestamped file `<stem>_YYYY-MM-DD_HH-MM-SS.ps1` (with collision handling `_1`, `_2`).
     ///    - Atomically updates `.metadata.json` and preserves all old versions.
+    pub fn is_valid_filename(filename: &str) -> bool {
+        let name = filename.trim();
+        if name.is_empty() {
+            return false;
+        }
+        if name.contains('/') || name.contains('\\') || name.contains("..") || name.contains(':') {
+            return false;
+        }
+        let p = Path::new(name);
+        p.components().count() == 1
+    }
+
     pub fn get_or_create_script(
         &self,
         task_name: &str,
         logical_name: &str,
         canonical_content: &str,
     ) -> Result<PathBuf> {
+        if !Self::is_valid_filename(logical_name) {
+            anyhow::bail!("Invalid logical_name '{}': must be a simple filename without path separators or traversal", logical_name);
+        }
+
         let clean_task_name = Self::sanitize_task_name(task_name);
 
-        // Acquire process-wide task lock to prevent thread races
         let task_lock = get_task_lock(&clean_task_name);
         let _lock_guard = task_lock.lock().unwrap_or_else(|e| e.into_inner());
 
@@ -112,17 +127,36 @@ impl ScriptManager {
                 .with_context(|| format!("Failed to create script directory at {:?}", task_dir))?;
         }
 
+        let lock_path = task_dir.join(".task.lock");
+        let lock_file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&lock_path)
+            .with_context(|| format!("Failed to create lock file at {:?}", lock_path))?;
+        fs2::FileExt::lock_exclusive(&lock_file)
+            .with_context(|| format!("Failed to acquire OS lock on {:?}", lock_path))?;
+
         let metadata_path = task_dir.join(".metadata.json");
 
-        // Calculate SHA-256 fingerprint of canonical generated content
         let mut hasher = Sha256::new();
         hasher.update(canonical_content.as_bytes());
         let current_hash = hex::encode(hasher.finalize());
 
-        // Read existing metadata if available
         let mut metadata: TaskMetadata = if metadata_path.exists() {
             match fs::read_to_string(&metadata_path) {
-                Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
+                Ok(content) => match serde_json::from_str(&content) {
+                    Ok(m) => m,
+                    Err(e) => {
+                        error!("Corrupted metadata JSON at {:?}: {}", metadata_path, e);
+                        let timestamp =
+                            chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
+                        let backup_path =
+                            task_dir.join(format!(".metadata.json.corrupted_{}", timestamp));
+                        let _ = fs::rename(&metadata_path, &backup_path);
+                        TaskMetadata::default()
+                    }
+                },
                 Err(_) => TaskMetadata::default(),
             }
         } else {
@@ -130,24 +164,29 @@ impl ScriptManager {
         };
 
         if let Some(entry) = metadata.scripts.get(logical_name) {
-            let active_path = task_dir.join(&entry.active_script);
-            if entry.generator_hash == current_hash && active_path.exists() {
-                info!(
-                    "Reusing existing persistent script at {:?} (Generator hash unchanged)",
-                    active_path
+            if !Self::is_valid_filename(&entry.active_script) {
+                error!(
+                    "Corrupted active_script path in metadata: {}",
+                    entry.active_script
                 );
-                return Ok(active_path);
+            } else {
+                let active_path = task_dir.join(&entry.active_script);
+                if entry.generator_hash == current_hash && active_path.exists() {
+                    info!(
+                        "Reusing existing persistent script at {:?} (Generator hash unchanged)",
+                        active_path
+                    );
+                    let _ = fs2::FileExt::unlock(&lock_file);
+                    return Ok(active_path);
+                }
             }
         }
 
-        // Generator hash changed, or script not found on disk
         let base_file_path = task_dir.join(logical_name);
 
         let target_filename = if !base_file_path.exists() {
-            // First time creation: use logical name as base file name
             logical_name.to_string()
         } else {
-            // Generator content changed and base file exists: create new timestamped version
             let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
             let stem = Path::new(logical_name)
                 .file_stem()
@@ -177,16 +216,25 @@ impl ScriptManager {
             target_path, task_name
         );
 
-        // Write script content securely
-        let mut file = File::create(&target_path)
-            .with_context(|| format!("Failed to create script file at {:?}", target_path))?;
-        file.write_all(canonical_content.as_bytes())
-            .with_context(|| format!("Failed to write script content to {:?}", target_path))?;
-        file.flush()?;
-        file.sync_all()?;
-        drop(file);
+        let tmp_target_path = task_dir.join(format!("{}.tmp", target_filename));
+        {
+            let mut file = File::create(&tmp_target_path).with_context(|| {
+                format!("Failed to create temp script file at {:?}", tmp_target_path)
+            })?;
+            file.write_all(canonical_content.as_bytes())
+                .with_context(|| {
+                    format!("Failed to write script content to {:?}", tmp_target_path)
+                })?;
+            file.flush()?;
+            file.sync_all()?;
+        }
+        fs::rename(&tmp_target_path, &target_path).with_context(|| {
+            format!(
+                "Failed to rename temp script {:?} to {:?}",
+                tmp_target_path, target_path
+            )
+        })?;
 
-        // Update metadata atomically
         metadata.scripts.insert(
             logical_name.to_string(),
             ScriptEntry {
@@ -198,9 +246,23 @@ impl ScriptManager {
         let metadata_content = serde_json::to_string_pretty(&metadata)
             .context("Failed to serialize task metadata JSON")?;
 
-        crate::utils::atomic_write(&metadata_path, &metadata_content)
-            .context("Failed to write script metadata JSON atomically")?;
+        let tmp_metadata_path = task_dir.join(".metadata.json.tmp");
+        {
+            let mut meta_file = File::create(&tmp_metadata_path).with_context(|| {
+                format!(
+                    "Failed to create temp metadata file at {:?}",
+                    tmp_metadata_path
+                )
+            })?;
+            meta_file.write_all(metadata_content.as_bytes())?;
+            meta_file.flush()?;
+            meta_file.sync_all()?;
+        }
+        fs::rename(&tmp_metadata_path, &metadata_path).with_context(|| {
+            format!("Failed to rename temp metadata file to {:?}", metadata_path)
+        })?;
 
+        let _ = fs2::FileExt::unlock(&lock_file);
         Ok(target_path)
     }
 
