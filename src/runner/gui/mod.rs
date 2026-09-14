@@ -1,7 +1,7 @@
 const MAX_HEADER_BYTES: usize = 64 * 1024;
 const MAX_BODY_BYTES: usize = 2 * 1024 * 1024;
 
-pub(crate) fn status_reason_phrase(code: u16) -> &'static str {
+pub fn status_reason_phrase(code: u16) -> &'static str {
     match code {
         200 => "OK",
         400 => "Bad Request",
@@ -10,7 +10,7 @@ pub(crate) fn status_reason_phrase(code: u16) -> &'static str {
         408 => "Request Timeout",
         413 => "Payload Too Large",
         500 => "Internal Server Error",
-        _ => "OK",
+        _ => "Unknown Error",
     }
 }
 #[allow(unused_imports)]

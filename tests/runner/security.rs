@@ -230,4 +230,35 @@ Host: 127.0.0.1
             resp
         );
     }
+
+    // 6. Test status reason phrases for all supported codes
+    assert_eq!(crm_tool::runner::gui::status_reason_phrase(200), "OK");
+    assert_eq!(
+        crm_tool::runner::gui::status_reason_phrase(400),
+        "Bad Request"
+    );
+    assert_eq!(
+        crm_tool::runner::gui::status_reason_phrase(404),
+        "Not Found"
+    );
+    assert_eq!(
+        crm_tool::runner::gui::status_reason_phrase(405),
+        "Method Not Allowed"
+    );
+    assert_eq!(
+        crm_tool::runner::gui::status_reason_phrase(408),
+        "Request Timeout"
+    );
+    assert_eq!(
+        crm_tool::runner::gui::status_reason_phrase(413),
+        "Payload Too Large"
+    );
+    assert_eq!(
+        crm_tool::runner::gui::status_reason_phrase(500),
+        "Internal Server Error"
+    );
+    assert_eq!(
+        crm_tool::runner::gui::status_reason_phrase(999),
+        "Unknown Error"
+    );
 }
