@@ -92,7 +92,10 @@ fn test_true_two_os_process_script_manager_locking() {
         waited += 1;
     }
 
-    assert!(ready1.exists() && ready2.exists(), "Both workers must reach readiness");
+    assert!(
+        ready1.exists() && ready2.exists(),
+        "Both workers must reach readiness"
+    );
 
     // Release both workers simultaneously
     fs::write(root_path.join(".go"), "GO").unwrap();
@@ -116,7 +119,10 @@ fn test_true_two_os_process_script_manager_locking() {
         .get("concurrent_script.ps1")
         .expect("Logical script entry must exist in metadata");
 
-    assert!(!entry.active_script.is_empty(), "Active script must not be empty");
+    assert!(
+        !entry.active_script.is_empty(),
+        "Active script must not be empty"
+    );
 
     let active_script_path = task_dir.join(&entry.active_script);
     assert!(
@@ -132,10 +138,7 @@ fn test_true_two_os_process_script_manager_locking() {
         .collect();
 
     // Verify all generated version files are unique and exist
-    let script_files: Vec<_> = dir_entries
-        .iter()
-        .filter(|n| n.ends_with(".ps1"))
-        .collect();
+    let script_files: Vec<_> = dir_entries.iter().filter(|n| n.ends_with(".ps1")).collect();
 
     let unique_names: HashSet<_> = script_files.iter().cloned().collect();
     assert_eq!(
@@ -145,9 +148,9 @@ fn test_true_two_os_process_script_manager_locking() {
     );
 
     // Verify no temporary files remain
-    let temp_files: Vec<_> = dir_entries
-        .iter()
-        .filter(|n| n.contains(".tmp"))
-        .collect();
-    assert!(temp_files.is_empty(), "No temporary files should remain after execution");
+    let temp_files: Vec<_> = dir_entries.iter().filter(|n| n.contains(".tmp")).collect();
+    assert!(
+        temp_files.is_empty(),
+        "No temporary files should remain after execution"
+    );
 }

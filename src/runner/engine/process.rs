@@ -162,7 +162,6 @@ mod tests {
     async fn test_bounded_process_output_cap_above_10mb() {
         let mut stdout_bytes = Vec::new();
 
-        // 12 MB byte stream
         let stream_size = 12 * 1024 * 1024;
         let large_stream = vec![b'A'; stream_size];
         let mut cursor = std::io::Cursor::new(large_stream);
@@ -180,7 +179,7 @@ mod tests {
     async fn test_process_timeout_and_tree_termination() {
         let logger = TaskLogger::new("timeout_test", "timeout_test");
 
-        let mut cmd = if cfg!(windows) {
+        let cmd = if cfg!(windows) {
             let mut c = tokio::process::Command::new("cmd");
             c.args(["/C", "ping -n 10 127.0.0.1 > nul"]);
             c
