@@ -64,9 +64,7 @@ try {
     $Inbox = $Namespace.GetDefaultFolder(6) # olFolderInbox
     $SentFolder = $Namespace.GetDefaultFolder(5) # olFolderSentMail
 
-     =
-
-    function Find-OriginalMessage(, ) {
+    function Find-OriginalMessage($FolderItems, $SortProperty) {
         $FolderItems.Sort($SortProperty, $true)
         $matches = @()
 
@@ -75,7 +73,7 @@ try {
                 continue
             }
 
-             =
+            $SenderAddress = ""
             try {
                 $SenderAddress = $Item.SenderEmailAddress
             } catch {
@@ -112,26 +110,26 @@ try {
             }
 
             if ([string]::Equals($SenderAddress.Trim(), $SenderAccount.Trim(), [System.StringComparison]::OrdinalIgnoreCase)) {
-                Write-Output "TRACE: Sender match successful ()."
-                 +=
+                Write-Output "TRACE: Sender match successful ($SenderAddress)."
+                $matches += $Item
             } else {
-                Write-Output "TRACE: Candidate rejected. Sender '' does not match ''."
+                Write-Output "TRACE: Candidate rejected. Sender '$SenderAddress' does not match '$SenderAccount'."
             }
         }
 
-        if (.Count -gt 0) {
-            if (.Count -gt 1) {
-                Write-Output "TRACE: Found  matches in folder. Logging all matches:"
-                foreach ($Item in $FolderItems) {
-                    Write-Output "TRACE: Match - Subject: , Received: "
+        if ($matches.Count -gt 0) {
+            if ($matches.Count -gt 1) {
+                Write-Output "TRACE: Found $($matches.Count) matches in folder. Logging all matches:"
+                foreach ($m in $matches) {
+                    Write-Output "TRACE: Match - Subject: $($m.Subject), Received: $($m.ReceivedTime)"
                 }
                 Write-Output "TRACE: Selecting the latest match."
             }
-            $script:OriginalMail = [0]
+            $script:OriginalMail = $matches[0]
         }
     }
 
-    $script:OriginalMail =
+    $script:OriginalMail = $null
 
     # Search Inbox
     Write-Output "TRACE: Searching Inbox..."
@@ -146,7 +144,7 @@ try {
     $TargetMail = $script:OriginalMail
 
     if (-not $TargetMail) {
-        throw "Original message with subject prefix '' not found in Inbox or Sent Items of ''."
+        throw "Original message with subject prefix '$SubjectPrefix' not found in Inbox or Sent Items of '$SenderAccount'."
     }
 
     Write-Output "TRACE: Creating ReplyAll draft..."
@@ -167,7 +165,6 @@ try {
 } catch {
     Write-Error "Outlook operation failed: $_"
     exit 1
-    throw
 }
 "#;
 
@@ -364,17 +361,12 @@ mod tests {
             table_column_widths: None,
         };
 
-        // Running it against dummy data will yield no actual HTML tables of datasets since the mock PowerShell script output is `[]`.
-        // We will just execute it to ensure no crashes occur with the new parsing logic.
         let result = run(&config);
         assert!(result.is_ok(), "Task failed: {:?}", result.err());
     }
 
     #[test]
     fn test_email_html_generation_and_team_mapping() {
-        // We will mock the extracted data and team mapping and test the end-to-end execution
-        // using the test mode flags (save_email_as_html = true)
-
         let mut temp_mapping = tempfile::NamedTempFile::new().unwrap();
         use std::io::Write;
         writeln!(temp_mapping, "Team Name,Receiver Name,To Emails,is_shared").unwrap();
@@ -414,7 +406,7 @@ mod tests {
                     .to_str()
                     .unwrap()
                     .to_string(),
-                dashboard_file: temp_mapping.path().to_str().unwrap().to_string(), // use mapping as dummy file so it exists
+                dashboard_file: temp_mapping.path().to_str().unwrap().to_string(),
                 email_to: Some("test@example.com".to_string()),
                 email_cc: None,
                 save_email_as_html: Some(true),
@@ -433,14 +425,9 @@ mod tests {
             table_column_widths: None,
         };
 
-        // We run the task. Since save_email_as_html is true, PowerShell COM is skipped,
-        // and an empty JSON will be created in place of the slicer extraction.
-        // It should complete successfully without OS errors.
-
         let result = run(&config);
         assert!(result.is_ok(), "Task failed: {:?}", result.err());
 
-        // Verify email HTML was generated
         let tmp_dir = std::env::temp_dir();
         let html_path = tmp_dir.join("crm_open_sohail_email.html");
         assert!(html_path.exists());
@@ -458,23 +445,21 @@ mod tests {
         assert!(src.contains("catch"));
         assert!(!src.contains(&format!("$ReplyMail.{} = ", "To")));
         assert!(!src.contains(&format!("$ReplyMail.{} = ", "CC")));
-        // Assert sender_account_email is used
+
         assert!(
             src.contains("sender_account_email"),
             "Should reference sender_account_email config field"
         );
 
-        // Assert reply_subject_prefix is used for searching
         assert!(
             src.contains("reply_subject_prefix"),
             "Should reference reply_subject_prefix config field"
         );
         assert!(
-            src.contains(".StartsWith($PrefixToMatch"),
+            src.contains(".StartsWith($SubjectPrefix"),
             "Should use explicit prefix startswith check"
         );
 
-        // Assert .ReplyAll() is used instead of .CreateItem() or .Reply()
         assert!(
             src.contains(".ReplyAll()"),
             "Should use Outlook's ReplyAll method to preserve thread context"
@@ -486,15 +471,13 @@ mod tests {
             "Should not create a brand new email item"
         );
 
-        // Assert $ReplyMail.Save() is used instead of .Send() to ensure Draft state
         assert!(
-            src.contains("$ReplyMail$ReplyMail.Save()"),
+            src.contains("$ReplyMail.Save()"),
             "Should save email as draft"
         );
 
-        // Assert explicit error handling exits with non-zero
         assert!(
-            src.contains("} catch {"),
+            src.contains("catch {"),
             "Should use try/catch block to trap COM errors"
         );
         assert!(
@@ -502,7 +485,6 @@ mod tests {
             "Should explicitly exit with non-zero code on failure"
         );
 
-        // Assert strict case-insensitive match
         assert!(
             src.contains("[System.StringComparison]::OrdinalIgnoreCase"),
             "Should use OrdinalIgnoreCase for string comparison"
@@ -516,22 +498,18 @@ mod tests {
     #[test]
     fn test_calculate_yesterday_subject() {
         use chrono::NaiveDate;
-        // Normal day
         assert_eq!(
             calculate_yesterday_subject(NaiveDate::from_ymd_opt(2026, 9, 3).unwrap()),
             "Open TKTs 02-September"
         );
-        // Month boundary
         assert_eq!(
             calculate_yesterday_subject(NaiveDate::from_ymd_opt(2026, 10, 1).unwrap()),
             "Open TKTs 30-September"
         );
-        // Year boundary
         assert_eq!(
             calculate_yesterday_subject(NaiveDate::from_ymd_opt(2027, 1, 1).unwrap()),
             "Open TKTs 31-December"
         );
-        // Leap year
         assert_eq!(
             calculate_yesterday_subject(NaiveDate::from_ymd_opt(2024, 3, 1).unwrap()),
             "Open TKTs 29-February"

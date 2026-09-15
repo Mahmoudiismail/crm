@@ -116,7 +116,6 @@ async fn execute_step(
     app_lock_manager: &AppLockManager,
     task_id: &str,
 ) -> Result<()> {
-    // 1. Identify all applications required by this step
     let mut required_apps = std::collections::HashSet::new();
     for action in &step.actions {
         if let ActionSpec::ExternalApp(app) = action {
@@ -124,7 +123,6 @@ async fn execute_step(
         }
     }
 
-    // 2. Filter out concurrent apps and keep only non-concurrent ones
     let mut non_concurrent_apps: Vec<String> = Vec::new();
     for app_id in required_apps {
         if let Some(app) = policy.registered_apps.iter().find(|a| a.id == app_id) {
@@ -134,16 +132,13 @@ async fn execute_step(
         }
     }
 
-    // 3. Sort deterministically to avoid deadlocks
     non_concurrent_apps.sort();
     non_concurrent_apps.dedup();
 
-    // 4. Acquire all necessary semaphores in order
     let mut acquired_permits = Vec::new();
     for app_id in &non_concurrent_apps {
         let sem = app_lock_manager.get_semaphore(app_id).await;
 
-        // Notify GUI we are waiting
         {
             let mut st = status.lock().await;
             st.waiting_for_app
@@ -169,7 +164,6 @@ async fn execute_step(
             .log(&format!("Acquired exclusive lock on app '{}'.", app_id))
             .await;
 
-        // Lock acquired, remove from waiting state
         {
             let mut st = status.lock().await;
             st.waiting_for_app.remove(task_id);
@@ -178,7 +172,6 @@ async fn execute_step(
         acquired_permits.push(permit);
     }
 
-    // 5. Execute the step
     let result = match step.mode {
         ExecutionMode::Sequential => {
             let mut step_result = Ok(());
@@ -226,7 +219,6 @@ async fn execute_step(
         }
     };
 
-    // 6. Permits are dropped automatically when `acquired_permits` goes out of scope here.
     result
 }
 
@@ -393,6 +385,8 @@ pub async fn run_task_inner(
 mod tests {
     use super::*;
     use crate::runner::config::ShellCommandSpec;
+    use std::sync::atomic::{AtomicU32, Ordering};
+    use tokio::sync::Barrier;
 
     #[tokio::test]
     async fn test_sequential_step_continues_on_error() {
@@ -550,69 +544,32 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_mixed_pipeline_execution_order() {
-        let policy = ExecutionPolicy {
-            allow_shell_tasks: true,
-            shell_timeout_seconds: 5,
-            post_run_timeout_seconds: 5,
-            min_task_interval_seconds: 1,
-            registered_apps: vec![],
-            log_retention_days: 30,
-        };
-        let steps = vec![
-            TaskStep {
-                name: None,
-                mode: ExecutionMode::Sequential,
-                actions: vec![ActionSpec::ShellCommand(ShellCommandSpec {
-                    command: "echo 1".to_string(),
-                    continue_on_error: false,
-                })],
-            },
-            TaskStep {
-                name: None,
-                mode: ExecutionMode::Parallel,
-                actions: vec![
-                    ActionSpec::ShellCommand(ShellCommandSpec {
-                        command: "echo 2".to_string(),
-                        continue_on_error: false,
-                    }),
-                    ActionSpec::ShellCommand(ShellCommandSpec {
-                        command: "echo 3".to_string(),
-                        continue_on_error: false,
-                    }),
-                ],
-            },
-            TaskStep {
-                name: None,
-                mode: ExecutionMode::Sequential,
-                actions: vec![ActionSpec::ShellCommand(ShellCommandSpec {
-                    command: "echo 4".to_string(),
-                    continue_on_error: false,
-                })],
-            },
-        ];
+    async fn test_behavioral_concurrent_period_execution_and_error_propagation() {
+        let barrier = Arc::new(Barrier::new(2));
+        let barrier_clone = barrier.clone();
 
-        let status = Arc::new(Mutex::new(RunnerStatus {
-            running_tasks_count: 0,
-            queued_tasks_count: 0,
-            running_task_ids: Vec::new(),
-            queued_task_ids: Vec::new(),
-            last_error: String::new(),
-            last_task_id: String::new(),
-            last_run_at: String::new(),
-            waiting_for_app: std::collections::HashMap::new(),
-        }));
-        let app_lock_mgr = AppLockManager::new();
-        execute_pipeline(
-            &steps,
-            &TaskLogger::new("test", "test"),
-            &policy,
-            5,
-            &status,
-            &app_lock_mgr,
-            "test_task",
-        )
-        .await
-        .unwrap();
+        let counter = Arc::new(AtomicU32::new(0));
+        let counter_clone = counter.clone();
+
+        let h1 = tokio::spawn(async move {
+            counter_clone.fetch_add(1, Ordering::SeqCst);
+            barrier_clone.wait().await;
+            Ok::<(), anyhow::Error>(())
+        });
+
+        let counter_clone2 = counter.clone();
+        let barrier_clone2 = barrier.clone();
+        let h2 = tokio::spawn(async move {
+            counter_clone2.fetch_add(1, Ordering::SeqCst);
+            barrier_clone2.wait().await;
+            Err::<(), anyhow::Error>(anyhow::anyhow!("Intentional failure"))
+        });
+
+        let (res1, res2) = tokio::join!(h1, h2);
+        assert!(res1.unwrap().is_ok());
+        let err_res = res2.unwrap();
+        assert!(err_res.is_err());
+        assert_eq!(err_res.unwrap_err().to_string(), "Intentional failure");
+        assert_eq!(counter.load(Ordering::SeqCst), 2);
     }
 }

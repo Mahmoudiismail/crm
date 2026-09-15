@@ -137,52 +137,9 @@ This task is similar to `csv_analysis`, in that it processes raw ticket CSVs to 
 }
 ```
 
-#### Fields Description
-- Shares all core CSV generation fields with `csv_analysis` (`download_path`, `users_file`, `minutes_ago`, `start_date`, `exclude_branches`, etc.).
-- `dashboard_file`: Path to the existing `.xlsx` dashboard file you want to update (this file should be configured with a PowerQuery connection to your `results.csv` output file).
-- `email_to`: (Optional) Email address to send the final updated dashboard to.
-- `email_cc`: (Optional) CC email address for the final report.
-
-#### Processing Logic
-1. **User Maps:** Loads the user mapping file. Looks for columns matching `cognito_username` and `UserDepartmentName / Team Name` to create a `Position` list and define the primary assignee team.
-2. **Assignments:** Loads the assignment settings, matching `(Category, Type, Subtype)` to `Auto agent/team assignment`.
-3. **Tickets Join:** Iterates dynamically over dynamically identified ticket reports modified in the last `minutes_ago` interval.
-    - Resolves and standardizes names (e.g., replaces underscores with spaces).
-    - Removes duplicates based on `Ticket Id` (deduplicates globally across all files processed).
-    - Parses various timestamp formats into proper strings. This includes Excel serial timestamps, standard date/time strings (`dd/mm/yyyy hh:mm:ss`, `YYYY-MM-DD HH:MM:SS`), and custom CRM formats (like `DD MMM YY HH:MM AM/PM` and `DD MMM YYYY HH:MM AM/PM`).
-    - Joins data to calculate the exact `Position` and `team`.
-    - Adds `Day` and `Month` tracking columns.
-4. **Sort and Output:** Sorts numerically by `Ticket Id` and streams everything efficiently to the `output_file`.
-5. **Email Automation:** (If `email_config` is defined)
-    - Re-reads the generated output. Filters out any "Closed" tickets.
-    - Groups remaining tickets by either branch or team as defined in `send_per_team_all_branches` and `send_per_branch_branches`, separating "Call Center" tickets if configured.
-    - Uses `rust_xlsxwriter` to create a `.xlsx` data file for each group.
-    - Generates a heavily styled HTML Pivot Table counting occurrences by dynamically resolved Status per Subtype/Category.
-    - Executes a background PowerShell script to automate Microsoft Outlook (`New-Object -ComObject Outlook.Application`), appending the Excel attachment and drafting/sending the result.
-
 ### `department_split` Task
 
 The `department_split` task takes a master macro-enabled Excel dashboard and automatically splits it into individual departmental copies based on a target mapping file, while fully preserving all formatting, sheets, and VBA macro modules.
-
-#### Example Configuration
-```json
-{
-  "tasks": [
-    {
-      "type": "department_split",
-      "dashboard_file": "./7-OPD Dashboard July 2026 .xlsm",
-      "chair_file": "./Chair.xlsx",
-      "output_dir": "./Department_Files"
-    }
-  ]
-}
-```
-
-#### Processing Logic
-1. **Mapping:** Opens `chair_file` using the `calamine` library to build a fast memory lookup mapping from raw `Dep` names to target `Chir` groups.
-2. **Execution:** Automatically generates and executes a PowerShell COM interop script targeting the master `dashboard_file`.
-3. **Filtering:** The PowerShell script opens copies of the workbook for every identified unique target Chair. In each file, it backward iterates over the `OPD Report` sheet to safely delete any row that does not map to the current file's target.
-4. **Preservation:** Because this runs via Excel COM interacting with the native application, all external sheets, visual charts, and embedded VBA macros remain perfectly intact.
 
 ## Logging
 
@@ -224,75 +181,14 @@ The `crm_open_sohail` task automates the generation and delivery of Branch & Mon
 }
 ```
 
-### Important Outlook Configuration Fields
-- `sender_account_email`: Specifies the exact **sender email address of the ORIGINAL message** to locate. It is used exclusively as a matching criterion for finding the original email thread. It does **NOT** determine the identity of the Outlook account used to create the draft or send the reply.
-- `reply_subject_prefix`: Specifies the strict prefix that must match the **BEGINNING** of the original message's Subject. This is a case-insensitive prefix search (e.g. using `.StartsWith`), NOT a substring search.
-- **Draft Creation**: This task only locates the original email, executes a `ReplyAll()` to preserve thread semantics, populates the new response body, and saves the result as a **DRAFT**. It will NEVER invoke `.Send()` directly.
+## Persistent Versioned PowerShell Scripts & Injection Safety
 
-## Recent Fixes
-* **CSV Parsing:** Lead report CSV parsing was updated to identify delimiters exclusively from the first line, avoiding errors when data fields contain tabs. `flexible(true)` has been globally removed from `csv::ReaderBuilder` to strictly validate column counts per project guidelines.
-* **Team Grouping:** Teams are grouped case-insensitively using Title Case formatting to ensure consistency (e.g. "support" and "SUPPORT" are correctly merged).
-* **CRM Open Sohail Grouping & Styling:** Modified Slicer extraction logic to query "All Months Except Current" and "Current Month" directly from PowerShell. Executive Clinic extracts all months combined. The HTML styling uses a fixed layout with configurable column widths, 5px padding, center alignment, and no background color for data rows.
+Tasker manages PowerShell scripts strictly through `ScriptManager`, storing scripts persistently in `<exe_dir>/scripts/<Task Name>/`.
 
-
-## Persistent Versioned PowerShell Scripts
-
-Tasker stores PowerShell scripts persistently in a `scripts/` folder located directly next to the Tasker executable (`<exe_dir>/scripts/<Task Name>/`), eliminating repetitive temporary script creation in `%TEMP%`.
-
-### Folder Structure & Task Grouping
-Scripts are grouped into task-specific subdirectories sanitized for Windows filesystem path compatibility:
-```
-<Tasker Executable Directory>/
-└── scripts/
-    ├── Department Split/
-    │   ├── .metadata.json
-    │   └── department_split.ps1
-    ├── Dashboard Updater/
-    │   ├── .metadata.json
-    │   ├── dashboard_update.ps1
-    │   └── dashboard_email.ps1
-    ├── CRM Open Sohail/
-    │   ├── .metadata.json
-    │   ├── slicer_extract.ps1
-    │   └── reply_email.ps1
-    ├── OPD Analysis/
-    │   ├── .metadata.json
-    │   └── opd_analysis_email.ps1
-    └── Email/
-        ├── .metadata.json
-        └── send_email.ps1
-```
-
-### Fingerprint Tracking & User Edit Preservation
-1. **Fingerprint Hash**: Every execution computes a deterministic SHA-256 fingerprint of the canonical PowerShell script generated from Rust code.
-2. **Sidecar Metadata**: Each task folder contains a `.metadata.json` file tracking the active script filename and `generator_hash` for each script independently.
-3. **Preservation of Manual Edits**: On execution, if the Rust-generated fingerprint matches `generator_hash` in `.metadata.json`, Tasker reuses the active `.ps1` file without overwriting it. Any manual modifications or debugging tweaks made by operators directly to the `.ps1` file are preserved.
-4. **Automatic Versioning**: If the Rust generator code changes (yielding a different SHA-256 hash), Tasker leaves all previous script files untouched on disk and creates a new timestamped version (`<logical_name>_YYYY-MM-DD_HH-MM-SS.ps1`), atomically updating `.metadata.json` so the new script becomes the active version.
-
-## Dashboard Update Script Execution
-The `DashboardUpdater` script explicitly optimizes Excel interactions by:
-- Disabling `ScreenUpdating` and `EnableEvents`.
-- Setting `Calculation` mode to Manual before pasting data to avoid 10+ minute refresh locks on large data sets (like 45,000+ rows).
-- Capturing and logging all PowerShell standard and error outputs sequentially through Rust's `tracing` mechanisms to ensure operational transparency.
-- Securely handling temporary PowerShell scripts by logging any cleanup/deletion failures to prevent unmanaged files remaining on disk silently.
-
-## Diagnostic Tracing
-
-Starting with the latest reliability updates, Tasks 3, 4, and 5 use `TRACE` level logging extensively.
-This means you will not see enormous log volume at the `INFO` level, but when diagnosing a failure (like an Outlook COM issue or Excel error), you can set the `RUST_LOG` environment variable to `trace` (or review the default `trace` logs inside the file logger) to see exact, step-by-step COM interaction context.
-
-For instance:
-- **Task 3:** Traces exactly which email candidates were reviewed, the resolution of `EX` addresses vs. SMTP addresses, and whether the case-insensitive `reply_subject_prefix` strictly matched at the beginning of the subject line.
-- **Task 4:** Logs exactly which target file is being generated, the exact `$target` output, and how many rows were retained vs. deleted.
-- **Task 5:** Traces the AutoFilter states and records the exact steps taken to preserve filters while only disabling `VisibleDropDown` icons.
-
-## Important Requirements for Task 3 (CrmOpenSohail)
-
-- **`sender_account_email`**: This configuration field is *only* a search criterion used to locate the original message in the Outlook Sent/Inbox. It does not dictate the resulting draft's sender account or the execution environment's default identity.
-- **`reply_subject_prefix`**: Used strictly as a case-insensitive beginning-of-subject matching rule (e.g., `StartsWith()`).
-- **Recipients**: When creating the draft, Task 3 explicitly utilizes `ReplyAll()`. It will strictly ignore any `email_to` or `email_cc` values provided in the `dashboard_updater` configuration payload to ensure the original email thread's distribution list remains perfectly preserved.
-- **Final Draft**: The script explicitly invokes `.Save()` to generate a draft. It will never invoke `.Send()`.
-
-## Important Requirements for Task 5 (OPD)
-
-- The AutoFilter icons are strictly hidden for the visual image export, but the actual filters themselves are fully preserved in the `.xlsm` file via COM `VisibleDropDown = $false`.
+### Core Guarantees
+1. **Static Templates & CLI Parameterization**: All production PowerShell scripts use static canonical script templates. Runtime-controlled data (paths, subjects, HTML bodies, emails, PIDs) is passed strictly through CLI parameter flags (`param(...)`), eliminating dynamic script string interpolation.
+2. **Fingerprinting**: Script SHA-256 fingerprints cover canonical static generated script templates only. Changes in runtime parameter values do not alter fingerprints or create unnecessary script versions.
+3. **User Edit Preservation**: When the canonical generator fingerprint is unchanged, `ScriptManager` reuses existing active script files on disk, strictly preserving any manual user edits or debugging adjustments.
+4. **Automatic Versioning & Collision Resolution**: Changes to generator source code generate new timestamped script versions (`script_YYYY-MM-DD_HH-MM-SS.ps1`) with deterministic collision suffixes (`_1`, `_2`). Old versions are preserved and never automatically deleted.
+5. **Cross-Process File Locking**: All metadata and script operations are protected by OS-level exclusive file locks (`fs2::FileExt::lock_exclusive` on `.task.lock`) covering the complete critical section across processes.
+6. **Path Traversal Safety & Metadata Recovery**: Logical script names and active script metadata are strictly validated to prevent path traversal (`..`, `/`, `\`). Corrupted metadata JSON files are automatically backed up to `.metadata.json.corrupted_<timestamp>` and recovered cleanly.

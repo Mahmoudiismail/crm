@@ -153,3 +153,55 @@ async fn terminate_process_tree(child_pid: Option<u32>, child: &mut tokio::proce
     let _ = child.kill().await;
     let _ = child.wait().await;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_bounded_process_output_cap_above_10mb() {
+        let mut stdout_bytes = Vec::new();
+
+        let stream_size = 12 * 1024 * 1024;
+        let large_stream = vec![b'A'; stream_size];
+        let mut cursor = std::io::Cursor::new(large_stream);
+
+        read_bounded(Some(&mut cursor), &mut stdout_bytes).await;
+
+        assert_eq!(
+            stdout_bytes.len(),
+            MAX_OUTPUT_BYTES,
+            "Captured output must be capped strictly at 10 MiB"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_process_timeout_and_tree_termination() {
+        let logger = TaskLogger::new("timeout_test", "timeout_test");
+
+        let cmd = if cfg!(windows) {
+            let mut c = tokio::process::Command::new("cmd");
+            c.args(["/C", "ping -n 10 127.0.0.1 > nul"]);
+            c
+        } else {
+            let mut c = tokio::process::Command::new("sleep");
+            c.arg("10");
+            c
+        };
+
+        let ctx = ProcessContext {
+            logger: &logger,
+            command_str: "long_running_process".to_string(),
+            timeout_seconds: 1,
+            cmd,
+        };
+
+        let res = run_process(ctx).await;
+        assert!(res.is_err(), "Process should return timeout error");
+        let err_msg = res.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("timed out"),
+            "Error message should mention timeout"
+        );
+    }
+}

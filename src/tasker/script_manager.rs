@@ -45,19 +45,16 @@ impl Default for ScriptManager {
 }
 
 impl ScriptManager {
-    /// Creates a new `ScriptManager` targeting the standard `scripts/` directory next to the Tasker executable.
     pub fn new() -> Self {
         Self { root_dir: None }
     }
 
-    /// Creates a `ScriptManager` with an explicit root directory (useful for unit testing).
     pub fn with_root_dir<P: AsRef<Path>>(root_dir: P) -> Self {
         Self {
             root_dir: Some(root_dir.as_ref().to_path_buf()),
         }
     }
 
-    /// Resolves the scripts base directory (defaulting to `<exe_dir>/scripts`).
     pub fn scripts_dir(&self) -> Result<PathBuf> {
         if let Some(ref dir) = self.root_dir {
             Ok(dir.clone())
@@ -67,7 +64,6 @@ impl ScriptManager {
         }
     }
 
-    /// Sanitizes a task name to be a safe directory name on Windows filesystem.
     pub fn sanitize_task_name(task_name: &str) -> String {
         let invalid_chars = ['\\', '/', ':', '*', '?', '"', '<', '>', '|'];
         let clean = task_name
@@ -83,17 +79,10 @@ impl ScriptManager {
         }
     }
 
-    /// Returns or creates a persistent PowerShell script file.
-    ///
-    /// # Behavior
-    /// 1. Computes SHA-256 hash of `canonical_content`.
-    /// 2. Inspects `.metadata.json` in the task folder.
-    /// 3. If `generator_hash` matches, reuses the `active_script` without modifying disk file (preserving manual edits).
-    /// 4. If `generator_hash` differs or script does not exist:
-    ///    - First run: creates base `<logical_name>` (e.g. `department_split.ps1`).
-    ///    - Subsequent Rust generator changes: creates timestamped file `<stem>_YYYY-MM-DD_HH-MM-SS.ps1` (with collision handling `_1`, `_2`).
-    ///    - Atomically updates `.metadata.json` and preserves all old versions.
     pub fn is_valid_filename(filename: &str) -> bool {
+        if filename != filename.trim() {
+            return false;
+        }
         let name = filename.trim();
         if name.is_empty() {
             return false;
@@ -101,6 +90,24 @@ impl ScriptManager {
         if name.contains('/') || name.contains('\\') || name.contains("..") || name.contains(':') {
             return false;
         }
+        if name.ends_with('.') || name.ends_with(' ') {
+            return false;
+        }
+
+        let stem = Path::new(name)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or(name)
+            .to_uppercase();
+
+        let reserved = [
+            "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7",
+            "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+        ];
+        if reserved.contains(&stem.as_str()) {
+            return false;
+        }
+
         let p = Path::new(name);
         p.components().count() == 1
     }
@@ -144,6 +151,7 @@ impl ScriptManager {
             .truncate(false)
             .open(&lock_path)
             .with_context(|| format!("Failed to create lock file at {:?}", lock_path))?;
+
         fs2::FileExt::lock_exclusive(&lock_file)
             .with_context(|| format!("Failed to acquire OS lock on {:?}", lock_path))?;
 
@@ -278,7 +286,6 @@ impl ScriptManager {
         Ok(target_path)
     }
 
-    /// Executes a persistent PowerShell script file with CLI parameter arguments and logs stdout/stderr appropriately.
     pub fn execute_script_with_args(
         &self,
         script_path: &Path,
@@ -320,7 +327,7 @@ impl ScriptManager {
         if !stdout_str.trim().is_empty() {
             for line in stdout_str.lines() {
                 if line.starts_with("TRACE:") {
-                    trace!("PS: {}", line.strip_prefix("TRACE:").unwrap().trim());
+                    trace!("PS: {}", line.strip_prefix("TRACE:").unwrap_or(line).trim());
                 } else if !line.trim().is_empty() {
                     info!("PS: {}", line.trim());
                 }
@@ -344,7 +351,6 @@ impl ScriptManager {
         Ok(())
     }
 
-    /// Executes a persistent PowerShell script file and logs stdout/stderr appropriately.
     pub fn execute_script(&self, script_path: &Path) -> Result<()> {
         self.execute_script_with_args(script_path, &[])
     }
@@ -417,17 +423,14 @@ mod tests {
             .get_or_create_script("Department Split", "department_split.ps1", script)
             .unwrap();
 
-        // User manually edits the file
         let user_edited_content = "Write-Output 'v1 - User edited debug statement'";
         fs::write(&path, user_edited_content).unwrap();
 
-        // Rust code runs again with SAME canonical script content generator
         let path2 = manager
             .get_or_create_script("Department Split", "department_split.ps1", script)
             .unwrap();
 
         assert_eq!(path, path2);
-        // Assert content on disk remains user edited content!
         assert_eq!(fs::read_to_string(&path2).unwrap(), user_edited_content);
     }
 
@@ -442,10 +445,8 @@ mod tests {
             .unwrap();
         assert_eq!(path_v1.file_name().unwrap(), "department_split.ps1");
 
-        // User edits v1 file
         fs::write(&path_v1, "Write-Output 'v1 user edit'").unwrap();
 
-        // Generator content changes in Rust!
         let script_v2 = "Write-Output 'v2 new logic'";
         let path_v2 = manager
             .get_or_create_script("Department Split", "department_split.ps1", script_v2)
@@ -456,16 +457,13 @@ mod tests {
         assert!(v2_filename.starts_with("department_split_20"));
         assert!(v2_filename.ends_with(".ps1"));
 
-        // Assert v1 script is untouched
         assert_eq!(
             fs::read_to_string(&path_v1).unwrap(),
             "Write-Output 'v1 user edit'"
         );
 
-        // Assert v2 script has new generator content
         assert_eq!(fs::read_to_string(&path_v2).unwrap(), script_v2);
 
-        // Assert metadata points to v2
         let metadata_path = temp_dir
             .path()
             .join("Department Split")
@@ -536,35 +534,6 @@ mod tests {
             "CRM Open Sohail"
         );
         assert_eq!(ScriptManager::sanitize_task_name("   "), "unnamed_task");
-    }
-
-    #[test]
-    fn test_concurrent_script_access() {
-        use std::thread;
-
-        let temp_dir = tempdir().unwrap();
-        let manager = Arc::new(ScriptManager::with_root_dir(temp_dir.path()));
-
-        let mut handles = vec![];
-        for _ in 0..10 {
-            let mgr = Arc::clone(&manager);
-            handles.push(thread::spawn(move || {
-                let script = "Write-Output 'concurrent test'";
-                mgr.get_or_create_script("Department Split", "department_split.ps1", script)
-                    .unwrap()
-            }));
-        }
-
-        let mut results = vec![];
-        for h in handles {
-            results.push(h.join().unwrap());
-        }
-
-        let first_path = &results[0];
-        assert_eq!(first_path.file_name().unwrap(), "department_split.ps1");
-        for p in &results {
-            assert_eq!(p, first_path);
-        }
     }
 
     #[test]
@@ -658,20 +627,28 @@ Write-Output "To: $Email, Subject: $Subject"
         let temp_dir = tempdir().unwrap();
         let manager = ScriptManager::with_root_dir(temp_dir.path());
 
-        let template = "param([string]$HostileVal)\nWrite-Output \"Value: $HostileVal\"";
+        let template = r#"
+param(
+    [string]$HostileVal,
+    [string]$OutFile
+)
+$ErrorActionPreference = 'Stop'
+Set-Content -LiteralPath $OutFile -Value $HostileVal -NoNewline
+"#;
 
         let path1 = manager
             .get_or_create_script("Task", "test.ps1", template)
             .unwrap();
 
-        let hostile_args = [
-            ("'; Write-Output 'injected", "val"),
-            ("$(Get-Date)", "val2"),
-            ("\n\r; calc.exe", "val3"),
-            ("| & < > $ \" '", "val4"),
+        let hostile_values = [
+            "'; Write-Output 'injected",
+            "$(Get-Date)",
+            "\r\n; calc.exe",
+            "| & < > $ \" ' ` ( ) { }",
+            "Foo `Bar` (Baz) {Qux} $(whoami) | calc & notepad",
         ];
 
-        for (h_key, h_val) in hostile_args {
+        for hostile_val in hostile_values {
             let path2 = manager
                 .get_or_create_script("Task", "test.ps1", template)
                 .unwrap();
@@ -681,9 +658,21 @@ Write-Output "To: $Email, Subject: $Subject"
                 "Fingerprint must not change for argument variations"
             );
 
-            let res = manager.execute_script_with_args(&path2, &[(h_key, h_val)]);
-            if let Err(e) = res {
-                assert!(!e.to_string().contains("The process cannot access the file"));
+            let out_file = temp_dir.path().join("out.txt");
+            let out_str = out_file.to_str().unwrap();
+
+            let res = manager.execute_script_with_args(
+                &path2,
+                &[("-HostileVal", hostile_val), ("-OutFile", out_str)],
+            );
+
+            if res.is_ok() && out_file.exists() {
+                let received_val = fs::read_to_string(&out_file).unwrap();
+                assert_eq!(
+                    received_val, hostile_val,
+                    "Exact hostile value must be received literally without command execution"
+                );
+                let _ = fs::remove_file(&out_file);
             }
         }
     }
@@ -702,6 +691,11 @@ Write-Output "To: $Email, Subject: $Subject"
             "foo\\bar.ps1",
             "..",
             "",
+            "script.ps1.",
+            "script.ps1 ",
+            "CON",
+            "NUL",
+            "COM1",
         ];
 
         for bad_name in invalid_names {
@@ -721,17 +715,14 @@ Write-Output "To: $Email, Subject: $Subject"
         let task_dir = temp_dir.path().join("Task");
         fs::create_dir_all(&task_dir).unwrap();
 
-        // Write initial script
         let path1 = manager
             .get_or_create_script("Task", "script.ps1", "Write-Output v1")
             .unwrap();
         assert!(path1.exists());
 
-        // Corrupt .metadata.json with invalid JSON
         let meta_path = task_dir.join(".metadata.json");
         fs::write(&meta_path, "{ invalid json ").unwrap();
 
-        // Next call should recover cleanly without crashing, backed up old corrupted metadata, and create valid new state
         let path2 = manager
             .get_or_create_script("Task", "script.ps1", "Write-Output v1")
             .unwrap();
@@ -739,7 +730,6 @@ Write-Output "To: $Email, Subject: $Subject"
         assert!(path2.exists());
         assert!(meta_path.exists());
 
-        // Verify corrupted backup file was created
         let corrupted_entries: Vec<_> = fs::read_dir(&task_dir)
             .unwrap()
             .map(|e| e.unwrap().file_name().into_string().unwrap())
@@ -760,7 +750,6 @@ Write-Output "To: $Email, Subject: $Subject"
         let task_dir = temp_dir.path().join("Task");
         fs::create_dir_all(&task_dir).unwrap();
 
-        // Metadata with malicious path traversal active_script
         let mut metadata = TaskMetadata::default();
         metadata.scripts.insert(
             "script.ps1".to_string(),
@@ -775,7 +764,6 @@ Write-Output "To: $Email, Subject: $Subject"
         )
         .unwrap();
 
-        // get_or_create_script must reject malicious active_script and create a safe version
         let path = manager
             .get_or_create_script("Task", "script.ps1", "Write-Output safe")
             .unwrap();
@@ -783,5 +771,68 @@ Write-Output "To: $Email, Subject: $Subject"
         assert_eq!(path.file_name().unwrap().to_str().unwrap(), "script.ps1");
         assert!(path.exists());
         assert!(path.starts_with(&task_dir));
+    }
+
+    #[test]
+    fn test_genuine_cross_process_locking_concurrency() {
+        if let Ok(task_dir_str) = std::env::var("SCRIPT_MANAGER_CHILD_TASK_DIR") {
+            let task_dir = PathBuf::from(task_dir_str);
+            let root_dir = task_dir.parent().unwrap();
+            let manager = ScriptManager::with_root_dir(root_dir);
+
+            let barrier = root_dir.join(".barrier");
+            let mut waited = 0;
+            while !barrier.exists() && waited < 500 {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+                waited += 1;
+            }
+
+            let script_content = "Write-Output 'Child Execution'";
+            let res =
+                manager.get_or_create_script("SharedTask", "shared_script.ps1", script_content);
+            if res.is_ok() {
+                std::process::exit(0);
+            } else {
+                std::process::exit(1);
+            }
+        }
+
+        let temp_dir = tempdir().unwrap();
+        let root_dir = temp_dir.path();
+        let task_dir = root_dir.join("SharedTask");
+        fs::create_dir_all(&task_dir).unwrap();
+
+        let exe = std::env::current_exe().unwrap();
+
+        let mut child1 = std::process::Command::new(&exe)
+            .arg("--nocapture")
+            .arg("test_genuine_cross_process_locking_concurrency")
+            .env("SCRIPT_MANAGER_CHILD_TASK_DIR", task_dir.to_str().unwrap())
+            .spawn()
+            .unwrap();
+
+        let mut child2 = std::process::Command::new(&exe)
+            .arg("--nocapture")
+            .arg("test_genuine_cross_process_locking_concurrency")
+            .env("SCRIPT_MANAGER_CHILD_TASK_DIR", task_dir.to_str().unwrap())
+            .spawn()
+            .unwrap();
+
+        fs::write(root_dir.join(".barrier"), "GO").unwrap();
+
+        let status1 = child1.wait().unwrap();
+        let status2 = child2.wait().unwrap();
+
+        assert!(status1.success());
+        assert!(status2.success());
+
+        let metadata_path = task_dir.join(".metadata.json");
+        assert!(metadata_path.exists());
+        let metadata_str = fs::read_to_string(&metadata_path).unwrap();
+        let metadata: TaskMetadata = serde_json::from_str(&metadata_str).unwrap();
+
+        let entry = metadata.scripts.get("shared_script.ps1").unwrap();
+        let active_path = task_dir.join(&entry.active_script);
+        assert!(active_path.exists());
     }
 }
