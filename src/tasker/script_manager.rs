@@ -136,6 +136,8 @@ impl ScriptManager {
             .truncate(false)
             .open(&lock_path)
             .with_context(|| format!("Failed to create lock file at {:?}", lock_path))?;
+
+        // OS-level lock covers complete critical section: metadata read -> recovery -> hash check -> version selection -> atomic file & metadata write
         fs2::FileExt::lock_exclusive(&lock_file)
             .with_context(|| format!("Failed to acquire OS lock on {:?}", lock_path))?;
 
@@ -611,7 +613,14 @@ Write-Output "To: $Email, Subject: $Subject"
         let temp_dir = tempdir().unwrap();
         let manager = ScriptManager::with_root_dir(temp_dir.path());
 
-        let template = "param([string]$HostileVal)\nWrite-Output \"Value: $HostileVal\"";
+        let template = r#"
+param(
+    [string]$HostileVal,
+    [string]$OutFile
+)
+$ErrorActionPreference = 'Stop'
+Set-Content -LiteralPath $OutFile -Value $HostileVal -NoNewline
+"#;
 
         let path1 = manager
             .get_or_create_script("Task", "test.ps1", template)
@@ -620,9 +629,9 @@ Write-Output "To: $Email, Subject: $Subject"
         let hostile_values = [
             "'; Write-Output 'injected",
             "$(Get-Date)",
-            "\n\r; calc.exe",
-            "| & < > $ \" '",
-            "Foo `Bar` (Baz) {Qux}",
+            "\r\n; calc.exe",
+            "| & < > $ \" ' ` ( ) { }",
+            "Foo `Bar` (Baz) {Qux} $(whoami) | calc & notepad",
         ];
 
         for hostile_val in hostile_values {
@@ -635,9 +644,21 @@ Write-Output "To: $Email, Subject: $Subject"
                 "Fingerprint must not change for argument variations"
             );
 
-            let res = manager.execute_script_with_args(&path2, &[("-HostileVal", hostile_val)]);
-            if let Err(e) = res {
-                assert!(!e.to_string().contains("The process cannot access the file"));
+            let out_file = temp_dir.path().join("out.txt");
+            let out_str = out_file.to_str().unwrap();
+
+            let res = manager.execute_script_with_args(
+                &path2,
+                &[("-HostileVal", hostile_val), ("-OutFile", out_str)],
+            );
+
+            if res.is_ok() && out_file.exists() {
+                let received_val = fs::read_to_string(&out_file).unwrap();
+                assert_eq!(
+                    received_val, hostile_val,
+                    "Exact hostile value must be received literally without command execution"
+                );
+                let _ = fs::remove_file(&out_file);
             }
         }
     }

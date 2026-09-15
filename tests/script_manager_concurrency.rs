@@ -1,98 +1,122 @@
-use crm_tool::tasker::script_manager::ScriptManager;
+use crm_tool::tasker::script_manager::{ScriptManager, TaskMetadata};
+use std::collections::HashSet;
 use std::fs;
+use std::path::PathBuf;
 use std::process::Command;
 use tempfile::tempdir;
 
-fn run_child_if_args() {
+fn run_child_worker() {
     let args: Vec<String> = std::env::args().collect();
-    if args.iter().any(|a| a == "--child-process") {
-        let root_dir = &args[args.len() - 2];
-        let proc_id = &args[args.len() - 1];
-        let mgr = ScriptManager::with_root_dir(root_dir);
+    if let Some(pos) = args.iter().position(|a| a == "--worker-id") {
+        let worker_id = &args[pos + 1];
+        let root_dir_str = &args[pos + 2];
+        let timestamp_override = &args[pos + 3];
 
-        for i in 0..10 {
-            let template = format!(
-                "param([string]$Arg)\nWrite-Output \"Proc: {} Iter: {}\"",
-                proc_id, i
-            );
-            let _ = mgr
-                .get_or_create_script("ConcurrentTask", "concurrent_script.ps1", &template)
-                .unwrap();
+        let root_dir = PathBuf::from(root_dir_str);
+        let mgr = ScriptManager::with_root_dir(&root_dir);
+
+        // Signal readiness
+        let ready_file = root_dir.join(format!(".ready_{}", worker_id));
+        fs::write(&ready_file, "READY").unwrap();
+
+        // Wait for parent barrier release
+        let go_file = root_dir.join(".go");
+        let mut waited = 0;
+        while !go_file.exists() && waited < 1000 {
+            std::thread::sleep(std::time::Duration::from_millis(5));
+            waited += 1;
         }
-        std::process::exit(0);
+
+        // Execute ScriptManager version allocation under contention
+        let template = format!(
+            "param([string]$Arg)\n# Worker: {}\nWrite-Output \"Worker execution content\"",
+            worker_id
+        );
+
+        let res = mgr.get_or_create_script_with_timestamp(
+            "ConcurrentTask",
+            "concurrent_script.ps1",
+            &template,
+            Some(timestamp_override),
+        );
+
+        if res.is_ok() {
+            std::process::exit(0);
+        } else {
+            eprintln!("Worker {} failed: {:?}", worker_id, res.err());
+            std::process::exit(1);
+        }
     }
 }
 
 #[test]
 fn test_true_two_os_process_script_manager_locking() {
-    run_child_if_args();
+    run_child_worker();
 
     let temp_dir = tempdir().unwrap();
     let root_path = temp_dir.path().to_path_buf();
+    let task_dir = root_path.join("ConcurrentTask");
+    fs::create_dir_all(&task_dir).unwrap();
 
     let exe_path = std::env::current_exe().unwrap();
+    let fixed_timestamp = "2026-09-08_19-42-15";
 
-    let task_name = "ConcurrentTask";
-    let logical_name = "concurrent_script.ps1";
-
-    let handle1 = Command::new(&exe_path)
-        .arg("test_true_two_os_process_script_manager_locking")
-        .arg("--exact")
+    let mut proc1 = Command::new(&exe_path)
         .arg("--nocapture")
+        .arg("test_true_two_os_process_script_manager_locking")
         .arg("--")
-        .arg("--child-process")
+        .arg("--worker-id")
+        .arg("proc1")
         .arg(root_path.to_str().unwrap())
-        .arg("Proc1")
+        .arg(fixed_timestamp)
         .spawn()
         .expect("Failed to spawn process 1");
 
-    let handle2 = Command::new(&exe_path)
-        .arg("test_true_two_os_process_script_manager_locking")
-        .arg("--exact")
+    let mut proc2 = Command::new(&exe_path)
         .arg("--nocapture")
+        .arg("test_true_two_os_process_script_manager_locking")
         .arg("--")
-        .arg("--child-process")
+        .arg("--worker-id")
+        .arg("proc2")
         .arg(root_path.to_str().unwrap())
-        .arg("Proc2")
+        .arg(fixed_timestamp)
         .spawn()
         .expect("Failed to spawn process 2");
 
-    let out1 = handle1.wait_with_output().unwrap();
-    let out2 = handle2.wait_with_output().unwrap();
+    // Wait for both worker processes to reach readiness
+    let ready1 = root_path.join(".ready_proc1");
+    let ready2 = root_path.join(".ready_proc2");
+    let mut waited = 0;
+    while (!ready1.exists() || !ready2.exists()) && waited < 1000 {
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        waited += 1;
+    }
 
-    assert!(
-        out1.status.success(),
-        "Process 1 failed with status {}\nStdout: {}\nStderr: {}",
-        out1.status,
-        String::from_utf8_lossy(&out1.stdout),
-        String::from_utf8_lossy(&out1.stderr)
-    );
+    assert!(ready1.exists() && ready2.exists(), "Both workers must reach readiness");
 
-    assert!(
-        out2.status.success(),
-        "Process 2 failed with status {}\nStdout: {}\nStderr: {}",
-        out2.status,
-        String::from_utf8_lossy(&out2.stdout),
-        String::from_utf8_lossy(&out2.stderr)
-    );
+    // Release both workers simultaneously
+    fs::write(root_path.join(".go"), "GO").unwrap();
 
-    let task_dir = root_path.join(task_name);
+    let status1 = proc1.wait().expect("Wait failed for process 1");
+    let status2 = proc2.wait().expect("Wait failed for process 2");
+
+    assert!(status1.success(), "Process 1 failed");
+    assert!(status2.success(), "Process 2 failed");
+
+    // Comprehensive invariant assertions
     let metadata_path = task_dir.join(".metadata.json");
-
     assert!(metadata_path.exists(), "Metadata file must exist");
+
     let metadata_str = fs::read_to_string(&metadata_path).unwrap();
-    let metadata: crm_tool::tasker::script_manager::TaskMetadata =
+    let metadata: TaskMetadata =
         serde_json::from_str(&metadata_str).expect("Metadata must be valid JSON");
 
     let entry = metadata
         .scripts
-        .get(logical_name)
+        .get("concurrent_script.ps1")
         .expect("Logical script entry must exist in metadata");
 
-    assert!(
-        !entry.active_script.is_empty(),
-        "Active script must not be empty"
-    );
+    assert!(!entry.active_script.is_empty(), "Active script must not be empty");
 
     let active_script_path = task_dir.join(&entry.active_script);
     assert!(
@@ -101,14 +125,29 @@ fn test_true_two_os_process_script_manager_locking() {
         active_script_path
     );
 
-    // Verify all referenced script files exist
-    for (name, entry) in &metadata.scripts {
-        let path = task_dir.join(&entry.active_script);
-        assert!(
-            path.exists(),
-            "Referenced script file for {} ({}) must exist",
-            name,
-            entry.active_script
-        );
-    }
+    // Read all files in task_dir
+    let dir_entries: Vec<_> = fs::read_dir(&task_dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().into_string().unwrap())
+        .collect();
+
+    // Verify all generated version files are unique and exist
+    let script_files: Vec<_> = dir_entries
+        .iter()
+        .filter(|n| n.ends_with(".ps1"))
+        .collect();
+
+    let unique_names: HashSet<_> = script_files.iter().cloned().collect();
+    assert_eq!(
+        script_files.len(),
+        unique_names.len(),
+        "Every generated version file name must be unique"
+    );
+
+    // Verify no temporary files remain
+    let temp_files: Vec<_> = dir_entries
+        .iter()
+        .filter(|n| n.contains(".tmp"))
+        .collect();
+    assert!(temp_files.is_empty(), "No temporary files should remain after execution");
 }

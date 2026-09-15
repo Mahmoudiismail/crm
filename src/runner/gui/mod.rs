@@ -287,6 +287,27 @@ mod tests {
         assert_eq!(body_len(lf_req), 4);
     }
 
+    #[test]
+    fn test_non_loopback_binding_rejection() {
+        let non_loopback_cfg = RunnerConfig {
+            gui_host: "0.0.0.0".to_string(),
+            ..Default::default()
+        };
+        assert!(non_loopback_cfg.validate().is_err());
+
+        let non_loopback_ip = RunnerConfig {
+            gui_host: "192.168.1.100".to_string(),
+            ..Default::default()
+        };
+        assert!(non_loopback_ip.validate().is_err());
+
+        let loopback_cfg = RunnerConfig {
+            gui_host: "127.0.0.1".to_string(),
+            ..Default::default()
+        };
+        assert!(loopback_cfg.validate().is_ok());
+    }
+
     #[tokio::test]
     async fn test_start_gui_server_routing() {
         let temp_dir = tempfile::tempdir().unwrap();
