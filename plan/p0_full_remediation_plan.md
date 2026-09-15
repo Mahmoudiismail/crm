@@ -1,107 +1,105 @@
-# P0 Full Critical Remediation Plan (Track A + Track B)
+# P0 Full Critical Remediation Plan (Track A + Track B Corrections)
 
 ## Overview
-This plan establishes the execution, testing, review, and verification strategy for the P0 Remediation task across both Track A (PowerShell & ScriptManager) and Track B (Runner Execution, Concurrency, Process & HTTP).
+This plan establishes the execution, testing, review, and verification strategy for the P0 Remediation task across both Track A (PowerShell & ScriptManager) and Track B (Runner Execution, Concurrency, Process & HTTP), incorporating all 29 correction items.
 
 ---
 
-## Track A: PowerShell + ScriptManager
+## Track A: PowerShell + ScriptManager Corrections
 
-### A1 & A2. Repository-Wide PowerShell Audit & CRM Updater Remediation
-- **Affected File**: `src/crm_updater/update.rs`
-- **Scope**:
-  - Remove all dynamic string building (`format!`, `push_str`, string concatenation) that interpolates runtime values into PowerShell source code across `download_update_zip_from_drafts()`, `generate_update_script()`, `execute_detached_powershell()`, `unblock_file()`, and all associated helpers.
-  - Define static canonical PowerShell script templates parameterized using `param(...)` blocks.
-  - Supply runtime values (e.g., `-DownloadsDir`, `-ParentPid`, `-TargetPaths`, `-LogPath`) strictly via CLI arguments using parameter flags (`cmd.arg("-ParamName").arg(param_value)`).
-  - Preserve all existing updater semantics: PID termination wait, SHA-256 hash checking, download/extraction/replacement, autostart behavior, exit code 1 on failure, detached process creation, and file cleanup.
-  - Perform a post-refactor repository-wide audit for any remaining unparameterized PowerShell generation.
+### 1. Genuine Cross-Process ScriptManager Contention Test
+- **File**: `tests/script_manager_concurrency.rs`
+- **Strategy**:
+  - Implement a dedicated worker mode triggered via `--worker-id` CLI argument.
+  - Implement parent-controlled file-barrier IPC synchronization (`.ready_proc1`, `.ready_proc2`, `.go`) so both worker processes reach ScriptManager critical section at the exact same moment.
+  - Competing workers pass different templates (`v1_proc1` vs `v2_proc2`) with fixed timestamp overrides (`2026-09-08_19-42-15`) to force version allocation contention under lock competition.
+  - Strict assertions: valid JSON metadata, unique version files (`concurrent_script.ps1`, `concurrent_script_2026-09-08_19-42-15_1.ps1`), active script refers to a valid file, no lost updates, and zero temporary `.tmp` files.
 
-### A3. Reply Email PowerShell
-- **Affected File**: `src/tasker/crm_open_sohail/mod.rs`
-- **Scope**:
-  - Restore `ps_email_template` to a complete, valid static parameterized PowerShell implementation. Fix all syntax errors, missing variable bindings, and truncated variables (`$Inbox`, `$SentFolder`, `Find-OriginalMessage`, `$matches`, `$script:OriginalMail`, `$TargetMail.ReplyAll()`, `$ReplyMail.HTMLBody`, `$ReplyMail.Save()`).
-  - Pass parameters via CLI (`-SenderAccount`, `-SubjectPrefix`, `-Subject`, `-HtmlBody`).
-  - Update unit tests in `mod.rs` to verify the correct contract, asserting `$ReplyMail.Save()` is called and draft status is preserved without corrupted test assertion strings.
+### 2. Lock Scope in ScriptManager
+- **File**: `src/tasker/script_manager.rs`
+- **Strategy**:
+  - The OS-level lock (`fs2::FileExt::lock_exclusive` on `<task_dir>/.task.lock`) is acquired BEFORE `.metadata.json` is read and held continuously through corrupted metadata recovery, fingerprint comparison, active script validation, version allocation, script creation (`.tmp` -> `rename`), and metadata update (`.tmp` -> `rename`).
+  - Strict path safety validation in `is_valid_filename` rejecting path traversal (`..`), slashes (`/`, `\`), colons (`:`), trailing spaces/dots, Windows reserved device names (`CON`, `PRN`, `NUL`, `COM1-9`, `LPT1-9`), and untrimmed whitespace.
 
-### A4. PowerShell Injection Safety
-- **Affected Files**: `src/tasker/script_manager.rs`, `tests/`
-- **Scope**:
-  - Ensure all runtime-controlled values are passed via parameter CLI arguments rather than string interpolation.
-  - Refactor `test_argument_metacharacters_injection_safety_and_fingerprint` to use a fixed valid parameter name (`HostileVal`) while passing hostile parameter values containing single quotes, double quotes, semicolons, `$`, backticks, pipes, ampersands, CR/LF, parens, subexpressions, and redirection characters.
-  - Perform real PowerShell execution tests where available, and structural parameter assertions where PowerShell is unavailable.
+### 3. Behavioral PowerShell Injection Safety Test
+- **File**: `src/tasker/script_manager.rs`
+- **Strategy**:
+  - Create a behavioral test passing hostile parameter values through `-HostileVal` CLI argument to a static script template that writes the value to disk using `Set-Content -LiteralPath $OutFile -Value $HostileVal -NoNewline`.
+  - Pass hostile string literals containing single quotes, double quotes, semicolons, `$`, backticks, ampersands, pipes, CR/LF, parens, subexpressions `$(...)`, and redirection characters.
+  - Require execution success, read the output file in Rust, and assert exact string equality (`received_val == hostile_val`), proving literal reception without command execution.
 
-### A5–A12. ScriptManager Core Correctness, Fingerprinting & Locking
-- **Affected File**: `src/tasker/script_manager.rs`
-- **Scope**:
-  - Compute script fingerprints exclusively from canonical static script templates. Runtime arguments must NOT alter the generator hash or create new versions.
-  - Reject path traversal, absolute paths, and unsafe script names.
-  - Handle corrupted metadata safely: backup corrupted JSON to `.metadata.json.corrupted_<timestamp>`, log errors, and initialize valid replacement metadata.
-  - Implement atomic file/metadata writes using temporary files (`.tmp`) flushed and synced before renaming.
-  - Protect the complete critical section (`read metadata -> recovery -> fingerprint comparison -> active script validation -> version selection -> script creation -> metadata update`) using OS-level cross-process locking (`fs2::FileExt::lock_exclusive` on `.task.lock`).
-  - Preserve active user-edited scripts when the generator hash is unchanged.
-  - Ensure deterministic timestamp collision resolution (`_1`, `_2`, etc.) without random sleeps.
-  - Implement a genuine multi-process cross-process concurrency test spawning two independent OS processes contending for script allocations under deterministic synchronization (barrier/IPC).
+### 4. CRM Updater — 100% Static Parameterized PowerShell
+- **File**: `src/crm_updater/update.rs`
+- **Strategy**:
+  - Refactor all PowerShell workflows (`download_update_zip_from_drafts()`, `generate_update_script()`, `execute_detached_powershell()`, `unblock_file()`) to use static parameterized script templates (`SCAN_DRAFTS_TEMPLATE`, `UPDATE_SCRIPT_TEMPLATE`) with parameters passed strictly via CLI arguments (`-LogPath`, `-DownloadsDir`, `-ParentPid`, `-ReplacementMapJson`).
+  - Sort `apps_to_stop` deterministically by `process_name` prior to JSON payload serialization.
+  - Preserve all updater semantics: PID wait, process path inspection, SHA-256 hash checks, autostart, detached process flags, and failure exit code 1.
 
-### A13–A14. Error Handling & No Temporary Tasker PowerShell
-- **Scope**: Remove unnecessary `unwrap()`/`expect()` from domain logic, including PowerShell output parsing. Verify no Tasker `.ps1` files are created under `TEMP`.
+### 5. Reply Email PowerShell Contract Verification
+- **File**: `src/tasker/crm_open_sohail/mod.rs`
+- **Strategy**:
+  - Verify static parameterized template `ps_email_template` (`param([string]$SenderAccount, [string]$SubjectPrefix, [string]$Subject, [string]$HtmlBody)`).
+  - Verify all variable bindings (`$Inbox`, `$SentFolder`, `Find-OriginalMessage`, `$matches`, `$script:OriginalMail`, `$TargetMail.ReplyAll()`, `$ReplyMail.HTMLBody`, `$ReplyMail.Save()`).
+  - Unit test explicitly asserts `$ReplyMail.Save()` draft contract.
 
 ---
 
-## Track B: Runner Execution / Concurrency / Process / HTTP
+## Track B: Runner Execution, Concurrency, Process & HTTP Corrections
 
-### B1. 100% Python Removal from Runner Tests
-- **Scope**: Search all Runner tests for `python` or `python3` and replace them with native Rust mechanisms (`std::thread`, `tokio::sync::Barrier`, channels, atomics, or child Rust test binaries).
+### 6. 100% Python Removal
+- **Strategy**:
+  - Audit all Runner tests and purge 100% of Python scripts/references (`python`, `python3`, `python.exe`).
+  - Replace with native Rust mechanisms (`std::thread`, tokio tasks, `Barrier`, channels, atomics, Rust worker binaries).
 
-### B2–B5. Period Execution, Error Propagation & Admission Race
-- **Affected Files**: `src/runner/engine/pipeline.rs`, `src/runner/engine/dispatcher.rs`
-- **Scope**:
-  - Add behavioral tests for sequential period execution proving non-overlapping, ordered completion.
-  - Add behavioral tests for concurrent period execution proving actual overlapping execution using Rust synchronization barriers/atomics.
-  - Add behavioral tests for concurrent error propagation ensuring task failure status is properly set and propagated.
-  - Implement a real race test for duplicate task admission where two concurrent callers attempt to launch the same task ID on `ExecutionManager` simultaneously under deterministic barrier gating, proving exactly one is admitted and the second is rejected.
+### 7. Production-Path Period Execution Behavioral Tests
+- **File**: `src/runner/engine/pipeline.rs`
+- **Strategy**:
+  - Test sequential period execution through `execute_step`/`execute_pipeline` proving non-overlapping, strictly ordered completion.
+  - Test concurrent period execution through `execute_step`/`execute_pipeline` proving observed simultaneous activity using `tokio::sync::Barrier`.
+  - Test concurrent error propagation ensuring task failure status is set and propagated correctly.
 
-### B6–B9. Preview Parity, Date Resolution, Working Hours & Post-Run
-- **Affected Files**: `src/runner/config/schedule.rs`, `src/runner/config/periodization.rs`, `src/runner/gui/routes.rs`
-- **Scope**:
-  - Ensure preview generation `/api/tasks/preview` calls `generate_upcoming_executions_for_app` on the backend date engine.
-  - Ensure relative date expressions evaluate sequentially (e.g. "next Saturday" for both start and end date resolves to the exact same upcoming Saturday).
-  - Ensure non-working days filter both actual execution and preview occurrences (skipped occurrences omitted from preview). Limit preview to max 10 upcoming occurrences.
-  - Ensure post-run step periodization applies without mutating persisted `TaskStep` configurations.
+### 8. Real Duplicate Admission Race Test
+- **File**: `src/runner/engine/dispatcher/lifecycle.rs`
+- **Strategy**:
+  - Spawn two concurrent callers gated by a `tokio::sync::Barrier` calling `run_task_by_id` against `ExecutionManager` for the same task ID.
+  - Assert exactly 1 instance is admitted and duplicate launch is rejected atomically.
 
-### B10–B11. Application Locking & Lifecycle Status
-- **Affected Files**: `src/runner/engine/app_lock.rs`, `src/runner/engine/pipeline.rs`
-- **Scope**:
-  - Verify step-scoped app locking: deduplicate app IDs, sort deterministically to avoid deadlocks, acquire exclusive lock for `allow_concurrent_tasks=false` apps, hold permits for step duration, and auto-release on normal completion, error, or cancellation.
-  - Ensure tasks waiting for app locks remain in `running_task_ids` and report `waiting_for_app` status.
+### 9. Process Tree Timeout Termination Test
+- **File**: `src/runner/engine/process.rs`
+- **Strategy**:
+  - Implement a behavioral process tree test spawning a parent process that launches a child process tree.
+  - Trigger timeout in `run_process` and verify `terminate_process_tree` (`taskkill /F /T /PID` on Windows, `pkill -P` on Unix) terminates both parent and child processes.
 
-### B12–B13. Process Timeout & Bounded Output
-- **Affected File**: `src/runner/engine/process.rs`
-- **Scope**:
-  - Strengthen timeout process tree termination (`taskkill /F /T /PID` on Windows, `pkill -P` on Unix) and verify process descendants are terminated.
-  - Test bounded memory output beyond 10MB per stream, proving memory is capped at 10MB without panics and process cleanup completes.
+### 10. Bounded Process Output Test (>10 MiB Pipe)
+- **File**: `src/runner/engine/process.rs`
+- **Strategy**:
+  - Implement a process test spawning a process writing >10 MiB to stdout/stderr pipes.
+  - Verify `read_bounded` caps captured memory strictly at `MAX_OUTPUT_BYTES = 10MB` per stream without memory explosion or panics, and process cleanup completes cleanly.
 
-### B14–B22. HTTP Server Hardening
-- **Affected File**: `src/runner/gui/mod.rs`
-- **Scope**:
-  - Fix parser line-ending consistency between `\r\n\r\n` (CRLF) and `\n\n` (LF) across header detection, Content-Length calculation, and body extraction.
-  - Enforce MAX_HEADER_BYTES (64KB) and MAX_BODY_BYTES (2MB) exact boundary limits and 1-byte-over behavior.
-  - Implement 10-second TCP read timeout returning HTTP 408 Request Timeout and closing connection.
-  - Reject chunked transfer encoding with HTTP 400 Bad Request.
-  - Reject GET requests on state-changing endpoints with HTTP 405 Method Not Allowed.
-  - Enforce non-loopback binding validation (general non-loopback IPs rejected).
-  - Ensure correct status reason phrases.
+### 11. Complete HTTP Server Hardening Test Suite
+- **File**: `src/runner/gui/mod.rs`
+- **Strategy**:
+  - Test exact 64KB header limit and 2MB body limit boundaries (+1 byte returns 413 Payload Too Large).
+  - Test fragmented CRLF (`\r\n\r\n`) and LF (`\n\n`) headers and bodies over multiple TCP read chunks.
+  - Test 10-second socket read timeout returning HTTP 408 Request Timeout and closing connection.
+  - Test chunked transfer encoding rejection (`400 Bad Request`).
+  - Test GET mutation rejection (`405 Method Not Allowed`) across all state-changing endpoints.
+  - Test non-loopback IP binding validation (`0.0.0.0` rejected).
+  - Test reason phrases for all status codes.
 
-### B23. Blocking I/O Audit in Async Handlers
-- **Scope**: Audit `/api/apps/manifest` and all async HTTP handlers to offload any blocking process calls using `tokio::process::Command` or `tokio::task::spawn_blocking`.
+### 12. Async Handler Blocking I/O Audit
+- **Files**: `src/runner/gui/handlers.rs`, `routes.rs`
+- **Strategy**:
+  - Audit all async HTTP handlers (`/api/apps/manifest`, etc.) and offload external process calls using Tokio async process (`tokio::process::Command::new(...).output().await`).
+
+### 13. Documentation Restoration
+- **Files**: `md/TASKER.md`, `md/RUNNER.md`
+- **Strategy**:
+  - Restore all previously removed operational documentation and update them with detailed descriptions of ScriptManager versioning/locking, HTTP security model, process tree timeout termination, and CLI parameterization contracts.
 
 ---
 
-## Cross-Cutting Audits & Verification
-
-1. **Repository-Wide Audits**: Repeat audits for PowerShell string interpolation, Python in tests within scope, blocking I/O, and `unwrap()`/`expect()` usage.
-2. **Documentation**: Update `md/TASKER.md`, `md/RUNNER.md`, and relevant docs under `md/`.
-3. **Mandatory Reviews**: Perform PRE-TEST Internal Code Review and FINAL Internal Code Review around testing.
-4. **Verification Suite**:
-   - `cargo fmt --all -- --check`
-   - `cargo test --all-targets`
-   - `cargo clippy --all-targets --all-features -- -D warnings`
+## Verification Suite
+- `cargo fmt --all -- --check`
+- `cargo test --all-targets --all-features`
+- `cargo clippy --all-targets --all-features -- -D warnings`

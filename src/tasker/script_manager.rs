@@ -93,6 +93,21 @@ impl ScriptManager {
         if name.ends_with('.') || name.ends_with(' ') {
             return false;
         }
+
+        let stem = Path::new(name)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or(name)
+            .to_uppercase();
+
+        let reserved = [
+            "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7",
+            "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+        ];
+        if reserved.contains(&stem.as_str()) {
+            return false;
+        }
+
         let p = Path::new(name);
         p.components().count() == 1
     }
@@ -137,7 +152,6 @@ impl ScriptManager {
             .open(&lock_path)
             .with_context(|| format!("Failed to create lock file at {:?}", lock_path))?;
 
-        // OS-level lock covers complete critical section: metadata read -> recovery -> hash check -> version selection -> atomic file & metadata write
         fs2::FileExt::lock_exclusive(&lock_file)
             .with_context(|| format!("Failed to acquire OS lock on {:?}", lock_path))?;
 
@@ -679,6 +693,9 @@ Set-Content -LiteralPath $OutFile -Value $HostileVal -NoNewline
             "",
             "script.ps1.",
             "script.ps1 ",
+            "CON",
+            "NUL",
+            "COM1",
         ];
 
         for bad_name in invalid_names {
