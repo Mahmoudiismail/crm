@@ -111,6 +111,16 @@ impl ScriptManager {
         logical_name: &str,
         canonical_content: &str,
     ) -> Result<PathBuf> {
+        self.get_or_create_script_with_timestamp(task_name, logical_name, canonical_content, None)
+    }
+
+    pub fn get_or_create_script_with_timestamp(
+        &self,
+        task_name: &str,
+        logical_name: &str,
+        canonical_content: &str,
+        timestamp_override: Option<&str>,
+    ) -> Result<PathBuf> {
         if !Self::is_valid_filename(logical_name) {
             anyhow::bail!("Invalid logical_name '{}': must be a simple filename without path separators or traversal", logical_name);
         }
@@ -187,7 +197,9 @@ impl ScriptManager {
         let target_filename = if !base_file_path.exists() {
             logical_name.to_string()
         } else {
-            let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
+            let timestamp = timestamp_override
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string());
             let stem = Path::new(logical_name)
                 .file_stem()
                 .and_then(|s| s.to_str())
@@ -587,5 +599,189 @@ Write-Output "To: $Email, Subject: $Subject"
 
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0], "send_email.ps1");
+    }
+
+    #[test]
+    fn test_deterministic_timestamp_collision_handling() {
+        let temp_dir = tempdir().unwrap();
+        let manager = ScriptManager::with_root_dir(temp_dir.path());
+        let task_dir = temp_dir.path().join("Department Split");
+        fs::create_dir_all(&task_dir).unwrap();
+
+        let fixed_ts = "2026-03-30_12-00-00";
+        fs::write(task_dir.join("department_split.ps1"), "v1").unwrap();
+        fs::write(
+            task_dir.join(format!("department_split_{}.ps1", fixed_ts)),
+            "v2",
+        )
+        .unwrap();
+        fs::write(
+            task_dir.join(format!("department_split_{}_1.ps1", fixed_ts)),
+            "v3",
+        )
+        .unwrap();
+
+        let mut metadata = TaskMetadata::default();
+        metadata.scripts.insert(
+            "department_split.ps1".to_string(),
+            ScriptEntry {
+                active_script: "department_split.ps1".to_string(),
+                generator_hash: "oldhash".to_string(),
+            },
+        );
+        fs::write(
+            task_dir.join(".metadata.json"),
+            serde_json::to_string_pretty(&metadata).unwrap(),
+        )
+        .unwrap();
+
+        let path = manager
+            .get_or_create_script_with_timestamp(
+                "Department Split",
+                "department_split.ps1",
+                "v4 new generator",
+                Some(fixed_ts),
+            )
+            .unwrap();
+
+        let expected_filename = format!("department_split_{}_2.ps1", fixed_ts);
+        assert_eq!(
+            path.file_name().unwrap().to_str().unwrap(),
+            expected_filename
+        );
+        assert!(path.exists());
+        assert_eq!(fs::read_to_string(&path).unwrap(), "v4 new generator");
+    }
+
+    #[test]
+    fn test_argument_metacharacters_injection_safety_and_fingerprint() {
+        let temp_dir = tempdir().unwrap();
+        let manager = ScriptManager::with_root_dir(temp_dir.path());
+
+        let template = "param([string]$HostileVal)\nWrite-Output \"Value: $HostileVal\"";
+
+        let path1 = manager
+            .get_or_create_script("Task", "test.ps1", template)
+            .unwrap();
+
+        let hostile_args = [
+            ("'; Write-Output 'injected", "val"),
+            ("$(Get-Date)", "val2"),
+            ("\n\r; calc.exe", "val3"),
+            ("| & < > $ \" '", "val4"),
+        ];
+
+        for (h_key, h_val) in hostile_args {
+            let path2 = manager
+                .get_or_create_script("Task", "test.ps1", template)
+                .unwrap();
+
+            assert_eq!(
+                path1, path2,
+                "Fingerprint must not change for argument variations"
+            );
+
+            let res = manager.execute_script_with_args(&path2, &[(h_key, h_val)]);
+            if let Err(e) = res {
+                assert!(!e.to_string().contains("The process cannot access the file"));
+            }
+        }
+    }
+
+    #[test]
+    fn test_path_safety_rejects_malicious_names() {
+        let temp_dir = tempdir().unwrap();
+        let manager = ScriptManager::with_root_dir(temp_dir.path());
+
+        let invalid_names = [
+            "../script.ps1",
+            "..\\script.ps1",
+            "/etc/passwd",
+            r"C:\Windows\system32\cmd.exe",
+            "foo/bar.ps1",
+            "foo\\bar.ps1",
+            "..",
+            "",
+        ];
+
+        for bad_name in invalid_names {
+            let res = manager.get_or_create_script("Task", bad_name, "Write-Output 1");
+            assert!(
+                res.is_err(),
+                "Should reject invalid script name: {}",
+                bad_name
+            );
+        }
+    }
+
+    #[test]
+    fn test_corrupted_metadata_recovery() {
+        let temp_dir = tempdir().unwrap();
+        let manager = ScriptManager::with_root_dir(temp_dir.path());
+        let task_dir = temp_dir.path().join("Task");
+        fs::create_dir_all(&task_dir).unwrap();
+
+        // Write initial script
+        let path1 = manager
+            .get_or_create_script("Task", "script.ps1", "Write-Output v1")
+            .unwrap();
+        assert!(path1.exists());
+
+        // Corrupt .metadata.json with invalid JSON
+        let meta_path = task_dir.join(".metadata.json");
+        fs::write(&meta_path, "{ invalid json ").unwrap();
+
+        // Next call should recover cleanly without crashing, backed up old corrupted metadata, and create valid new state
+        let path2 = manager
+            .get_or_create_script("Task", "script.ps1", "Write-Output v1")
+            .unwrap();
+
+        assert!(path2.exists());
+        assert!(meta_path.exists());
+
+        // Verify corrupted backup file was created
+        let corrupted_entries: Vec<_> = fs::read_dir(&task_dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .filter(|name| name.contains(".metadata.json.corrupted_"))
+            .collect();
+
+        assert_eq!(
+            corrupted_entries.len(),
+            1,
+            "Should create corrupted metadata backup file"
+        );
+    }
+
+    #[test]
+    fn test_corrupted_active_script_path_recovery() {
+        let temp_dir = tempdir().unwrap();
+        let manager = ScriptManager::with_root_dir(temp_dir.path());
+        let task_dir = temp_dir.path().join("Task");
+        fs::create_dir_all(&task_dir).unwrap();
+
+        // Metadata with malicious path traversal active_script
+        let mut metadata = TaskMetadata::default();
+        metadata.scripts.insert(
+            "script.ps1".to_string(),
+            ScriptEntry {
+                active_script: "../../../etc/passwd".to_string(),
+                generator_hash: "somehash".to_string(),
+            },
+        );
+        fs::write(
+            task_dir.join(".metadata.json"),
+            serde_json::to_string_pretty(&metadata).unwrap(),
+        )
+        .unwrap();
+
+        // get_or_create_script must reject malicious active_script and create a safe version
+        let path = manager
+            .get_or_create_script("Task", "script.ps1", "Write-Output safe")
+            .unwrap();
+
+        assert_eq!(path.file_name().unwrap().to_str().unwrap(), "script.ps1");
+        assert!(path.exists());
+        assert!(path.starts_with(&task_dir));
     }
 }

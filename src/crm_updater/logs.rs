@@ -50,13 +50,10 @@ pub fn process_and_send_logs(config: &UpdaterConfig) -> Result<()> {
         .tempfile()?;
 
     let mut current_zip = ZipWriter::new(current_zip_path.as_file().try_clone()?);
-    let options = FileOptions::<'_, ()>::default().compression_method(CompressionMethod::Deflated);
+    let options = FileOptions::<()>::default().compression_method(CompressionMethod::Deflated);
 
     let mut bytes_written_to_current_zip: u64 = 0;
 
-    // We roughly estimate the zip size by looking at the uncompressed size.
-    // Deflate compresses well, so if the uncompressed size is under 20MB, the compressed is definitely under.
-    // If we exceed 20MB of uncompressed size, we'll conservatively rotate.
     for log_path in &log_files {
         let metadata = fs::metadata(log_path)?;
         let file_size = metadata.len();
@@ -120,30 +117,71 @@ pub fn process_and_send_logs(config: &UpdaterConfig) -> Result<()> {
 fn send_logs_email(recipient: &str, attachments: &[PathBuf]) -> Result<()> {
     info!("Preparing to send logs email to {}", recipient);
 
-    let mut ps_script = format!(
-        r#"
-$Outlook = New-Object -ComObject Outlook.Application
-$Mail = $Outlook.CreateItem(0)
-$Mail.To = "{}"
-$Mail.Subject = "logs"
-$Mail.Body = "Please find the logs attached."
-"#,
-        recipient.replace('\"', "'")
-    );
+    let template = r#"
+param(
+    [string]$Recipient,
+    [string]$AttachmentsCsv
+)
 
-    for attachment in attachments {
-        ps_script.push_str(&format!(
-            "try {{\n    $Mail.Attachments.Add(\"{}\")\n}} catch {{\n    Write-Error \"Failed to attach {:?}\"\n}}\n",
-            attachment.display(),
-            attachment.display()
-        ));
+try {
+    $ErrorActionPreference = "Stop"
+    $Outlook = New-Object -ComObject Outlook.Application
+    $Mail = $Outlook.CreateItem(0)
+    $Mail.To = $Recipient
+    $Mail.Subject = "logs"
+    $Mail.Body = "Please find the logs attached."
+
+    if ($AttachmentsCsv) {
+        $paths = $AttachmentsCsv -split ","
+        foreach ($p in $paths) {
+            $trimmed = $p.Trim()
+            if ($trimmed -and (Test-Path $trimmed)) {
+                try {
+                    $Mail.Attachments.Add($trimmed)
+                } catch {
+                    Write-Error "Failed to attach $trimmed: $_"
+                }
+            }
+        }
     }
 
-    ps_script.push_str("$Mail.Send()\n");
+    $Mail.Send()
+} catch {
+    Write-Error "Failed to send logs email: $_"
+    exit 1
+}
+"#;
 
-    crate::tasker::email::outlook::run_powershell(&ps_script)
+    let att_csv = attachments
+        .iter()
+        .map(|p| p.to_string_lossy().to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+
+    let script_manager = crate::tasker::script_manager::ScriptManager::new();
+    let script_path =
+        script_manager.get_or_create_script("CrmUpdater", "send_logs.ps1", template)?;
+
+    script_manager
+        .execute_script_with_args(
+            &script_path,
+            &[("-Recipient", recipient), ("-AttachmentsCsv", &att_csv)],
+        )
         .context("Failed to run PowerShell script for sending logs email")?;
 
     info!("Logs email sent successfully.");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    // use super::*;
+
+    #[test]
+    fn test_send_logs_parameter_contract() {
+        let src = include_str!("logs.rs");
+        assert!(src.contains("[string]$Recipient"));
+        assert!(src.contains("[string]$AttachmentsCsv"));
+        assert!(src.contains("send_logs.ps1"));
+    }
 }
