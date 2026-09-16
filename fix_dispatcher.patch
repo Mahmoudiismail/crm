@@ -1,0 +1,18 @@
+--- src/runner/engine/dispatcher/task_commands.rs
++++ src/runner/engine/dispatcher/task_commands.rs
+@@ -104,12 +104,16 @@
+
+     if let Some(task) = cfg.tasks.iter_mut().find(|t| t.id == task_id) {
+         {
++            #[cfg(test)]
++            if RACE_TESTING.load(std::sync::atomic::Ordering::SeqCst) {
++                RACE_BARRIER.wait().await;
++            }
+             let mut st = status.lock().await;
+             if st.queued_task_ids.contains(&task.id) || st.running_task_ids.contains(&task.id) {
+                 tracing::warn!(
+                     "Task '{}' is already running or queued; skipping duplicate launch",
+                     task.id
+                 );
+                 return Ok(());
+             }
