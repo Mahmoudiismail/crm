@@ -27,12 +27,18 @@ impl TaskLogger {
         let mut inner = self.inner.lock().await;
         inner.log_bytes(prefix, bytes);
     }
+
+    pub async fn log_path_async(&self) -> std::path::PathBuf {
+        let inner = self.inner.lock().await;
+        inner.log_path.clone().unwrap_or_default()
+    }
 }
 
 #[derive(Debug)]
 struct TaskLoggerInner {
     file: Option<fs::File>,
     task_id: String,
+    log_path: Option<std::path::PathBuf>,
 }
 
 impl TaskLoggerInner {
@@ -50,24 +56,22 @@ impl TaskLoggerInner {
             Err(_) => std::path::PathBuf::from("logs").join(&safe_task_name),
         };
 
-        if let Err(e) = fs::create_dir_all(&log_dir) {
-            error!(
-                "Failed to create log directory {}: {}",
-                log_dir.display(),
-                e
-            );
+        if let Err(e) = std::fs::create_dir_all(&log_dir) {
+            error!("Failed to create log directory {}: {}", log_dir.display(), e);
             return Self {
                 file: None,
                 task_id: task_id.to_string(),
+                log_path: None,
             };
         }
 
         let log_path = log_dir.join(filename);
-        match fs::File::create(&log_path) {
+        match std::fs::File::create(&log_path) {
             Ok(file) => {
                 let mut logger = Self {
                     file: Some(file),
                     task_id: task_id.to_string(),
+                    log_path: Some(log_path.clone()),
                 };
                 logger.log("==================================================");
                 logger.log(&format!("TASK INITIATED: {} (ID: {})", task_name, task_id));
@@ -80,6 +84,7 @@ impl TaskLoggerInner {
                 Self {
                     file: None,
                     task_id: task_id.to_string(),
+                    log_path: None,
                 }
             }
         }
@@ -92,7 +97,6 @@ impl TaskLoggerInner {
             let _ = f.write_all(line.as_bytes());
             let _ = f.flush();
         }
-        // Capture into the runner's own log for unified tracing
         debug!("[Task:{}] {}", self.task_id, message);
     }
 
@@ -168,4 +172,24 @@ pub async fn cleanup_old_logs(log_retention_days: u64) {
         }
     })
     .await;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_task_logger_isolation_and_path() {
+        let logger = TaskLogger::new("task1", "Test Task");
+        logger.log("Hello from Task 1").await;
+        logger.log_bytes("STDOUT", b"Line 1\nLine 2").await;
+
+        let path = logger.log_path_async().await;
+        assert!(path.exists(), "Log file should be created correctly");
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains("TASK INITIATED: Test Task"));
+        assert!(content.contains("Hello from Task 1"));
+        assert!(content.contains("STDOUT: Line 1"));
+        assert!(content.contains("STDOUT: Line 2"));
+    }
 }

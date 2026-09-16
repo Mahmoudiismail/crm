@@ -91,6 +91,7 @@ pub fn process_update_pipeline(config: &crate::crm_updater::config::UpdaterConfi
     Ok(())
 }
 
+#[allow(dead_code)]
 const SCAN_DRAFTS_TEMPLATE: &str = r#"
 param(
     [string]$DownloadsDir

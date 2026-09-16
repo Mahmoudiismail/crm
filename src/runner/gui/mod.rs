@@ -21,6 +21,8 @@ use anyhow::Result;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tracing::{error, info};
+use std::sync::Arc;
+use tokio::sync::Semaphore;
 
 pub mod components;
 pub mod forms;
@@ -56,11 +58,19 @@ pub(crate) async fn run_server(handle: RunnerHandle) -> Result<()> {
     let listener = TcpListener::bind(&bind_addr).await?;
     info!("Runner GUI listening on http://{}", bind_addr);
 
+    let connection_limit = Arc::new(Semaphore::new(100)); // In-flight GUI connection limit
+
     loop {
         let (mut socket, _) = listener.accept().await?;
+        let permit = match connection_limit.clone().acquire_owned().await {
+            Ok(p) => p,
+            Err(_) => break Ok(()), // semaphore closed
+        };
         let handle_clone = handle.clone();
 
         tokio::spawn(async move {
+            let _permit = permit; // Released when connection drops
+
             let request = match read_http_request(&mut socket).await {
                 Ok(Some(request)) => request,
                 Ok(None) | Err(_) => return,
@@ -105,39 +115,106 @@ pub(crate) async fn run_server(handle: RunnerHandle) -> Result<()> {
     }
 }
 
+async fn send_error(socket: &mut tokio::net::TcpStream, status: u16, message: &str) -> Result<Option<HttpRequest>> {
+    let reason = status_reason_phrase(status);
+    let resp = format!(
+        "HTTP/1.1 {} {}\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n{}",
+        status, reason, message
+    );
+    let _ = socket.write_all(resp.as_bytes()).await;
+    let _ = socket.shutdown().await;
+    Ok(None)
+}
+
 pub(crate) async fn read_http_request(
     socket: &mut tokio::net::TcpStream,
 ) -> Result<Option<HttpRequest>> {
     use std::time::Duration;
 
     let mut buf = vec![0u8; 8192];
-    let mut read = 0;
+    let mut total_read = 0;
 
-    loop {
-        if read >= MAX_HEADER_BYTES + MAX_BODY_BYTES {
-            let resp = "HTTP/1.1 413 Payload Too Large\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nPayload Too Large";
-            let _ = socket.write_all(resp.as_bytes()).await;
-            let _ = socket.shutdown().await;
-            return Ok(None);
+    let read_result = tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            if total_read >= MAX_HEADER_BYTES + MAX_BODY_BYTES {
+                return Err(anyhow::anyhow!("Payload Too Large"));
+            }
+
+            if total_read == buf.len() {
+                let next_len = (buf.len() * 2).min(MAX_HEADER_BYTES + MAX_BODY_BYTES + 1024);
+                if next_len <= buf.len() {
+                    return Err(anyhow::anyhow!("Payload Too Large"));
+                }
+                buf.resize(next_len, 0);
+            }
+
+            match socket.read(&mut buf[total_read..]).await {
+                Ok(0) => break Ok::<usize, anyhow::Error>(total_read),
+                Ok(n) => {
+                    total_read += n;
+
+                    let header_end_pos = buf[..total_read]
+                        .windows(4)
+                        .position(|w| w == b"\r\n\r\n")
+                        .map(|p| (p, 4))
+                        .or_else(|| {
+                            buf[..total_read]
+                                .windows(2)
+                                .position(|w| w == b"\n\n")
+                                .map(|p| (p, 2))
+                        });
+
+                    if let Some((pos, delim_len)) = header_end_pos {
+                        if pos > MAX_HEADER_BYTES {
+                            return Err(anyhow::anyhow!("Payload Too Large"));
+                        }
+
+                        let cl = header_content_length(&buf[..pos]).unwrap_or(0);
+                        if cl > MAX_BODY_BYTES {
+                            return Err(anyhow::anyhow!("Payload Too Large"));
+                        }
+
+                        let body_received = total_read.saturating_sub(pos + delim_len);
+                        if body_received >= cl {
+                            break Ok(total_read);
+                        }
+                    }
+                }
+                Err(e) => break Err(e.into()),
+            }
         }
+    }).await;
 
-        let read_res =
-            tokio::time::timeout(Duration::from_secs(10), socket.read(&mut buf[read..])).await;
-        let n = match read_res {
-            Ok(Ok(0)) => break,
-            Ok(Ok(n)) => n,
-            Ok(Err(_)) => break,
-            Err(_) => {
-                let resp = "HTTP/1.1 408 Request Timeout\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nRequest Timeout";
-                let _ = socket.write_all(resp.as_bytes()).await;
-                let _ = socket.shutdown().await;
+    match read_result {
+        Ok(Ok(_n)) => {}
+        Ok(Err(e)) => {
+            if e.to_string() == "Payload Too Large" {
+                let _ = send_error(socket, 413, "Payload Too Large").await;
                 return Ok(None);
             }
-        };
+            return Ok(None);
+        }
+        Err(_) => {
+            let _ = send_error(socket, 408, "Request Timeout").await;
+            return Ok(None);
+        }
+    }
 
-        read += n;
+    let header_end = buf[..total_read]
+        .windows(4)
+        .position(|w| w == b"\r\n\r\n")
+        .map(|p| (p, 4))
+        .or_else(|| {
+            buf[..total_read]
+                .windows(2)
+                .position(|w| w == b"\n\n")
+                .map(|p| (p, 2))
+        });
 
-        let req_str = String::from_utf8_lossy(&buf[..read]);
+    if let Some((pos, delim_len)) = header_end {
+        let headers_slice = &buf[..pos];
+        let req_str = String::from_utf8_lossy(headers_slice);
+
         if req_str.lines().any(|l| {
             let mut parts = l.splitn(2, ':');
             if let (Some(k), Some(v)) = (parts.next(), parts.next()) {
@@ -147,79 +224,46 @@ pub(crate) async fn read_http_request(
                 false
             }
         }) {
-            let resp = "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nChunked Transfer-Encoding is not supported";
-            let _ = socket.write_all(resp.as_bytes()).await;
-            let _ = socket.shutdown().await;
+            let _ = send_error(socket, 400, "Chunked Transfer-Encoding is not supported").await;
             return Ok(None);
         }
 
-        let header_end = buf[..read]
-            .windows(4)
-            .position(|w| w == b"\r\n\r\n")
-            .map(|p| (p, 4))
-            .or_else(|| {
-                buf[..read]
-                    .windows(2)
-                    .position(|w| w == b"\n\n")
-                    .map(|p| (p, 2))
-            });
+        let cl = header_content_length(headers_slice).unwrap_or(0);
+        let body_received = total_read.saturating_sub(pos + delim_len);
 
-        if let Some((pos, delim_len)) = header_end {
-            if pos + delim_len > MAX_HEADER_BYTES {
-                let resp = "HTTP/1.1 413 Payload Too Large\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nPayload Too Large";
-                let _ = socket.write_all(resp.as_bytes()).await;
-                let _ = socket.shutdown().await;
-                return Ok(None);
-            }
-
-            let cl = header_content_length(&buf[..pos]).unwrap_or(0);
-            if cl > MAX_BODY_BYTES {
-                let resp = "HTTP/1.1 413 Payload Too Large\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nPayload Too Large";
-                let _ = socket.write_all(resp.as_bytes()).await;
-                let _ = socket.shutdown().await;
-                return Ok(None);
-            }
-
-            let body_received = read.saturating_sub(pos + delim_len);
-            if body_received >= cl {
-                let headers_str = String::from_utf8_lossy(&buf[..pos]);
-                let body_str = String::from_utf8_lossy(&buf[pos + delim_len..read]);
-
-                let first = headers_str.lines().next().unwrap_or_default();
-                let mut parts = first.split_whitespace();
-                let method = parts.next().unwrap_or_default().to_string();
-                let path = parts.next().unwrap_or("/").to_string();
-
-                if !path.starts_with("/assets/js/") {
-                    info!(
-                        "HTTP Request: {} {}\nHeaders:\n{}\nBody:\n{}",
-                        method, path, headers_str, body_str
-                    );
-                }
-
-                return Ok(Some(HttpRequest {
-                    method,
-                    path,
-                    body: body_str.to_string(),
-                }));
-            }
-        } else if read > MAX_HEADER_BYTES {
-            let resp = "HTTP/1.1 413 Payload Too Large\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nPayload Too Large";
-            let _ = socket.write_all(resp.as_bytes()).await;
-            let _ = socket.shutdown().await;
+        if body_received < cl {
             return Ok(None);
         }
 
-        if read == buf.len() {
-            let next_len = (buf.len() * 2).min(MAX_HEADER_BYTES + MAX_BODY_BYTES + 1024);
-            if next_len <= buf.len() {
-                let resp = "HTTP/1.1 413 Payload Too Large\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nPayload Too Large";
-                let _ = socket.write_all(resp.as_bytes()).await;
-                let _ = socket.shutdown().await;
-                return Ok(None);
-            }
-            buf.resize(next_len, 0);
+        let exact_body_end = pos + delim_len + cl;
+        if total_read > exact_body_end {
+            let _ = send_error(socket, 400, "Malformed Request: Extra bytes beyond Content-Length").await;
+            return Ok(None);
         }
+
+        let body_str = String::from_utf8_lossy(&buf[pos + delim_len..exact_body_end]).to_string();
+
+        let first = req_str.lines().next().unwrap_or_default();
+        let mut parts = first.split_whitespace();
+        let method = parts.next().unwrap_or_default().to_string();
+        let path = parts.next().unwrap_or_default().to_string();
+        let version = parts.next().unwrap_or_default().to_string();
+
+        if method.is_empty() || path.is_empty() || !version.starts_with("HTTP/") {
+            let _ = send_error(socket, 400, "Malformed Request-Line").await;
+            return Ok(None);
+        }
+
+        if !path.starts_with("/assets/js/") {
+            let safe_path = if let Some(idx) = path.find('?') {
+                &path[..idx]
+            } else {
+                &path
+            };
+            info!("HTTP Request: {} {} (Body length: {})", method, safe_path, cl);
+        }
+
+        return Ok(Some(HttpRequest { method, path, body: body_str }));
     }
 
     Ok(None)
@@ -381,5 +425,69 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(res.status().as_u16(), 400);
+    }
+
+    #[tokio::test]
+    async fn test_http_fragmented_parsing_and_limits() {
+        use std::net::TcpListener;
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        let cfg = RunnerConfig {
+            gui_port: port,
+            ..RunnerConfig::default()
+        };
+        let temp_dir = tempfile::tempdir().unwrap();
+        let config_path = temp_dir.path().join("config.json");
+        cfg.save(config_path.to_str().unwrap()).unwrap();
+
+        let status = Arc::new(Mutex::new(RunnerStatus {
+            running_tasks_count: 0,
+            queued_tasks_count: 0,
+            running_task_ids: Vec::new(),
+            queued_task_ids: Vec::new(),
+            last_error: "".to_string(),
+            last_task_id: "".to_string(),
+            last_run_at: "".to_string(),
+            waiting_for_app: std::collections::HashMap::new(),
+        }));
+        let (tx, _) = mpsc::channel(1);
+        let (exec_tx, _) = mpsc::channel(1);
+        let handle = RunnerHandle {
+            command_tx: tx,
+            exec_tx,
+            status,
+            runner_config_path: config_path.to_str().unwrap().to_string(),
+        };
+
+        start_gui_server(handle);
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        use tokio::io::{AsyncWriteExt, AsyncReadExt};
+
+        let mut stream = tokio::net::TcpStream::connect(format!("127.0.0.1:{}", port)).await.unwrap();
+        stream.write_all(b"POST /test HTTP/1.1\r\n").await.unwrap();
+        stream.write_all(b"Content-Length: 4\r\n\r\n").await.unwrap();
+        stream.write_all(b"te").await.unwrap();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        stream.write_all(b"st").await.unwrap();
+
+        let mut resp = String::new();
+        let _ = tokio::time::timeout(Duration::from_secs(2), stream.read_to_string(&mut resp)).await;
+        assert!(resp.contains("404 Not Found") || resp.is_empty());
+
+        let mut stream2 = tokio::net::TcpStream::connect(format!("127.0.0.1:{}", port)).await.unwrap();
+        stream2.write_all(b"POST /test HTTP/1.1\r\nContent-Length: 4\r\n\r\ntestX").await.unwrap();
+        let mut resp2 = String::new();
+        let _ = tokio::time::timeout(Duration::from_secs(2), stream2.read_to_string(&mut resp2)).await;
+        assert!(resp2.contains("400 Bad Request") || resp2.is_empty());
+        assert!(resp2.contains("Malformed Request: Extra bytes") || resp2.is_empty());
+
+        let mut stream3 = tokio::net::TcpStream::connect(format!("127.0.0.1:{}", port)).await.unwrap();
+        stream3.write_all(b"POST \r\n\r\n").await.unwrap();
+        let mut resp3 = String::new();
+        let _ = tokio::time::timeout(Duration::from_secs(2), stream3.read_to_string(&mut resp3)).await;
+        assert!(resp3.contains("400 Bad Request") || resp3.is_empty());
+        assert!(resp3.contains("Malformed Request-Line") || resp3.is_empty());
     }
 }

@@ -192,3 +192,10 @@ Tasker manages PowerShell scripts strictly through `ScriptManager`, storing scri
 4. **Automatic Versioning & Collision Resolution**: Changes to generator source code generate new timestamped script versions (`script_YYYY-MM-DD_HH-MM-SS.ps1`) with deterministic collision suffixes (`_1`, `_2`). Old versions are preserved and never automatically deleted.
 5. **Cross-Process File Locking**: All metadata and script operations are protected by OS-level exclusive file locks (`fs2::FileExt::lock_exclusive` on `.task.lock`) covering the complete critical section across processes.
 6. **Path Traversal Safety & Metadata Recovery**: Logical script names and active script metadata are strictly validated to prevent path traversal (`..`, `/`, `\`). Corrupted metadata JSON files are automatically backed up to `.metadata.json.corrupted_<timestamp>` and recovered cleanly.
+
+## ScriptManager Versioning & Locking
+PowerShell integration relies on `ScriptManager` persistence. Script generators define static templates parameterized solely by run-time arguments.
+- Generating the script computes a strict SHA-256 fingerprint ignoring runtime parameters.
+- When generating files across concurrent processes, an OS-level lock via `fs2` ensures metadata file updates (`.metadata.json`) are perfectly coordinated.
+- In the event of a crash during write, `.metadata.json.corrupted_*` backups are generated and state is safely auto-healed.
+- Manual user modifications to active scripts are intentionally kept preserved if the source generator algorithm hash remains identical to the metadata.
