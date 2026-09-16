@@ -76,7 +76,7 @@ async fn execute_action(
                             .context("concurrent period execution join error")??;
                     }
                     Ok(())
-        } else {
+                } else {
                     let total_periods = periods.len();
                     for (idx, period) in periods.iter().enumerate() {
                         if total_periods > 1 {
@@ -96,7 +96,7 @@ async fn execute_action(
                     }
                     Ok(())
                 }
-        } else {
+            } else {
                 Err(anyhow::anyhow!(
                     "Registered app with ID '{}' not found in config",
                     spec.app_id
@@ -210,7 +210,7 @@ async fn execute_step(
 
             if failures.is_empty() {
                 Ok(())
-        } else {
+            } else {
                 Err(anyhow::anyhow!(
                     "parallel actions failed: {}",
                     failures.join("; ")
@@ -297,7 +297,7 @@ pub async fn run_task_inner(
             if task.post_run_steps.is_empty() {
                 logger.log("Task completed successfully.").await;
                 task.last_status = "ok".to_string();
-        } else {
+            } else {
                 logger
                     .log("Main pipeline completed. Executing post run steps...")
                     .await;

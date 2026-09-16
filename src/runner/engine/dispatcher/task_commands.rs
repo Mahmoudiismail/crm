@@ -600,80 +600,81 @@ mod tests {
     }
 }
 
-    #[tokio::test]
-    async fn test_duplicate_admission_race() {
-        use crate::runner::engine::RunnerStatus;
-        use crate::runner::config::{RunnerConfig, RunnerTask};
-        use std::sync::Arc;
-        use tokio::sync::{mpsc, Mutex};
-        use std::sync::atomic::Ordering;
+#[tokio::test]
+async fn test_duplicate_admission_race() {
+    use crate::runner::config::{RunnerConfig, RunnerTask};
+    use crate::runner::engine::RunnerStatus;
+    use std::sync::atomic::Ordering;
+    use std::sync::Arc;
+    use tokio::sync::{mpsc, Mutex};
 
-        let temp_dir = tempfile::tempdir().unwrap();
-        let path = temp_dir.path().join("config.json");
-        let path_str = path.to_str().unwrap();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let path = temp_dir.path().join("config.json");
+    let path_str = path.to_str().unwrap();
 
-        let task = RunnerTask {
-            id: "race_task".to_string(),
-            name: "race_task".to_string(),
-            enabled: true,
-            schedules: vec![],
-            steps: vec![],
-            post_run_steps: vec![],
-            last_run_at: "".to_string(),
-            last_status: "SUCCESS".to_string(),
-            timeout_seconds: 3600,
-            frequency_seconds: 3600,
-            next_run_at: "".to_string(),
-            repetition: crate::runner::config::models::Repetition::Once,
-        };
+    let task = RunnerTask {
+        id: "race_task".to_string(),
+        name: "race_task".to_string(),
+        enabled: true,
+        schedules: vec![],
+        steps: vec![],
+        post_run_steps: vec![],
+        last_run_at: "".to_string(),
+        last_status: "SUCCESS".to_string(),
+        timeout_seconds: 3600,
+        frequency_seconds: 3600,
+        next_run_at: "".to_string(),
+        repetition: crate::runner::config::models::Repetition::Once,
+    };
 
-        let config = RunnerConfig {
-            tasks: vec![task],
-            ..RunnerConfig::default()
-        };
-        config.save(path_str).unwrap();
+    let config = RunnerConfig {
+        tasks: vec![task],
+        ..RunnerConfig::default()
+    };
+    config.save(path_str).unwrap();
 
-        let status = Arc::new(Mutex::new(RunnerStatus {
-            running_tasks_count: 0,
-            queued_tasks_count: 0,
-            running_task_ids: Vec::new(),
-            queued_task_ids: Vec::new(),
-            last_error: "".to_string(),
-            last_task_id: "".to_string(),
-            last_run_at: "".to_string(),
-            waiting_for_app: std::collections::HashMap::new(),
-        }));
+    let status = Arc::new(Mutex::new(RunnerStatus {
+        running_tasks_count: 0,
+        queued_tasks_count: 0,
+        running_task_ids: Vec::new(),
+        queued_task_ids: Vec::new(),
+        last_error: "".to_string(),
+        last_task_id: "".to_string(),
+        last_run_at: "".to_string(),
+        waiting_for_app: std::collections::HashMap::new(),
+    }));
 
-        let (exec_tx, mut exec_rx) = mpsc::channel(100);
+    let (exec_tx, mut exec_rx) = mpsc::channel(100);
 
-        RACE_TESTING.store(true, Ordering::SeqCst);
+    RACE_TESTING.store(true, Ordering::SeqCst);
 
-        let p_str1 = path_str.to_string();
-        let st1 = status.clone();
-        let tx1 = exec_tx.clone();
-        let handle1 = tokio::spawn(async move {
-            run_task_by_id(&p_str1, "race_task", &st1, &tx1, true).await
-        });
+    let p_str1 = path_str.to_string();
+    let st1 = status.clone();
+    let tx1 = exec_tx.clone();
+    let handle1 =
+        tokio::spawn(async move { run_task_by_id(&p_str1, "race_task", &st1, &tx1, true).await });
 
-        let p_str2 = path_str.to_string();
-        let st2 = status.clone();
-        let tx2 = exec_tx.clone();
-        let handle2 = tokio::spawn(async move {
-            run_task_by_id(&p_str2, "race_task", &st2, &tx2, true).await
-        });
+    let p_str2 = path_str.to_string();
+    let st2 = status.clone();
+    let tx2 = exec_tx.clone();
+    let handle2 =
+        tokio::spawn(async move { run_task_by_id(&p_str2, "race_task", &st2, &tx2, true).await });
 
-        let res1 = handle1.await.unwrap();
-        let res2 = handle2.await.unwrap();
+    let res1 = handle1.await.unwrap();
+    let res2 = handle2.await.unwrap();
 
-        assert!(res1.is_ok());
-        assert!(res2.is_ok());
+    assert!(res1.is_ok());
+    assert!(res2.is_ok());
 
-        RACE_TESTING.store(false, Ordering::SeqCst);
+    RACE_TESTING.store(false, Ordering::SeqCst);
 
-        let mut sent_commands = 0;
-        while exec_rx.try_recv().is_ok() {
-            sent_commands += 1;
-        }
-
-        assert_eq!(sent_commands, 1, "Exactly one task should be queued, duplicate was rejected.");
+    let mut sent_commands = 0;
+    while exec_rx.try_recv().is_ok() {
+        sent_commands += 1;
     }
+
+    assert_eq!(
+        sent_commands, 1,
+        "Exactly one task should be queued, duplicate was rejected."
+    );
+}

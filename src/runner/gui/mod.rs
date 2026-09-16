@@ -18,11 +18,11 @@ use crate::runner::config::*;
 use crate::runner::engine::*;
 use anyhow::Result;
 
+use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
-use tracing::{error, info};
-use std::sync::Arc;
 use tokio::sync::Semaphore;
+use tracing::{error, info};
 
 pub mod components;
 pub mod forms;
@@ -115,7 +115,11 @@ pub(crate) async fn run_server(handle: RunnerHandle) -> Result<()> {
     }
 }
 
-async fn send_error(socket: &mut tokio::net::TcpStream, status: u16, message: &str) -> Result<Option<HttpRequest>> {
+async fn send_error(
+    socket: &mut tokio::net::TcpStream,
+    status: u16,
+    message: &str,
+) -> Result<Option<HttpRequest>> {
     let reason = status_reason_phrase(status);
     let resp = format!(
         "HTTP/1.1 {} {}\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n{}",
@@ -183,7 +187,8 @@ pub(crate) async fn read_http_request(
                 Err(e) => break Err(e.into()),
             }
         }
-    }).await;
+    })
+    .await;
 
     match read_result {
         Ok(Ok(_n)) => {}
@@ -237,7 +242,12 @@ pub(crate) async fn read_http_request(
 
         let exact_body_end = pos + delim_len + cl;
         if total_read > exact_body_end {
-            let _ = send_error(socket, 400, "Malformed Request: Extra bytes beyond Content-Length").await;
+            let _ = send_error(
+                socket,
+                400,
+                "Malformed Request: Extra bytes beyond Content-Length",
+            )
+            .await;
             return Ok(None);
         }
 
@@ -260,10 +270,17 @@ pub(crate) async fn read_http_request(
             } else {
                 &path
             };
-            info!("HTTP Request: {} {} (Body length: {})", method, safe_path, cl);
+            info!(
+                "HTTP Request: {} {} (Body length: {})",
+                method, safe_path, cl
+            );
         }
 
-        return Ok(Some(HttpRequest { method, path, body: body_str }));
+        return Ok(Some(HttpRequest {
+            method,
+            path,
+            body: body_str,
+        }));
     }
 
     Ok(None)
@@ -463,30 +480,45 @@ mod tests {
         start_gui_server(handle);
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        use tokio::io::{AsyncWriteExt, AsyncReadExt};
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-        let mut stream = tokio::net::TcpStream::connect(format!("127.0.0.1:{}", port)).await.unwrap();
+        let mut stream = tokio::net::TcpStream::connect(format!("127.0.0.1:{}", port))
+            .await
+            .unwrap();
         stream.write_all(b"POST /test HTTP/1.1\r\n").await.unwrap();
-        stream.write_all(b"Content-Length: 4\r\n\r\n").await.unwrap();
+        stream
+            .write_all(b"Content-Length: 4\r\n\r\n")
+            .await
+            .unwrap();
         stream.write_all(b"te").await.unwrap();
         tokio::time::sleep(Duration::from_millis(50)).await;
         stream.write_all(b"st").await.unwrap();
 
         let mut resp = String::new();
-        let _ = tokio::time::timeout(Duration::from_secs(2), stream.read_to_string(&mut resp)).await;
+        let _ =
+            tokio::time::timeout(Duration::from_secs(2), stream.read_to_string(&mut resp)).await;
         assert!(resp.contains("404 Not Found") || resp.is_empty());
 
-        let mut stream2 = tokio::net::TcpStream::connect(format!("127.0.0.1:{}", port)).await.unwrap();
-        stream2.write_all(b"POST /test HTTP/1.1\r\nContent-Length: 4\r\n\r\ntestX").await.unwrap();
+        let mut stream2 = tokio::net::TcpStream::connect(format!("127.0.0.1:{}", port))
+            .await
+            .unwrap();
+        stream2
+            .write_all(b"POST /test HTTP/1.1\r\nContent-Length: 4\r\n\r\ntestX")
+            .await
+            .unwrap();
         let mut resp2 = String::new();
-        let _ = tokio::time::timeout(Duration::from_secs(2), stream2.read_to_string(&mut resp2)).await;
+        let _ =
+            tokio::time::timeout(Duration::from_secs(2), stream2.read_to_string(&mut resp2)).await;
         assert!(resp2.contains("400 Bad Request") || resp2.is_empty());
         assert!(resp2.contains("Malformed Request: Extra bytes") || resp2.is_empty());
 
-        let mut stream3 = tokio::net::TcpStream::connect(format!("127.0.0.1:{}", port)).await.unwrap();
+        let mut stream3 = tokio::net::TcpStream::connect(format!("127.0.0.1:{}", port))
+            .await
+            .unwrap();
         stream3.write_all(b"POST \r\n\r\n").await.unwrap();
         let mut resp3 = String::new();
-        let _ = tokio::time::timeout(Duration::from_secs(2), stream3.read_to_string(&mut resp3)).await;
+        let _ =
+            tokio::time::timeout(Duration::from_secs(2), stream3.read_to_string(&mut resp3)).await;
         assert!(resp3.contains("400 Bad Request") || resp3.is_empty());
         assert!(resp3.contains("Malformed Request-Line") || resp3.is_empty());
     }

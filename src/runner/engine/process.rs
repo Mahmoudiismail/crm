@@ -205,48 +205,58 @@ mod tests {
         );
     }
 }
-    #[tokio::test]
-    async fn test_real_bounded_process_output_cap_above_10mb() {
-        let logger = TaskLogger::new("bounded_test", "bounded_test");
-        let cmd = if cfg!(windows) {
-            let mut c = tokio::process::Command::new("powershell");
-            c.args(["-NoProfile", "-Command", "$str = 'A' * 1024; for ($i=0; $i -lt 12000; $i++) { Write-Host $str }"]);
-            c
-        } else {
-            let mut c = tokio::process::Command::new("sh");
-            c.args(["-c", "yes AAAA | head -c 12582912"]);
-            c
-        };
-        let ctx = ProcessContext {
-            logger: &logger,
-            command_str: "bounded_output_process".to_string(),
-            timeout_seconds: 30,
-            cmd,
-        };
-        let res = run_process(ctx).await;
-        assert!(res.is_ok(), "Bounded process should succeed without timeout");
-    }
+#[tokio::test]
+async fn test_real_bounded_process_output_cap_above_10mb() {
+    let logger = TaskLogger::new("bounded_test", "bounded_test");
+    let cmd = if cfg!(windows) {
+        let mut c = tokio::process::Command::new("powershell");
+        c.args([
+            "-NoProfile",
+            "-Command",
+            "$str = 'A' * 1024; for ($i=0; $i -lt 12000; $i++) { Write-Host $str }",
+        ]);
+        c
+    } else {
+        let mut c = tokio::process::Command::new("sh");
+        c.args(["-c", "yes AAAA | head -c 12582912"]);
+        c
+    };
+    let ctx = ProcessContext {
+        logger: &logger,
+        command_str: "bounded_output_process".to_string(),
+        timeout_seconds: 30,
+        cmd,
+    };
+    let res = run_process(ctx).await;
+    assert!(
+        res.is_ok(),
+        "Bounded process should succeed without timeout"
+    );
+}
 
-    #[tokio::test]
-    async fn test_real_process_tree_timeout_and_termination() {
-        let logger = TaskLogger::new("timeout_test", "timeout_test");
-        let cmd = if cfg!(windows) {
-            let mut c = tokio::process::Command::new("cmd");
-            c.args(["/C", "start /wait ping -n 10 127.0.0.1 > nul"]);
-            c
-        } else {
-            let mut c = tokio::process::Command::new("sh");
-            c.args(["-c", "sleep 10"]);
-            c
-        };
-        let ctx = ProcessContext {
-            logger: &logger,
-            command_str: "long_running_process".to_string(),
-            timeout_seconds: 1,
-            cmd,
-        };
-        let res = run_process(ctx).await;
-        assert!(res.is_err(), "Process should return timeout error");
-        let err_msg = res.unwrap_err().to_string();
-        assert!(err_msg.contains("timed out"), "Error message should mention timeout");
-    }
+#[tokio::test]
+async fn test_real_process_tree_timeout_and_termination() {
+    let logger = TaskLogger::new("timeout_test", "timeout_test");
+    let cmd = if cfg!(windows) {
+        let mut c = tokio::process::Command::new("cmd");
+        c.args(["/C", "start /wait ping -n 10 127.0.0.1 > nul"]);
+        c
+    } else {
+        let mut c = tokio::process::Command::new("sh");
+        c.args(["-c", "sleep 10"]);
+        c
+    };
+    let ctx = ProcessContext {
+        logger: &logger,
+        command_str: "long_running_process".to_string(),
+        timeout_seconds: 1,
+        cmd,
+    };
+    let res = run_process(ctx).await;
+    assert!(res.is_err(), "Process should return timeout error");
+    let err_msg = res.unwrap_err().to_string();
+    assert!(
+        err_msg.contains("timed out"),
+        "Error message should mention timeout"
+    );
+}

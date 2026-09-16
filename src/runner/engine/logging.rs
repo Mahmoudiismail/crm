@@ -57,7 +57,11 @@ impl TaskLoggerInner {
         };
 
         if let Err(e) = std::fs::create_dir_all(&log_dir) {
-            error!("Failed to create log directory {}: {}", log_dir.display(), e);
+            error!(
+                "Failed to create log directory {}: {}",
+                log_dir.display(),
+                e
+            );
             return Self {
                 file: None,
                 task_id: task_id.to_string(),
