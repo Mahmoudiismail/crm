@@ -91,6 +91,7 @@ pub fn process_update_pipeline(config: &crate::crm_updater::config::UpdaterConfi
     Ok(())
 }
 
+#[allow(dead_code)]
 const SCAN_DRAFTS_TEMPLATE: &str = r#"
 param(
     [string]$DownloadsDir
@@ -249,7 +250,7 @@ param(
     [string]$LogPath,
     [string]$DownloadsDir,
     [int]$ParentPid,
-    [string]$ReplacementMapJson
+    [string]$ReplacementMapPath
 )
 
 $ErrorActionPreference = 'Stop'
@@ -283,7 +284,7 @@ try {
         Write-Log "Original updater process terminated successfully."
     }
 
-    $Config = $ReplacementMapJson | ConvertFrom-Json
+    $Config = Get-Content -LiteralPath $ReplacementMapPath -Raw | ConvertFrom-Json
 
     if ($Config.apps_to_stop) {
         foreach ($App in $Config.apps_to_stop) {
@@ -426,7 +427,11 @@ try {
 } finally {
     Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue
     if ($UpdateFailed) {
-        exit 1
+
+    if (Test-Path -LiteralPath $ReplacementMapPath) {
+        Remove-Item -LiteralPath $ReplacementMapPath -Force -ErrorAction SilentlyContinue
+    }
+    exit 1
     }
 }
 "#;
@@ -519,10 +524,21 @@ fn generate_update_script(
         ("-LogPath".to_string(), log_path),
         ("-DownloadsDir".to_string(), downloads_dir_str),
         ("-ParentPid".to_string(), parent_pid.to_string()),
-        ("-ReplacementMapJson".to_string(), payload_json),
     ];
 
-    Ok((script_path, args))
+    let mut map_file = tempfile::Builder::new()
+        .prefix("crm_replacement_map_")
+        .suffix(".json")
+        .tempfile()?;
+    map_file.write_all(payload_json.as_bytes())?;
+    let (_, path_buf) = map_file.keep()?; // Detached process handles deletion
+
+    let mut final_args = args;
+    final_args.push((
+        "-ReplacementMapPath".to_string(),
+        path_buf.to_string_lossy().to_string(),
+    ));
+    Ok((script_path, final_args))
 }
 
 fn execute_detached_powershell(script_path: &Path, args: &[(String, String)]) -> Result<()> {
@@ -642,7 +658,7 @@ mod tests {
         let script_content = std::fs::read_to_string(&script_path).unwrap();
 
         assert!(script_content.contains("param("));
-        assert!(script_content.contains("[string]$ReplacementMapJson"));
+        assert!(script_content.contains("[string]$ReplacementMapPath"));
         assert!(script_content.contains("ConvertFrom-Json"));
 
         assert_eq!(args.len(), 4);
@@ -650,12 +666,14 @@ mod tests {
         assert_eq!(args[1].0, "-DownloadsDir");
         assert_eq!(args[2].0, "-ParentPid");
         assert_eq!(args[2].1, "99999");
-        assert_eq!(args[3].0, "-ReplacementMapJson");
+        assert_eq!(args[3].0, "-ReplacementMapPath");
 
-        let json_val: serde_json::Value = serde_json::from_str(&args[3].1).unwrap();
+        let json_val: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&args[3].1).unwrap()).unwrap();
         assert_eq!(json_val["apps_to_stop"][0]["process_name"], "app1");
         assert_eq!(json_val["restart_apps"][0]["autostart"], true);
         assert_eq!(json_val["restart_apps"][1]["autostart"], false);
+        std::fs::remove_file(&args[3].1).unwrap();
     }
 
     #[test]

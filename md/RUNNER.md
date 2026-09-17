@@ -62,3 +62,18 @@ Each External Application action block inside the task editor features its own d
 - `/run-all` (POST) - Enqueues all tasks for immediate execution (Manual mode).
 - `/api/tasks/preview` (POST) - Generates up to 10 future execution occurrences for a specified External Application and schedule configuration.
 - `/api/apps/manifest` (GET) - Retrieves JSON manifest for registered application via non-blocking async process invocation.
+
+## HTTP Security Model
+The Runner GUI web server (`0.0.0.0` bindings rejected, limited strictly to loopback addresses like `127.0.0.1` unless configured otherwise intentionally) ensures safe execution of workflows on a local machine.
+- Requests are bounded with a 10-second lifetime absolute timeout across all fragmented reads to prevent Slowloris attacks.
+- Strict limit bounds are in place: `MAX_HEADER_BYTES = 64KB` and `MAX_BODY_BYTES = 2MB`. If limits are exceeded, HTTP 413 is raised.
+- Malformed inputs, missing headers, or unexpected bytes beyond the declared Content-Length result in an immediate 400 Bad Request error.
+- All non-read state mutation routes strictly require POST requests and enforce a 405 Method Not Allowed error on GET.
+- A Tokio semaphore limits concurrent HTTP requests to a max of 100 in-flight connections to prevent resource starvation.
+- Server logs sanitize URIs and only record standard metadata, masking sensitive body information.
+
+## Manifest Execution
+External apps are queried via `--manifest` through an async bounded execution environment (`src/runner/engine/process.rs`). Outputs are heavily capped (MAX 10 MB per stream stdout/stderr). Long-running manifests or hanging child processes are aggressively cleaned up natively across platforms via process tree termination (`taskkill /F /T /PID` or `pkill -P`).
+
+## Date Periodization
+The period engine is responsible for converting configurations (`PeriodMode::Monthly`, `AQuarter`, etc.) directly into Execution Periods, decoupled from the core lifecycle queue. Resolution occurs sequentially where the context of the `start_date` bounds the upcoming contextual resolution of the `end_date`.
