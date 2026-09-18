@@ -177,11 +177,14 @@ pub async fn initiate_auth(
     let status = resp.status();
     let resp_text = resp.text().await?;
     debug!("InitiateAuth response status: {}", status);
-    debug!("InitiateAuth response body: {}", resp_text);
+    debug!("InitiateAuth response size: {} bytes", resp_text.len());
 
     if !status.is_success() {
         let safe_msg = if let Ok(json) = serde_json::from_str::<serde_json::Value>(&resp_text) {
-            json["message"].as_str().unwrap_or("Unknown error").to_string()
+            json["message"]
+                .as_str()
+                .unwrap_or("Unknown error")
+                .to_string()
         } else {
             "Unknown error".to_string()
         };
@@ -264,11 +267,17 @@ pub async fn respond_to_auth_challenge(
     let status = resp.status();
     let resp_text = resp.text().await?;
     debug!("RespondToAuthChallenge response status: {}", status);
-    debug!("RespondToAuthChallenge response body: {}", resp_text);
+    debug!(
+        "RespondToAuthChallenge response size: {} bytes",
+        resp_text.len()
+    );
 
     if !status.is_success() {
         let safe_msg = if let Ok(json) = serde_json::from_str::<serde_json::Value>(&resp_text) {
-            json["message"].as_str().unwrap_or("Unknown error").to_string()
+            json["message"]
+                .as_str()
+                .unwrap_or("Unknown error")
+                .to_string()
         } else {
             "Unknown error".to_string()
         };
