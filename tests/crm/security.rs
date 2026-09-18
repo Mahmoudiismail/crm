@@ -49,8 +49,10 @@ fn test_explicit_true_no_verify_ssl_is_true() {
 
 #[tokio::test]
 async fn test_tls_client_behavior_enabled() {
-    let mut config = AppConfig::default();
-    config.no_verify_ssl = false;
+    let config = AppConfig {
+        no_verify_ssl: false,
+        ..Default::default()
+    };
     let client = build_client(&config).expect("Failed to build client");
 
     let res = client.get("https://self-signed.badssl.com/").send().await;
@@ -73,8 +75,10 @@ async fn test_tls_client_behavior_enabled() {
 
 #[tokio::test]
 async fn test_tls_client_behavior_disabled_opt_out() {
-    let mut config = AppConfig::default();
-    config.no_verify_ssl = true;
+    let config = AppConfig {
+        no_verify_ssl: true,
+        ..Default::default()
+    };
     let client = build_client(&config).expect("Failed to build client");
 
     let res = client.get("https://self-signed.badssl.com/").send().await;
