@@ -149,12 +149,17 @@ async fn main() -> Result<()> {
                 } else {
                     let status = resp.status();
                     let text = resp.text().await.unwrap_or_default();
-                    error!("Failed to fetch {}: {} - {}", name, status, text);
+                    error!(
+                        "Failed to fetch {}: {} - {} bytes",
+                        name,
+                        status,
+                        text.len()
+                    );
                     results.insert(
                         name.to_string(),
                         serde_json::json!({
                             "error": format!("Status: {}", status),
-                            "details": text
+                            "details": format!("Body length: {} bytes", text.len())
                         }),
                     );
                 }

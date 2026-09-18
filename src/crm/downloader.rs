@@ -49,7 +49,12 @@ pub async fn download_csv(
     if !status.is_success() {
         let body = resp.text().await.unwrap_or_default();
         let _ = tokio::fs::remove_file(&temp_dest_path).await;
-        anyhow::bail!("[{}] Download HTTP {}: {}", report_key, status, body);
+        anyhow::bail!(
+            "[{}] Download HTTP {}: body size {} bytes",
+            report_key,
+            status,
+            body.len()
+        );
     }
 
     let content_length = resp.content_length();

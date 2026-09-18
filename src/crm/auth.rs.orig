@@ -141,11 +141,7 @@ pub async fn initiate_auth(
     username: &str,
     big_a_hex: &str,
 ) -> Result<ChallengeParams> {
-    let initiate_url = if region.starts_with("http") {
-        region.to_string()
-    } else {
-        format!("https://cognito-idp.{}.amazonaws.com/", region)
-    };
+    let initiate_url = format!("https://cognito-idp.{}.amazonaws.com/", region);
 
     let initiate_body = serde_json::json!({
         "AuthFlow": "USER_SRP_AUTH",
@@ -180,12 +176,7 @@ pub async fn initiate_auth(
     debug!("InitiateAuth response body: {}", resp_text);
 
     if !status.is_success() {
-        let safe_msg = if let Ok(json) = serde_json::from_str::<serde_json::Value>(&resp_text) {
-            json["message"].as_str().unwrap_or("Unknown error").to_string()
-        } else {
-            "Unknown error".to_string()
-        };
-        bail!("InitiateAuth failed (HTTP {}): {}", status, safe_msg);
+        bail!("InitiateAuth failed (HTTP {}): {}", status, resp_text);
     }
 
     let init_resp: serde_json::Value = serde_json::from_str(&resp_text)?;
@@ -227,11 +218,7 @@ pub async fn respond_to_auth_challenge(
     signature: &str,
     timestamp: &str,
 ) -> Result<AuthTokens> {
-    let challenge_url = if region.starts_with("http") {
-        region.to_string()
-    } else {
-        format!("https://cognito-idp.{}.amazonaws.com/", region)
-    };
+    let challenge_url = format!("https://cognito-idp.{}.amazonaws.com/", region);
 
     let challenge_body = serde_json::json!({
         "ChallengeName": "PASSWORD_VERIFIER",
@@ -267,15 +254,10 @@ pub async fn respond_to_auth_challenge(
     debug!("RespondToAuthChallenge response body: {}", resp_text);
 
     if !status.is_success() {
-        let safe_msg = if let Ok(json) = serde_json::from_str::<serde_json::Value>(&resp_text) {
-            json["message"].as_str().unwrap_or("Unknown error").to_string()
-        } else {
-            "Unknown error".to_string()
-        };
         bail!(
             "RespondToAuthChallenge failed (HTTP {}): {}",
             status,
-            safe_msg
+            resp_text
         );
     }
 

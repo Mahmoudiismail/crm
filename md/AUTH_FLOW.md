@@ -108,6 +108,7 @@ The SRP-6a modular exponentiation math in `compute_s` is unit-tested against kno
 
 ## Security Guidance
 
-- Prefer default TLS verification (`no_verify_ssl = false`) in production.
+- Default TLS verification is strictly enabled (`no_verify_ssl = false`) in production by default. Explicitly setting `no_verify_ssl: true` is an intentional insecure override.
+- Authentication tokens, payloads, and raw responses are strictly prevented from being logged to protect credentials. Safe diagnostic logging is used instead.
 - Use `remember_secrets = false` if config should not retain tokens/password.
 - Do not log raw passwords.

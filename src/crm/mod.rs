@@ -136,7 +136,7 @@ pub async fn run_once(
     Ok(())
 }
 
-fn build_client(config: &AppConfig) -> Result<reqwest::Client> {
+pub fn build_client(config: &AppConfig) -> Result<reqwest::Client> {
     let mut builder = reqwest::Client::builder();
     if config.no_verify_ssl {
         builder = builder.danger_accept_invalid_certs(true);

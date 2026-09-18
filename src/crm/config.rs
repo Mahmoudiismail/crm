@@ -110,7 +110,7 @@ impl Default for AppConfig {
             client_id: "i7g0t35boqicb1tdc4rgthk6".into(),
             username: "".into(),
             password: "".into(),
-            no_verify_ssl: true,
+            no_verify_ssl: false,
             remember_secrets: true,
             email: "Mahmoud_iismail@rayacx.com".into(),
             from_date: "2025-01-01".into(),
@@ -356,7 +356,7 @@ mod tests {
 
         // Default values should be filled in
         assert_eq!(config.username, "");
-        assert!(config.no_verify_ssl);
+        assert!(!config.no_verify_ssl);
     }
 
     #[test]
