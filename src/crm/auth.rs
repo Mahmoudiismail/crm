@@ -119,22 +119,22 @@ pub async fn ensure_authenticated(
 // ──────────────────────────────────────────────────────────────
 
 #[derive(Debug)]
-pub struct AuthTokens {
-    pub access_token: String,
-    pub id_token: String,
-    pub refresh_token: String,
+struct AuthTokens {
+    access_token: String,
+    id_token: String,
+    refresh_token: String,
     expires_in: u64,
 }
 
 #[derive(Debug)]
-pub struct ChallengeParams {
+struct ChallengeParams {
     srp_b_hex: String,
     salt_hex: String,
     secret_block_b64: String,
     user_id: String,
 }
 
-pub async fn initiate_auth(
+async fn initiate_auth(
     client: &reqwest::Client,
     region: &str,
     client_id: &str,
@@ -221,7 +221,7 @@ pub async fn initiate_auth(
     })
 }
 
-pub async fn respond_to_auth_challenge(
+async fn respond_to_auth_challenge(
     client: &reqwest::Client,
     region: &str,
     client_id: &str,
@@ -632,5 +632,201 @@ mod tests {
 
         let s = compute_s(&b, &k, &g, &x, &a, &u, &n);
         assert_eq!(s, expected_s);
+    }
+}
+
+#[cfg(test)]
+mod security_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_initiate_auth_secrets_not_returned_in_errors() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let url = format!("http://{}", addr);
+
+        let secret_sentinel = "ACCESS_TOKEN_SENTINEL_INITIATE";
+
+        tokio::spawn(async move {
+            if let Ok((mut socket, _)) = listener.accept().await {
+                let mut buf = [0; 1024];
+                let _ = socket.read(&mut buf).await;
+
+                let json_resp = serde_json::json!({
+                    "message": "Auth challenge failed",
+                    "sensitive_token": secret_sentinel
+                });
+                let response = format!(
+                    "HTTP/1.1 400 Bad Request\r\nContent-Length: {}\r\n\r\n{}",
+                    json_resp.to_string().len(),
+                    json_resp
+                );
+                let _ = socket.write_all(response.as_bytes()).await;
+            }
+        });
+
+        let client = reqwest::Client::new();
+        let result = initiate_auth(&client, &url, "client123", "user123", "00aabb").await;
+
+        assert!(result.is_err());
+
+        let err_str = result.unwrap_err().to_string();
+        assert!(
+            !err_str.contains(secret_sentinel),
+            "Result::Err should NOT contain the secret sentinel! Found in: {}",
+            err_str
+        );
+    }
+
+    #[tokio::test]
+    async fn test_respond_to_auth_challenge_secrets_not_returned_in_errors() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let url = format!("http://{}", addr);
+
+        let secret_sentinel = "ACCESS_TOKEN_SENTINEL_RESPOND";
+
+        tokio::spawn(async move {
+            if let Ok((mut socket, _)) = listener.accept().await {
+                let mut buf = [0; 1024];
+                let _ = socket.read(&mut buf).await;
+
+                let json_resp = serde_json::json!({
+                    "message": "Auth challenge failed again",
+                    "sensitive_token": secret_sentinel
+                });
+                let response = format!(
+                    "HTTP/1.1 401 Unauthorized\r\nContent-Length: {}\r\n\r\n{}",
+                    json_resp.to_string().len(),
+                    json_resp
+                );
+                let _ = socket.write_all(response.as_bytes()).await;
+            }
+        });
+
+        let client = reqwest::Client::new();
+        let result = respond_to_auth_challenge(
+            &client,
+            &url,
+            "client123",
+            "user123",
+            "secret123",
+            "sig123",
+            "time123",
+        )
+        .await;
+
+        assert!(result.is_err());
+
+        let err_str = result.unwrap_err().to_string();
+        assert!(
+            !err_str.contains(secret_sentinel),
+            "Result::Err should NOT contain the secret sentinel! Found in: {}",
+            err_str
+        );
+    }
+
+    #[tokio::test]
+    async fn test_initiate_auth_secrets_not_returned_in_errors_success() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let url = format!("http://{}", addr);
+
+        let secret_sentinel = "ACCESS_TOKEN_SENTINEL_INITIATE_SUCCESS";
+
+        tokio::spawn(async move {
+            if let Ok((mut socket, _)) = listener.accept().await {
+                let mut buf = [0; 1024];
+                let _ = socket.read(&mut buf).await;
+
+                let json_resp = serde_json::json!({
+                    "ChallengeName": "PASSWORD_VERIFIER",
+                    "ChallengeParameters": {
+                        "SRP_B": "b_value",
+                        "SALT": "salt_value",
+                        "SECRET_BLOCK": "secret_block",
+                        "USER_ID_FOR_SRP": "user_id"
+                    },
+                    "sensitive_token": secret_sentinel
+                });
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
+                    json_resp.to_string().len(),
+                    json_resp
+                );
+                let _ = socket.write_all(response.as_bytes()).await;
+            }
+        });
+
+        let client = reqwest::Client::new();
+        let result = initiate_auth(&client, &url, "client123", "user123", "00aabb").await;
+
+        assert!(result.is_ok(), "initiate_auth failed: {:?}", result.err());
+    }
+
+    #[tokio::test]
+    async fn test_respond_to_auth_challenge_secrets_not_returned_in_errors_success() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let url = format!("http://{}", addr);
+
+        let secret_sentinel = "ACCESS_TOKEN_SENTINEL_RESPOND_SUCCESS";
+
+        tokio::spawn(async move {
+            if let Ok((mut socket, _)) = listener.accept().await {
+                let mut buf = [0; 1024];
+                let _ = socket.read(&mut buf).await;
+
+                let json_resp = serde_json::json!({
+                    "AuthenticationResult": {
+                        "AccessToken": secret_sentinel,
+                        "IdToken": "id",
+                        "RefreshToken": "refresh",
+                        "ExpiresIn": 3600
+                    }
+                });
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
+                    json_resp.to_string().len(),
+                    json_resp
+                );
+                let _ = socket.write_all(response.as_bytes()).await;
+            }
+        });
+
+        let client = reqwest::Client::new();
+        let result = respond_to_auth_challenge(
+            &client,
+            &url,
+            "client123",
+            "user123",
+            "secret123",
+            "sig123",
+            "time123",
+        )
+        .await;
+
+        assert!(
+            result.is_ok(),
+            "respond_to_auth_challenge failed: {:?}",
+            result.err()
+        );
+        let auth = result.unwrap();
+        assert_eq!(
+            auth.access_token, secret_sentinel,
+            "Token parsed correctly from mock"
+        );
     }
 }

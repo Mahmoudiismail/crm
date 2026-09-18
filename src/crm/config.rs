@@ -431,3 +431,53 @@ mod tests {
         assert!(!config.dynamic_calls_from_date);
     }
 }
+
+#[cfg(test)]
+mod security_tests {
+    use super::*;
+
+    #[test]
+    fn test_default_config_tls_verification_enabled() {
+        let config = AppConfig::default();
+        assert!(
+            !config.no_verify_ssl,
+            "TLS verification should be enabled by default"
+        );
+    }
+
+    #[test]
+    fn test_missing_no_verify_ssl_defaults_to_false() {
+        let json = r#"{
+            "region": "us-east-1"
+        }"#;
+        let config: AppConfig = serde_json::from_str(json).expect("Failed to parse JSON");
+        assert!(
+            !config.no_verify_ssl,
+            "Missing no_verify_ssl should default to false"
+        );
+    }
+
+    #[test]
+    fn test_explicit_false_no_verify_ssl_is_false() {
+        let json = r#"{
+            "no_verify_ssl": false
+        }"#;
+        let config: AppConfig = serde_json::from_str(json).expect("Failed to parse JSON");
+        assert!(
+            !config.no_verify_ssl,
+            "Explicit false no_verify_ssl should be false"
+        );
+    }
+
+    #[test]
+    fn test_explicit_true_no_verify_ssl_is_true() {
+        let json = r#"{
+            "no_verify_ssl": true
+        }"#;
+        let config: AppConfig = serde_json::from_str(json).expect("Failed to parse JSON");
+        assert!(
+            config.no_verify_ssl,
+            "Explicit true no_verify_ssl should be true"
+        );
+    }
+}

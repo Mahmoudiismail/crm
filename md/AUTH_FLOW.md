@@ -109,6 +109,7 @@ The SRP-6a modular exponentiation math in `compute_s` is unit-tested against kno
 ## Security Guidance
 
 - Default TLS verification is strictly enabled (`no_verify_ssl = false`) in production by default. Explicitly setting `no_verify_ssl: true` is an intentional insecure override.
-- Authentication tokens, payloads, and raw responses are strictly prevented from being logged to protect credentials. Safe diagnostic logging is used instead.
+- Authentication tokens/secrets and raw authentication responses must not be logged.
+- Useful CRM API error response bodies may be logged when needed to diagnose API failures, provided they do not contain authentication secrets/credentials.
 - Use `remember_secrets = false` if config should not retain tokens/password.
 - Do not log raw passwords.

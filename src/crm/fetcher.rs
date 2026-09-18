@@ -623,12 +623,7 @@ async fn fetch_users_report(
         .with_context(|| format!("Failed to read response body from {}", endpoint))?;
 
     if !status.is_success() {
-        anyhow::bail!(
-            "{} HTTP {}: body size {} bytes",
-            endpoint,
-            status,
-            body.len()
-        );
+        anyhow::bail!("{} HTTP {}: {}", endpoint, status, body);
     }
 
     let duration = start_time.elapsed();
@@ -725,17 +720,12 @@ async fn fetch_and_update_incomplete_reservations(
         if !res.status().is_success() {
             let status = res.status();
             let body = res.text().await.unwrap_or_default();
-            anyhow::bail!(
-                "GET {} failed with status {}: body size {} bytes",
-                url,
-                status,
-                body.len()
-            );
+            anyhow::bail!("GET {} failed with status {}: {}", url, status, body);
         }
 
         let text: String = res.text().await.unwrap_or_default();
         let parsed: IncompleteReservationResponse = serde_json::from_str(&text)
-            .with_context(|| format!("Failed to parse response of size {}", text.len()))?;
+            .with_context(|| format!("Failed to parse response: {}", text))?;
 
         for item in parsed.data.items {
             all_ids.push(item.id);
@@ -825,16 +815,16 @@ async fn fetch_and_update_incomplete_reservations(
         let status = res.status();
         let body = res.text().await.unwrap_or_default();
         anyhow::bail!(
-            "PATCH {} failed with status {}: body size {} bytes",
+            "PATCH {} failed with status {}: {}",
             patch_url,
             status,
-            body.len()
+            body
         );
     }
 
     let text = res.text().await?;
     let parsed: Value = serde_json::from_str(&text)
-        .with_context(|| format!("Failed to parse response of size {}", text.len()))?;
+        .with_context(|| format!("Failed to parse response: {}", text))?;
 
     Ok(parsed)
 }
@@ -1131,18 +1121,10 @@ async fn fetch_single(
         "Response from {} — status: {}, headers: {}",
         endpoint, status, headers
     );
-    debug!("Response body from {} size: {} bytes", endpoint, body.len());
+    debug!("Response body from {}: {}", endpoint, body);
 
     if !status.is_success() {
-        let safe_msg = if let Ok(json) = serde_json::from_str::<serde_json::Value>(&body) {
-            json["message"]
-                .as_str()
-                .unwrap_or("Unknown error")
-                .to_string()
-        } else {
-            "Unknown error".to_string()
-        };
-        let err_msg = format!("{} returned HTTP {}: {}", endpoint, status, safe_msg);
+        let err_msg = format!("{} returned HTTP {}: {}", endpoint, status, body);
         let err = anyhow::anyhow!("{}", err_msg);
         if is_signed_url_generation_failure(&err) {
             info!("{} failed with HTTP {}: {}", endpoint, status, body);
