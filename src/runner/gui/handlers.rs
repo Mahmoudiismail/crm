@@ -4,6 +4,7 @@ use super::helpers::*;
 use super::templates::*;
 use super::HttpRequest;
 use crate::runner::config::*;
+use crate::runner::engine::process::execute_hardened_process;
 use crate::runner::engine::*;
 use anyhow::{Context, Result};
 use chrono::{Local, Utc};
@@ -550,21 +551,21 @@ pub(crate) async fn handle_api_apps_manifest(
             ));
         }
 
-        let output_res = tokio::process::Command::new(&app.executable_path)
-            .arg("--manifest")
-            .output()
-            .await;
+        let mut cmd = tokio::process::Command::new(&app.executable_path);
+        cmd.arg("--manifest");
+
+        let output_res = execute_hardened_process(cmd, 30).await;
 
         match output_res {
-            Ok(output) => {
-                if output.status.success() {
-                    let mut body = String::from_utf8_lossy(&output.stdout).to_string();
+            Ok((status, stdout_bytes, stderr_bytes)) => {
+                if status.success() {
+                    let mut body = String::from_utf8_lossy(&stdout_bytes).to_string();
                     if body.trim().is_empty() {
                         body = "{}".to_string();
                     }
                     Ok((200, "application/json", body))
                 } else {
-                    let err_msg = String::from_utf8_lossy(&output.stderr);
+                    let err_msg = String::from_utf8_lossy(&stderr_bytes);
                     Ok((
                         500,
                         "application/json",

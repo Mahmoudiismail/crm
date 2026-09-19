@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use chrono::Local;
 use tokio::sync::Mutex;
-use tracing::{debug, error};
+use tracing::error;
 
 #[derive(Clone, Debug)]
 pub struct TaskLogger {
@@ -20,12 +20,49 @@ impl TaskLogger {
 
     pub async fn log(&self, message: &str) {
         let mut inner = self.inner.lock().await;
-        inner.log(message);
+        if let Some(mut f) = inner.file.take() {
+            let msg = message.to_string();
+            let tid = inner.task_id.clone();
+            inner.file = Some(
+                tokio::task::spawn_blocking(move || {
+                    let now = chrono::Local::now().to_rfc3339();
+                    let line = format!("[{}] {}\n", now, msg);
+                    let _ = f.write_all(line.as_bytes());
+                    let _ = f.flush();
+                    tracing::debug!("[Task:{}] {}", tid, msg);
+                    f
+                })
+                .await
+                .unwrap(),
+            );
+        } else {
+            tracing::debug!("[Task:{}] {}", inner.task_id, message);
+        }
     }
 
     pub async fn log_bytes(&self, prefix: &str, bytes: &[u8]) {
+        if bytes.is_empty() {
+            return;
+        }
         let mut inner = self.inner.lock().await;
-        inner.log_bytes(prefix, bytes);
+        if let Some(mut f) = inner.file.take() {
+            let prefix = prefix.to_string();
+            let bytes = bytes.to_vec();
+            inner.file = Some(
+                tokio::task::spawn_blocking(move || {
+                    let text = String::from_utf8_lossy(&bytes);
+                    for line in text.lines() {
+                        let now = chrono::Local::now().to_rfc3339();
+                        let formatted = format!("[{}] {}: {}\n", now, prefix, line);
+                        let _ = f.write_all(formatted.as_bytes());
+                    }
+                    let _ = f.flush();
+                    f
+                })
+                .await
+                .unwrap(),
+            );
+        }
     }
 
     pub async fn log_path_async(&self) -> std::path::PathBuf {
@@ -95,32 +132,13 @@ impl TaskLoggerInner {
     }
 
     fn log(&mut self, message: &str) {
-        let now = Local::now().to_rfc3339();
-        let line = format!("[{}] {}\n", now, message);
         if let Some(ref mut f) = self.file {
+            let now = chrono::Local::now().to_rfc3339();
+            let line = format!("[{}] {}\n", now, message);
             let _ = f.write_all(line.as_bytes());
             let _ = f.flush();
         }
-        debug!("[Task:{}] {}", self.task_id, message);
-    }
-
-    fn log_file_only(&mut self, message: &str) {
-        let now = Local::now().to_rfc3339();
-        let line = format!("[{}] {}\n", now, message);
-        if let Some(ref mut f) = self.file {
-            let _ = f.write_all(line.as_bytes());
-            let _ = f.flush();
-        }
-    }
-
-    fn log_bytes(&mut self, prefix: &str, bytes: &[u8]) {
-        if bytes.is_empty() {
-            return;
-        }
-        let text = String::from_utf8_lossy(bytes);
-        for line in text.lines() {
-            self.log_file_only(&format!("{}: {}", prefix, line));
-        }
+        tracing::debug!("[Task:{}] {}", self.task_id, message);
     }
 }
 

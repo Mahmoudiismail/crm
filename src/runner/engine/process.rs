@@ -16,7 +16,49 @@ pub struct ProcessContext<'a> {
     pub cmd: tokio::process::Command,
 }
 
-pub async fn run_process(mut ctx: ProcessContext<'_>) -> Result<()> {
+pub(crate) async fn execute_hardened_process(
+    mut cmd: tokio::process::Command,
+    timeout_seconds: u64,
+) -> Result<(std::process::ExitStatus, Vec<u8>, Vec<u8>)> {
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
+    cmd.kill_on_drop(true);
+    let mut child = cmd.spawn().context("Failed to spawn process")?;
+    let child_pid = child.id();
+    let timeout_duration = if timeout_seconds > 0 {
+        Some(Duration::from_secs(timeout_seconds))
+    } else {
+        None
+    };
+    let mut stdout_stream = child.stdout.take();
+    let mut stderr_stream = child.stderr.take();
+    let mut stdout_bytes = Vec::new();
+    let mut stderr_bytes = Vec::new();
+    let read_stdout = read_bounded(stdout_stream.as_mut(), &mut stdout_bytes);
+    let read_stderr = read_bounded(stderr_stream.as_mut(), &mut stderr_bytes);
+    let status_res = if let Some(duration) = timeout_duration {
+        let wait_child = async {
+            let (s, _, _) = tokio::join!(child.wait(), read_stdout, read_stderr);
+            s
+        };
+        match tokio::time::timeout(duration, wait_child).await {
+            Ok(s) => s.context("Failed waiting for process")?,
+            Err(_) => {
+                terminate_process_tree(child_pid, &mut child).await;
+                return Err(anyhow::anyhow!(
+                    "Process timed out after {}s",
+                    timeout_seconds
+                ));
+            }
+        }
+    } else {
+        let (s, _, _) = tokio::join!(child.wait(), read_stdout, read_stderr);
+        s.context("Failed waiting for process completion")?
+    };
+    Ok((status_res, stdout_bytes, stderr_bytes))
+}
+
+pub async fn run_process(ctx: ProcessContext<'_>) -> Result<()> {
     ctx.logger
         .log("--------------------------------------------------")
         .await;
@@ -27,61 +69,29 @@ pub async fn run_process(mut ctx: ProcessContext<'_>) -> Result<()> {
         .log("--------------------------------------------------")
         .await;
 
-    ctx.cmd.stdout(Stdio::piped());
-    ctx.cmd.stderr(Stdio::piped());
-    ctx.cmd.kill_on_drop(true);
-
-    let mut child = ctx
-        .cmd
-        .spawn()
-        .with_context(|| format!("Failed to spawn process for command: {}", ctx.command_str))?;
-
-    let child_pid = child.id();
-
-    let timeout_duration = if ctx.timeout_seconds > 0 {
-        Some(Duration::from_secs(ctx.timeout_seconds))
-    } else {
-        None
-    };
-
-    let mut stdout_stream = child.stdout.take();
-    let mut stderr_stream = child.stderr.take();
-
-    let mut stdout_bytes = Vec::new();
-    let mut stderr_bytes = Vec::new();
-
-    let read_stdout = read_bounded(stdout_stream.as_mut(), &mut stdout_bytes);
-    let read_stderr = read_bounded(stderr_stream.as_mut(), &mut stderr_bytes);
-
-    let status = if let Some(duration) = timeout_duration {
-        let wait_child = async {
-            let (status_res, _, _) = tokio::join!(child.wait(), read_stdout, read_stderr);
-            status_res
-        };
-
-        match tokio::time::timeout(duration, wait_child).await {
-            Ok(res) => res.context("Failed waiting for process completion")?,
-            Err(_) => {
-                ctx.logger
-                    .log(&format!(
-                        "TIMEOUT: Action exceeded timeout of {}s. Terminating process tree...",
-                        ctx.timeout_seconds
-                    ))
-                    .await;
-
-                terminate_process_tree(child_pid, &mut child).await;
-
-                return Err(anyhow::anyhow!(
-                    "Command timed out after {}s: {}",
-                    ctx.timeout_seconds,
+    let (status, stdout_bytes, stderr_bytes) =
+        match execute_hardened_process(ctx.cmd, ctx.timeout_seconds).await {
+            Ok(res) => res,
+            Err(e) => {
+                if e.to_string().contains("timed out") {
+                    ctx.logger
+                        .log(&format!(
+                            "TIMEOUT: Action exceeded timeout of {}s. Terminating process tree...",
+                            ctx.timeout_seconds
+                        ))
+                        .await;
+                    return Err(anyhow::anyhow!(
+                        "Command timed out after {}s: {}",
+                        ctx.timeout_seconds,
+                        ctx.command_str
+                    ));
+                }
+                return Err(e.context(format!(
+                    "Failed to spawn process for command: {}",
                     ctx.command_str
-                ));
+                )));
             }
-        }
-    } else {
-        let (status_res, _, _) = tokio::join!(child.wait(), read_stdout, read_stderr);
-        status_res.context("Failed waiting for process completion")?
-    };
+        };
 
     ctx.logger.log_bytes("STDOUT", &stdout_bytes).await;
     ctx.logger.log_bytes("STDERR", &stderr_bytes).await;
