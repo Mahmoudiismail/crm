@@ -143,3 +143,34 @@ fn build_client(config: &AppConfig) -> Result<reqwest::Client> {
     }
     Ok(builder.build()?)
 }
+
+#[cfg(test)]
+mod security_tests {
+    use super::*;
+    use crate::crm::config::AppConfig;
+
+    #[test]
+    fn test_tls_client_configuration_behavior() {
+        // Deterministically verify that the client builds successfully under both
+        // configurations without crashing, avoiding external network dependency.
+        let secure_config = AppConfig {
+            no_verify_ssl: false,
+            ..Default::default()
+        };
+        let secure_client = build_client(&secure_config);
+        assert!(
+            secure_client.is_ok(),
+            "Client should build successfully with TLS verification enabled"
+        );
+
+        let insecure_config = AppConfig {
+            no_verify_ssl: true,
+            ..Default::default()
+        };
+        let insecure_client = build_client(&insecure_config);
+        assert!(
+            insecure_client.is_ok(),
+            "Client should build successfully with TLS verification disabled"
+        );
+    }
+}
