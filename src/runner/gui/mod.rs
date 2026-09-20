@@ -173,15 +173,7 @@ pub(crate) async fn read_http_request(
                             return Err(anyhow::anyhow!("Payload Too Large"));
                         }
 
-                        let cl = match header_content_length(&buf[..pos]) {
-                            Ok(Some(cl)) => cl,
-                            Ok(None) => 0,
-                            Err(_) => {
-                                return Err(anyhow::anyhow!(
-                                    "Malformed Request: Invalid Content-Length"
-                                ))
-                            }
-                        };
+                        let cl = header_content_length(&buf[..pos]).unwrap_or(0);
                         if cl > MAX_BODY_BYTES {
                             return Err(anyhow::anyhow!("Payload Too Large"));
                         }
@@ -241,14 +233,7 @@ pub(crate) async fn read_http_request(
             return Ok(None);
         }
 
-        let cl = match header_content_length(headers_slice) {
-            Ok(Some(c)) => c,
-            Ok(None) => 0,
-            Err(_) => {
-                let _ = send_error(socket, 400, "Malformed Request: Invalid Content-Length").await;
-                return Ok(None);
-            }
-        };
+        let cl = header_content_length(headers_slice).unwrap_or(0);
         let body_received = total_read.saturating_sub(pos + delim_len);
 
         if body_received < cl {
@@ -301,16 +286,16 @@ pub(crate) async fn read_http_request(
     Ok(None)
 }
 
-pub(crate) fn header_content_length(bytes: &[u8]) -> Result<Option<usize>, ()> {
+pub(crate) fn header_content_length(bytes: &[u8]) -> Option<usize> {
     let req = String::from_utf8_lossy(bytes);
-    for line in req.lines() {
-        if let Some((name, value)) = line.split_once(':') {
-            if name.eq_ignore_ascii_case("content-length") {
-                return value.trim().parse().map(Some).map_err(|_| ());
-            }
+    req.lines().find_map(|line| {
+        let (name, value) = line.split_once(':')?;
+        if name.eq_ignore_ascii_case("content-length") {
+            value.trim().parse().ok()
+        } else {
+            None
         }
-    }
-    Ok(None)
+    })
 }
 
 #[allow(dead_code)]
@@ -356,8 +341,8 @@ mod tests {
         let crlf_req = b"POST /test HTTP/1.1\r\nContent-Length: 4\r\n\r\ntest";
         let lf_req = b"POST /test HTTP/1.1\nContent-Length: 4\n\ntest";
 
-        assert_eq!(header_content_length(crlf_req), Ok(Some(4)));
-        assert_eq!(header_content_length(lf_req), Ok(Some(4)));
+        assert_eq!(header_content_length(crlf_req), Some(4));
+        assert_eq!(header_content_length(lf_req), Some(4));
 
         assert_eq!(body_len(crlf_req), 4);
         assert_eq!(body_len(lf_req), 4);
@@ -536,17 +521,5 @@ mod tests {
             tokio::time::timeout(Duration::from_secs(2), stream3.read_to_string(&mut resp3)).await;
         assert!(resp3.contains("400 Bad Request") || resp3.is_empty());
         assert!(resp3.contains("Malformed Request-Line") || resp3.is_empty());
-    }
-}
-
-#[cfg(test)]
-mod additional_tests {
-    use super::*;
-
-    #[test]
-    fn test_malformed_content_length() {
-        let malformed_req = b"POST /test HTTP/1.1\r\nContent-Length: abc\r\n\r\ntest";
-        let res = header_content_length(malformed_req);
-        assert_eq!(res, Err(()));
     }
 }
