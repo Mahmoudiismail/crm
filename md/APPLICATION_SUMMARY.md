@@ -31,7 +31,7 @@ The system is a collection of Rust binaries designed to:
 8. Inject data via COM strictly preventing Excel exceptions (`0x800A03EC`) via native property disablements natively embedded within scripts.
 9. Support deep PowerShell integration via custom string parsing scripts bridging multi-type boundaries (double-parsing fallback arrays natively mapped via Rust structures).
 10. Send rich HTML outputs safely bypassing maximum file size barriers.
-11. Support dynamic variables universally mapped to Date inputs allowing recursive logic calculations cleanly across all binary ecosystems (`today`, `yesterday`, `tomorrow`, `eomonth`).
+11. Support dynamic variables universally mapped to Date inputs allowing recursive logic calculations cleanly across all binary ecosystems (`today`, `yesterday`, `tomorrow`, `eomonth`). Absolute date variables (`today`, `yesterday`, `tomorrow`) strictly derive from the local system date and unequivocally ignore any provided configuration `base_date`, whereas relative variables (like `eomonth`) resolve against the `base_date`.
 12. Automatically populate filter dates dynamically mapped to `start_date_key` and `end_date_key` via `yasweb_config.json` during monthly execution.
 
 ## Executables

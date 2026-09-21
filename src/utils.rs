@@ -263,20 +263,23 @@ pub(crate) fn resolve_date_var(val: &str, base_date: Option<&str>) -> Result<chr
     match val_lower.as_str() {
         "today" => {
             info!("Variable detected: {}", val);
-            debug!("Resolved value: {} (Original: {})", dt, val);
+            let res = Local::now().date_naive();
+            debug!("Resolved value: {} (Original: {})", res, val);
             trace!("Variable resolution path: today");
-            Ok(dt)
+            Ok(res)
         }
         "yesterday" => {
             info!("Variable detected: {}", val);
-            let res = dt - chrono::TimeDelta::try_days(1).context("valid days")?;
+            let res =
+                Local::now().date_naive() - chrono::TimeDelta::try_days(1).context("valid days")?;
             debug!("Resolved value: {} (Original: {})", res, val);
             trace!("Variable resolution path: yesterday");
             Ok(res)
         }
         "tomorrow" => {
             info!("Variable detected: {}", val);
-            let res = dt + chrono::TimeDelta::try_days(1).context("valid days")?;
+            let res =
+                Local::now().date_naive() + chrono::TimeDelta::try_days(1).context("valid days")?;
             debug!("Resolved value: {} (Original: {})", res, val);
             trace!("Variable resolution path: tomorrow");
             Ok(res)
@@ -584,6 +587,21 @@ mod tests {
         assert_eq!(
             resolve_date_var("eomonth", Some("2023-02-15")).unwrap(),
             eomonth_feb_nonleap
+        );
+
+        // Ensure absolute keywords IGNORE base_date and always use local system date
+        let base_date_str = "2026-01-01";
+        assert_eq!(
+            resolve_date_var("today", Some(base_date_str)).unwrap(),
+            today
+        );
+        assert_eq!(
+            resolve_date_var("yesterday", Some(base_date_str)).unwrap(),
+            yesterday
+        );
+        assert_eq!(
+            resolve_date_var("tomorrow", Some(base_date_str)).unwrap(),
+            tomorrow
         );
 
         // Test invalid variables
