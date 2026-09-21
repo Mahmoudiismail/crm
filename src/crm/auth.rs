@@ -78,7 +78,8 @@ pub async fn ensure_authenticated(
     // 2. Check cached token expiry
     if !config.access_token.is_empty() && !config.access_token_expiry.is_empty() {
         if let Ok(expiry) = DateTime::parse_from_rfc3339(&config.access_token_expiry) {
-            if expiry > Utc::now() {
+            let buffer = chrono::TimeDelta::try_minutes(5).unwrap_or_default();
+            if expiry > Utc::now() + buffer {
                 info!("Cached token still valid (expires {})", expiry);
                 let token = if !config.id_token.is_empty() {
                     config.id_token.clone()
@@ -134,6 +135,34 @@ struct ChallengeParams {
     user_id: String,
 }
 
+fn mask_sensitive_json(v: &mut serde_json::Value) {
+    if let serde_json::Value::Object(map) = v {
+        for (key, value) in map.iter_mut() {
+            if key == "PASSWORD_CLAIM_SECRET_BLOCK"
+                || key == "PASSWORD_CLAIM_SIGNATURE"
+                || key == "AccessToken"
+                || key == "IdToken"
+                || key == "RefreshToken"
+                || key == "SRP_A"
+                || key == "SRP_B"
+                || key == "SALT"
+                || key == "SECRET_BLOCK"
+                || key == "PASSWORD"
+            {
+                if value.is_string() {
+                    *value = serde_json::Value::String("***REDACTED***".to_string());
+                }
+            } else {
+                mask_sensitive_json(value);
+            }
+        }
+    } else if let serde_json::Value::Array(arr) = v {
+        for item in arr.iter_mut() {
+            mask_sensitive_json(item);
+        }
+    }
+}
+
 async fn initiate_auth(
     client: &reqwest::Client,
     region: &str,
@@ -157,9 +186,11 @@ async fn initiate_auth(
     });
 
     debug!("InitiateAuth request URL: {}", initiate_url);
+    let mut masked_initiate_body = initiate_body.clone();
+    mask_sensitive_json(&mut masked_initiate_body);
     debug!(
         "InitiateAuth body: {}",
-        serde_json::to_string_pretty(&initiate_body)?
+        serde_json::to_string_pretty(&masked_initiate_body)?
     );
 
     let resp = client
@@ -247,9 +278,11 @@ async fn respond_to_auth_challenge(
         }
     });
 
+    let mut masked_challenge_body = challenge_body.clone();
+    mask_sensitive_json(&mut masked_challenge_body);
     debug!(
         "RespondToAuthChallenge body: {}",
-        serde_json::to_string_pretty(&challenge_body)?
+        serde_json::to_string_pretty(&masked_challenge_body)?
     );
 
     let resp = client
@@ -828,5 +861,60 @@ mod security_tests {
             auth.access_token, secret_sentinel,
             "Token parsed correctly from mock"
         );
+    }
+}
+
+#[cfg(test)]
+mod auth_fix_tests {
+    use super::*;
+    use crate::crm::config::AppConfig;
+
+    #[tokio::test]
+    async fn test_token_expiry_buffer() {
+        let mut config = AppConfig::default();
+        let client = reqwest::Client::new();
+
+        config.access_token = "some_token".to_string();
+        config.access_token_expiry = Utc::now().to_rfc3339();
+
+        let result = ensure_authenticated(&mut config, &client, false).await;
+        assert!(
+            result.is_err(),
+            "Token with 0 min remaining should fail auth due to buffer"
+        );
+
+        config.access_token_expiry =
+            (Utc::now() + chrono::TimeDelta::try_minutes(6).unwrap_or_default()).to_rfc3339();
+        let result2 = ensure_authenticated(&mut config, &client, false).await;
+        assert!(
+            result2.is_ok(),
+            "Token with 6 mins remaining should be valid and bypassed"
+        );
+    }
+
+    #[test]
+    fn test_mask_sensitive_json_logic() {
+        let mut data = serde_json::json!({
+            "ChallengeName": "PASSWORD_VERIFIER",
+            "ChallengeResponses": {
+                "USERNAME": "user123",
+                "PASSWORD_CLAIM_SECRET_BLOCK": "secret_data",
+                "PASSWORD_CLAIM_SIGNATURE": "signature_data",
+                "TIMESTAMP": "time123"
+            }
+        });
+
+        mask_sensitive_json(&mut data);
+
+        assert_eq!(data["ChallengeResponses"]["USERNAME"], "user123");
+        assert_eq!(
+            data["ChallengeResponses"]["PASSWORD_CLAIM_SECRET_BLOCK"],
+            "***REDACTED***"
+        );
+        assert_eq!(
+            data["ChallengeResponses"]["PASSWORD_CLAIM_SIGNATURE"],
+            "***REDACTED***"
+        );
+        assert_eq!(data["ChallengeResponses"]["TIMESTAMP"], "time123");
     }
 }

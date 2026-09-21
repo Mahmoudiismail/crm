@@ -57,6 +57,11 @@ impl FetchContext {
         if !token_in_cfg.is_empty() && token_in_cfg != current_invalid_token {
             return Ok(token_in_cfg);
         }
+
+        // Invalidate current cached token strings explicitly before attempting a fresh login
+        cfg.id_token.clear();
+        cfg.access_token.clear();
+        cfg.access_token_expiry.clear();
         tracing::info!("Token expired (401), performing Cognito SRP authentication...");
         let new_token = crate::crm::auth::ensure_authenticated(&mut cfg, client, false)
             .await
@@ -252,7 +257,7 @@ pub async fn fetch_reports(
     let should_fetch = |key: &str| -> bool { report_type.iter().any(|r| r == "all" || r == key) };
 
     // Build task list using Futures so we can process them with buffer_unordered
-    let mut futures = Vec::new();
+    let mut futures: Vec<BoxFuture<'static, Result<(String, Value)>>> = Vec::new();
 
     let context = Arc::new(FetchContext {
         config: config_mutex.clone(),
@@ -371,13 +376,8 @@ pub async fn fetch_reports(
                         download_tx,
                         Some(context.clone()),
                     )
-                    .await
-                    .unwrap_or_else(|e| {
-                        error!("Report '{}' failed: {}", endpoint, e);
-                        serde_json::json!({"error": format!("{}", e)})
-                    });
-
-                    (key, v)
+                    .await?;
+                    Ok((key, v))
                 }
                 .boxed(),
             );
@@ -413,11 +413,7 @@ pub async fn fetch_reports(
                         &params,
                         Some(context.clone()),
                     )
-                    .await
-                    .unwrap_or_else(|e| {
-                        error!("Report '{}' failed: {}", endpoint, e);
-                        serde_json::json!({"error": format!("{}", e)})
-                    });
+                    .await?;
 
                     if download_csv {
                         if let Some(base64_val) = v.get("base64_data").and_then(|b| b.as_str()) {
@@ -433,7 +429,7 @@ pub async fn fetch_reports(
                         }
                     }
 
-                    (key, v)
+                    Ok((key, v))
                 }
                 .boxed(),
             );
@@ -462,12 +458,8 @@ pub async fn fetch_reports(
                         limit,
                         Some(context.clone()),
                     )
-                    .await
-                    .unwrap_or_else(|e| {
-                        error!("Report '{}' failed: {}", key, e);
-                        serde_json::json!({"error": format!("{}", e)})
-                    });
-                    (key, v)
+                    .await?;
+                    Ok((key, v))
                 }
                 .boxed(),
             );
@@ -512,13 +504,8 @@ pub async fn fetch_reports(
                         download_tx,
                         Some(context.clone()),
                     )
-                    .await
-                    .unwrap_or_else(|e| {
-                        error!("Report '{}' failed: {}", endpoint, e);
-                        serde_json::json!({"error": format!("{}", e)})
-                    });
-
-                    (key, v)
+                    .await?;
+                    Ok((key, v))
                 }
                 .boxed(),
             );
@@ -531,8 +518,8 @@ pub async fn fetch_reports(
     // Process up to 4 concurrent top-level fetch streams
     let task_results: Vec<(String, Value)> = futures_util::stream::iter(futures)
         .buffer_unordered(4)
-        .collect()
-        .await;
+        .try_collect()
+        .await?;
 
     // Await all downloads to complete
     let download_result = download_processor.await;
