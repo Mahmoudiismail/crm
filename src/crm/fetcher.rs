@@ -376,8 +376,10 @@ pub async fn fetch_reports(
                         download_tx,
                         Some(context.clone()),
                     )
-                    .await
-                    ?; Ok((key, v)) }.boxed(),
+                    .await?;
+                    Ok((key, v))
+                }
+                .boxed(),
             );
         } else if def.key == "users" {
             // Users report: direct GET request, no dates, returns Base64 CSV
@@ -411,8 +413,7 @@ pub async fn fetch_reports(
                         &params,
                         Some(context.clone()),
                     )
-                    .await
-                    ?;
+                    .await?;
 
                     if download_csv {
                         if let Some(base64_val) = v.get("base64_data").and_then(|b| b.as_str()) {
@@ -428,7 +429,9 @@ pub async fn fetch_reports(
                         }
                     }
 
-                    Ok((key, v)) }.boxed(),
+                    Ok((key, v))
+                }
+                .boxed(),
             );
         } else if def.key == "incomplete_reservation" {
             // Incomplete Reservation task: fetches tickets and bulk-updates them
@@ -455,8 +458,10 @@ pub async fn fetch_reports(
                         limit,
                         Some(context.clone()),
                     )
-                    .await
-                    ?; Ok((key, v)) }.boxed(),
+                    .await?;
+                    Ok((key, v))
+                }
+                .boxed(),
             );
         } else {
             // Tickets / Leads: try the full range first, then split if the
@@ -499,8 +504,10 @@ pub async fn fetch_reports(
                         download_tx,
                         Some(context.clone()),
                     )
-                    .await
-                    ?; Ok((key, v)) }.boxed(),
+                    .await?;
+                    Ok((key, v))
+                }
+                .boxed(),
             );
         }
     }

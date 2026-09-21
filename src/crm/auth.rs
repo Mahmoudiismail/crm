@@ -135,11 +135,20 @@ struct ChallengeParams {
     user_id: String,
 }
 
-
 fn mask_sensitive_json(v: &mut serde_json::Value) {
     if let serde_json::Value::Object(map) = v {
         for (key, value) in map.iter_mut() {
-            if key == "PASSWORD_CLAIM_SECRET_BLOCK" || key == "PASSWORD_CLAIM_SIGNATURE" || key == "AccessToken" || key == "IdToken" || key == "RefreshToken" || key == "SRP_A" || key == "SRP_B" || key == "SALT" || key == "SECRET_BLOCK" || key == "PASSWORD" {
+            if key == "PASSWORD_CLAIM_SECRET_BLOCK"
+                || key == "PASSWORD_CLAIM_SIGNATURE"
+                || key == "AccessToken"
+                || key == "IdToken"
+                || key == "RefreshToken"
+                || key == "SRP_A"
+                || key == "SRP_B"
+                || key == "SALT"
+                || key == "SECRET_BLOCK"
+                || key == "PASSWORD"
+            {
                 if value.is_string() {
                     *value = serde_json::Value::String("***REDACTED***".to_string());
                 }
@@ -869,11 +878,18 @@ mod auth_fix_tests {
         config.access_token_expiry = Utc::now().to_rfc3339();
 
         let result = ensure_authenticated(&mut config, &client, false).await;
-        assert!(result.is_err(), "Token with 0 min remaining should fail auth due to buffer");
+        assert!(
+            result.is_err(),
+            "Token with 0 min remaining should fail auth due to buffer"
+        );
 
-        config.access_token_expiry = (Utc::now() + chrono::TimeDelta::try_minutes(6).unwrap_or_default()).to_rfc3339();
+        config.access_token_expiry =
+            (Utc::now() + chrono::TimeDelta::try_minutes(6).unwrap_or_default()).to_rfc3339();
         let result2 = ensure_authenticated(&mut config, &client, false).await;
-        assert!(result2.is_ok(), "Token with 6 mins remaining should be valid and bypassed");
+        assert!(
+            result2.is_ok(),
+            "Token with 6 mins remaining should be valid and bypassed"
+        );
     }
 
     #[test]
@@ -891,8 +907,14 @@ mod auth_fix_tests {
         mask_sensitive_json(&mut data);
 
         assert_eq!(data["ChallengeResponses"]["USERNAME"], "user123");
-        assert_eq!(data["ChallengeResponses"]["PASSWORD_CLAIM_SECRET_BLOCK"], "***REDACTED***");
-        assert_eq!(data["ChallengeResponses"]["PASSWORD_CLAIM_SIGNATURE"], "***REDACTED***");
+        assert_eq!(
+            data["ChallengeResponses"]["PASSWORD_CLAIM_SECRET_BLOCK"],
+            "***REDACTED***"
+        );
+        assert_eq!(
+            data["ChallengeResponses"]["PASSWORD_CLAIM_SIGNATURE"],
+            "***REDACTED***"
+        );
         assert_eq!(data["ChallengeResponses"]["TIMESTAMP"], "time123");
     }
 }
