@@ -548,7 +548,6 @@ mod tests {
     use super::*;
     use chrono::Local;
 
-
     #[test]
     fn test_absolute_date_ignores_base_date_e2e() {
         use chrono::Local;
