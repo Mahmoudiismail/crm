@@ -8,12 +8,12 @@ Implementation: `src/crm/auth.rs`
 
 Decision tree:
 
-1. If cached token and `access_token_expiry` are valid -> reuse token.
+1. If cached token and `access_token_expiry` are valid (with a 5-minute safety buffer) -> reuse token.
 2. Else perform fresh SRP login.
 
 Current runtime policy: CRM execution always requires login flow (no user-facing skip-login option).
 
-Report range splitting does not change authentication behavior. Split retries reuse the same bearer token and request headers as the original report fetch.
+Report range splitting does not change authentication behavior. Split retries reuse the same bearer token and request headers as the original report fetch. Immediate cache eviction occurs on HTTP 401 Unauthorized errors to force fresh SRP authentication on retries.
 
 ## Cognito SRP Sequence
 
@@ -29,7 +29,7 @@ Report range splitting does not change authentication behavior. Split retries re
 
 POST to:
 
-- `https://cognito-idp.<region>.amazonaws.com/`
+- `https://cognito-idp.<region>.amazonaws.com/` (or the exact URL if `region` starts with `http`).
 
 Headers:
 
@@ -98,6 +98,10 @@ On success:
 - Missing challenge fields.
 - Invalid SRP math state (`u == 0`, `A mod N == 0`, `B mod N == 0`).
 - JSON/decoding errors.
+
+## Log Redaction & Secure Payload Handling
+
+Raw response bodies from `InitiateAuth` and `RespondToAuthChallenge` are explicitly **not** logged to prevent credential or secret block leakage. Instead, only HTTP response sizes (in bytes) are logged in debug modes. If an error occurs, safe fields like the Cognito JSON `message` are extracted for the error return, falling back to a generic error to ensure no secure tokens are dumped into logs. Additionally, HTTP region mapping gracefully falls back to using the `region` string directly if it begins with `http`, allowing custom IDP deployments to be used securely without string formatting errors.
 
 ## Implementation Quality and Testing
 

@@ -39,6 +39,16 @@ The runner uses **cron-based polling** to evaluate task schedules:
    - **Daily**: Check if current time >= calculated `next_run_at` for today's times
    - **Weekly**: Check if current time >= calculated `next_run_at` for the target day
    - **Monthly**: Check if current time >= calculated `next_run_at` for the target date
+   - **Manual (Empty Schedules)**: If a task has an explicitly empty schedules list (`"schedules": []`), it represents a purely Manual execution mode. It will never run automatically and will strictly wait for manual triggers from the GUI or System Tray.
+
+### Application Task Dates and Periodization Modes
+Applications that utilize start/end dates support explicit dynamic expressions:
+- `today`, `yesterday`, `tomorrow`
+- `beginning_of_month` (e.g. `2024-11-01`), `eomonth` (e.g. `2024-11-30`)
+- `next mon` through `next sun` (dynamically resolves to the upcoming occurrence of that weekday).
+
+Tasks utilizing dates also construct explicit runtime execution periods via 5 distinct modes (`Daily`/`Custom`, `Monthly`, `Quarterly`, `A Month`, `A Quarter`).
+**Important**: These period representations are transformed into executing instances strictly in memory at runtime and are **NOT** persisted to the configuration file as duplicated `TaskSteps`. The GUI specifically only exposes Start Date, End Date, and Periodization mode inputs when configuring External App specifications that actually define Date requirements in their Manifest, ensuring tasks that do not utilize dates are not cluttered.
 4. **Task Execution**: If any schedule is due, execute the task:
    - For `shell_command`, run configured commands. Commands can execute sequentially or in parallel
 5. **Task State Update**:

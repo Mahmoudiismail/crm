@@ -29,6 +29,15 @@ If the primary pipeline completes successfully, any configured `post_run_steps` 
 The runner acts as an asynchronous daemon. When it receives a termination signal (`Ctrl+C` on Unix, or "Exit" from the Windows system tray), it broadcasts a `Shutdown` command.
 The Execution Manager tracks all actively running processes via `tokio::task::JoinHandle`. During shutdown, it explicitly `.abort()`s these handles, ensuring that child shells, browser sessions, or fetching scripts are cleanly terminated before the daemon exits, preventing zombie processes.
 
+**Process Lifecycle Limits:** Strict timeout and termination limits are globally enforced per child process. When a task triggers a timeout, the Runner issues a complete process tree termination (e.g., using `taskkill /F /T /PID` on Windows or `pkill -P` on Unix), ensuring that no descendant shells or long-running worker processes outlive their parent. Output bounds are strictly capped (e.g., to 10MB) to prevent memory ballooning from excessively noisy tasks.
+
+## Script Manager & Execution Constraints
+
+The application utilizes a `ScriptManager` utility to standardize the execution of inline scripting (like PowerShell automation). This standard completely bypasses command injection risks by managing deterministic script templates.
+- **Persistent Generation**: Script files are deterministically serialized and stored persistently under `<exe_dir>/scripts/<Task Folder>/`.
+- **Hash Fingerprinting**: The persistence utilizes a canonical SHA-256 fingerprint generated solely from the static text structure of the generator template.
+- **Runtime Separation**: Instead of interpolating dynamic user-strings or config parameters directly into scripts (which opens injection vectors), runtime data is exclusively passed via strictly separated CLI arguments to parameterized script blocks (e.g. `param($arg1)`). The scripts themselves remain statically hashed and are updated only when core logic within the Rust codebase is modified.
+
 ## Data Persistence
 
 *   **Config State:** Configuration files (`runner_config.json`, `config.json`, `yasweb_config.json`, `wcxx_config.json`, `tasker_config.json`) are automatically created in the exact same directory as their relative executables with sane defaults if missing.
@@ -38,3 +47,6 @@ The Execution Manager tracks all actively running processes via `tokio::task::Jo
 
 - **`tasker`:** Aggregates and emails reports based on configured bucket logic. Supports `--send-exceptions` to dynamically read teams mapped in `category_exceptions` and group exception tickets dynamically, using only mapped CC lists and ignoring standard global logic.
 ### Recent Fixes
+- **`crm`**: Empty flags passed correctly; improved empty check to correctly bypass.
+- **`yasweb`**: Timeout parsing issues resolved.
+- **`runner`**: Implemented `AppLockManager` to enforce deterministic, step-level application locks.

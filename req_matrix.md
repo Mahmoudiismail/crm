@@ -1,5 +1,12 @@
 # POST-#375 HARDENING AND VERIFICATION - Requirement to Evidence Matrix
 
+**STATUS: ACTIVE V1 PRODUCTION TRACKS**
+- **PR #377 (Security Hardening):** MERGED
+- **CRM:** Error propagation and token buffer tracks verified.
+- **Runner:** Schedule defaults and live preview tracks verified.
+- **Tasker:** Script audits (ScriptManager) verified.
+
+
 | Requirement | Implementation Location | Regression Test | What the Test Actually Proves | Status |
 | :--- | :--- | :--- | :--- | :--- |
 | **1. CRM UPDATER** | | | | |

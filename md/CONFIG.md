@@ -8,7 +8,7 @@ This file controls the GUI, global timing, and task scheduling. It has a `regist
 
 ```json
 {
-  "gui_host": "127.0.0.1",
+  "gui_host": "127.0.0.1", // strictly validated. Must be loopback (127.0.0.1 or localhost)
   "gui_port": 8787,
   "poll_interval_seconds": 30,
   "allow_shell_tasks": false,
