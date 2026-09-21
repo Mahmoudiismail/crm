@@ -646,7 +646,9 @@ async fn main() -> Result<()> {
                         };
 
                         let res = match run_browser_tab(
-                            browser,
+                            browser.clone(),
+
+
                             &config_task,
                             &active_report_name_task,
                             &active_report_type_task,
@@ -667,6 +669,7 @@ async fn main() -> Result<()> {
                             }
                         };
 
+                        drop(browser);
                         let _ = std::fs::remove_dir_all(&user_data_dir);
                         (res, temp_dl_dir_clone, final_filename)
                     }));

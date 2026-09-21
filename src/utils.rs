@@ -548,6 +548,36 @@ mod tests {
     use super::*;
     use chrono::Local;
 
+
+    #[test]
+    fn test_absolute_date_ignores_base_date_e2e() {
+        use chrono::Local;
+        let actual_today = Local::now().date_naive();
+        let actual_yesterday = actual_today - chrono::TimeDelta::try_days(1).unwrap();
+        let actual_tomorrow = actual_today + chrono::TimeDelta::try_days(1).unwrap();
+
+        let legacy_base = Some("2026-01-01");
+
+        // Ensure that resolve_date_var strictly ignores the explicit base_date
+        // and resolves relative to the current local date.
+        assert_eq!(
+            resolve_date_var("today", legacy_base).unwrap(),
+            actual_today,
+            "Today should strictly ignore base_date"
+        );
+
+        assert_eq!(
+            resolve_date_var("yesterday", legacy_base).unwrap(),
+            actual_yesterday,
+            "Yesterday should strictly ignore base_date"
+        );
+
+        assert_eq!(
+            resolve_date_var("tomorrow", legacy_base).unwrap(),
+            actual_tomorrow,
+            "Tomorrow should strictly ignore base_date"
+        );
+    }
     #[test]
     fn test_resolve_date_var() {
         let today = Local::now().date_naive();
