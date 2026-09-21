@@ -17,6 +17,13 @@ Step-level application locking is managed by `AppLockManager`:
 - Multiple non-concurrent applications required within a step are sorted deterministically and acquired in order to prevent deadlocks.
 - Semaphores are held for the step duration and automatically released on step completion, error, or cancellation.
 - Tasks waiting for an application lock remain in `running_task_ids` with `waiting_for_app` status reported in the GUI.
+- **Duplicate Task Prevention**: The Execution Manager strictly inspects `running_task_ids` during scheduling evaluation to definitively block duplicate concurrent instances of the identical task ID from being scheduled or pushed into execution pipelines.
+
+## HTTP GUI Security Constraints
+The Runner enforces strict application and network layer protections to secure its control plane:
+- **Host Validation**: Binding to a non-loopback host interface (`0.0.0.0` or external IP) in `gui_host` without protection is actively rejected at startup, keeping access limited to local configurations (`127.0.0.1`, `localhost`).
+- **Connection Timings**: Connections are subject to a strict `10`-second absolute parsing deadline via `tokio::time::timeout` to avoid unauthenticated connection hangs.
+- **Memory & Parsing Limits**: The HTTP logic enforces maximum header parsing bounds (`64KB`) and strictly rejects request payloads exceeding `2MB` (`MAX_BODY_BYTES`) via exact `Content-Length` checks, rejecting fragmented or chunked uploads to prevent overflow.
 
 ## External Application Date Periodization Modes
 Periodization and dates (`period_mode`, `start_date`, `end_date`) belong exclusively to `ExternalAppSpec`. `RunnerTask` does not own task-level periodization fields.
@@ -38,42 +45,8 @@ Date expressions are evaluated sequentially:
 1. Start Date is resolved first relative to current time.
 2. End Date is then resolved using the resolved Start Date as its contextual base date.
 3. For relative weekday expressions (e.g. `next sat` for both Start and End), date resolution evaluates both to the exact same upcoming occurrence rather than advancing the End Date to the subsequent week.
-4. When Start Date determines a month context (e.g. `beginning_of_month`), `eomonth` for End Date refers to the same resolved month.
-5. Invalid date expressions produce explicit errors without silent fallbacks.
 
 ## Live Execution Preview
-Each External Application action block inside the task editor features its own dedicated **Live Execution Preview** displaying up to the **Next 10 Upcoming Executions** for that specific application. The preview uses the authoritative backend scheduling, date resolution, working-hours, week-off, and interval grid alignment engine. Changing one External Application's periodization or dates updates its preview box independently without executing applications or tasks.
+External Application sections feature a robust **Preview** button displaying a visual calendar of upcoming periodic invocations directly within the GUI.
+The preview is strictly bounded to the upcoming 10 evaluations (preventing unbounded computational recursion for tightly-scheduled tasks). The frontend preview utilizes the exact same native Rust backend API (`/api/tasks/preview`) that dispatches periodization during live tasks, ensuring complete functional parity between the GUI prediction and actual background task evaluations.
 
-## Process Execution, Timeout & Output Caps
-- **Process Tree Cleanup**: Process timeouts terminate the entire process tree (`taskkill /F /T /PID` on Windows, `pkill -P` on Unix) to prevent orphan child processes.
-- **Bounded Output**: Stdout and stderr byte streams are bounded at 10 MiB memory caps per stream to prevent unbounded memory growth during heavy output.
-
-## HTTP Server Hardening & Security Model
-- **Header & Body Limits**: Enforces `MAX_HEADER_BYTES = 64KB` and `MAX_BODY_BYTES = 2MB`. Requests exceeding boundaries return `HTTP 413 Payload Too Large`.
-- **Read Timeout**: Socket read operations enforce a 10-second read timeout, returning `HTTP 408 Request Timeout` and closing stalled connections.
-- **Line Ending Consistency**: Parses HTTP headers and body consistently across both CRLF (`\r\n\r\n`) and LF (`\n\n`) line-ending delimiters.
-- **Chunked Transfer Encoding**: Rejects unsupported `Transfer-Encoding: chunked` with `HTTP 400 Bad Request`.
-- **GET Mutation Protection**: All state-changing endpoints strictly reject `GET` requests with `HTTP 405 Method Not Allowed` and require `POST`.
-- **Loopback Enforcement**: Runner GUI binds to `127.0.0.1` (localhost loopback). Non-loopback `gui_host` bindings (such as `0.0.0.0` or local network interfaces) are rejected on startup.
-- **Non-blocking Async Handlers**: All async HTTP handlers offload blocking process calls using async process execution (`tokio::process::Command`) to keep the Tokio runtime unblocked.
-
-## API Endpoints
-- `/run/{task_id}` (POST) - Forces immediate execution of the given task ID (Manual mode).
-- `/run-all` (POST) - Enqueues all tasks for immediate execution (Manual mode).
-- `/api/tasks/preview` (POST) - Generates up to 10 future execution occurrences for a specified External Application and schedule configuration.
-- `/api/apps/manifest` (GET) - Retrieves JSON manifest for registered application via non-blocking async process invocation.
-
-## HTTP Security Model
-The Runner GUI web server (`0.0.0.0` bindings rejected, limited strictly to loopback addresses like `127.0.0.1` unless configured otherwise intentionally) ensures safe execution of workflows on a local machine.
-- Requests are bounded with a 10-second lifetime absolute timeout across all fragmented reads to prevent Slowloris attacks.
-- Strict limit bounds are in place: `MAX_HEADER_BYTES = 64KB` and `MAX_BODY_BYTES = 2MB`. If limits are exceeded, HTTP 413 is raised.
-- Malformed inputs, missing headers, or unexpected bytes beyond the declared Content-Length result in an immediate 400 Bad Request error.
-- All non-read state mutation routes strictly require POST requests and enforce a 405 Method Not Allowed error on GET.
-- A Tokio semaphore limits concurrent HTTP requests to a max of 100 in-flight connections to prevent resource starvation.
-- Server logs sanitize URIs and only record standard metadata, masking sensitive body information.
-
-## Manifest Execution
-External apps are queried via `--manifest` through an async bounded execution environment (`src/runner/engine/process.rs`). Outputs are heavily capped (MAX 10 MB per stream stdout/stderr). Long-running manifests or hanging child processes are aggressively cleaned up natively across platforms via process tree termination (`taskkill /F /T /PID` or `pkill -P`).
-
-## Date Periodization
-The period engine is responsible for converting configurations (`PeriodMode::Monthly`, `AQuarter`, etc.) directly into Execution Periods, decoupled from the core lifecycle queue. Resolution occurs sequentially where the context of the `start_date` bounds the upcoming contextual resolution of the `end_date`.

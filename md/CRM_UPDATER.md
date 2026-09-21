@@ -11,6 +11,7 @@ If found, it:
 - Extracts the ZIP archive using AES decryption (default password: `123456`).
 - Unblocks the extracted files (`Unblock-File`).
 - Dynamically generates and executes a detached PowerShell script (`.ps1`) to:
+  - Securely injects the `file_replacement_map` configuration payload into the PowerShell context via a temporary JSON file passed to the script using the `-ReplacementMapPath` argument. This avoids unbounded Windows CLI limits and command injection vulnerabilities when deploying updates to large numbers of binaries.
   - Resolves source and target paths relative to the current executable's directory.
   - Check if target processes are currently running.
   - Gracefully stop any running target applications (e.g., `crm_updater.exe`, `runner.exe`) and robustly wait for actual process termination.
