@@ -297,7 +297,7 @@ pub fn navigate_and_run_report(
                         );
                         let step2_js = format!(
                             r#"
-                                        (async function(reportType, reportName) {{
+                                        (async function(reportType, reportName, timeoutMinutes) {{
                                             function sleep(ms) {{ return new Promise(r => setTimeout(r, ms)); }}
                                             let logs = [];
                                             let iframe = document.querySelector('iframe');
@@ -306,7 +306,7 @@ pub fn navigate_and_run_report(
 
                                             logs.push("Waiting for loader to disappear before typing...");
                                             for(let i=0; i<30; i++) {{
-                                                let loader = document.querySelector('.loading-screen-wrapper, mat-progress-bar, .dx-loadpanel') || doc.querySelector('.loading-screen-wrapper, mat-progress-bar, .dx-loadpanel');
+                                                let loader = document.querySelector('#loader_svg, .loading-screen-wrapper, mat-progress-bar, .dx-loadpanel') || doc.querySelector('#loader_svg, .loading-screen-wrapper, mat-progress-bar, .dx-loadpanel');
                                                 let isLoaderVisible = false;
                                                 if (loader) {{
                                                     let style = loader.ownerDocument.defaultView.getComputedStyle(loader);
@@ -322,7 +322,8 @@ pub fn navigate_and_run_report(
 
                                             let listLoaded = false;
                                             logs.push("Waiting for report list to load (tree-view)...");
-                                            for (let i = 0; i < 30; i++) {{
+                                            const deadlineList = Date.now() + timeoutMinutes * 60 * 1000;
+                                            while (Date.now() <= deadlineList) {{
                                                 if (doc.querySelectorAll('.tree-view').length > 0) {{
                                                     listLoaded = true; break;
                                                 }}
@@ -358,7 +359,8 @@ pub fn navigate_and_run_report(
 
                                             let reportFound = false;
                                             logs.push("Waiting for report span in list: " + reportName);
-                                            for (let i = 0; i < 30; i++) {{
+                                            const deadlineReport = Date.now() + timeoutMinutes * 60 * 1000;
+                                            while (Date.now() <= deadlineReport) {{
                                                 let exactMatchSpan = null;
                                                 let partialMatchSpan = null;
 
@@ -432,14 +434,14 @@ pub fn navigate_and_run_report(
                                             for (let i = 0; i < 30; i++) {{
                                                 let selects = doc.querySelectorAll('mat-select');
                                                 for (let s of selects) {{
-                                                    if (s.innerText.includes(reportName) || s.textContent.includes(reportName)) {{
+                                                    if (s.innerText.includes({0}) || s.textContent.includes({0})) {{
                                                         reportBound = true; break;
                                                     }}
                                                 }}
                                                 if (!reportBound) {{
                                                     let headers = doc.querySelectorAll('.fw-semibold, .fw-bold');
                                                     for (let h of headers) {{
-                                                        if (h.innerText.includes(reportName) || h.textContent.includes(reportName)) {{
+                                                        if (h.innerText.includes({0}) || h.textContent.includes({0})) {{
                                                             reportBound = true; break;
                                                         }}
                                                     }}
@@ -449,9 +451,10 @@ pub fn navigate_and_run_report(
                                             }}
                                             if (!reportBound) return JSON.stringify({{ status: "ERROR", msg: "Binding timeout.", logs }});
                                             return JSON.stringify({{ status: "SUCCESS", logs }});
-                                        }})({});
+                                        }})({0}, {1});
                                         "#,
-                            serde_json::to_string(&active_report_name).unwrap()
+                            serde_json::to_string(&active_report_name).unwrap(),
+                            timeout_minutes
                         );
 
                         info!("Waiting for Report Binding...");
@@ -468,7 +471,7 @@ pub fn navigate_and_run_report(
                         tracing::debug!("Executing JavaScript to apply filters...");
                         let step4_fill_js = format!(
                             r#"
-                                        (async function(filters) {{
+                                        (async function(filters, timeoutMinutes) {{
                                             function sleep(ms) {{ return new Promise(r => setTimeout(r, ms)); }}
                                             let logs = [];
                                             let iframe = document.querySelector('iframe');
@@ -476,8 +479,9 @@ pub fn navigate_and_run_report(
 
                                             logs.push("Waiting for loader to disappear...");
                                             let loaderGone = false;
-                                            for(let i=0; i<50; i++) {{
-                                                let loader = document.querySelector('.loading-screen-wrapper, mat-progress-bar, .dx-loadpanel') || doc.querySelector('.loading-screen-wrapper, mat-progress-bar, .dx-loadpanel');
+                                            const deadlineFillLoader = Date.now() + timeoutMinutes * 60 * 1000;
+                                            while (Date.now() <= deadlineFillLoader) {{
+                                                let loader = document.querySelector('#loader_svg, .loading-screen-wrapper, mat-progress-bar, .dx-loadpanel') || doc.querySelector('#loader_svg, .loading-screen-wrapper, mat-progress-bar, .dx-loadpanel');
                                                 let isLoaderVisible = false;
                                                 if (loader) {{
                                                     let style = loader.ownerDocument.defaultView.getComputedStyle(loader);
@@ -614,15 +618,15 @@ pub fn navigate_and_run_report(
                         // STEP 5: Search Click
                         tracing::debug!("Executing JavaScript to click search...");
                         let step5_search_js = r#"
-                                        (async function() {
+                                        (async function(timeoutMinutes) {
                                             function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
                                             let logs = [];
                                             let doc = document.querySelector('iframe').contentWindow.document;
 
                                             logs.push("Waiting for Search button to appear...");
                                             let clickedSearch = false;
-
-                                            for (let i = 0; i < 100; i++) {
+                                            const deadlineSearch = Date.now() + timeoutMinutes * 60 * 1000;
+                                            while (Date.now() <= deadlineSearch) {
                                                 let btn = doc.querySelector('button[mattooltip="Search"]');
                                                 if (btn && btn.offsetParent !== null) {
                                                     btn.click();
@@ -648,13 +652,15 @@ pub fn navigate_and_run_report(
                                                 return JSON.stringify({ status: "ERROR", msg: "Search button not found.", logs });
                                             }
                                             return JSON.stringify({ status: "SUCCESS", logs });
-                                        })();
+                                        })( {} );
                                     "#;
+                        let step5_search_js =
+                            step5_search_js.replace("{}", &timeout_minutes.to_string());
 
                         info!("Clicking Search...");
                         javascript::evaluate_automation_step(
                             tab,
-                            step5_search_js,
+                            &step5_search_js,
                             "Step 5 (Search Click)",
                         )?;
 
@@ -688,14 +694,14 @@ pub fn navigate_and_run_report(
                         // STEP 7: Click XLSX
                         tracing::debug!("Executing JavaScript to click XLSX export option...");
                         let step7_xlsx_js = r#"
-                                        (async function() {
+                                        (async function(timeoutMinutes) {
                                             function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
                                             let doc = document.querySelector('iframe').contentWindow.document;
                                             let mainDoc = document;
                                             let logs = [];
                                             let xlsxOption = null;
-
-                                            for(let i=0; i<75; i++) {
+                                            const deadlineXlsx = Date.now() + timeoutMinutes * 60 * 1000;
+                                            while (Date.now() <= deadlineXlsx) {
                                                 let listItems = doc.querySelectorAll('.dx-list-item-content');
                                                 for (let item of listItems) {
                                                     if (item.textContent.trim() === 'XLSX') { xlsxOption = item.closest('.dx-list-item'); break; }
@@ -732,11 +738,13 @@ pub fn navigate_and_run_report(
                                             xlsxOption.click();
                                             logs.push("Clicked XLSX option");
                                             return JSON.stringify({ status: "SUCCESS", logs });
-                                        })();
+                                        })( {} );
                                     "#;
+                        let step7_xlsx_js =
+                            step7_xlsx_js.replace("{}", &timeout_minutes.to_string());
 
                         info!("Clicking XLSX...");
-                        javascript::evaluate_automation_step(tab, step7_xlsx_js, "Step 7 (XLSX)")?;
+                        javascript::evaluate_automation_step(tab, &step7_xlsx_js, "Step 7 (XLSX)")?;
                         info!("JS Automation Sequence Completed Successfully!");
 
                         debug::save_html_state(
@@ -782,7 +790,7 @@ pub fn generate_step6_js(timeout_minutes: u64) -> String {
             let iterations = 0;
 
             while (Date.now() <= deadline) {{
-                let loader = document.querySelector('.loading-screen-wrapper, mat-progress-bar, .dx-loadpanel') || doc.querySelector('.loading-screen-wrapper, mat-progress-bar, .dx-loadpanel');
+                let loader = document.querySelector('#loader_svg, .loading-screen-wrapper, mat-progress-bar, .dx-loadpanel') || doc.querySelector('#loader_svg, .loading-screen-wrapper, mat-progress-bar, .dx-loadpanel');
                 let isLoaderVisible = false;
                 if (loader) {{
                     let style = loader.ownerDocument.defaultView.getComputedStyle(loader);
@@ -809,7 +817,8 @@ pub fn generate_step6_js(timeout_minutes: u64) -> String {
 
             logs.push("Looking for Export button...");
             let exportBtn = null;
-            for(let i=0; i<75; i++) {{
+            const deadlineExportBtn = Date.now() + timeoutMinutes * 60 * 1000;
+            while (Date.now() <= deadlineExportBtn) {{
                 exportBtn = doc.querySelector('div[aria-label="Export"]');
                 if (exportBtn && exportBtn.offsetParent !== null) break;
 
