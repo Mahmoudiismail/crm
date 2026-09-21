@@ -12,12 +12,15 @@ impl RunnerTask {
         if !self.schedules.is_empty() {
             return self.schedules.iter().any(|schedule| schedule.due_now(now));
         }
+
+        // If there are no schedules and repetition is Once with no next_run_at, it's manual
         if self.next_run_at.is_empty() {
-            return true;
+            return false; // Empty schedule = Manual execution only
         }
+
         DateTime::parse_from_rfc3339(&self.next_run_at)
             .map(|dt| dt.with_timezone(&Utc) <= now)
-            .unwrap_or(true)
+            .unwrap_or(false)
     }
 
     pub fn schedule_summary(&self) -> String {

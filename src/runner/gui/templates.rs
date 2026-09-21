@@ -451,11 +451,6 @@ pub(crate) fn schedule_rows_html(
             }
         }
     }
-    if rows.is_empty() {
-        rows.push(schedule_row_html(
-            0, "interval", "1h", "", "", "", "", None, None, None, profiles,
-        ));
-    }
     rows.join("")
 }
 

@@ -257,7 +257,7 @@ mod tests {
     use crate::runner::config::{next_daily_run_after, Repetition};
 
     #[test]
-    fn legacy_repeat_task_is_due_without_next_run() {
+    fn legacy_repeat_task_is_not_due_without_next_run() {
         let task = RunnerTask {
             id: "legacy".to_string(),
             name: "Legacy".to_string(),
@@ -273,7 +273,8 @@ mod tests {
             timeout_seconds: 0,
         };
 
-        assert!(task.due_now(Utc::now()));
+        // Manual tasks (no schedule or next_run_at) should not be due automatically.
+        assert!(!task.due_now(Utc::now()));
     }
 
     #[test]
