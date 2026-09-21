@@ -210,6 +210,53 @@
       row.remove();
     });
 
+    const profileSelect = row.querySelector(".schedule-wh-profile");
+    if (profileSelect) {
+        profileSelect.addEventListener("change", (e) => {
+            const profilesJson = scheduleRows.getAttribute("data-profiles");
+            if (profilesJson) {
+                try {
+                    const profiles = JSON.parse(profilesJson);
+                    const selectedProfile = profiles.find(p => p.id === e.target.value);
+                    const days = [
+                      { key: "Monday", cls: ".wh-mon" },
+                      { key: "Tuesday", cls: ".wh-tue" },
+                      { key: "Wednesday", cls: ".wh-wed" },
+                      { key: "Thursday", cls: ".wh-thu" },
+                      { key: "Friday", cls: ".wh-fri" },
+                      { key: "Saturday", cls: ".wh-sat" },
+                      { key: "Sunday", cls: ".wh-sun" }
+                    ];
+                    if (selectedProfile && selectedProfile.days) {
+                        days.forEach(day => {
+                            const dayData = selectedProfile.days[day.key];
+                            if (dayData) {
+                                const startInput = row.querySelector(day.cls + "-start");
+                                const endInput = row.querySelector(day.cls + "-end");
+                                if (startInput) startInput.value = dayData.start;
+                                if (endInput) endInput.value = dayData.end;
+                            } else {
+                                const startInput = row.querySelector(day.cls + "-start");
+                                const endInput = row.querySelector(day.cls + "-end");
+                                if (startInput) startInput.value = "";
+                                if (endInput) endInput.value = "";
+                            }
+                        });
+                    } else {
+                        days.forEach(day => {
+                            const startInput = row.querySelector(day.cls + "-start");
+                            const endInput = row.querySelector(day.cls + "-end");
+                            if (startInput) startInput.value = "";
+                            if (endInput) endInput.value = "";
+                        });
+                    }
+                } catch (err) {
+                    console.error("Failed to apply working hours profile", err);
+                }
+            }
+        });
+    }
+
     // Add Daily Time logic
     const addDailyTimeBtn = row.querySelector('.add-daily-time-btn');
     if (addDailyTimeBtn) {
@@ -261,6 +308,7 @@
 
   function buildSchedules() {
     if (!scheduleRows) return "";
+    if (scheduleRows.children.length === 0) return "";
     const schedules = [];
     const rows = scheduleRows.querySelectorAll(".flex-col");
     for (const row of rows) {
@@ -330,6 +378,46 @@
       row.querySelector(".remove-schedule").addEventListener("click", () => {
         row.remove();
       });
+
+      const profileSelect = row.querySelector(".schedule-wh-profile");
+      if (profileSelect) {
+          profileSelect.addEventListener("change", (e) => {
+              const profilesJson = scheduleRows.getAttribute("data-profiles");
+              if (profilesJson) {
+                  try {
+                      const profiles = JSON.parse(profilesJson);
+                      const selectedProfile = profiles.find(p => p.id === e.target.value);
+                      if (selectedProfile && selectedProfile.days) {
+                          const days = [
+                            { key: "Monday", cls: ".wh-mon" },
+                            { key: "Tuesday", cls: ".wh-tue" },
+                            { key: "Wednesday", cls: ".wh-wed" },
+                            { key: "Thursday", cls: ".wh-thu" },
+                            { key: "Friday", cls: ".wh-fri" },
+                            { key: "Saturday", cls: ".wh-sat" },
+                            { key: "Sunday", cls: ".wh-sun" }
+                          ];
+                          days.forEach(day => {
+                              const dayData = selectedProfile.days[day.key];
+                              if (dayData) {
+                                  const startInput = row.querySelector(day.cls + "-start");
+                                  const endInput = row.querySelector(day.cls + "-end");
+                                  if (startInput) startInput.value = dayData.start;
+                                  if (endInput) endInput.value = dayData.end;
+                              } else {
+                                  const startInput = row.querySelector(day.cls + "-start");
+                                  const endInput = row.querySelector(day.cls + "-end");
+                                  if (startInput) startInput.value = "";
+                                  if (endInput) endInput.value = "";
+                              }
+                          });
+                      }
+                  } catch (err) {
+                      console.error("Failed to apply working hours profile", err);
+                  }
+              }
+          });
+      }
 
       const addDailyTimeBtn = row.querySelector('.add-daily-time-btn');
       if (addDailyTimeBtn) {
@@ -842,6 +930,37 @@
         }
       } catch (e) {
         console.error("Failed to parse existing args", e);
+      }
+
+      // Check if the app requires date/periodization inputs
+      let hasDateArgs = manifest.arguments.some(arg =>
+          arg.name.toLowerCase().includes("date") ||
+          arg.name.toLowerCase().includes("period") ||
+          arg.arg_type === "date_var"
+      );
+
+      const contentDiv = dynamicInputs.closest(".action-content");
+      if (contentDiv) {
+          const appPreviewBox = contentDiv.querySelector(".app-preview-box");
+          const periodizationContainer = contentDiv.querySelector(".app-periodization-container");
+
+          if (periodizationContainer) {
+              if (hasDateArgs) {
+                  periodizationContainer.classList.remove("hidden");
+                  periodizationContainer.style.display = "";
+                  if (appPreviewBox) {
+                      appPreviewBox.classList.remove("hidden");
+                      appPreviewBox.style.display = "";
+                  }
+              } else {
+                  periodizationContainer.classList.add("hidden");
+                  periodizationContainer.style.display = "none";
+                  if (appPreviewBox) {
+                      appPreviewBox.classList.add("hidden");
+                      appPreviewBox.style.display = "none";
+                  }
+              }
+          }
       }
 
       let html =

@@ -44,7 +44,11 @@ pub(crate) fn build_task_from_values(
         .transpose()?
         .unwrap_or_default();
     let (repetition, frequency_seconds, next_run_at) = if values.contains_key("schedules") {
-        legacy_fields_from_schedules(&schedules)
+        if schedules.is_empty() {
+            (Repetition::Once, 0, String::new())
+        } else {
+            legacy_fields_from_schedules(&schedules)
+        }
     } else {
         legacy_fields_from_values(values)
     };
