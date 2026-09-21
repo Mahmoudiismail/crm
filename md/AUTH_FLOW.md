@@ -117,3 +117,8 @@ The SRP-6a modular exponentiation math in `compute_s` is unit-tested against kno
 - Useful CRM API error response bodies may be logged when needed to diagnose API failures, provided they do not contain authentication secrets/credentials.
 - Use `remember_secrets = false` if config should not retain tokens/password.
 - Do not log raw passwords.
+
+## CRM Cognito SRP Authentication Enhancements (Recent Updates)
+- **Token Expiry Buffer:** A 5-minute safety buffer is applied when validating cached token expirations (`token_expiry > Utc::now() + 5_minutes`). This prevents tokens from being authorized locally but rejected by the API moments later.
+- **Cache Eviction on HTTP 401:** If any API request responds with a `401 Unauthorized`, the active token cache (including `access_token`, `id_token`, and `access_token_expiry`) is forcefully cleared before retrying to ensure a strict fresh login occurs.
+- **Debug Log Redaction:** The request bodies for `InitiateAuth` and `RespondToAuthChallenge` are recursively parsed, and sensitive secrets (e.g., `PASSWORD_CLAIM_SECRET_BLOCK`, `PASSWORD_CLAIM_SIGNATURE`, `AccessToken`) are explicitly masked with the exact string `"***REDACTED***"` before logging to standard output or trace files.

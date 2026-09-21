@@ -50,3 +50,7 @@ The application utilizes a `ScriptManager` utility to standardize the execution 
 - **`crm`**: Empty flags passed correctly; improved empty check to correctly bypass.
 - **`yasweb`**: Timeout parsing issues resolved.
 - **`runner`**: Implemented `AppLockManager` to enforce deterministic, step-level application locks.
+
+### CRM Execution & Error Propagation
+- The `crm` binary correctly propagates individual report failures (e.g. `HTTP 500`) outwards, immediately terminating the binary execution with a non-zero exit code.
+- Relative date logic and CLI resolution exclusively utilizes Local system time (`chrono::Local::now()`) to prevent date boundary shifts (due to UTC vs timezone offset collisions).
