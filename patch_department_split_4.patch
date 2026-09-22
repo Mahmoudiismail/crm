@@ -1,0 +1,41 @@
+--- src/tasker/department_split.rs
++++ src/tasker/department_split.rs
+@@ -53,10 +53,11 @@
+         .canonicalize()
+         .context("Failed to canonicalize dashboard_file path")?;
+
+-    let dashboard_path_str = dashboard_path
+-        .to_str()
+-        .unwrap()
+-        .strip_prefix(r"\\?\")
+-        .unwrap_or(dashboard_path.to_str().unwrap());
++    let dashboard_path_str_full = dashboard_path.to_str()
++        .ok_or_else(|| anyhow::anyhow!("Failed to convert dashboard path to string: {:?}", dashboard_path))?;
++    let dashboard_path_str = dashboard_path_str_full
++        .strip_prefix(r"\\?\")
++        .unwrap_or(dashboard_path_str_full);
+
+     let out_dir = PathBuf::from(&config.output_dir);
+@@ -67,10 +68,11 @@
+         .canonicalize()
+         .context("Failed to canonicalize output_dir")?;
+-    let out_dir_str = out_dir_canon
+-        .to_str()
+-        .unwrap()
+-        .strip_prefix(r"\\?\")
+-        .unwrap_or(out_dir_canon.to_str().unwrap());
++    let out_dir_str_full = out_dir_canon.to_str()
++        .ok_or_else(|| anyhow::anyhow!("Failed to convert output directory path to string: {:?}", out_dir_canon))?;
++    let out_dir_str = out_dir_str_full
++        .strip_prefix(r"\\?\")
++        .unwrap_or(out_dir_str_full);
+
+     // Write mapping to a temporary JSON file to pass to PowerShell
+     let mapping_json = serde_json::to_string(&mapping)?;
+     let tmp_dir = std::env::temp_dir();
+     let mapping_file = tmp_dir.join("chair_mapping.json");
+     std::fs::write(&mapping_file, mapping_json).context("Failed to write mapping JSON")?;
+
+-    let mapping_file_str = mapping_file.to_str().unwrap();
++    let mapping_file_str = mapping_file.to_str()
++        .ok_or_else(|| anyhow::anyhow!("Failed to convert mapping file path to string: {:?}", mapping_file))?;

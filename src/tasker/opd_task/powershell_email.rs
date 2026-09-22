@@ -123,14 +123,21 @@ try {
         }
     }
 
-    $visibleRows = $exactRange.SpecialCells(12)
+    try {
+        $visibleRows = $exactRange.SpecialCells(12)
+    } catch {
+        Write-Output "TRACE: Warning: No visible rows found via SpecialCells(12)."
+        $visibleRows = $null
+    }
 
     Write-Output "TRACE: Finding last visible row after filters"
     $lastRow = 1
-    foreach ($area in $visibleRows.Areas) {
-        $areaLastRow = $area.Row + $area.Rows.Count - 1
-        if ($areaLastRow -gt $lastRow) {
-            $lastRow = $areaLastRow
+    if ($null -ne $visibleRows) {
+        foreach ($area in $visibleRows.Areas) {
+            $areaLastRow = $area.Row + $area.Rows.Count - 1
+            if ($areaLastRow -gt $lastRow) {
+                $lastRow = $areaLastRow
+            }
         }
     }
 
@@ -174,9 +181,17 @@ try {
     Write-Output "TRACE: Email Draft saved successfully."
     $inspector.Close(1)
 } finally {
-    if ($workbook) { $workbook.Close($false) }
-    if ($excel) { $excel.Quit() }
-    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
+    if ($workbook) { try { $workbook.Close($false) } catch {} }
+    if ($excel) {
+        try {
+            $excel.Quit()
+            [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
+        } catch {}
+    }
+    if ($mail) { try { [System.Runtime.Interopservices.Marshal]::ReleaseComObject($mail) | Out-Null } catch {} }
+    if ($outlook) { try { [System.Runtime.Interopservices.Marshal]::ReleaseComObject($outlook) | Out-Null } catch {} }
+    [System.GC]::Collect()
+    [System.GC]::WaitForPendingFinalizers()
 }
 "#
 }

@@ -505,11 +505,17 @@ try {
     if ($Workbook) { $Workbook.Close($false) }
     throw $_
 } finally {
-    $Excel.Quit()
-    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($Excel) | Out-Null
+    if ($Excel) {
+        try {
+            $Excel.Quit()
+            [System.Runtime.Interopservices.Marshal]::ReleaseComObject($Excel) | Out-Null
+        } catch { }
+    }
     if ($processId) {
         Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
     }
+    [System.GC]::Collect()
+    [System.GC]::WaitForPendingFinalizers()
 }
 "#;
 
