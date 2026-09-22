@@ -300,7 +300,11 @@ impl ScriptManager {
         let mut safe_args = Vec::new();
         for (k, v) in args {
             let k_lower = k.to_lowercase();
-            if k_lower.contains("htmlbody") || k_lower.contains("emailto") || k_lower.contains("csvpath") || k_lower.contains("subject") {
+            if k_lower.contains("htmlbody")
+                || k_lower.contains("emailto")
+                || k_lower.contains("csvpath")
+                || k_lower.contains("subject")
+            {
                 safe_args.push((*k, "<REDACTED>"));
             } else {
                 safe_args.push((*k, *v));
@@ -355,7 +359,11 @@ impl ScriptManager {
             loop {
                 match stdout.read(&mut buf) {
                     Ok(0) => break,
-                    Ok(n) => if tx.send(buf[..n].to_vec()).is_err() { break; },
+                    Ok(n) => {
+                        if tx.send(buf[..n].to_vec()).is_err() {
+                            break;
+                        }
+                    }
                     Err(_) => break,
                 }
             }
@@ -366,7 +374,11 @@ impl ScriptManager {
             loop {
                 match stderr.read(&mut buf) {
                     Ok(0) => break,
-                    Ok(n) => if tx2.send(buf[..n].to_vec()).is_err() { break; },
+                    Ok(n) => {
+                        if tx2.send(buf[..n].to_vec()).is_err() {
+                            break;
+                        }
+                    }
                     Err(_) => break,
                 }
             }
@@ -436,7 +448,7 @@ impl ScriptManager {
 
         if timed_out {
             let _ = std::process::Command::new("taskkill")
-                .args(&["/F", "/T", "/PID", &pid.to_string()])
+                .args(["/F", "/T", "/PID", &pid.to_string()])
                 .output();
             let _ = child.kill();
             let _ = child.wait();

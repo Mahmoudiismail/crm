@@ -52,8 +52,15 @@ pub fn run(config: &DepartmentSplitConfig) -> Result<()> {
         .canonicalize()
         .context("Failed to canonicalize dashboard_file path")?;
 
-    let dashboard_path_str_full = dashboard_path.to_str().ok_or_else(|| anyhow::anyhow!("Failed to convert dashboard path to string: {:?}", dashboard_path))?;
-    let dashboard_path_str = dashboard_path_str_full.strip_prefix(r"\\?\").unwrap_or(dashboard_path_str_full);
+    let dashboard_path_str_full = dashboard_path.to_str().ok_or_else(|| {
+        anyhow::anyhow!(
+            "Failed to convert dashboard path to string: {:?}",
+            dashboard_path
+        )
+    })?;
+    let dashboard_path_str = dashboard_path_str_full
+        .strip_prefix(r"\\?\")
+        .unwrap_or(dashboard_path_str_full);
 
     let out_dir = PathBuf::from(&config.output_dir);
     if !out_dir.exists() {
@@ -63,8 +70,15 @@ pub fn run(config: &DepartmentSplitConfig) -> Result<()> {
     let out_dir_canon = out_dir
         .canonicalize()
         .context("Failed to canonicalize output_dir")?;
-    let out_dir_str_full = out_dir_canon.to_str().ok_or_else(|| anyhow::anyhow!("Failed to convert output directory path to string: {:?}", out_dir_canon))?;
-    let out_dir_str = out_dir_str_full.strip_prefix(r"\\?\").unwrap_or(out_dir_str_full);
+    let out_dir_str_full = out_dir_canon.to_str().ok_or_else(|| {
+        anyhow::anyhow!(
+            "Failed to convert output directory path to string: {:?}",
+            out_dir_canon
+        )
+    })?;
+    let out_dir_str = out_dir_str_full
+        .strip_prefix(r"\\?\")
+        .unwrap_or(out_dir_str_full);
 
     // Write mapping to a temporary JSON file to pass to PowerShell
     let mapping_json = serde_json::to_string(&mapping)?;
@@ -72,7 +86,12 @@ pub fn run(config: &DepartmentSplitConfig) -> Result<()> {
     let mapping_file = tmp_dir.join("chair_mapping.json");
     std::fs::write(&mapping_file, mapping_json).context("Failed to write mapping JSON")?;
 
-    let mapping_file_str = mapping_file.to_str().ok_or_else(|| anyhow::anyhow!("Failed to convert mapping file path to string: {:?}", mapping_file))?;
+    let mapping_file_str = mapping_file.to_str().ok_or_else(|| {
+        anyhow::anyhow!(
+            "Failed to convert mapping file path to string: {:?}",
+            mapping_file
+        )
+    })?;
 
     let ps_script = r#"
 param(
