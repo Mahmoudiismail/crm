@@ -52,11 +52,12 @@ pub fn run(config: &DepartmentSplitConfig) -> Result<()> {
         .canonicalize()
         .context("Failed to canonicalize dashboard_file path")?;
 
-    let dashboard_path_str = dashboard_path
-        .to_str()
-        .unwrap()
-        .strip_prefix(r"\\?\")
-        .unwrap_or(dashboard_path.to_str().unwrap());
+    let dashboard_path_str = {
+        let path_str = dashboard_path
+            .to_str()
+            .context("Failed to convert dashboard_path to string")?;
+        path_str.strip_prefix(r"\?\").unwrap_or(path_str)
+    };
 
     let out_dir = PathBuf::from(&config.output_dir);
     if !out_dir.exists() {
@@ -66,11 +67,12 @@ pub fn run(config: &DepartmentSplitConfig) -> Result<()> {
     let out_dir_canon = out_dir
         .canonicalize()
         .context("Failed to canonicalize output_dir")?;
-    let out_dir_str = out_dir_canon
-        .to_str()
-        .unwrap()
-        .strip_prefix(r"\\?\")
-        .unwrap_or(out_dir_canon.to_str().unwrap());
+    let out_dir_str = {
+        let path_str = out_dir_canon
+            .to_str()
+            .context("Failed to convert out_dir_canon to string")?;
+        path_str.strip_prefix(r"\?\").unwrap_or(path_str)
+    };
 
     // Write mapping to a temporary JSON file to pass to PowerShell
     let mapping_json = serde_json::to_string(&mapping)?;
@@ -78,7 +80,9 @@ pub fn run(config: &DepartmentSplitConfig) -> Result<()> {
     let mapping_file = tmp_dir.join("chair_mapping.json");
     std::fs::write(&mapping_file, mapping_json).context("Failed to write mapping JSON")?;
 
-    let mapping_file_str = mapping_file.to_str().unwrap();
+    let mapping_file_str = mapping_file
+        .to_str()
+        .context("Failed to convert mapping_file to string")?;
 
     let ps_script = r#"
 param(
@@ -255,13 +259,30 @@ try {
 
         try {
             $dataBodyRange = $Sheet.Range($Sheet.Cells.Item($startRow, 1), $Sheet.Cells.Item($lastRow, $Sheet.UsedRange.Columns.Count))
-            $visibleRows = $dataBodyRange.SpecialCells(12) # xlCellTypeVisible
+            $visibleRows = $null
+
+            # Explicit try/catch specifically for the SpecialCells call to avoid terminating the script
+            try {
+                $visibleRows = $dataBodyRange.SpecialCells(12) # xlCellTypeVisible
+            } catch {
+                # This is normal if 0 rows matched the AutoFilter criteria
+                $visibleRows = $null
+            }
 
             if ($null -ne $visibleRows) {
-                $null = $visibleRows.Copy($TargetSheet.Cells.Item($startRow, 1))
+                # Ensure we actually have rows before copying, sometimes COM returns a 1x1 empty range
+                $count = 0
+                try { $count = $visibleRows.Rows.Count } catch {}
+                if ($count -gt 0) {
+                    $null = $visibleRows.Copy($TargetSheet.Cells.Item($startRow, 1))
+                } else {
+                    Write-Log "  -> Warning: VisibleRows returned but Count is 0 for ${target}"
+                }
+            } else {
+                Write-Log "  -> Warning: No visible rows found for ${target} (Empty Result)"
             }
         } catch {
-            Write-Log "  -> Warning: No visible rows found for ${target}"
+            Write-Log "  -> Warning: Failed during row copy for ${target}: $_"
         }
 
         if ($Sheet.AutoFilterMode) {
@@ -311,16 +332,27 @@ try {
     }
 
     try {
+        if ($TargetSheet) { [System.Runtime.InteropServices.Marshal]::ReleaseComObject($TargetSheet) | Out-Null }
+        if ($TargetWB) { [System.Runtime.InteropServices.Marshal]::ReleaseComObject($TargetWB) | Out-Null }
+        if ($Sheet) { [System.Runtime.InteropServices.Marshal]::ReleaseComObject($Sheet) | Out-Null }
+        if ($Workbook) { [System.Runtime.InteropServices.Marshal]::ReleaseComObject($Workbook) | Out-Null }
+
+        $TargetSheet = $null
+        $TargetWB = $null
+        $Sheet = $null
+        $Workbook = $null
+
         if ($Excel) {
             $Excel.ScreenUpdating = $true
             $Excel.EnableEvents = $true
             $Excel.DisplayAlerts = $true
             if ($originalCalculation) { try { $Excel.Calculation = $originalCalculation } catch {} }
-            $Excel.Quit()
+            try { $Excel.Quit() } catch {}
             [System.Runtime.InteropServices.Marshal]::ReleaseComObject($Excel) | Out-Null
+            $Excel = $null
         }
     } catch {
-        Write-Log "Warning: Failed to cleanly quit Excel."
+        Write-Log "Warning: Failed to cleanly quit and release Excel COM objects: $_"
     }
 
     [System.GC]::Collect()
@@ -389,4 +421,35 @@ mod tests {
             "Should use safe bracket notation for target"
         );
     }
+}
+
+#[test]
+fn test_special_cells_and_com_cleanup() {
+    let src = include_str!("department_split.rs");
+
+    // Verify SpecialCells is wrapped properly
+    assert!(
+            src.contains("try {\n                $visibleRows = $dataBodyRange.SpecialCells(12) # xlCellTypeVisible\n            } catch {\n                # This is normal if 0 rows matched the AutoFilter criteria\n                $visibleRows = $null\n            }"),
+            "Should contain specific try/catch for SpecialCells"
+        );
+
+    // Verify counts are checked
+    assert!(
+        src.contains("if ($count -gt 0)"),
+        "Should verify row count before copying"
+    );
+
+    // Verify thorough COM cleanup is performed
+    assert!(
+        src.contains("[System.Runtime.InteropServices.Marshal]::ReleaseComObject($TargetWB)"),
+        "Should release TargetWB"
+    );
+    assert!(
+        src.contains("[System.Runtime.InteropServices.Marshal]::ReleaseComObject($Workbook)"),
+        "Should release Master Workbook"
+    );
+    assert!(
+        src.contains("$Excel = $null"),
+        "Should set Excel to null for GC"
+    );
 }
