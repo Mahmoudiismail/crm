@@ -32,10 +32,8 @@ pub fn spawn_execution_manager(
             match cmd {
                 ExecutionManagerCommand::QueueTask { task, policy } => {
                     let mut st = status.lock().await;
-                    let is_queued = st.queued_task_ids.contains(&task.id)
-                        || queued_tasks.iter().any(|(t, _)| t.id == task.id);
-                    let is_running = st.running_task_ids.contains(&task.id)
-                        || running_tasks.iter().any(|(t, _)| t.id == task.id);
+                    let is_queued = queued_tasks.iter().any(|(t, _)| t.id == task.id);
+                    let is_running = running_tasks.iter().any(|(t, _)| t.id == task.id);
 
                     if is_queued || is_running {
                         tracing::warn!(
@@ -43,7 +41,9 @@ pub fn spawn_execution_manager(
                             task.id
                         );
                     } else {
-                        st.queued_task_ids.push(task.id.clone());
+                        if !st.queued_task_ids.contains(&task.id) {
+                            st.queued_task_ids.push(task.id.clone());
+                        }
                         queued_tasks.push_back((task, policy));
                     }
                 }

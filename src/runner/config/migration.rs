@@ -24,6 +24,8 @@ impl From<ExternalAppSpecLegacy> for ExternalAppSpec {
             period_mode: legacy.period_mode.unwrap_or(PeriodMode::Custom),
             start_date: legacy.start_date,
             end_date: legacy.end_date,
+            start_date_arg: None,
+            end_date_arg: None,
         }
     }
 }
@@ -235,6 +237,8 @@ impl From<RunnerTaskLegacy> for RunnerTask {
                             period_mode,
                             start_date,
                             end_date,
+                            start_date_arg: None,
+                            end_date_arg: None,
                         })
                     }
                 })
@@ -390,6 +394,8 @@ impl RunnerTask {
                         period_mode: PeriodMode::Custom,
                         start_date: None,
                         end_date: None,
+                        start_date_arg: None,
+                        end_date_arg: None,
                     })],
                 });
             }

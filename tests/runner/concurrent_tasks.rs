@@ -75,6 +75,8 @@ async fn test_different_non_concurrent_apps_do_not_block() {
             period_mode: crm_tool::runner::config::PeriodMode::Custom,
             start_date: None,
             end_date: None,
+            start_date_arg: None,
+            end_date_arg: None,
         })],
     });
 
@@ -88,6 +90,8 @@ async fn test_different_non_concurrent_apps_do_not_block() {
             period_mode: crm_tool::runner::config::PeriodMode::Custom,
             start_date: None,
             end_date: None,
+            start_date_arg: None,
+            end_date_arg: None,
         })],
     });
 
@@ -155,6 +159,8 @@ async fn test_same_non_concurrent_app_serializes() {
             period_mode: crm_tool::runner::config::PeriodMode::Custom,
             start_date: None,
             end_date: None,
+            start_date_arg: None,
+            end_date_arg: None,
         })],
     });
 
@@ -245,6 +251,8 @@ async fn test_same_concurrent_app_runs_concurrently() {
             period_mode: crm_tool::runner::config::PeriodMode::Custom,
             start_date: None,
             end_date: None,
+            start_date_arg: None,
+            end_date_arg: None,
         })],
     });
 
@@ -313,6 +321,8 @@ async fn test_multiple_actions_same_app() {
                 period_mode: crm_tool::runner::config::PeriodMode::Custom,
                 start_date: None,
                 end_date: None,
+                start_date_arg: None,
+                end_date_arg: None,
             }),
             ActionSpec::ExternalApp(ExternalAppSpec {
                 app_id: "AppA".to_string(),
@@ -320,6 +330,8 @@ async fn test_multiple_actions_same_app() {
                 period_mode: crm_tool::runner::config::PeriodMode::Custom,
                 start_date: None,
                 end_date: None,
+                start_date_arg: None,
+                end_date_arg: None,
             }),
             ActionSpec::ExternalApp(ExternalAppSpec {
                 app_id: "AppA".to_string(),
@@ -327,6 +339,8 @@ async fn test_multiple_actions_same_app() {
                 period_mode: crm_tool::runner::config::PeriodMode::Custom,
                 start_date: None,
                 end_date: None,
+                start_date_arg: None,
+                end_date_arg: None,
             }),
         ],
     });
@@ -382,6 +396,8 @@ async fn test_future_step_contention() {
             period_mode: crm_tool::runner::config::PeriodMode::Custom,
             start_date: None,
             end_date: None,
+            start_date_arg: None,
+            end_date_arg: None,
         })],
     });
     t1.steps.push(TaskStep {
@@ -393,6 +409,8 @@ async fn test_future_step_contention() {
             period_mode: crm_tool::runner::config::PeriodMode::Custom,
             start_date: None,
             end_date: None,
+            start_date_arg: None,
+            end_date_arg: None,
         })],
     });
 
@@ -462,6 +480,8 @@ async fn test_multiple_apps_in_one_step_dedup_and_sort() {
                 period_mode: crm_tool::runner::config::PeriodMode::Custom,
                 start_date: None,
                 end_date: None,
+                start_date_arg: None,
+                end_date_arg: None,
             }),
             ActionSpec::ExternalApp(ExternalAppSpec {
                 app_id: "AppA".to_string(),
@@ -469,6 +489,8 @@ async fn test_multiple_apps_in_one_step_dedup_and_sort() {
                 period_mode: crm_tool::runner::config::PeriodMode::Custom,
                 start_date: None,
                 end_date: None,
+                start_date_arg: None,
+                end_date_arg: None,
             }),
         ],
     });
@@ -485,6 +507,8 @@ async fn test_multiple_apps_in_one_step_dedup_and_sort() {
                 period_mode: crm_tool::runner::config::PeriodMode::Custom,
                 start_date: None,
                 end_date: None,
+                start_date_arg: None,
+                end_date_arg: None,
             }),
             ActionSpec::ExternalApp(ExternalAppSpec {
                 app_id: "AppB".to_string(),
@@ -492,6 +516,8 @@ async fn test_multiple_apps_in_one_step_dedup_and_sort() {
                 period_mode: crm_tool::runner::config::PeriodMode::Custom,
                 start_date: None,
                 end_date: None,
+                start_date_arg: None,
+                end_date_arg: None,
             }),
         ],
     });

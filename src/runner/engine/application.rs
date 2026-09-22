@@ -10,7 +10,7 @@ use crate::runner::engine::validation::{resolve_executable, resolve_relative_to_
 pub async fn run_external_app(
     logger: &TaskLogger,
     app: &RegisteredApp,
-    args: &HashMap<String, String>,
+    spec: &crate::runner::config::ExternalAppSpec,
     period: Option<&crate::runner::config::ExecutionPeriod>,
     timeout_seconds: u64,
 ) -> Result<()> {
@@ -22,6 +22,7 @@ pub async fn run_external_app(
         command.arg("--config").arg(&resolved_config);
     }
 
+    let args = &spec.args;
     let mut effective_args = HashMap::new();
     let (start_str, end_str) = if let Some(p) = period {
         (
@@ -43,8 +44,25 @@ pub async fn run_external_app(
     }
 
     if period.is_some() {
-        effective_args.insert("--start-date".to_string(), start_str.clone());
-        effective_args.insert("--end-date".to_string(), end_str.clone());
+        if let Some(st_arg) = &spec.start_date_arg {
+            if !st_arg.is_empty() {
+                effective_args.insert(st_arg.clone(), start_str.clone());
+            } else {
+                effective_args.insert("--start-date".to_string(), start_str.clone());
+            }
+        } else {
+            effective_args.insert("--start-date".to_string(), start_str.clone());
+        }
+
+        if let Some(ed_arg) = &spec.end_date_arg {
+            if !ed_arg.is_empty() {
+                effective_args.insert(ed_arg.clone(), end_str.clone());
+            } else {
+                effective_args.insert("--end-date".to_string(), end_str.clone());
+            }
+        } else {
+            effective_args.insert("--end-date".to_string(), end_str.clone());
+        }
     }
 
     let mut sorted_keys: Vec<&String> = effective_args.keys().collect();

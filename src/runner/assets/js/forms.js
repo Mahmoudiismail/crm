@@ -596,6 +596,14 @@
                                   </select>
                               </div>
                               <div>
+                                  <label class="block text-xs font-medium text-gray-700 mb-1">Target Arg for Start Date</label>
+                                  <select class="app-start-date-arg block w-full rounded border border-gray-300 px-2 py-1 text-sm bg-white"><option value="">-- Hardcoded / None --</option></select>
+                              </div>
+                              <div>
+                                  <label class="block text-xs font-medium text-gray-700 mb-1">Target Arg for End Date</label>
+                                  <select class="app-end-date-arg block w-full rounded border border-gray-300 px-2 py-1 text-sm bg-white"><option value="">-- Hardcoded / None --</option></select>
+                              </div>
+                              <div>
                                   <label class="block text-xs font-medium text-gray-700 mb-1">End Date</label>
                                   <div class="flex gap-1 mb-1">
                                       <select class="app-end-date-mode text-xs rounded border border-gray-300 px-1 py-1 bg-white">
@@ -641,6 +649,8 @@
               const edModeSel = contentDiv.querySelector(".app-end-date-mode");
               const edFixedInp = contentDiv.querySelector(".app-end-date-fixed");
               const edDynSel = contentDiv.querySelector(".app-end-date-dyn");
+              const sdArgSel = contentDiv.querySelector(".app-start-date-arg");
+              const edArgSel = contentDiv.querySelector(".app-end-date-arg");
 
               if (sdModeSel) {
                   sdModeSel.addEventListener("change", () => {

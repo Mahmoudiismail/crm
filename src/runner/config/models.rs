@@ -76,6 +76,10 @@ pub struct ExternalAppSpec {
     pub start_date: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub end_date: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_date_arg: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end_date_arg: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]

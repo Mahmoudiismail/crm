@@ -135,6 +135,8 @@ fn test_validate_config_invalid_external_app_reference() {
             period_mode: crm_tool::runner::config::PeriodMode::Custom,
             start_date: None,
             end_date: None,
+            start_date_arg: None,
+            end_date_arg: None,
         })],
     };
     let task = RunnerTask {
