@@ -171,11 +171,16 @@ impl AppConfig {
         self.to_date = to_iso_date(&self.to_date);
         self.calls_from_date = to_iso_date(&self.calls_from_date);
 
-        // Finalize to_date: if still empty, default to today
+        // Finalize to_date: if still empty, default to from_date if it exists, otherwise today
         if self.to_date.is_empty() {
-            self.to_date = Local::now().format("%Y-%m-%d").to_string();
-            self.dynamic_to_date = true;
-            debug!("to_date defaulted to today (Local): {}", self.to_date);
+            if !self.from_date.is_empty() {
+                self.to_date = self.from_date.clone();
+                debug!("to_date defaulted to from_date: {}", self.to_date);
+            } else {
+                self.to_date = Local::now().format("%Y-%m-%d").to_string();
+                self.dynamic_to_date = true;
+                debug!("to_date defaulted to today (Local): {}", self.to_date);
+            }
         }
 
         // (Do NOT overwrite calls_from_date merely because from_date exists)
@@ -421,10 +426,9 @@ mod tests {
         config.finalize_runtime_fields();
 
         assert_eq!(config.from_date, "2026-05-01");
-        // to_date should default to today
-        let today = Local::now().format("%Y-%m-%d").to_string();
-        assert_eq!(config.to_date, today);
-        assert!(config.dynamic_to_date);
+        // to_date should default to from_date
+        assert_eq!(config.to_date, "2026-05-01");
+        assert!(!config.dynamic_to_date);
 
         // calls_from_date should NOT fall back to from_date
         assert_eq!(config.calls_from_date, "2026-04-01");
