@@ -61,6 +61,8 @@ async fn test_gui_status_waiting_for_app_deterministic() {
                 period_mode: crm_tool::runner::config::PeriodMode::Custom,
                 start_date: None,
                 end_date: None,
+                start_date_arg: None,
+                end_date_arg: None,
             })],
         }],
         post_run_steps: vec![],

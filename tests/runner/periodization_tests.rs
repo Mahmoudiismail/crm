@@ -15,6 +15,8 @@ fn test_external_app_spec_owns_periodization_and_dates() {
         period_mode: PeriodMode::Monthly,
         start_date: Some("2026-01-01".to_string()),
         end_date: Some("2026-09-01".to_string()),
+        start_date_arg: None,
+        end_date_arg: None,
     };
 
     assert_eq!(spec.period_mode, PeriodMode::Monthly);
@@ -192,6 +194,8 @@ fn test_multiple_external_apps_independence_and_preview() {
         period_mode: PeriodMode::Monthly,
         start_date: Some("2026-01-01".to_string()),
         end_date: Some("2026-03-31".to_string()),
+        start_date_arg: None,
+        end_date_arg: None,
     };
 
     let app_b = ExternalAppSpec {
@@ -200,6 +204,8 @@ fn test_multiple_external_apps_independence_and_preview() {
         period_mode: PeriodMode::Quarterly,
         start_date: Some("2026-01-01".to_string()),
         end_date: Some("2026-12-31".to_string()),
+        start_date_arg: None,
+        end_date_arg: None,
     };
 
     let task = RunnerTask {
@@ -261,6 +267,8 @@ fn test_preview_interval_grid_alignment() {
         period_mode: PeriodMode::Custom,
         start_date: Some("2026-01-01".to_string()),
         end_date: Some("2026-01-01".to_string()),
+        start_date_arg: None,
+        end_date_arg: None,
     };
 
     // Configured start_time = 08:00, interval = 1 hour (3600s)
@@ -640,6 +648,8 @@ async fn test_concurrent_period_execution() {
         period_mode: PeriodMode::Monthly,
         start_date: Some("2026-01-01".to_string()),
         end_date: Some("2026-03-31".to_string()),
+        start_date_arg: None,
+        end_date_arg: None,
     };
 
     let mut task = RunnerTask {
@@ -749,6 +759,8 @@ async fn test_concurrent_period_execution_overlapping() {
         period_mode: PeriodMode::Monthly,
         start_date: Some("2026-01-01".to_string()),
         end_date: Some("2026-02-28".to_string()),
+        start_date_arg: None,
+        end_date_arg: None,
     };
 
     let mut task = RunnerTask {
@@ -854,6 +866,8 @@ async fn test_sequential_period_execution() {
         period_mode: PeriodMode::Monthly,
         start_date: Some("2026-01-01".to_string()),
         end_date: Some("2026-02-28".to_string()),
+        start_date_arg: None,
+        end_date_arg: None,
     };
 
     let mut task = RunnerTask {
@@ -942,6 +956,8 @@ async fn test_concurrent_period_error_propagation() {
         period_mode: PeriodMode::Monthly,
         start_date: Some("2026-01-01".to_string()),
         end_date: Some("2026-02-28".to_string()),
+        start_date_arg: None,
+        end_date_arg: None,
     };
 
     let mut task = RunnerTask {
@@ -1024,6 +1040,8 @@ async fn test_multiple_external_apps_execution_isolation() {
         period_mode: PeriodMode::Monthly,
         start_date: Some("2026-01-01".to_string()),
         end_date: Some("2026-01-31".to_string()),
+        start_date_arg: None,
+        end_date_arg: None,
     };
 
     let mut args_b = HashMap::new();
@@ -1035,6 +1053,8 @@ async fn test_multiple_external_apps_execution_isolation() {
         period_mode: PeriodMode::Quarterly,
         start_date: Some("2026-04-01".to_string()),
         end_date: Some("2026-06-30".to_string()),
+        start_date_arg: None,
+        end_date_arg: None,
     };
 
     let mut task = RunnerTask {
@@ -1126,6 +1146,8 @@ async fn test_post_run_external_app_execution() {
         period_mode: PeriodMode::Monthly,
         start_date: Some("2026-05-01".to_string()),
         end_date: Some("2026-05-31".to_string()),
+        start_date_arg: None,
+        end_date_arg: None,
     };
 
     let mut task = RunnerTask {
@@ -1205,6 +1227,8 @@ fn test_live_preview_monthly_full_year_generation() {
         period_mode: PeriodMode::Custom,
         start_date: Some("2024-01-01".to_string()),
         end_date: None,
+        start_date_arg: None,
+        end_date_arg: None,
     };
 
     let occs = crm_tool::runner::config::schedule::generate_upcoming_executions_for_app(

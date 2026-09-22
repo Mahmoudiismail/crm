@@ -1367,6 +1367,8 @@ mod tests {
                     period_mode: PeriodMode::Monthly,
                     start_date: Some("2026-01-01".to_string()),
                     end_date: Some("2026-12-31".to_string()),
+                    start_date_arg: None,
+                    end_date_arg: None,
                 })],
             }],
             post_run_steps: vec![],
@@ -1405,6 +1407,8 @@ mod tests {
                     period_mode: PeriodMode::Custom,
                     start_date: Some("2020-01-01".to_string()),
                     end_date: Some("2020-01-05".to_string()),
+                    start_date_arg: None,
+                    end_date_arg: None,
                 })],
             }],
             post_run_steps: vec![],
@@ -1780,6 +1784,8 @@ mod tests_live_preview {
             period_mode: PeriodMode::Custom,
             start_date: Some("2024-01-01".to_string()),
             end_date: None,
+            start_date_arg: None,
+            end_date_arg: None,
         };
 
         let occs = crate::runner::config::schedule::generate_upcoming_executions_for_app(

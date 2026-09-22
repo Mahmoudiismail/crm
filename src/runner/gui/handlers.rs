@@ -502,6 +502,8 @@ pub(crate) async fn handle_api_task_preview(
         period_mode,
         start_date,
         end_date,
+        start_date_arg: None,
+        end_date_arg: None,
     };
 
     let now = Utc::now();

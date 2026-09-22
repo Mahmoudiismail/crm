@@ -108,7 +108,7 @@ pub async fn run_task_by_id(
             if RACE_TESTING.load(std::sync::atomic::Ordering::SeqCst) {
                 RACE_BARRIER.wait().await;
             }
-            let mut st = status.lock().await;
+            let st = status.lock().await;
             if st.queued_task_ids.contains(&task.id) || st.running_task_ids.contains(&task.id) {
                 tracing::warn!(
                     "Task '{}' is already running or queued; skipping duplicate launch",
@@ -116,7 +116,8 @@ pub async fn run_task_by_id(
                 );
                 return Ok(());
             }
-            st.queued_task_ids.push(task.id.clone());
+            // Note: We DO NOT push to queued_task_ids here anymore!
+            // ExecutionManagerCommand::QueueTask handles pushing to queued_task_ids.
         }
         task.last_run_at = now.to_rfc3339();
 

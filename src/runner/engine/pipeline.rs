@@ -50,7 +50,7 @@ async fn execute_action(
                     for (idx, period) in periods.into_iter().enumerate() {
                         let logger = logger.clone();
                         let app = app.clone();
-                        let args = spec.args.clone();
+                        let spec_owned = spec.clone();
 
                         handles.push(tokio::spawn(async move {
                             if total_periods > 1 {
@@ -65,8 +65,14 @@ async fn execute_action(
                                     ))
                                     .await;
                             }
-                            run_external_app(&logger, &app, &args, Some(&period), timeout_seconds)
-                                .await
+                            run_external_app(
+                                &logger,
+                                &app,
+                                &spec_owned,
+                                Some(&period),
+                                timeout_seconds,
+                            )
+                            .await
                         }));
                     }
 
@@ -91,8 +97,7 @@ async fn execute_action(
                                 ))
                                 .await;
                         }
-                        run_external_app(logger, app, &spec.args, Some(period), timeout_seconds)
-                            .await?;
+                        run_external_app(logger, app, spec, Some(period), timeout_seconds).await?;
                     }
                     Ok(())
                 }
