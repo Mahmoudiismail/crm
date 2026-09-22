@@ -1167,3 +1167,53 @@ async fn test_post_run_external_app_execution() {
     assert!(log_content.contains("2026-05-01"));
     assert!(log_content.contains("2026-05-31"));
 }
+
+#[test]
+fn test_live_preview_monthly_full_year_generation() {
+    use chrono::{TimeZone, Utc};
+    use crm_tool::runner::config::{
+        ExternalAppSpec, PeriodMode, Repetition, RunnerTask, TaskSchedule,
+    };
+    use std::collections::HashMap;
+
+    let now = Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
+    let task = RunnerTask {
+        id: "t1".to_string(),
+        name: "Monthly Task".to_string(),
+        enabled: true,
+        repetition: Repetition::Repeat,
+        frequency_seconds: 0,
+        next_run_at: String::new(),
+        schedules: vec![TaskSchedule::Monthly {
+            enabled: true,
+            day_of_month: 15,
+            at_time: "09:00".to_string(),
+            next_run_at: String::new(),
+            working_hours: None,
+            working_hours_profile_id: None,
+        }],
+        steps: vec![],
+        post_run_steps: vec![],
+        last_run_at: String::new(),
+        last_status: String::new(),
+        timeout_seconds: 3600,
+    };
+
+    let app_spec = ExternalAppSpec {
+        app_id: "test_app".to_string(),
+        args: HashMap::new(),
+        period_mode: PeriodMode::Custom,
+        start_date: Some("2024-01-01".to_string()),
+        end_date: None,
+    };
+
+    let occs = crm_tool::runner::config::schedule::generate_upcoming_executions_for_app(
+        &task, &app_spec, now, 10,
+    )
+    .unwrap();
+    assert_eq!(
+        occs.len(),
+        10,
+        "Should generate exactly 10 upcoming executions when end_date is unbounded"
+    );
+}

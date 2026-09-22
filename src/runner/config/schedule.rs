@@ -883,6 +883,30 @@ pub fn generate_upcoming_executions_for_app(
             .unwrap_or_else(|| Utc::now().with_timezone(&Local))
             .with_timezone(&Utc);
 
+        #[allow(unused_variables)]
+        let effective_period_end_utc =
+            if app_spec.period_mode == PeriodMode::Custom && app_spec.end_date.is_none() {
+                period_end_utc + chrono::Duration::days(365 * 5)
+            } else {
+                period_end_utc
+            };
+
+        #[allow(unused_variables)]
+        let effective_period_end_utc =
+            if app_spec.period_mode == PeriodMode::Custom && app_spec.end_date.is_none() {
+                period_end_utc + chrono::Duration::days(365 * 5)
+            } else {
+                period_end_utc
+            };
+
+        #[allow(unused_variables)]
+        let effective_period_end_utc =
+            if app_spec.period_mode == PeriodMode::Custom && app_spec.end_date.is_none() {
+                period_end_utc + chrono::Duration::days(365 * 5)
+            } else {
+                period_end_utc
+            };
+
         if period_end_utc < now {
             continue;
         }
@@ -918,7 +942,7 @@ pub fn generate_upcoming_executions_for_app(
                         period_start_utc
                     };
 
-                    if dt >= now && dt >= period_start_utc && dt <= period_end_utc {
+                    if dt >= now && dt >= period_start_utc && dt <= effective_period_end_utc {
                         results.push(ExecutionOccurrence {
                             period: period.clone(),
                             scheduled_at: dt,
@@ -970,7 +994,10 @@ pub fn generate_upcoming_executions_for_app(
                     }
 
                     let mut steps_count = 0;
-                    while cursor <= period_end_utc && results.len() < limit && steps_count < 1000 {
+                    while cursor <= effective_period_end_utc
+                        && results.len() < limit
+                        && steps_count < 1000
+                    {
                         steps_count += 1;
                         let is_wh_ok = if let Some(wh) = working_hours {
                             is_within_working_hours(wh, cursor)
@@ -999,14 +1026,20 @@ pub fn generate_upcoming_executions_for_app(
                     ..
                 } => {
                     let mut cur_date = period.start_date;
-                    while cur_date <= period.end_date && results.len() < limit {
+                    let effective_end_local = effective_period_end_utc
+                        .with_timezone(&chrono::Local)
+                        .date_naive();
+                    while cur_date <= effective_end_local && results.len() < limit {
                         for raw_time in times {
                             if let Ok(time) = NaiveTime::parse_from_str(raw_time.trim(), "%H:%M") {
                                 if let Some(local_dt) =
                                     cur_date.and_time(time).and_local_timezone(Local).single()
                                 {
                                     let dt = local_dt.with_timezone(&Utc);
-                                    if dt >= now && dt >= period_start_utc && dt <= period_end_utc {
+                                    if dt >= now
+                                        && dt >= period_start_utc
+                                        && dt <= effective_period_end_utc
+                                    {
                                         let is_wh_ok = if let Some(wh) = working_hours {
                                             is_working_day(wh, dt)
                                         } else {
@@ -1035,6 +1068,9 @@ pub fn generate_upcoming_executions_for_app(
                     ..
                 } => {
                     let mut cur_date = period.start_date;
+                    let effective_end_local = effective_period_end_utc
+                        .with_timezone(&chrono::Local)
+                        .date_naive();
                     let target_weekday = match day_of_week.trim().to_lowercase().as_str() {
                         "sunday" | "sun" | "0" => chrono::Weekday::Sun,
                         "monday" | "mon" | "1" => chrono::Weekday::Mon,
@@ -1052,13 +1088,16 @@ pub fn generate_upcoming_executions_for_app(
                             .unwrap_or_else(|_| NaiveTime::from_hms_opt(0, 0, 0).unwrap())
                     };
 
-                    while cur_date <= period.end_date && results.len() < limit {
+                    while cur_date <= effective_end_local && results.len() < limit {
                         if cur_date.weekday() == target_weekday {
                             if let Some(local_dt) =
                                 cur_date.and_time(time).and_local_timezone(Local).single()
                             {
                                 let dt = local_dt.with_timezone(&Utc);
-                                if dt >= now && dt >= period_start_utc && dt <= period_end_utc {
+                                if dt >= now
+                                    && dt >= period_start_utc
+                                    && dt <= effective_period_end_utc
+                                {
                                     let is_wh_ok = if let Some(wh) = working_hours {
                                         is_working_day(wh, dt)
                                     } else {
@@ -1085,10 +1124,13 @@ pub fn generate_upcoming_executions_for_app(
                     working_hours,
                     ..
                 } => {
+                    use chrono::Datelike;
                     let mut cur_year = period.start_date.year();
                     let mut cur_month = period.start_date.month();
-                    let end_year = period.end_date.year();
-                    let end_month = period.end_date.month();
+                    let effective_end_local =
+                        effective_period_end_utc.with_timezone(&Local).date_naive();
+                    let end_year = effective_end_local.year();
+                    let end_month = effective_end_local.month();
 
                     let time = if at_time.is_empty() {
                         NaiveTime::from_hms_opt(0, 0, 0).unwrap()
@@ -1100,12 +1142,15 @@ pub fn generate_upcoming_executions_for_app(
                     loop {
                         let day = (*day_of_month).min(days_in_month(cur_year, cur_month));
                         if let Some(cur_date) = NaiveDate::from_ymd_opt(cur_year, cur_month, day) {
-                            if cur_date >= period.start_date && cur_date <= period.end_date {
+                            if cur_date >= period.start_date && cur_date <= effective_end_local {
                                 if let Some(local_dt) =
                                     cur_date.and_time(time).and_local_timezone(Local).single()
                                 {
                                     let dt = local_dt.with_timezone(&Utc);
-                                    if dt >= now && dt >= period_start_utc && dt <= period_end_utc {
+                                    if dt >= now
+                                        && dt >= period_start_utc
+                                        && dt <= effective_period_end_utc
+                                    {
                                         let is_wh_ok = if let Some(wh) = working_hours {
                                             is_working_day(wh, dt)
                                         } else {
@@ -1693,5 +1738,104 @@ mod tests {
             "Error string was: {}",
             err4
         );
+    }
+}
+
+#[cfg(test)]
+mod tests_live_preview {
+    use crate::runner::config::{
+        ExternalAppSpec, PeriodMode, Repetition, RunnerTask, TaskSchedule,
+    };
+    use chrono::{TimeZone, Utc};
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_live_preview_monthly_full_year_generation() {
+        let now = Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
+        let task = RunnerTask {
+            id: "t1".to_string(),
+            name: "Monthly Task".to_string(),
+            enabled: true,
+            repetition: Repetition::Repeat,
+            frequency_seconds: 0,
+            next_run_at: String::new(),
+            schedules: vec![TaskSchedule::Monthly {
+                enabled: true,
+                day_of_month: 15,
+                at_time: "09:00".to_string(),
+                next_run_at: String::new(),
+                working_hours: None,
+                working_hours_profile_id: None,
+            }],
+            steps: vec![],
+            post_run_steps: vec![],
+            last_run_at: String::new(),
+            last_status: String::new(),
+            timeout_seconds: 3600,
+        };
+
+        let app_spec = ExternalAppSpec {
+            app_id: "test_app".to_string(),
+            args: HashMap::new(),
+            period_mode: PeriodMode::Custom,
+            start_date: Some("2024-01-01".to_string()),
+            end_date: None,
+        };
+
+        let occs = crate::runner::config::schedule::generate_upcoming_executions_for_app(
+            &task, &app_spec, now, 10,
+        )
+        .unwrap();
+        assert_eq!(
+            occs.len(),
+            10,
+            "Should generate exactly 10 upcoming executions when end_date is unbounded"
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests_due_now {
+    use super::*;
+    use chrono::{TimeZone, Utc};
+
+    #[test]
+    fn test_scheduled_execution_due_now() {
+        let schedule = TaskSchedule::Interval {
+            enabled: true,
+            every_seconds: 60,
+            working_hours: None,
+            working_hours_profile_id: None,
+            start_time: None,
+            next_run_at: String::new(),
+        };
+
+        let now = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap();
+        // If next_run_at is empty, it's due immediately.
+        assert!(schedule.due_now(now));
+
+        // If next_run_at is in the past, it's due.
+        let past = Utc.with_ymd_and_hms(2024, 1, 1, 11, 59, 0).unwrap();
+        let schedule_past = TaskSchedule::Interval {
+            enabled: true,
+            every_seconds: 60,
+            working_hours: None,
+            working_hours_profile_id: None,
+            start_time: None,
+            next_run_at: past.to_rfc3339(),
+        };
+        assert!(schedule_past.due_now(now));
+
+        // If next_run_at is in the future, it's NOT due.
+        let future = Utc.with_ymd_and_hms(2024, 1, 1, 12, 1, 0).unwrap();
+        let schedule_future = TaskSchedule::Interval {
+            enabled: true,
+            every_seconds: 60,
+            working_hours: None,
+            working_hours_profile_id: None,
+            start_time: None,
+            next_run_at: future.to_rfc3339(),
+        };
+        assert!(!schedule_future.due_now(now));
     }
 }
