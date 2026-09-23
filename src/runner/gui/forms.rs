@@ -176,7 +176,7 @@ pub(crate) fn parse_schedules_text(
                             }
                         }
                     }
-                    if !wh_map.is_empty() && working_hours_profile_id.is_none() {
+                    if working_hours_profile_id.is_none() {
                         working_hours = Some(wh_map);
                     }
                 }
@@ -230,7 +230,7 @@ pub(crate) fn parse_schedules_text(
                             }
                         }
                     }
-                    if !wh_map.is_empty() && working_hours_profile_id.is_none() {
+                    if working_hours_profile_id.is_none() {
                         working_hours = Some(wh_map);
                     }
                 }
@@ -278,7 +278,7 @@ pub(crate) fn parse_schedules_text(
                             }
                         }
                     }
-                    if !wh_map.is_empty() && working_hours_profile_id.is_none() {
+                    if working_hours_profile_id.is_none() {
                         working_hours = Some(wh_map);
                     }
                 }
@@ -330,7 +330,7 @@ pub(crate) fn parse_schedules_text(
                             }
                         }
                     }
-                    if !wh_map.is_empty() && working_hours_profile_id.is_none() {
+                    if working_hours_profile_id.is_none() {
                         working_hours = Some(wh_map);
                     }
                 }

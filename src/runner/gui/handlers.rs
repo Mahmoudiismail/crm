@@ -496,7 +496,7 @@ pub(crate) async fn handle_api_task_preview(
 
     let app_id = values.get("app_id").cloned().unwrap_or_default();
 
-    let app_spec = ExternalAppSpec {
+    let mut app_spec = ExternalAppSpec {
         app_id,
         args: HashMap::new(),
         period_mode,
@@ -505,6 +505,11 @@ pub(crate) async fn handle_api_task_preview(
         start_date_arg: None,
         end_date_arg: None,
     };
+    if let Some(args_str) = values.get("args") {
+        if let Ok(args_map) = serde_json::from_str::<HashMap<String, String>>(args_str) {
+            app_spec.args = args_map;
+        }
+    }
 
     let now = Utc::now();
     match generate_upcoming_executions_for_app(&task, &app_spec, now, 10) {
@@ -552,10 +557,54 @@ pub(crate) async fn handle_api_apps_manifest(
             ));
         }
 
-        let output_res = tokio::process::Command::new(&app.executable_path)
+        let mut child_cmd = tokio::process::Command::new(&app.executable_path);
+        child_cmd
             .arg("--manifest")
-            .output()
-            .await;
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .kill_on_drop(true);
+        let spawn_res = child_cmd.spawn();
+        let output_res = match spawn_res {
+            Ok(child) => {
+                let child_pid = child.id();
+                match tokio::time::timeout(
+                    std::time::Duration::from_secs(10),
+                    child.wait_with_output(),
+                )
+                .await
+                {
+                    Ok(res) => res,
+                    Err(_) => {
+                        if let Some(pid) = child_pid {
+                            #[cfg(target_os = "windows")]
+                            {
+                                let _ = tokio::process::Command::new("taskkill")
+                                    .args(["/F", "/T", "/PID", &pid.to_string()])
+                                    .stdout(std::process::Stdio::null())
+                                    .stderr(std::process::Stdio::null())
+                                    .status()
+                                    .await;
+                            }
+                            #[cfg(not(target_os = "windows"))]
+                            {
+                                let _ = tokio::process::Command::new("pkill")
+                                    .args(["-P", &pid.to_string()])
+                                    .stdout(std::process::Stdio::null())
+                                    .stderr(std::process::Stdio::null())
+                                    .status()
+                                    .await;
+                            }
+                        }
+                        return Ok((
+                            500,
+                            "application/json",
+                            "{\"error\": \"App manifest execution timed out\"}".to_string(),
+                        ));
+                    }
+                }
+            }
+            Err(e) => Err(e),
+        };
 
         match output_res {
             Ok(output) => {

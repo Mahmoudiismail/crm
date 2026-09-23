@@ -72,3 +72,5 @@ Task execution is concurrent, with an execution manager enforcing collision prev
 ## Call Center Execution
 - Running the tasker app via CLI with `--only-call-center` explicitly funnels data to the call center team bucket.
 - This mode automatically triggers the CRM lead generation report export as a secondary attachment alongside the primary ticket list, skipping standard branching logic.
+- **Runner Manifest Execution Limits:** The `handle_api_apps_manifest` endpoint enforces a strict 10-second timeout using `tokio::time::timeout`. If the application fails to return its manifest within 10 seconds, the child process tree is forcefully terminated using OS-level commands (`taskkill /F /T /PID` on Windows or `pkill -P` on Unix) to prevent process hanging and file handle exhaustion.
+- **TaskLogger I/O Isolation:** `TaskLogger` executes all blocking filesystem I/O (log directory creation, file creation, appending bytes, and flushing) off the async executor using `tokio::task::spawn_blocking` or `std::thread::spawn`. This ensures Tokio's core executor pool is not stalled by slow I/O when generating large task logs.
