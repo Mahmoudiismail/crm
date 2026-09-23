@@ -4,3 +4,5 @@
   - When matching text fields or dropdown options in XPath, always use `normalize-space(.)` instead of `text()` to bypass any leading/trailing whitespace problems.
   - Polling wait-loops (with intervals inside `tab.evaluate`) are strongly preferred over strict implicit waits, because they allow querying multiple elements or states concurrently until an explicit event (such as a loader `.loading-screen-wrapper` completely vanishing or `mat-label` parameters rendering) takes place before continuing to execute logic.
   - Form automation must simulate native keyboard events (`KeyboardEvent` keyup/keydown) after typing so Angular forms digest values accurately, especially for the search input in DevExtreme/Angular panels.
+
+- When using `SpecialCells(12)` in PowerShell Excel COM automation to copy filtered rows, always wrap the call in a specific `try/catch` block, as Excel COM throws a terminating exception when no visible rows match the criteria. Additionally, ensure that comprehensive COM cleanup is executed in the `finally` block, including explicit `ReleaseComObject` calls for Workbooks and Worksheets, not just the primary Application object.

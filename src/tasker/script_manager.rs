@@ -44,6 +44,20 @@ impl Default for ScriptManager {
     }
 }
 
+fn rename_with_fallback(from: &Path, to: &Path) -> std::io::Result<()> {
+    match fs::rename(from, to) {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            tracing::trace!(
+                "Initial rename failed ({}), attempting fallback remove...",
+                e
+            );
+            let _ = fs::remove_file(to);
+            fs::rename(from, to)
+        }
+    }
+}
+
 impl ScriptManager {
     pub fn new() -> Self {
         Self { root_dir: None }
@@ -171,7 +185,7 @@ impl ScriptManager {
                             chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
                         let backup_path =
                             task_dir.join(format!(".metadata.json.corrupted_{}", timestamp));
-                        let _ = fs::rename(&metadata_path, &backup_path);
+                        let _ = rename_with_fallback(&metadata_path, &backup_path);
                         TaskMetadata::default()
                     }
                 },
@@ -248,7 +262,7 @@ impl ScriptManager {
             file.flush()?;
             file.sync_all()?;
         }
-        fs::rename(&tmp_target_path, &target_path).with_context(|| {
+        rename_with_fallback(&tmp_target_path, &target_path).with_context(|| {
             format!(
                 "Failed to rename temp script {:?} to {:?}",
                 tmp_target_path, target_path
@@ -278,7 +292,7 @@ impl ScriptManager {
             meta_file.flush()?;
             meta_file.sync_all()?;
         }
-        fs::rename(&tmp_metadata_path, &metadata_path).with_context(|| {
+        rename_with_fallback(&tmp_metadata_path, &metadata_path).with_context(|| {
             format!("Failed to rename temp metadata file to {:?}", metadata_path)
         })?;
 
@@ -834,5 +848,30 @@ Set-Content -LiteralPath $OutFile -Value $HostileVal -NoNewline
         let entry = metadata.scripts.get("shared_script.ps1").unwrap();
         let active_path = task_dir.join(&entry.active_script);
         assert!(active_path.exists());
+    }
+}
+
+#[cfg(test)]
+mod additional_tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_rename_with_fallback_existing_file() {
+        let temp_dir = tempdir().unwrap();
+        let file1 = temp_dir.path().join("file1.txt");
+        let file2 = temp_dir.path().join("file2.txt");
+
+        fs::write(&file1, "source content").unwrap();
+        fs::write(&file2, "existing destination content").unwrap();
+
+        // This will simulate the rename on Windows where file2 already exists
+        let result = rename_with_fallback(&file1, &file2);
+        assert!(result.is_ok());
+
+        assert!(!file1.exists());
+        assert!(file2.exists());
+        assert_eq!(fs::read_to_string(&file2).unwrap(), "source content");
     }
 }
