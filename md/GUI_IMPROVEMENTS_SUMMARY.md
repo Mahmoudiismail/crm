@@ -143,3 +143,6 @@
 4. Add multiple commands with mixed Run/Continue modes - verify they execute in order
 5. Verify existing tasks with legacy repetition/frequency fields still load correctly
 6. Test the add/remove buttons multiple times to ensure they remain responsive
+
+### Recent Fixes
+* **Forms JS Bug Fix:** Removed a stray code block in `src/runner/assets/js/forms.js` that caused an `Uncaught ReferenceError: contentDiv is not defined` crash on page load, restoring full GUI form functionality and layout stability.
