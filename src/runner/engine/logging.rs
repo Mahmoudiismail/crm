@@ -19,13 +19,51 @@ impl TaskLogger {
     }
 
     pub async fn log(&self, message: &str) {
-        let mut inner = self.inner.lock().await;
-        inner.log(message);
+        let (task_id, file_opt) = {
+            let inner = self.inner.lock().await;
+            (
+                inner.task_id.clone(),
+                inner.file.as_ref().and_then(|f| f.try_clone().ok()),
+            )
+        };
+
+        let now = Local::now().to_rfc3339();
+        let line = format!("[{}] {}\n", now, message);
+
+        if let Some(mut f) = file_opt {
+            let _ = tokio::task::spawn_blocking(move || {
+                let _ = f.write_all(line.as_bytes());
+                let _ = f.flush();
+            })
+            .await;
+        }
+        debug!("[Task:{}] {}", task_id, message);
     }
 
     pub async fn log_bytes(&self, prefix: &str, bytes: &[u8]) {
-        let mut inner = self.inner.lock().await;
-        inner.log_bytes(prefix, bytes);
+        if bytes.is_empty() {
+            return;
+        }
+
+        let file_opt = {
+            let inner = self.inner.lock().await;
+            inner.file.as_ref().and_then(|f| f.try_clone().ok())
+        };
+
+        if let Some(mut f) = file_opt {
+            let text = String::from_utf8_lossy(bytes).into_owned();
+            let prefix_owned = prefix.to_string();
+            let _ = tokio::task::spawn_blocking(move || {
+                let mut all_lines = String::new();
+                for line in text.lines() {
+                    let now = Local::now().to_rfc3339();
+                    all_lines.push_str(&format!("[{}] {}: {}\n", now, prefix_owned, line));
+                }
+                let _ = f.write_all(all_lines.as_bytes());
+                let _ = f.flush();
+            })
+            .await;
+        }
     }
 
     pub async fn log_path_async(&self) -> std::path::PathBuf {
@@ -56,7 +94,13 @@ impl TaskLoggerInner {
             Err(_) => std::path::PathBuf::from("logs").join(&safe_task_name),
         };
 
-        if let Err(e) = std::fs::create_dir_all(&log_dir) {
+        if let Err(e) = std::thread::spawn({
+            let log_dir = log_dir.clone();
+            move || std::fs::create_dir_all(&log_dir)
+        })
+        .join()
+        .unwrap()
+        {
             error!(
                 "Failed to create log directory {}: {}",
                 log_dir.display(),
@@ -70,17 +114,66 @@ impl TaskLoggerInner {
         }
 
         let log_path = log_dir.join(filename);
-        match std::fs::File::create(&log_path) {
+        match std::thread::spawn({
+            let log_path = log_path.clone();
+            move || std::fs::File::create(&log_path)
+        })
+        .join()
+        .unwrap()
+        {
             Ok(file) => {
                 let mut logger = Self {
                     file: Some(file),
                     task_id: task_id.to_string(),
                     log_path: Some(log_path.clone()),
                 };
-                logger.log("==================================================");
-                logger.log(&format!("TASK INITIATED: {} (ID: {})", task_name, task_id));
-                logger.log(&format!("START TIME:     {}", now.to_rfc3339()));
-                logger.log("==================================================");
+
+                let lines = vec![
+                    format!(
+                        "[{}] ==================================================\n",
+                        now.to_rfc3339()
+                    ),
+                    format!(
+                        "[{}] TASK INITIATED: {} (ID: {})\n",
+                        now.to_rfc3339(),
+                        task_name,
+                        task_id
+                    ),
+                    format!(
+                        "[{}] START TIME:     {}\n",
+                        now.to_rfc3339(),
+                        now.to_rfc3339()
+                    ),
+                    format!(
+                        "[{}] ==================================================\n",
+                        now.to_rfc3339()
+                    ),
+                ];
+                if let Some(ref mut f) = logger.file {
+                    if let Ok(mut f_clone) = f.try_clone() {
+                        let _ = std::thread::spawn(move || {
+                            for line in lines {
+                                let _ = f_clone.write_all(line.as_bytes());
+                            }
+                            let _ = f_clone.flush();
+                        })
+                        .join();
+                    }
+                }
+                debug!(
+                    "[Task:{}] ==================================================",
+                    task_id
+                );
+                debug!(
+                    "[Task:{}] TASK INITIATED: {} (ID: {})",
+                    task_id, task_name, task_id
+                );
+                debug!("[Task:{}] START TIME:     {}", task_id, now.to_rfc3339());
+                debug!(
+                    "[Task:{}] ==================================================",
+                    task_id
+                );
+
                 logger
             }
             Err(e) => {
@@ -91,35 +184,6 @@ impl TaskLoggerInner {
                     log_path: None,
                 }
             }
-        }
-    }
-
-    fn log(&mut self, message: &str) {
-        let now = Local::now().to_rfc3339();
-        let line = format!("[{}] {}\n", now, message);
-        if let Some(ref mut f) = self.file {
-            let _ = f.write_all(line.as_bytes());
-            let _ = f.flush();
-        }
-        debug!("[Task:{}] {}", self.task_id, message);
-    }
-
-    fn log_file_only(&mut self, message: &str) {
-        let now = Local::now().to_rfc3339();
-        let line = format!("[{}] {}\n", now, message);
-        if let Some(ref mut f) = self.file {
-            let _ = f.write_all(line.as_bytes());
-            let _ = f.flush();
-        }
-    }
-
-    fn log_bytes(&mut self, prefix: &str, bytes: &[u8]) {
-        if bytes.is_empty() {
-            return;
-        }
-        let text = String::from_utf8_lossy(bytes);
-        for line in text.lines() {
-            self.log_file_only(&format!("{}: {}", prefix, line));
         }
     }
 }
