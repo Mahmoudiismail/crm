@@ -9,12 +9,23 @@ pub fn send_email(
     leads_path: Option<&str>,
     display_or_send: &str,
 ) -> Result<()> {
+    // 1. Create directory and save HTML payload
+    let payloads_dir = std::env::current_dir()
+        .unwrap_or_else(|_| std::path::PathBuf::from("."))
+        .join("logs")
+        .join("email_payloads");
+    std::fs::create_dir_all(&payloads_dir)?;
+
+    let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S_%f");
+    let html_path = payloads_dir.join(format!("email_body_send_email_{}.html", timestamp));
+    std::fs::write(&html_path, html_body)?;
+
     let template = r#"
 param(
     [string]$To,
     [string]$Cc,
     [string]$Subject,
-    [string]$HtmlBody,
+    [string]$HtmlBodyPath,
     [string]$AttachmentPath,
     [string]$LeadsPath,
     [string]$DisplayOrSend
@@ -28,7 +39,10 @@ try {
     if ($To) { $Mail.To = $To }
     if ($Cc) { $Mail.CC = $Cc }
     if ($Subject) { $Mail.Subject = $Subject }
-    if ($HtmlBody) { $Mail.HTMLBody = $HtmlBody }
+
+    if ($HtmlBodyPath -and (Test-Path $HtmlBodyPath)) {
+        $Mail.HTMLBody = Get-Content -LiteralPath $HtmlBodyPath -Raw -Encoding UTF8
+    }
 
     if ($AttachmentPath -and (Test-Path $AttachmentPath)) {
         $Mail.Attachments.Add($AttachmentPath)
@@ -45,7 +59,7 @@ try {
     }
 } catch {
     Write-Error "Failed to send/display email via Outlook COM: $_"
-    exit 1
+    [System.Environment]::Exit(1)
 }
 "#;
 
@@ -58,7 +72,7 @@ try {
             ("-To", to),
             ("-Cc", cc),
             ("-Subject", subject),
-            ("-HtmlBody", html_body),
+            ("-HtmlBodyPath", html_path.to_string_lossy().as_ref()),
             ("-AttachmentPath", attachment_path.unwrap_or("")),
             ("-LeadsPath", leads_path.unwrap_or("")),
             ("-DisplayOrSend", display_or_send),
@@ -87,7 +101,7 @@ mod tests {
         assert!(src.contains("[string]$To"));
         assert!(src.contains("[string]$Cc"));
         assert!(src.contains("[string]$Subject"));
-        assert!(src.contains("[string]$HtmlBody"));
+        assert!(src.contains("[string]$HtmlBodyPath"));
         assert!(src.contains("[string]$AttachmentPath"));
         assert!(src.contains("[string]$LeadsPath"));
         assert!(src.contains("[string]$DisplayOrSend"));
