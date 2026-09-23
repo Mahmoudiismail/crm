@@ -157,25 +157,14 @@ pub fn navigate_and_run_report(
                             );
                         }
 
-                        let mut mis_reports_found = false;
-                        let mis_reports_xpath = "//div[contains(@class, 'label') and contains(@class, 'fw-bold') and contains(text(), 'MIS Reports')]";
-
-                        for _ in 0..100 {
-                            if tab.find_element_by_xpath(mis_reports_xpath).is_ok() {
-                                mis_reports_found = true;
-                                break;
-                            }
-                            std::thread::sleep(Duration::from_millis(100));
-                        }
-
-                        if !mis_reports_found {
-                            error!("MIS Reports button not found after wait.");
+                        let wait_js = generate_mis_reports_wait_js(10);
+                        if let Err(e) = javascript::evaluate_automation_step(tab, &wait_js, "Wait for MIS Reports") {
+                            error!("MIS Reports button wait timeout: {:?}", e);
                             if let Ok(html) = tab.get_content() {
                                 error!("Page HTML at MIS Reports button wait timeout:\n{}", html);
                             }
                             return Err(anyhow::anyhow!("MIS Reports button wait timeout"));
                         }
-
                         info!("MIS Reports button successfully verified.");
                         println!("MIS Reports button successfully verified.");
                         debug::save_html_state(
@@ -846,6 +835,67 @@ pub fn generate_step6_js(timeout_minutes: u64) -> String {
 
             exportBtn.click();
             logs.push("Clicked Export button");
+            return JSON.stringify({{ status: "SUCCESS", logs }});
+        }})({});
+        "#,
+        timeout_minutes
+    )
+}
+pub fn generate_mis_reports_wait_js(timeout_minutes: u64) -> String {
+    format!(
+        r#"
+        (async function(timeoutMinutes) {{
+            function sleep(ms) {{ return new Promise(r => setTimeout(r, ms)); }}
+            let logs = [];
+
+            logs.push("Waiting for SPA loaders to disappear...");
+            const deadline = Date.now() + timeoutMinutes * 60 * 1000;
+            let loadersGone = false;
+
+            while (Date.now() <= deadline) {{
+                let loader = document.querySelector('#loader_svg, .loading-screen-wrapper, mat-progress-bar, .dx-loadpanel');
+                let isLoaderVisible = false;
+                if (loader) {{
+                    let style = window.getComputedStyle(loader);
+                    if (style.display !== 'none' && style.opacity !== '0' && style.visibility !== 'hidden') {{
+                        isLoaderVisible = true;
+                    }}
+                }}
+
+                if (!isLoaderVisible) {{
+                    loadersGone = true;
+                    break;
+                }}
+                await sleep(100);
+            }}
+
+            if (!loadersGone) {{
+                return JSON.stringify({{ status: "ERROR", msg: "Timeout waiting for loader to disappear", logs }});
+            }}
+
+            logs.push("Wait for MIS Reports button to be visible...");
+            let misReportsFound = false;
+            const misReportsXpath = "//div[contains(@class, 'label') and contains(@class, 'fw-bold') and contains(text(), 'MIS Reports')]";
+
+            while (Date.now() <= deadline) {{
+                let result = document.evaluate(misReportsXpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                let element = result.singleNodeValue;
+
+                if (element) {{
+                    let style = window.getComputedStyle(element);
+                    if (style.display !== 'none' && style.visibility !== 'hidden' && element.offsetParent !== null) {{
+                        misReportsFound = true;
+                        break;
+                    }}
+                }}
+                await sleep(100);
+            }}
+
+            if (!misReportsFound) {{
+                return JSON.stringify({{ status: "ERROR", msg: "MIS Reports button not found or not visible", logs }});
+            }}
+
+            logs.push("MIS Reports button is present and visible.");
             return JSON.stringify({{ status: "SUCCESS", logs }});
         }})({});
         "#,
