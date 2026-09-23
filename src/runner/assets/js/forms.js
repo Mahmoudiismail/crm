@@ -79,12 +79,6 @@
   }
 (function () {
   const scheduleRows = document.getElementById("schedule-rows");
-      const dynContainer = contentDiv.querySelector(".app-dynamic-inputs");
-      const argsHidden = contentDiv.querySelector(".app-args-hidden");
-      if (dynContainer && argsHidden) {
-          window.validation.serializeExternalApp(dynContainer, argsHidden);
-          formData.append("args", argsHidden.value);
-      }
 
   const schedulesHidden = document.getElementById("schedules-hidden");
   const addScheduleBtn = document.getElementById("add-schedule-row");
