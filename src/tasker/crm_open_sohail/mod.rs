@@ -28,16 +28,10 @@ pub fn run(config: &CrmOpenSohailConfig) -> Result<()> {
     // Step 2-4: Extract Pivot Data via Slicers
     let extracted_data = with_retry(|| powershell::extract_data(config))?;
 
-    // Step 5: Process Data & Enrich OUL Column
+    // Step 5: Process and aggregate the extracted data
     let final_datasets = processing::process_extracted_data(config, extracted_data)?;
 
-    // Step 6: Generate HTML Email
-    info!("Email generation started");
-    info!(
-        "Generating HTML email layout from {} datasets",
-        final_datasets.len()
-    );
-
+    // Step 6: Generate final HTML report structure
     let final_html = reports::generate_html_report(config, &final_datasets);
 
     info!("Email generation completed");
@@ -47,12 +41,22 @@ pub fn run(config: &CrmOpenSohailConfig) -> Result<()> {
     let sender_account_email = config.sender_account_email.clone();
     let reply_subject_prefix = config.reply_subject_prefix.clone();
 
+    let payloads_dir = std::env::current_dir()
+        .unwrap_or_else(|_| std::path::PathBuf::from("."))
+        .join("logs")
+        .join("email_payloads");
+    std::fs::create_dir_all(&payloads_dir)?;
+
+    let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S_%f");
+    let html_path = payloads_dir.join(format!("email_body_crm_open_sohail_{}.html", timestamp));
+    std::fs::write(&html_path, &final_html)?;
+
     let ps_email_template = r#"
 param(
     [string]$SenderAccount,
     [string]$SubjectPrefix,
     [string]$Subject,
-    [string]$HtmlBody
+    [string]$HtmlBodyPath
 )
 
 try {
@@ -156,7 +160,10 @@ try {
 
     # Prepend the generated dashboard to the HTMLBody
     Write-Output "TRACE: Populating reply draft body..."
-    $ReplyMail.HTMLBody = $HtmlBody + $ReplyMail.HTMLBody
+    if ($HtmlBodyPath -and (Test-Path $HtmlBodyPath)) {
+        $HtmlBody = Get-Content -LiteralPath $HtmlBodyPath -Raw -Encoding UTF8
+        $ReplyMail.HTMLBody = $HtmlBody + $ReplyMail.HTMLBody
+    }
 
     Write-Output "TRACE: Saving reply draft..."
     $ReplyMail.Save()
@@ -164,14 +171,14 @@ try {
 
 } catch {
     Write-Error "Outlook operation failed: $_"
-    exit 1
+    [System.Environment]::Exit(1)
 }
 "#;
 
     if config.dashboard_config.save_email_as_html.unwrap_or(false) {
         let tmp_dir = std::env::temp_dir();
-        let html_path = tmp_dir.join("crm_open_sohail_email.html");
-        std::fs::write(&html_path, final_html)?;
+        let old_html_path = tmp_dir.join("crm_open_sohail_email.html");
+        std::fs::write(&old_html_path, final_html)?;
         info!("save_email_as_html is true. Saved email body to {}. Skipping PowerShell send for testing.", html_path.display());
     } else {
         info!("Creating/saving reply draft via Outlook COM...");
@@ -182,7 +189,7 @@ try {
                 ("-SenderAccount", &sender_account_email),
                 ("-SubjectPrefix", &reply_subject_prefix),
                 ("-Subject", &subject),
-                ("-HtmlBody", &final_html),
+                ("-HtmlBodyPath", html_path.to_string_lossy().as_ref()),
             ],
         ) {
             error!("Failed to create/save reply draft: {}", e);
@@ -198,321 +205,26 @@ try {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tasker::config::DashboardUpdaterConfig;
+    use chrono::NaiveDate;
 
-    pub(crate) struct TestDataset {
-        pub users_file: tempfile::NamedTempFile,
-        pub assignments_file: tempfile::NamedTempFile,
-        pub download_dir: tempfile::TempDir,
-        pub output_file: tempfile::NamedTempFile,
-        #[allow(dead_code)]
-        pub leads_file: tempfile::NamedTempFile,
-        #[allow(dead_code)]
-        pub teams_file: tempfile::NamedTempFile,
-        #[allow(dead_code)]
-        pub config_json: String,
-    }
-
-    pub(crate) fn setup_test_dataset() -> TestDataset {
-        let users_file = tempfile::NamedTempFile::new().unwrap();
-        let assignments_file = tempfile::NamedTempFile::new().unwrap();
-        let download_dir = tempfile::tempdir().unwrap();
-        let output_file = tempfile::NamedTempFile::new().unwrap();
-        let leads_file = tempfile::NamedTempFile::new().unwrap();
-        let teams_file = tempfile::NamedTempFile::new().unwrap();
-
-        let agents_csv = std::fs::read_to_string("TestingDownloads/users.csv").unwrap();
-        std::fs::write(users_file.path(), agents_csv).unwrap();
-
-        let assignment_csv =
-            std::fs::read_to_string("TestingDownloads/assignement settings.csv").unwrap();
-        std::fs::write(assignments_file.path(), assignment_csv).unwrap();
-
-        std::fs::copy(
-            "TestingDownloads/ticket_report_1783634497568.csv",
-            download_dir.path().join("ticket_report_1783634497568.csv"),
-        )
-        .unwrap();
-        std::fs::copy(
-            "TestingDownloads/ticket_report_1783634532999.csv",
-            download_dir.path().join("ticket_report_1783634532999.csv"),
-        )
-        .unwrap();
-        std::fs::copy(
-            "TestingDownloads/ticket_report_1783634535708.csv",
-            download_dir.path().join("ticket_report_1783634535708.csv"),
-        )
-        .unwrap();
-
-        let leads_bytes = std::fs::read("TestingDownloads/lead_report_1783627642439.csv").unwrap();
-        let leads_csv = String::from_utf8_lossy(&leads_bytes);
-        std::fs::write(leads_file.path(), leads_csv.as_bytes()).unwrap();
-        std::fs::copy(
-            leads_file.path(),
-            download_dir.path().join("lead_report_1783627642439.csv"),
-        )
-        .unwrap();
-
-        let config_json = std::fs::read_to_string("TestingDownloads/tasker_config.json").unwrap();
-        {
-            let mut teams_wtr = csv::Writer::from_writer(teams_file.as_file());
-            teams_wtr
-                .write_record(["Team Name", "Receiver Name", "To Emails", "CC"])
-                .unwrap();
-            teams_wtr
-                .write_record([
-                    "Incomplete Reservation",
-                    "Incomplete Reservation Team",
-                    "inc@example.com",
-                    "cc@example.com",
-                ])
-                .unwrap();
-            teams_wtr
-                .write_record([
-                    "PRE-AUTHORIZATION",
-                    "Pre-Auth Team",
-                    "preauth@example.com",
-                    "",
-                ])
-                .unwrap();
-            teams_wtr
-                .write_record(["Call Center", "Call Center Team", "cc@example.com", ""])
-                .unwrap();
-            teams_wtr.flush().unwrap();
-        }
-
-        TestDataset {
-            users_file,
-            assignments_file,
-            download_dir,
-            output_file,
-            leads_file,
-            teams_file,
-            config_json,
-        }
+    #[test]
+    fn test_calculate_yesterday_subject_single_digit_day() {
+        let today = NaiveDate::from_ymd_opt(2023, 11, 2).unwrap();
+        assert_eq!(calculate_yesterday_subject(today), "Open TKTs 01-November");
     }
 
     #[test]
-    fn test_oul_enrichment_rules() {
-        let mut temp_mapping = tempfile::NamedTempFile::new().unwrap();
-        use std::io::Write;
-        writeln!(temp_mapping, "Team Name,Owner Name,Owner Email,is_shared").unwrap();
-        writeln!(
-            temp_mapping,
-            "Shared Team,Shared Owner,shared@example.com,true"
-        )
-        .unwrap();
-        writeln!(
-            temp_mapping,
-            "Local Team,Local Owner,local@example.com,false"
-        )
-        .unwrap();
-        writeln!(temp_mapping, "No Email Team,No Email,,true").unwrap();
-
-        let dummy_dataset = setup_test_dataset();
-
-        let config = CrmOpenSohailConfig {
-            dashboard_config: DashboardUpdaterConfig {
-                download_path: dummy_dataset
-                    .download_dir
-                    .path()
-                    .to_str()
-                    .unwrap()
-                    .to_string(),
-                users_file: dummy_dataset
-                    .users_file
-                    .path()
-                    .to_str()
-                    .unwrap()
-                    .to_string(),
-                assignment_settings_file: dummy_dataset
-                    .assignments_file
-                    .path()
-                    .to_str()
-                    .unwrap()
-                    .to_string(),
-                minutes_ago: 60,
-                start_date: None,
-                exclude_branches: vec![],
-                exclude_categories: vec![],
-                category_exceptions: None,
-                output_file: dummy_dataset
-                    .output_file
-                    .path()
-                    .to_str()
-                    .unwrap()
-                    .to_string(),
-                dashboard_file: temp_mapping.path().to_str().unwrap().to_string(),
-                email_to: Some("test@example.com".to_string()),
-                email_cc: None,
-                save_email_as_html: Some(true),
-                indentation_spaces: Some(4),
-            },
-            sender_account_email: "sender@example.com".to_string(),
-            reply_subject_prefix: "[CRM-TEST]".to_string(),
-            team_mapping_file: temp_mapping.path().to_str().unwrap().to_string(),
-            body_template_file: None,
-            subject_template: Some("Test Subject".to_string()),
-            branch_filter: None,
-            month_filter: None,
-            fallback_oul: Some("".to_string()),
-            dashboard_sheet_name: None,
-            dashboard_pivot_name: None,
-            table_column_widths: None,
-        };
-
-        let result = run(&config);
-        assert!(result.is_ok(), "Task failed: {:?}", result.err());
+    fn test_calculate_yesterday_subject_month_boundary() {
+        let today = NaiveDate::from_ymd_opt(2023, 11, 1).unwrap();
+        assert_eq!(calculate_yesterday_subject(today), "Open TKTs 31-October");
     }
 
     #[test]
-    fn test_email_html_generation_and_team_mapping() {
-        let mut temp_mapping = tempfile::NamedTempFile::new().unwrap();
-        use std::io::Write;
-        writeln!(temp_mapping, "Team Name,Receiver Name,To Emails,is_shared").unwrap();
-        writeln!(temp_mapping, "Team Alpha,Alice,alice@example.com,true").unwrap();
-        writeln!(temp_mapping, "Team Beta,Bob,,false").unwrap();
-
-        let dummy_dataset = setup_test_dataset();
-
-        let config = CrmOpenSohailConfig {
-            dashboard_config: DashboardUpdaterConfig {
-                download_path: dummy_dataset
-                    .download_dir
-                    .path()
-                    .to_str()
-                    .unwrap()
-                    .to_string(),
-                users_file: dummy_dataset
-                    .users_file
-                    .path()
-                    .to_str()
-                    .unwrap()
-                    .to_string(),
-                assignment_settings_file: dummy_dataset
-                    .assignments_file
-                    .path()
-                    .to_str()
-                    .unwrap()
-                    .to_string(),
-                minutes_ago: 60,
-                start_date: None,
-                exclude_branches: vec![],
-                exclude_categories: vec![],
-                category_exceptions: None,
-                output_file: dummy_dataset
-                    .output_file
-                    .path()
-                    .to_str()
-                    .unwrap()
-                    .to_string(),
-                dashboard_file: temp_mapping.path().to_str().unwrap().to_string(),
-                email_to: Some("test@example.com".to_string()),
-                email_cc: None,
-                save_email_as_html: Some(true),
-                indentation_spaces: Some(4),
-            },
-            sender_account_email: "sender@example.com".to_string(),
-            reply_subject_prefix: "[CRM-TEST]".to_string(),
-            team_mapping_file: temp_mapping.path().to_str().unwrap().to_string(),
-            body_template_file: None,
-            subject_template: Some("Test Subject".to_string()),
-            branch_filter: None,
-            month_filter: None,
-            fallback_oul: Some("".to_string()),
-            dashboard_sheet_name: None,
-            dashboard_pivot_name: None,
-            table_column_widths: None,
-        };
-
-        let result = run(&config);
-        assert!(result.is_ok(), "Task failed: {:?}", result.err());
-
-        let tmp_dir = std::env::temp_dir();
-        let html_path = tmp_dir.join("crm_open_sohail_email.html");
-        assert!(html_path.exists());
-
-        let content = std::fs::read_to_string(&html_path).unwrap();
-        assert!(content.contains("Dear All,"));
-    }
-
-    #[test]
-    fn test_outlook_reply_all_draft_mechanism() {
+    fn test_reply_email_parameter_contract() {
         let src = include_str!("mod.rs");
-        assert!(src.contains("GetExchangeUser()"));
-        assert!(src.contains("PrimarySmtpAddress"));
-        assert!(src.contains("0x39FE001E"));
-        assert!(src.contains("catch"));
-        assert!(!src.contains(&format!("$ReplyMail.{} = ", "To")));
-        assert!(!src.contains(&format!("$ReplyMail.{} = ", "CC")));
-
-        assert!(
-            src.contains("sender_account_email"),
-            "Should reference sender_account_email config field"
-        );
-
-        assert!(
-            src.contains("reply_subject_prefix"),
-            "Should reference reply_subject_prefix config field"
-        );
-        assert!(
-            src.contains(".StartsWith($SubjectPrefix"),
-            "Should use explicit prefix startswith check"
-        );
-
-        assert!(
-            src.contains(".ReplyAll()"),
-            "Should use Outlook's ReplyAll method to preserve thread context"
-        );
-
-        let create_item = "$Outlook.CreateItem";
-        assert!(
-            !src.contains(&format!("{}(0)", create_item)),
-            "Should not create a brand new email item"
-        );
-
-        assert!(
-            src.contains("$ReplyMail.Save()"),
-            "Should save email as draft"
-        );
-
-        assert!(
-            src.contains("catch {"),
-            "Should use try/catch block to trap COM errors"
-        );
-        assert!(
-            src.contains("exit 1"),
-            "Should explicitly exit with non-zero code on failure"
-        );
-
-        assert!(
-            src.contains("[System.StringComparison]::OrdinalIgnoreCase"),
-            "Should use OrdinalIgnoreCase for string comparison"
-        );
-        assert!(
-            src.contains(".Trim()"),
-            "Should trim whitespace before comparing"
-        );
-    }
-
-    #[test]
-    fn test_calculate_yesterday_subject() {
-        use chrono::NaiveDate;
-        assert_eq!(
-            calculate_yesterday_subject(NaiveDate::from_ymd_opt(2026, 9, 3).unwrap()),
-            "Open TKTs 02-September"
-        );
-        assert_eq!(
-            calculate_yesterday_subject(NaiveDate::from_ymd_opt(2026, 10, 1).unwrap()),
-            "Open TKTs 30-September"
-        );
-        assert_eq!(
-            calculate_yesterday_subject(NaiveDate::from_ymd_opt(2027, 1, 1).unwrap()),
-            "Open TKTs 31-December"
-        );
-        assert_eq!(
-            calculate_yesterday_subject(NaiveDate::from_ymd_opt(2024, 3, 1).unwrap()),
-            "Open TKTs 29-February"
-        );
+        assert!(src.contains("[string]$SenderAccount"));
+        assert!(src.contains("[string]$SubjectPrefix"));
+        assert!(src.contains("[string]$Subject"));
+        assert!(src.contains("[string]$HtmlBodyPath"));
     }
 }

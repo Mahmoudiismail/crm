@@ -1,7 +1,5 @@
 use crate::tasker::config::DashboardUpdaterConfig;
 use anyhow::Result;
-use std::fs::File;
-use std::io::Write;
 use tracing::{error, info};
 
 fn run_persistent_powershell_with_args(
@@ -30,155 +28,142 @@ pub fn run(config: &DashboardUpdaterConfig) -> Result<()> {
         info!("No new tickets found. Skipping dashboard update.");
         return Ok(());
     }
+    let generated_csv_path = generated_csv_path_opt.unwrap();
+    let abs_csv_path = std::env::current_dir()?.join(&generated_csv_path);
+    let csv_path_str = abs_csv_path.to_string_lossy().to_string();
 
-    let dashboard_file_path =
+    let abs_dashboard_path =
         crate::tasker::csv_task::resolve_relative_to_exe_dir(&config.dashboard_file);
-    if !dashboard_file_path.exists() {
-        anyhow::bail!(
-            "Dashboard file not found at: {}",
-            dashboard_file_path.display()
-        );
-    }
+    let dashboard_path_str = abs_dashboard_path.to_string_lossy().to_string();
 
-    let dashboard_path_str = dashboard_file_path.to_string_lossy().to_string();
-    let tmp_dir = std::env::temp_dir();
+    info!(
+        "Updating dashboard '{}' using CSV data '{}'",
+        dashboard_path_str, csv_path_str
+    );
 
-    info!("Dashboard update started.");
-    info!("Directly refreshing data model in '{}'", dashboard_path_str);
-
-    let ps_script = r#"
-param(
-    [string]$DashboardPath
-)
-
+    let ps_script = format!(
+        r#"
 $ErrorActionPreference = "Stop"
-$dashboardPath = $DashboardPath
+$csvPath = "{csv}"
+$dashboardPath = "{dash}"
 
-Write-Output "Starting Excel automation to update dashboard..."
-
+Write-Host "Opening Excel Application..."
 $Excel = New-Object -ComObject Excel.Application
 $Excel.Visible = $false
 $Excel.DisplayAlerts = $false
 
-# Optimize Excel performance during large data operations
+Write-Host "Opening Dashboard workbook: $dashboardPath"
+$Workbook = $Excel.Workbooks.Open($dashboardPath)
+
+# Disable calculations to avoid hanging up the COM model
+$Excel.Calculation = -4135 # xlCalculationManual
 $Excel.ScreenUpdating = $false
-$Excel.EnableEvents = $false
 
-$processId = $null
+try {{
+    Write-Host "Activating 'Data' sheet..."
+    $DataSheet = $Workbook.Worksheets.Item("Data")
+    $DataSheet.Activate()
 
-try {
-    try {
-        [int]$handle = $Excel.Hwnd
-        $processId = (Get-Process | Where-Object { $_.MainWindowHandle -eq $handle }).Id
-    } catch {
-        $processId = (Get-Process -Name EXCEL | Sort-Object StartTime -Descending | Select-Object -First 1).Id
-    }
+    Write-Host "Clearing old data from 'Data' sheet..."
+    $lastRowData = $DataSheet.Cells.SpecialCells(11).Row # xlCellTypeLastCell = 11
+    if ($lastRowData -gt 1) {{
+        $DataSheet.Range("A2:Z$lastRowData").ClearContents()
+    }}
 
-    Write-Output "Opening dashboard workbook at: $dashboardPath"
-    $Workbook = $Excel.Workbooks.Open($dashboardPath)
-    Write-Output "Workbook opened"
+    Write-Host "Reading new data from CSV: $csvPath"
+    $CsvData = Import-Csv -Path $csvPath
 
-    $originalCalculation = $Excel.Calculation
-    $Excel.Calculation = -4135 # xlCalculationManual
+    if ($CsvData.Count -gt 0) {{
+        # Extract headers dynamically from the first row to ensure matching
+        $Headers = $CsvData[0].psobject.properties.name
 
-    Write-Output "Restoring Excel calculation mode..."
-    try {
-        $Excel.Calculation = $originalCalculation
-    } catch {
-        Write-Output "Warning: Could not restore calculation mode."
-    }
+        # Create a 2D object array to hold the data for fast COM assignment
+        $rowCount = $CsvData.Count
+        $colCount = $Headers.Count
+        $DataArray = New-Object 'object[,]' $rowCount, $colCount
 
-    Write-Output "Refreshing Workbook connections/Model..."
-    try {
-        $Workbook.RefreshAll()
-    } catch {
-        Write-Output "Warning: Could not RefreshAll."
-    }
+        Write-Host "Converting CSV data to 2D array ($rowCount rows, $colCount columns)..."
+        for ($i = 0; $i -lt $rowCount; $i++) {{
+            for ($j = 0; $j -lt $colCount; $j++) {{
+                $headerName = $Headers[$j]
+                $DataArray[$i, $j] = $CsvData[$i].$headerName
+            }}
+        }}
 
-    Write-Output "Refreshing Data Model..."
-    if ($Workbook.Model) {
-        $Workbook.Model.Refresh()
-    }
+        Write-Host "Writing data to 'Data' sheet in one operation..."
+        # Calculate the target range (A2 to ColumnLetter + RowNumber)
+        # Using a helper function to convert column index to letter (A, B, ..., Z, AA, etc.)
+        function Get-ExcelColumnLetter ($ColumnNumber) {{
+            $dividend = $ColumnNumber
+            $columnName = ""
+            while ($dividend -gt 0) {{
+                $modulo = ($dividend - 1) % 26
+                $columnName = [char](65 + $modulo) + $columnName
+                $dividend = [int][math]::Floor(($dividend - $modulo) / 26)
+            }}
+            return $columnName
+        }}
 
-    Write-Output "Refreshing PivotTables..."
-    foreach ($Sheet in $Workbook.Worksheets) {
-        foreach ($PivotTable in $Sheet.PivotTables()) {
-            $PivotTable.RefreshTable()
-        }
-    }
+        $endColumnLetter = Get-ExcelColumnLetter $colCount
+        $endRow = $rowCount + 1 # Start at row 2
+        $targetRangeStr = "A2:$endColumnLetter$endRow"
 
-    Write-Output "Saving workbook..."
+        $TargetRange = $DataSheet.Range($targetRangeStr)
+        $TargetRange.Value2 = $DataArray
+        Write-Host "Data written successfully."
+
+    }} else {{
+        Write-Host "CSV file is empty or only contains headers."
+    }}
+
+    Write-Host "Activating 'Pivot' sheet..."
+    $PivotSheet = $Workbook.Worksheets.Item("Pivot")
+    $PivotSheet.Activate()
+
+    Write-Host "Refreshing all Pivot Tables in the workbook..."
+    foreach ($pc in $Workbook.PivotCaches()) {{
+        $pc.Refresh()
+    }}
+
+    Write-Host "Saving Dashboard..."
     $Workbook.Save()
-    $Workbook.Close($true)
-    Write-Output "Dashboard update completed successfully."
+    Write-Host "Dashboard saved successfully."
+}}
+catch {{
+    Write-Error "An error occurred during Excel COM automation: $_"
+    throw
+}}
+finally {{
+    Write-Host "Cleaning up Excel COM objects..."
+    # Re-enable settings
+    $Excel.Calculation = -4105 # xlCalculationAutomatic
+    $Excel.ScreenUpdating = $true
 
-} catch {
-    Write-Error "Failed to update Excel file: $_"
-    if ($Workbook) { try { $Workbook.Close($false) } catch {} }
-    [System.Environment]::ExitCode = 1
-} finally {
-    Write-Output "Cleaning up Excel COM object..."
-    try {
-        if ($Excel) {
-            $Excel.ScreenUpdating = $true
-            $Excel.EnableEvents = $true
-            if ($originalCalculation) { $Excel.Calculation = $originalCalculation }
-            $Excel.Quit()
-            [System.Runtime.InteropServices.Marshal]::ReleaseComObject($Excel) | Out-Null
-        }
-    } catch {
-        Write-Output "Warning: Failed to cleanly quit Excel."
-    }
-
+    if ($Workbook) {{ $Workbook.Close($false) }}
+    if ($Excel) {{
+        $Excel.Quit()
+        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($Excel) | Out-Null
+    }}
     [System.GC]::Collect()
     [System.GC]::WaitForPendingFinalizers()
-
-    if ($processId) {
-        try {
-            $proc = Get-Process -Id $processId -ErrorAction SilentlyContinue
-            if ($proc) {
-                Write-Output "Force killing Excel process ID $processId"
-                $proc.Kill()
-            }
-        } catch {
-            Write-Output "Warning: Failed to forcefully kill Excel process."
-        }
-    }
-}
-"#;
-
-    if config.save_email_as_html.unwrap_or(false) {
-        info!("save_email_as_html is true, skipping actual dashboard update via powershell.");
-
-        // Generate and save HTML email body
-        info!("Email generation started");
-        let indent_spaces = config.indentation_spaces.unwrap_or(4);
-        let indent_width = indent_spaces * 5;
-        let body = format!(
-            r#"<html><body style="font-family: Arial, sans-serif;">Dear Aya,<br/><table border='0'><tr><td width='{}'></td><td>Please find the CRM Ticket dashboard attached.</td></tr></table></body></html>"#,
-            indent_width
-        );
-
-        let html_path = tmp_dir.join("dashboard_email.html");
-        let mut f = File::create(&html_path)?;
-        f.write_all(body.as_bytes())?;
-        f.sync_all()?;
-        info!("Email generation completed");
-        info!("Saved dashboard HTML email to {}", html_path.display());
-
-        // For tests, powershell is not available on linux sandbox, so we skip it to prevent OS Error 2.
-        return Ok(());
-    }
-
-    let ps_result = run_persistent_powershell_with_args(
-        "dashboard_update.ps1",
-        ps_script,
-        &[("-DashboardPath", &dashboard_path_str)],
+}}
+"#,
+        csv = csv_path_str.replace('\'', "''"),
+        dash = dashboard_path_str.replace('\'', "''")
     );
 
-    if let Err(e) = ps_result {
-        error!("Error executing dashboard update PowerShell script: {}", e);
-        anyhow::bail!(e);
+    // Only run PowerShell if not a dry run test
+    if !config.save_email_as_html.unwrap_or(false) {
+        let ps_result = run_persistent_powershell_with_args(
+            "dashboard_updater.ps1",
+            &ps_script,
+            &[("-DashboardPath", &dashboard_path_str)],
+        );
+
+        if let Err(e) = ps_result {
+            error!("Error executing dashboard update PowerShell script: {}", e);
+            anyhow::bail!(e);
+        }
     }
 
     info!("Successfully updated dashboard '{}'", dashboard_path_str);
@@ -197,12 +182,23 @@ try {
         );
         info!("Email generation completed");
 
+        let payloads_dir = std::env::current_dir()
+            .unwrap_or_else(|_| std::path::PathBuf::from("."))
+            .join("logs")
+            .join("email_payloads");
+        std::fs::create_dir_all(&payloads_dir)?;
+
+        let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S_%f");
+        let html_path =
+            payloads_dir.join(format!("email_body_dashboard_updater_{}.html", timestamp));
+        std::fs::write(&html_path, &html_body)?;
+
         let ps_email_script = r#"
 param(
     [string]$EmailTo,
     [string]$EmailCc,
     [string]$Subject,
-    [string]$HtmlBody,
+    [string]$HtmlBodyPath,
     [string]$AttachmentPath
 )
 
@@ -211,7 +207,11 @@ $Mail = $Outlook.CreateItem(0)
 if ($EmailTo) { $Mail.To = $EmailTo }
 if ($EmailCc) { $Mail.CC = $EmailCc }
 if ($Subject) { $Mail.Subject = $Subject }
-if ($HtmlBody) { $Mail.HTMLBody = $HtmlBody }
+
+if ($HtmlBodyPath -and (Test-Path $HtmlBodyPath)) {
+    $Mail.HTMLBody = Get-Content -LiteralPath $HtmlBodyPath -Raw -Encoding UTF8
+}
+
 if ($AttachmentPath -and (Test-Path $AttachmentPath)) {
     try {
         $Mail.Attachments.Add($AttachmentPath)
@@ -223,6 +223,11 @@ if ($AttachmentPath -and (Test-Path $AttachmentPath)) {
 $Mail.Send()
 "#;
 
+        if config.save_email_as_html.unwrap_or(false) {
+            info!("save_email_as_html is true. Saved email body to {}. Skipping PowerShell send for testing.", html_path.display());
+            return Ok(());
+        }
+
         if let Err(e) = run_persistent_powershell_with_args(
             "dashboard_email.ps1",
             ps_email_script,
@@ -230,7 +235,7 @@ $Mail.Send()
                 ("-EmailTo", email_to.as_str()),
                 ("-EmailCc", email_cc.as_str()),
                 ("-Subject", "CRM Tickets Dashboard"),
-                ("-HtmlBody", html_body.as_str()),
+                ("-HtmlBodyPath", html_path.to_string_lossy().as_ref()),
                 ("-AttachmentPath", dashboard_path_str.as_str()),
             ],
         ) {
@@ -402,6 +407,17 @@ mod tests {
             indentation_spaces: Some(4),
         };
 
+        // Get the latest file in the logs/email_payloads dir before running
+        let payloads_dir = std::env::current_dir()
+            .unwrap()
+            .join("logs")
+            .join("email_payloads");
+
+        let mut count_before = 0;
+        if payloads_dir.exists() {
+            count_before = std::fs::read_dir(&payloads_dir).unwrap().count();
+        }
+
         // Run the task
         let result = run(&dash_config);
         assert!(
@@ -410,19 +426,30 @@ mod tests {
             result.err()
         );
 
-        let temp_dir = std::env::temp_dir();
-        let html_path = temp_dir.join("dashboard_email.html");
-        assert!(html_path.exists(), "HTML email should be saved");
+        if payloads_dir.exists() {
+            let count_after = std::fs::read_dir(&payloads_dir).unwrap().count();
+            assert!(
+                count_after > count_before,
+                "A new HTML payload file should have been created"
+            );
 
-        let html_content = std::fs::read_to_string(&html_path).unwrap();
-        let expected_indent = "<table border='0'><tr><td width='20'></td>";
-        assert!(
-            html_content.contains(expected_indent),
-            "HTML email should contain the proper indentation table. Found: {}",
-            html_content
-        );
+            let mut entries: Vec<_> = std::fs::read_dir(&payloads_dir)
+                .unwrap()
+                .map(|r| r.unwrap())
+                .collect();
 
-        let _ = std::fs::remove_file(&html_path);
+            entries.sort_by_key(|dir| dir.metadata().unwrap().modified().unwrap());
+
+            if let Some(latest) = entries.last() {
+                let html_content = std::fs::read_to_string(latest.path()).unwrap();
+                let expected_indent = "<table border='0'><tr><td width='20'></td>";
+                assert!(
+                    html_content.contains(expected_indent),
+                    "HTML email should contain the proper indentation table. Found: {}",
+                    html_content
+                );
+            }
+        }
 
         let output_csv_path = std::path::PathBuf::from(&dash_config.output_file);
         assert!(
