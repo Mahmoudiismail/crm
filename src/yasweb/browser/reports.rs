@@ -853,11 +853,11 @@ pub fn generate_mis_reports_wait_js(timeout_seconds: u64) -> String {
             let logs = [];
 
             logs.push("Waiting for SPA loaders to disappear...");
-            const deadline = Date.now() + timeoutMinutes * 60 * 1000;
+            const deadline = Date.now() + timeoutSeconds * 1000;
             let loadersGone = false;
 
             while (Date.now() <= deadline) {{
-                let loader = document.querySelector('#loader_svg, .loading-screen-wrapper, mat-progress-bar, .dx-loadpanel');
+                let loader = document.querySelector('#loader_svg, mat-progress-bar, .dx-loadpanel');
                 let isLoaderVisible = false;
                 if (loader) {{
                     let style = window.getComputedStyle(loader);
@@ -903,6 +903,6 @@ pub fn generate_mis_reports_wait_js(timeout_seconds: u64) -> String {
             return JSON.stringify({{ status: "SUCCESS", logs }});
         }})({});
         "#,
-        timeout_minutes
+        timeout_seconds
     )
 }
