@@ -158,7 +158,11 @@ pub fn navigate_and_run_report(
                         }
 
                         let wait_js = generate_mis_reports_wait_js(10);
-                        if let Err(e) = javascript::evaluate_automation_step(tab, &wait_js, "Wait for MIS Reports") {
+                        if let Err(e) = javascript::evaluate_automation_step(
+                            tab,
+                            &wait_js,
+                            "Wait for MIS Reports",
+                        ) {
                             error!("MIS Reports button wait timeout: {:?}", e);
                             if let Ok(html) = tab.get_content() {
                                 error!("Page HTML at MIS Reports button wait timeout:\n{}", html);
