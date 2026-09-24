@@ -157,7 +157,7 @@ pub fn navigate_and_run_report(
                             );
                         }
 
-                        let wait_js = generate_mis_reports_wait_js(10);
+                        let wait_js = generate_mis_reports_wait_js(30);
                         if let Err(e) = javascript::evaluate_automation_step(
                             tab,
                             &wait_js,
@@ -845,19 +845,19 @@ pub fn generate_step6_js(timeout_minutes: u64) -> String {
         timeout_minutes
     )
 }
-pub fn generate_mis_reports_wait_js(timeout_minutes: u64) -> String {
+pub fn generate_mis_reports_wait_js(timeout_seconds: u64) -> String {
     format!(
         r#"
-        (async function(timeoutMinutes) {{
+        (async function(timeoutSeconds) {{
             function sleep(ms) {{ return new Promise(r => setTimeout(r, ms)); }}
             let logs = [];
 
             logs.push("Waiting for SPA loaders to disappear...");
-            const deadline = Date.now() + timeoutMinutes * 60 * 1000;
+            const deadline = Date.now() + timeoutSeconds * 1000;
             let loadersGone = false;
 
             while (Date.now() <= deadline) {{
-                let loader = document.querySelector('#loader_svg, .loading-screen-wrapper, mat-progress-bar, .dx-loadpanel');
+                let loader = document.querySelector('#loader_svg, mat-progress-bar, .dx-loadpanel');
                 let isLoaderVisible = false;
                 if (loader) {{
                     let style = window.getComputedStyle(loader);
@@ -903,6 +903,6 @@ pub fn generate_mis_reports_wait_js(timeout_minutes: u64) -> String {
             return JSON.stringify({{ status: "SUCCESS", logs }});
         }})({});
         "#,
-        timeout_minutes
+        timeout_seconds
     )
 }
