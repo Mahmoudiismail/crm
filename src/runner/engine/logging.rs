@@ -19,13 +19,23 @@ impl TaskLogger {
     }
 
     pub async fn log(&self, message: &str) {
-        let mut inner = self.inner.lock().await;
-        inner.log(message);
+        let msg = message.to_string();
+        let inner_clone = self.inner.clone();
+        let _ = tokio::task::spawn_blocking(move || {
+            let mut inner = inner_clone.blocking_lock();
+            inner.log(&msg);
+        }).await;
     }
 
     pub async fn log_bytes(&self, prefix: &str, bytes: &[u8]) {
-        let mut inner = self.inner.lock().await;
-        inner.log_bytes(prefix, bytes);
+        if bytes.is_empty() { return; }
+        let pre = prefix.to_string();
+        let b = bytes.to_vec();
+        let inner_clone = self.inner.clone();
+        let _ = tokio::task::spawn_blocking(move || {
+            let mut inner = inner_clone.blocking_lock();
+            inner.log_bytes(&pre, &b);
+        }).await;
     }
 
     pub async fn log_path_async(&self) -> std::path::PathBuf {

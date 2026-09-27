@@ -173,7 +173,7 @@ pub(crate) async fn read_http_request(
                             return Err(anyhow::anyhow!("Payload Too Large"));
                         }
 
-                        let cl = header_content_length(&buf[..pos]).unwrap_or(0);
+                        let cl = header_content_length(&buf[..pos])?;
                         if cl > MAX_BODY_BYTES {
                             return Err(anyhow::anyhow!("Payload Too Large"));
                         }
@@ -233,7 +233,13 @@ pub(crate) async fn read_http_request(
             return Ok(None);
         }
 
-        let cl = header_content_length(headers_slice).unwrap_or(0);
+        let cl = match header_content_length(headers_slice) {
+            Ok(v) => v,
+            Err(_e) => {
+                let _ = send_error(socket, 400, "Bad Request: Malformed Content-Length").await;
+                return Ok(None);
+            }
+        };
         let body_received = total_read.saturating_sub(pos + delim_len);
 
         if body_received < cl {
@@ -286,16 +292,24 @@ pub(crate) async fn read_http_request(
     Ok(None)
 }
 
-pub(crate) fn header_content_length(bytes: &[u8]) -> Option<usize> {
+pub(crate) fn header_content_length(bytes: &[u8]) -> Result<usize, anyhow::Error> {
     let req = String::from_utf8_lossy(bytes);
-    req.lines().find_map(|line| {
-        let (name, value) = line.split_once(':')?;
-        if name.eq_ignore_ascii_case("content-length") {
-            value.trim().parse().ok()
-        } else {
-            None
+    let mut cl: Option<usize> = None;
+    for line in req.lines() {
+        if let Some((name, value)) = line.split_once(':') {
+            if name.trim().eq_ignore_ascii_case("content-length") {
+                let parsed = value.trim().parse::<usize>().map_err(|_| anyhow::anyhow!("Malformed Content-Length"))?;
+                if let Some(existing) = cl {
+                    if existing != parsed {
+                        return Err(anyhow::anyhow!("Conflicting Content-Length headers"));
+                    }
+                } else {
+                    cl = Some(parsed);
+                }
+            }
         }
-    })
+    }
+    Ok(cl.unwrap_or(0))
 }
 
 #[allow(dead_code)]
@@ -341,8 +355,8 @@ mod tests {
         let crlf_req = b"POST /test HTTP/1.1\r\nContent-Length: 4\r\n\r\ntest";
         let lf_req = b"POST /test HTTP/1.1\nContent-Length: 4\n\ntest";
 
-        assert_eq!(header_content_length(crlf_req), Some(4));
-        assert_eq!(header_content_length(lf_req), Some(4));
+        assert_eq!(header_content_length(crlf_req).unwrap(), 4);
+        assert_eq!(header_content_length(lf_req).unwrap(), 4);
 
         assert_eq!(body_len(crlf_req), 4);
         assert_eq!(body_len(lf_req), 4);

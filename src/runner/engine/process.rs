@@ -131,22 +131,23 @@ async fn terminate_process_tree(child_pid: Option<u32>, child: &mut tokio::proce
     if let Some(pid) = child_pid {
         #[cfg(target_os = "windows")]
         {
-            let _ = tokio::process::Command::new("taskkill")
+            let _ = tokio::time::timeout(std::time::Duration::from_secs(5), tokio::process::Command::new("taskkill")
                 .args(["/F", "/T", "/PID", &pid.to_string()])
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .status()
-                .await;
+            ).await;
         }
 
         #[cfg(not(target_os = "windows"))]
         {
-            let _ = tokio::process::Command::new("pkill")
-                .args(["-P", &pid.to_string()])
+            let _ = tokio::time::timeout(std::time::Duration::from_secs(5), tokio::process::Command::new("sh")
+                .arg("-c")
+                .arg(format!("pkill -P {} || true; kill -9 -{} || true", pid, pid))
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .status()
-                .await;
+            ).await;
         }
     }
 

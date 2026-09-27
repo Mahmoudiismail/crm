@@ -303,7 +303,7 @@ try {
     Write-Error "Failed to process dashboard (target: ${target}): $_"
     if ($TargetWB) { try { $TargetWB.Close($false) } catch {} }
     if ($Workbook) { try { $Workbook.Close($false) } catch {} }
-    [System.Environment]::ExitCode = 1
+    exit 1
 } finally {
     Write-Log "Cleaning up temporary template and Excel COM object..."
     if ($templatePath -and (Test-Path $templatePath)) {

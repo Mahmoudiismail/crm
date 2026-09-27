@@ -550,10 +550,14 @@ pub(crate) async fn handle_api_apps_manifest(
             ));
         }
 
-        let output_res = tokio::process::Command::new(&app.executable_path)
-            .arg("--manifest")
-            .output()
-            .await;
+        let mut cmd = tokio::process::Command::new(&app.executable_path);
+        cmd.arg("--manifest");
+        let output_res = tokio::time::timeout(std::time::Duration::from_secs(30), cmd.output()).await;
+
+        let output_res = match output_res {
+            Ok(res) => res,
+            Err(_) => return Ok((500, "application/json", "{\"error\": \"Manifest extraction timed out\"}".to_string())),
+        };
 
         match output_res {
             Ok(output) => {

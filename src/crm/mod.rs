@@ -23,6 +23,7 @@ pub async fn run_once(
         if !sd.is_empty() {
             let parsed = to_iso_date_with_base(&sd, None);
             config.from_date = parsed.clone();
+            config.calls_from_date = parsed.clone();
             Some(parsed)
         } else {
             None

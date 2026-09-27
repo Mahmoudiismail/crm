@@ -156,11 +156,6 @@ async fn initiate_auth(
         }
     });
 
-    debug!("InitiateAuth request URL: {}", initiate_url);
-    debug!(
-        "InitiateAuth body: {}",
-        serde_json::to_string_pretty(&initiate_body)?
-    );
 
     let resp = client
         .post(&initiate_url)
@@ -247,10 +242,6 @@ async fn respond_to_auth_challenge(
         }
     });
 
-    debug!(
-        "RespondToAuthChallenge body: {}",
-        serde_json::to_string_pretty(&challenge_body)?
-    );
 
     let resp = client
         .post(&challenge_url)

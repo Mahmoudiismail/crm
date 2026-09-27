@@ -115,7 +115,7 @@ try {
 } catch {
     Write-Error "Failed to update Excel file: $_"
     if ($Workbook) { try { $Workbook.Close($false) } catch {} }
-    [System.Environment]::ExitCode = 1
+    exit 1
 } finally {
     Write-Output "Cleaning up Excel COM object..."
     try {
