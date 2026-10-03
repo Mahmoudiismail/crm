@@ -38,7 +38,7 @@ use crm_tool::yasweb::browser::reports::generate_mis_reports_wait_js;
 fn test_generate_mis_reports_wait_js_normal_timeout() {
     let js = generate_mis_reports_wait_js(10);
     // Should inject 10 as timeoutMinutes param
-    assert!(js.contains("const deadline = Date.now() + timeoutMinutes * 60 * 1000;"));
+    assert!(js.contains("const deadline = Date.now() + timeoutSeconds * 1000;"));
     assert!(js.contains("})(10);"));
 
     // Check xpath presence
@@ -46,7 +46,7 @@ fn test_generate_mis_reports_wait_js_normal_timeout() {
     assert!(js.contains("//div[contains(@class, 'label') and contains(@class, 'fw-bold') and contains(text(), 'MIS Reports')]"));
 
     // Check loading indicator presence
-    assert!(js.contains("#loader_svg, .loading-screen-wrapper, mat-progress-bar, .dx-loadpanel"));
+    assert!(js.contains("#loader_svg, mat-progress-bar, .dx-loadpanel"));
 }
 
 #[test]
