@@ -56,7 +56,7 @@ param(
     [string]$SenderAccount,
     [string]$SubjectPrefix,
     [string]$Subject,
-    [string]$HtmlBodyPath
+    [string]$HtmlBody
 )
 
 try {
@@ -81,7 +81,7 @@ try {
             try {
                 $SenderAddress = $Item.SenderEmailAddress
             } catch {
-                Write-Output "TRACE: Exception reading SenderEmailAddress: $_"
+                Write-Output "TRACE: Exception reading SenderEmailAddress: `$_"
             }
 
             if ($Item.SenderEmailType -eq "EX") {
@@ -93,7 +93,7 @@ try {
                         Write-Output "TRACE: GetExchangeUser returned null."
                     }
                 } catch {
-                    Write-Output "TRACE: GetExchangeUser failed: $_"
+                    Write-Output "TRACE: GetExchangeUser failed: `$_"
                 }
 
                 # Fallback to PropertyAccessor if still not resolved or empty
@@ -103,7 +103,7 @@ try {
                         $SenderAddress = $PA.GetProperty("http://schemas.microsoft.com/mapi/proptag/0x39FE001E")
                         Write-Output "TRACE: Resolved via PropertyAccessor to: $SenderAddress"
                     } catch {
-                        Write-Output "TRACE: PropertyAccessor 0x39FE001E failed: $_"
+                        Write-Output "TRACE: PropertyAccessor 0x39FE001E failed: `$_"
                     }
                 }
             }
@@ -160,17 +160,22 @@ try {
 
     # Prepend the generated dashboard to the HTMLBody
     Write-Output "TRACE: Populating reply draft body..."
-    if ($HtmlBodyPath -and (Test-Path $HtmlBodyPath)) {
-        $HtmlBody = Get-Content -LiteralPath $HtmlBodyPath -Raw -Encoding UTF8
-        $ReplyMail.HTMLBody = $HtmlBody + $ReplyMail.HTMLBody
-    }
+    $ReplyMail.HTMLBody = $HtmlBody + $ReplyMail.HTMLBody
+
+	# Define 7:00 AM for the current day
+	$TargetTime = (Get-Date).Date.AddDays(1).AddHours(7)
+
+	# Only delay if 7 AM hasn't passed yet today
+	if ((Get-Date) -lt $TargetTime) {
+		$ReplyMail.DeferredDeliveryTime = $TargetTime
+	}
 
     Write-Output "TRACE: Saving reply draft..."
-    $ReplyMail.Save()
+    $ReplyMail.Send()
     Write-Output "TRACE: Reply draft saved successfully."
 
 } catch {
-    Write-Error "Outlook operation failed: $_"
+    Write-Error "Outlook operation failed: `$_"
     [System.Environment]::Exit(1)
 }
 "#;
@@ -189,7 +194,7 @@ try {
                 ("-SenderAccount", &sender_account_email),
                 ("-SubjectPrefix", &reply_subject_prefix),
                 ("-Subject", &subject),
-                ("-HtmlBodyPath", html_path.to_string_lossy().as_ref()),
+                ("-HtmlBody", final_html.as_str()),
             ],
         ) {
             error!("Failed to create/save reply draft: {}", e);
@@ -225,6 +230,6 @@ mod tests {
         assert!(src.contains("[string]$SenderAccount"));
         assert!(src.contains("[string]$SubjectPrefix"));
         assert!(src.contains("[string]$Subject"));
-        assert!(src.contains("[string]$HtmlBodyPath"));
+        assert!(src.contains("[string]$HtmlBody"));
     }
 }
