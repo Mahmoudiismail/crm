@@ -85,14 +85,6 @@ async fn main() -> Result<()> {
         }
     };
 
-    if let Ok(config) = crm_tool::runner::config::RunnerConfig::load(&config_path.to_string_lossy())
-    {
-        info!(
-            "Loaded runner configuration successfully with {} tasks",
-            config.tasks.len()
-        );
-    }
-
     info!("==================================================");
     info!("RUNNER - Starting tray scheduler mode");
     info!("==================================================");
@@ -103,6 +95,25 @@ async fn main() -> Result<()> {
     let runner_config_path_str = runner_config_path.to_string_lossy().to_string();
 
     let config_exists = runner_config_path.exists();
+
+    let runner_cfg = {
+        let cfg = crm_tool::runner::config::RunnerConfig::load(&runner_config_path_str)
+            .unwrap_or_default();
+        if let Err(e) = cfg.validate() {
+            eprintln!("Runner configuration validation failed: {}", e);
+            std::process::exit(1);
+        }
+        if let Err(e) = crm_tool::runner::engine::validation::validate_config(&cfg) {
+            eprintln!("Runner configuration logic validation failed: {}", e);
+            std::process::exit(1);
+        }
+        cfg
+    };
+
+    info!(
+        "Loaded runner configuration successfully with {} tasks",
+        runner_cfg.tasks.len()
+    );
 
     let runner_handle = start_scheduler(runner_config_path_str.clone());
     start_gui_server(runner_handle.clone());
@@ -116,14 +127,6 @@ async fn main() -> Result<()> {
 
     #[cfg(target_os = "windows")]
     let event_loop = EventLoop::new()?;
-    #[cfg(target_os = "windows")]
-    let runner_cfg = {
-        let cfg = crm_tool::runner::config::RunnerConfig::load(&runner_config_path_str)
-            .unwrap_or_default();
-        cfg.validate()
-            .context("Runner configuration validation failed")?;
-        cfg
-    };
 
     #[cfg(target_os = "windows")]
     let mut app = App {

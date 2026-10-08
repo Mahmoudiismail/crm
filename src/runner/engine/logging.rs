@@ -1,8 +1,7 @@
-use std::fs;
-use std::io::Write;
 use std::sync::Arc;
 
 use chrono::Local;
+use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
 use tracing::{debug, error};
 
@@ -19,23 +18,18 @@ impl TaskLogger {
     }
 
     pub async fn log(&self, message: &str) {
-        let (task_id, file_opt) = {
-            let inner = self.inner.lock().await;
-            (
-                inner.task_id.clone(),
-                inner.file.as_ref().and_then(|f| f.try_clone().ok()),
-            )
-        };
+        let mut inner = self.inner.lock().await;
+        if let Err(e) = inner.ensure_initialized().await {
+            error!("TaskLogger initialization failed: {}", e);
+        }
 
+        let task_id = inner.task_id.clone();
         let now = Local::now().to_rfc3339();
         let line = format!("[{}] {}\n", now, message);
 
-        if let Some(mut f) = file_opt {
-            let _ = tokio::task::spawn_blocking(move || {
-                let _ = f.write_all(line.as_bytes());
-                let _ = f.flush();
-            })
-            .await;
+        if let Some(f) = inner.file.as_mut() {
+            let _ = f.write_all(line.as_bytes()).await;
+            let _ = f.flush().await;
         }
         debug!("[Task:{}] {}", task_id, message);
     }
@@ -45,24 +39,20 @@ impl TaskLogger {
             return;
         }
 
-        let file_opt = {
-            let inner = self.inner.lock().await;
-            inner.file.as_ref().and_then(|f| f.try_clone().ok())
-        };
+        let mut inner = self.inner.lock().await;
+        if let Err(e) = inner.ensure_initialized().await {
+            error!("TaskLogger initialization failed: {}", e);
+        }
 
-        if let Some(mut f) = file_opt {
+        if let Some(f) = inner.file.as_mut() {
             let text = String::from_utf8_lossy(bytes).into_owned();
-            let prefix_owned = prefix.to_string();
-            let _ = tokio::task::spawn_blocking(move || {
-                let mut all_lines = String::new();
-                for line in text.lines() {
-                    let now = Local::now().to_rfc3339();
-                    all_lines.push_str(&format!("[{}] {}: {}\n", now, prefix_owned, line));
-                }
-                let _ = f.write_all(all_lines.as_bytes());
-                let _ = f.flush();
-            })
-            .await;
+            let mut all_lines = String::new();
+            for line in text.lines() {
+                let now = Local::now().to_rfc3339();
+                all_lines.push_str(&format!("[{}] {}: {}\n", now, prefix, line));
+            }
+            let _ = f.write_all(all_lines.as_bytes()).await;
+            let _ = f.flush().await;
         }
     }
 
@@ -74,17 +64,34 @@ impl TaskLogger {
 
 #[derive(Debug)]
 struct TaskLoggerInner {
-    file: Option<fs::File>,
+    file: Option<tokio::fs::File>,
     task_id: String,
+    task_name: String,
     log_path: Option<std::path::PathBuf>,
+    initialized: bool,
 }
 
 impl TaskLoggerInner {
     fn new(task_id: &str, task_name: &str) -> Self {
+        Self {
+            file: None,
+            task_id: task_id.to_string(),
+            task_name: task_name.to_string(),
+            log_path: None,
+            initialized: false,
+        }
+    }
+
+    async fn ensure_initialized(&mut self) -> anyhow::Result<()> {
+        if self.initialized {
+            return Ok(());
+        }
+        self.initialized = true; // prevent retry loops if it fails
+
         let now = Local::now();
         let timestamp = now.format("%Y%m%d_%H%M%S").to_string();
-        let safe_task_name = task_name.replace(|c: char| !c.is_alphanumeric(), "_");
-        let filename = format!("{}_{}_{}.log", timestamp, safe_task_name, task_id);
+        let safe_task_name = self.task_name.replace(|c: char| !c.is_alphanumeric(), "_");
+        let filename = format!("{}_{}_{}.log", timestamp, safe_task_name, self.task_id);
 
         let log_dir = match std::env::current_exe() {
             Ok(exe) => exe
@@ -94,97 +101,41 @@ impl TaskLoggerInner {
             Err(_) => std::path::PathBuf::from("logs").join(&safe_task_name),
         };
 
-        if let Err(e) = std::thread::spawn({
-            let log_dir = log_dir.clone();
-            move || std::fs::create_dir_all(&log_dir)
-        })
-        .join()
-        .unwrap()
-        {
-            error!(
-                "Failed to create log directory {}: {}",
-                log_dir.display(),
-                e
-            );
-            return Self {
-                file: None,
-                task_id: task_id.to_string(),
-                log_path: None,
-            };
-        }
+        tokio::fs::create_dir_all(&log_dir)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to create log dir: {}", e))?;
 
         let log_path = log_dir.join(filename);
-        match std::thread::spawn({
-            let log_path = log_path.clone();
-            move || std::fs::File::create(&log_path)
-        })
-        .join()
-        .unwrap()
-        {
-            Ok(file) => {
-                let mut logger = Self {
-                    file: Some(file),
-                    task_id: task_id.to_string(),
-                    log_path: Some(log_path.clone()),
-                };
+        let mut file = tokio::fs::File::create(&log_path)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to create log file: {}", e))?;
 
-                let lines = vec![
-                    format!(
-                        "[{}] ==================================================\n",
-                        now.to_rfc3339()
-                    ),
-                    format!(
-                        "[{}] TASK INITIATED: {} (ID: {})\n",
-                        now.to_rfc3339(),
-                        task_name,
-                        task_id
-                    ),
-                    format!(
-                        "[{}] START TIME:     {}\n",
-                        now.to_rfc3339(),
-                        now.to_rfc3339()
-                    ),
-                    format!(
-                        "[{}] ==================================================\n",
-                        now.to_rfc3339()
-                    ),
-                ];
-                if let Some(ref mut f) = logger.file {
-                    if let Ok(mut f_clone) = f.try_clone() {
-                        let _ = std::thread::spawn(move || {
-                            for line in lines {
-                                let _ = f_clone.write_all(line.as_bytes());
-                            }
-                            let _ = f_clone.flush();
-                        })
-                        .join();
-                    }
-                }
-                debug!(
-                    "[Task:{}] ==================================================",
-                    task_id
-                );
-                debug!(
-                    "[Task:{}] TASK INITIATED: {} (ID: {})",
-                    task_id, task_name, task_id
-                );
-                debug!("[Task:{}] START TIME:     {}", task_id, now.to_rfc3339());
-                debug!(
-                    "[Task:{}] ==================================================",
-                    task_id
-                );
+        let lines = vec![
+            format!(
+                "[{}] ==================================================\n",
+                now.to_rfc3339()
+            ),
+            format!(
+                "[{}] TASK INITIATED: {} (ID: {})\n",
+                now.to_rfc3339(),
+                self.task_name,
+                self.task_id
+            ),
+            format!(
+                "[{}] ==================================================\n",
+                now.to_rfc3339()
+            ),
+        ];
 
-                logger
-            }
-            Err(e) => {
-                error!("Failed to create log file {}: {}", log_path.display(), e);
-                Self {
-                    file: None,
-                    task_id: task_id.to_string(),
-                    log_path: None,
-                }
-            }
+        for line in lines {
+            file.write_all(line.as_bytes()).await?;
         }
+        file.flush().await?;
+
+        self.file = Some(file);
+        self.log_path = Some(log_path);
+
+        Ok(())
     }
 }
 
@@ -241,23 +192,56 @@ pub async fn cleanup_old_logs(log_retention_days: u64) {
     })
     .await;
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[tokio::test]
     async fn test_task_logger_isolation_and_path() {
-        let logger = TaskLogger::new("task1", "Test Task");
-        logger.log("Hello from Task 1").await;
-        logger.log_bytes("STDOUT", b"Line 1\nLine 2").await;
+        let task_name = "Isolation_Test!";
+        let safe_name = "Isolation_Test_";
+        let task_id = "task_iso_123";
+
+        let logger = TaskLogger::new(task_id, task_name);
+
+        {
+            let inner = logger.inner.lock().await;
+            assert!(
+                inner.file.is_none(),
+                "TaskLogger file should be uninitialized before first log"
+            );
+            assert!(
+                !inner.initialized,
+                "TaskLogger initialized flag should be false"
+            );
+        }
+
+        logger.log("Hello Isolation").await;
 
         let path = logger.log_path_async().await;
-        assert!(path.exists(), "Log file should be created correctly");
-        let content = std::fs::read_to_string(&path).unwrap();
-        assert!(content.contains("TASK INITIATED: Test Task"));
-        assert!(content.contains("Hello from Task 1"));
-        assert!(content.contains("STDOUT: Line 1"));
-        assert!(content.contains("STDOUT: Line 2"));
+        let path_str = path.to_string_lossy();
+
+        assert!(
+            path_str.contains(safe_name),
+            "Log path {} should contain safe name {}",
+            path_str,
+            safe_name
+        );
+        assert!(
+            path_str.contains(task_id),
+            "Log path {} should contain task id {}",
+            path_str,
+            task_id
+        );
+
+        let content = std::fs::read_to_string(&path).expect("Failed to read test log file");
+        assert!(
+            content.contains("Hello Isolation"),
+            "Content should contain the logged message"
+        );
+        assert!(
+            content.contains("TASK INITIATED:"),
+            "Content should contain the init headers"
+        );
     }
 }

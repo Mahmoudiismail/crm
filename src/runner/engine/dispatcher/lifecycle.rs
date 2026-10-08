@@ -69,12 +69,17 @@ pub fn spawn_execution_manager(
                     }
 
                     let path_str = config_path.clone();
-                    if let Ok(mut cfg) = RunnerConfig::load(&path_str) {
-                        if let Some(t) = cfg.tasks.iter_mut().find(|t| t.id == task_id) {
-                            t.last_status = last_status;
-                            let _ = cfg.save(&path_str);
-                        }
-                    }
+                    tokio::spawn(async move {
+                        let _ = crate::runner::engine::dispatcher::helpers::modify_config(
+                            &path_str,
+                            move |cfg| {
+                                if let Some(t) = cfg.tasks.iter_mut().find(|t| t.id == task_id) {
+                                    t.last_status = last_status;
+                                }
+                            },
+                        )
+                        .await;
+                    });
                 }
                 ExecutionManagerCommand::ShutdownExecManager => {
                     info!(
@@ -176,9 +181,13 @@ pub fn start_scheduler(runner_config_path: String) -> RunnerHandle {
         Utc::now() - chrono::Duration::try_hours(24).unwrap_or(chrono::Duration::zero());
 
     let config_path_loop = config_path.clone();
-    let poll_interval = RunnerConfig::load(&config_path)
-        .map(|c| c.poll_interval_seconds.max(5))
-        .unwrap_or(30);
+    let poll_interval = {
+        let path_str = config_path.clone();
+        let cfg = std::thread::spawn(move || RunnerConfig::load(&path_str))
+            .join()
+            .unwrap();
+        cfg.map(|c| c.poll_interval_seconds.max(5)).unwrap_or(30)
+    };
 
     let tx_clone = tx.clone();
     tokio::spawn(async move {
@@ -203,7 +212,7 @@ pub fn start_scheduler(runner_config_path: String) -> RunnerHandle {
                     }
                 }
                 _ = tokio::time::sleep(Duration::from_secs(poll_interval)) => {
-                    if let Ok(cfg) = RunnerConfig::load(&config_path_loop) {
+                    if let Ok(cfg) = crate::runner::engine::dispatcher::helpers::load_config(&config_path_loop).await {
                         let now = Utc::now();
                         for task in &cfg.tasks {
                             if !task.enabled {
@@ -222,7 +231,7 @@ pub fn start_scheduler(runner_config_path: String) -> RunnerHandle {
                         }
                     }
 
-                    if let Ok(cfg) = RunnerConfig::load(&config_path_loop) {
+                    if let Ok(cfg) = crate::runner::engine::dispatcher::helpers::load_config(&config_path_loop).await {
                         let now = Utc::now();
                         if now.signed_duration_since(last_cleanup).num_hours() >= 24 {
                             info!("Triggering daily log cleanup...");

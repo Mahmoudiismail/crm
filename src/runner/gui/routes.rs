@@ -26,7 +26,6 @@ pub async fn route_request(
         || route_path.starts_with("/run/")
         || route_path.starts_with("/enable/")
         || route_path.starts_with("/disable/")
-        || route_path == "/reload"
         || route_path == "/working-hours/create"
         || route_path.starts_with("/working-hours/update/")
         || route_path.starts_with("/working-hours/delete/")
@@ -85,9 +84,6 @@ pub async fn route_request(
     if request.method == "POST" && route_path.starts_with("/disable/") {
         let task_id = route_path.trim_start_matches("/disable/");
         return handle_enable_task(handle, task_id, false).await;
-    }
-    if request.method == "POST" && route_path == "/reload" {
-        return handle_reload(handle).await;
     }
 
     if request.method == "GET" && route_path == "/working-hours" {
