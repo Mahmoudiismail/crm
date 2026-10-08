@@ -70,11 +70,15 @@ pub fn spawn_execution_manager(
 
                     let path_str = config_path.clone();
                     tokio::spawn(async move {
-                        let _ = crate::runner::engine::dispatcher::helpers::modify_config(&path_str, move |cfg| {
-                            if let Some(t) = cfg.tasks.iter_mut().find(|t| t.id == task_id) {
-                                t.last_status = last_status;
-                            }
-                        }).await;
+                        let _ = crate::runner::engine::dispatcher::helpers::modify_config(
+                            &path_str,
+                            move |cfg| {
+                                if let Some(t) = cfg.tasks.iter_mut().find(|t| t.id == task_id) {
+                                    t.last_status = last_status;
+                                }
+                            },
+                        )
+                        .await;
                     });
                 }
                 ExecutionManagerCommand::ShutdownExecManager => {

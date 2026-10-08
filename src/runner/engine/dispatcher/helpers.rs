@@ -1,7 +1,7 @@
 use crate::runner::config::RunnerConfig;
 use anyhow::{Context, Result};
-use tokio::sync::Mutex;
 use lazy_static::lazy_static;
+use tokio::sync::Mutex;
 
 lazy_static! {
     static ref CONFIG_LOCK: Mutex<()> = Mutex::new(());

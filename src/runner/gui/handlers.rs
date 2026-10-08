@@ -150,12 +150,21 @@ pub(crate) async fn handle_enable_task(
     enabled: bool,
 ) -> Result<(u16, &'static str, String)> {
     let (tx, rx) = tokio::sync::oneshot::channel();
-    if handle.command_tx.send(RunnerCommand::SetTaskEnabled {
-        task_id: task_id.to_string(),
-        enabled,
-        reply: tx,
-    }).await.is_err() {
-        return Ok((500, "text/html; charset=utf-8", render_error_page("Error", "Scheduler channel closed.")));
+    if handle
+        .command_tx
+        .send(RunnerCommand::SetTaskEnabled {
+            task_id: task_id.to_string(),
+            enabled,
+            reply: tx,
+        })
+        .await
+        .is_err()
+    {
+        return Ok((
+            500,
+            "text/html; charset=utf-8",
+            render_error_page("Error", "Scheduler channel closed."),
+        ));
     }
     match rx.await {
         Ok(Ok(_)) => Ok((
@@ -167,7 +176,11 @@ pub(crate) async fn handle_enable_task(
                 "Task disabled"
             }),
         )),
-        _ => Ok((500, "text/html; charset=utf-8", render_error_page("Error", "Failed to toggle task.")))
+        _ => Ok((
+            500,
+            "text/html; charset=utf-8",
+            render_error_page("Error", "Failed to toggle task."),
+        )),
     }
 }
 
@@ -243,8 +256,17 @@ pub(crate) async fn handle_wh_create(
     }
     let profile = WorkingHoursProfile { id, name, days };
     let (tx, rx) = tokio::sync::oneshot::channel();
-    if handle.command_tx.send(RunnerCommand::CreateWorkingHoursProfile { profile, reply: tx }).await.is_err() {
-        return Ok((500, "text/html; charset=utf-8", render_error_page("Error", "Scheduler channel closed.")));
+    if handle
+        .command_tx
+        .send(RunnerCommand::CreateWorkingHoursProfile { profile, reply: tx })
+        .await
+        .is_err()
+    {
+        return Ok((
+            500,
+            "text/html; charset=utf-8",
+            render_error_page("Error", "Scheduler channel closed."),
+        ));
     }
     match rx.await {
         Ok(Ok(_)) => Ok((
@@ -252,7 +274,11 @@ pub(crate) async fn handle_wh_create(
             "text/html; charset=utf-8",
             "<meta http-equiv=\"refresh\" content=\"0; url=/working-hours\">".to_string(),
         )),
-        _ => Ok((500, "text/html; charset=utf-8", render_error_page("Error", "Failed to create profile.")))
+        _ => Ok((
+            500,
+            "text/html; charset=utf-8",
+            render_error_page("Error", "Failed to create profile."),
+        )),
     }
 }
 
@@ -294,8 +320,17 @@ pub(crate) async fn handle_wh_update(
     }
     let profile = WorkingHoursProfile { id, name, days };
     let (tx, rx) = tokio::sync::oneshot::channel();
-    if handle.command_tx.send(RunnerCommand::UpdateWorkingHoursProfile { profile, reply: tx }).await.is_err() {
-        return Ok((500, "text/html; charset=utf-8", render_error_page("Error", "Scheduler channel closed.")));
+    if handle
+        .command_tx
+        .send(RunnerCommand::UpdateWorkingHoursProfile { profile, reply: tx })
+        .await
+        .is_err()
+    {
+        return Ok((
+            500,
+            "text/html; charset=utf-8",
+            render_error_page("Error", "Scheduler channel closed."),
+        ));
     }
     match rx.await {
         Ok(Ok(_)) => Ok((
@@ -303,7 +338,11 @@ pub(crate) async fn handle_wh_update(
             "text/html; charset=utf-8",
             "<meta http-equiv=\"refresh\" content=\"0; url=/working-hours\">".to_string(),
         )),
-        _ => Ok((500, "text/html; charset=utf-8", render_error_page("Error", "Failed to update profile.")))
+        _ => Ok((
+            500,
+            "text/html; charset=utf-8",
+            render_error_page("Error", "Failed to update profile."),
+        )),
     }
 }
 
@@ -312,8 +351,20 @@ pub(crate) async fn handle_wh_delete(
     id: &str,
 ) -> Result<(u16, &'static str, String)> {
     let (tx, rx) = tokio::sync::oneshot::channel();
-    if handle.command_tx.send(RunnerCommand::DeleteWorkingHoursProfile { profile_id: id.to_string(), reply: tx }).await.is_err() {
-        return Ok((500, "text/html; charset=utf-8", render_error_page("Error", "Scheduler channel closed.")));
+    if handle
+        .command_tx
+        .send(RunnerCommand::DeleteWorkingHoursProfile {
+            profile_id: id.to_string(),
+            reply: tx,
+        })
+        .await
+        .is_err()
+    {
+        return Ok((
+            500,
+            "text/html; charset=utf-8",
+            render_error_page("Error", "Scheduler channel closed."),
+        ));
     }
     match rx.await {
         Ok(Ok(_)) => Ok((
@@ -321,7 +372,11 @@ pub(crate) async fn handle_wh_delete(
             "text/html; charset=utf-8",
             "<meta http-equiv=\"refresh\" content=\"0; url=/working-hours\">".to_string(),
         )),
-        _ => Ok((500, "text/html; charset=utf-8", render_error_page("Error", "Failed to delete profile.")))
+        _ => Ok((
+            500,
+            "text/html; charset=utf-8",
+            render_error_page("Error", "Failed to delete profile."),
+        )),
     }
 }
 
@@ -390,8 +445,17 @@ pub(crate) async fn handle_apps_create(
     };
 
     let (tx, rx) = tokio::sync::oneshot::channel();
-    if handle.command_tx.send(RunnerCommand::CreateRegisteredApp { app, reply: tx }).await.is_err() {
-        return Ok((500, "text/html; charset=utf-8", render_error_page("Error", "Scheduler channel closed.")));
+    if handle
+        .command_tx
+        .send(RunnerCommand::CreateRegisteredApp { app, reply: tx })
+        .await
+        .is_err()
+    {
+        return Ok((
+            500,
+            "text/html; charset=utf-8",
+            render_error_page("Error", "Scheduler channel closed."),
+        ));
     }
     match rx.await {
         Ok(Ok(_)) => Ok((
@@ -399,7 +463,11 @@ pub(crate) async fn handle_apps_create(
             "text/html; charset=utf-8",
             render_redirect_to_dashboard("App registered"),
         )),
-        _ => Ok((500, "text/html; charset=utf-8", render_error_page("Error", "Failed to register app.")))
+        _ => Ok((
+            500,
+            "text/html; charset=utf-8",
+            render_error_page("Error", "Failed to register app."),
+        )),
     }
 }
 
@@ -433,8 +501,17 @@ pub(crate) async fn handle_apps_update(
     };
 
     let (tx, rx) = tokio::sync::oneshot::channel();
-    if handle.command_tx.send(RunnerCommand::UpdateRegisteredApp { app, reply: tx }).await.is_err() {
-        return Ok((500, "text/html; charset=utf-8", render_error_page("Error", "Scheduler channel closed.")));
+    if handle
+        .command_tx
+        .send(RunnerCommand::UpdateRegisteredApp { app, reply: tx })
+        .await
+        .is_err()
+    {
+        return Ok((
+            500,
+            "text/html; charset=utf-8",
+            render_error_page("Error", "Scheduler channel closed."),
+        ));
     }
     match rx.await {
         Ok(Ok(_)) => Ok((
@@ -442,7 +519,11 @@ pub(crate) async fn handle_apps_update(
             "text/html; charset=utf-8",
             render_redirect_to_dashboard("App updated"),
         )),
-        _ => Ok((500, "text/html; charset=utf-8", render_error_page("Error", "Failed to update app.")))
+        _ => Ok((
+            500,
+            "text/html; charset=utf-8",
+            render_error_page("Error", "Failed to update app."),
+        )),
     }
 }
 
@@ -451,8 +532,20 @@ pub(crate) async fn handle_apps_delete(
     app_id: &str,
 ) -> Result<(u16, &'static str, String)> {
     let (tx, rx) = tokio::sync::oneshot::channel();
-    if handle.command_tx.send(RunnerCommand::DeleteRegisteredApp { app_id: app_id.to_string(), reply: tx }).await.is_err() {
-        return Ok((500, "text/html; charset=utf-8", render_error_page("Error", "Scheduler channel closed.")));
+    if handle
+        .command_tx
+        .send(RunnerCommand::DeleteRegisteredApp {
+            app_id: app_id.to_string(),
+            reply: tx,
+        })
+        .await
+        .is_err()
+    {
+        return Ok((
+            500,
+            "text/html; charset=utf-8",
+            render_error_page("Error", "Scheduler channel closed."),
+        ));
     }
     match rx.await {
         Ok(Ok(_)) => Ok((
@@ -460,7 +553,11 @@ pub(crate) async fn handle_apps_delete(
             "text/html; charset=utf-8",
             render_redirect_to_dashboard("App deleted"),
         )),
-        _ => Ok((500, "text/html; charset=utf-8", render_error_page("Error", "Failed to delete app.")))
+        _ => Ok((
+            500,
+            "text/html; charset=utf-8",
+            render_error_page("Error", "Failed to delete app."),
+        )),
     }
 }
 

@@ -86,7 +86,6 @@ pub async fn route_request(
         return handle_enable_task(handle, task_id, false).await;
     }
 
-
     if request.method == "GET" && route_path == "/working-hours" {
         return handle_wh_page(handle).await;
     }

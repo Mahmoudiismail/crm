@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use chrono::Local;
-use tokio::sync::Mutex;
 use tokio::io::AsyncWriteExt;
+use tokio::sync::Mutex;
 use tracing::{debug, error};
 
 #[derive(Clone, Debug)]
@@ -101,15 +101,30 @@ impl TaskLoggerInner {
             Err(_) => std::path::PathBuf::from("logs").join(&safe_task_name),
         };
 
-        tokio::fs::create_dir_all(&log_dir).await.map_err(|e| anyhow::anyhow!("Failed to create log dir: {}", e))?;
+        tokio::fs::create_dir_all(&log_dir)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to create log dir: {}", e))?;
 
         let log_path = log_dir.join(filename);
-        let mut file = tokio::fs::File::create(&log_path).await.map_err(|e| anyhow::anyhow!("Failed to create log file: {}", e))?;
+        let mut file = tokio::fs::File::create(&log_path)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to create log file: {}", e))?;
 
         let lines = vec![
-            format!("[{}] ==================================================\n", now.to_rfc3339()),
-            format!("[{}] TASK INITIATED: {} (ID: {})\n", now.to_rfc3339(), self.task_name, self.task_id),
-            format!("[{}] ==================================================\n", now.to_rfc3339()),
+            format!(
+                "[{}] ==================================================\n",
+                now.to_rfc3339()
+            ),
+            format!(
+                "[{}] TASK INITIATED: {} (ID: {})\n",
+                now.to_rfc3339(),
+                self.task_name,
+                self.task_id
+            ),
+            format!(
+                "[{}] ==================================================\n",
+                now.to_rfc3339()
+            ),
         ];
 
         for line in lines {
@@ -191,8 +206,14 @@ mod tests {
 
         {
             let inner = logger.inner.lock().await;
-            assert!(inner.file.is_none(), "TaskLogger file should be uninitialized before first log");
-            assert!(!inner.initialized, "TaskLogger initialized flag should be false");
+            assert!(
+                inner.file.is_none(),
+                "TaskLogger file should be uninitialized before first log"
+            );
+            assert!(
+                !inner.initialized,
+                "TaskLogger initialized flag should be false"
+            );
         }
 
         logger.log("Hello Isolation").await;
