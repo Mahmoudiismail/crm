@@ -86,7 +86,6 @@ async fn test_get_mutation_rejected_405() {
         "/run-all",
         "/enable/task1",
         "/disable/task1",
-        "/reload",
         "/working-hours/create",
         "/working-hours/update/wh1",
         "/working-hours/delete/wh1",

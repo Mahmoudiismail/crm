@@ -361,14 +361,6 @@ pub(crate) async fn handle_run_all(handle: &RunnerHandle) -> Result<(u16, &'stat
     ))
 }
 
-pub(crate) async fn handle_reload(_handle: &RunnerHandle) -> Result<(u16, &'static str, String)> {
-    Ok((
-        200,
-        "text/html; charset=utf-8",
-        render_redirect_to_dashboard("Configuration reloaded"),
-    ))
-}
-
 pub(crate) async fn handle_apps_create(
     handle: &RunnerHandle,
     values: &HashMap<String, String>,

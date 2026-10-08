@@ -177,3 +177,50 @@ pub async fn cleanup_old_logs(log_retention_days: u64) {
     })
     .await;
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_task_logger_isolation_and_path() {
+        let task_name = "Isolation_Test!";
+        let safe_name = "Isolation_Test_";
+        let task_id = "task_iso_123";
+
+        let logger = TaskLogger::new(task_id, task_name);
+
+        {
+            let inner = logger.inner.lock().await;
+            assert!(inner.file.is_none(), "TaskLogger file should be uninitialized before first log");
+            assert!(!inner.initialized, "TaskLogger initialized flag should be false");
+        }
+
+        logger.log("Hello Isolation").await;
+
+        let path = logger.log_path_async().await;
+        let path_str = path.to_string_lossy();
+
+        assert!(
+            path_str.contains(safe_name),
+            "Log path {} should contain safe name {}",
+            path_str,
+            safe_name
+        );
+        assert!(
+            path_str.contains(task_id),
+            "Log path {} should contain task id {}",
+            path_str,
+            task_id
+        );
+
+        let content = std::fs::read_to_string(&path).expect("Failed to read test log file");
+        assert!(
+            content.contains("Hello Isolation"),
+            "Content should contain the logged message"
+        );
+        assert!(
+            content.contains("TASK INITIATED:"),
+            "Content should contain the init headers"
+        );
+    }
+}
