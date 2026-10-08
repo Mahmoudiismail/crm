@@ -4,6 +4,8 @@ use anyhow::Context;
 use anyhow::Result;
 use clap::Parser;
 use crm_tool::manifest::AppManifest;
+#[cfg(target_os = "windows")]
+use crm_tool::runner::engine::RunnerHandle;
 use crm_tool::runner::engine::{start_scheduler, RunnerCommand};
 use crm_tool::runner::gui::start_gui_server;
 use crm_tool::utils::{
@@ -13,6 +15,8 @@ use crm_tool::utils::{
 use muda::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem};
 #[cfg(target_os = "windows")]
 use std::time::Duration;
+#[cfg(target_os = "windows")]
+use tracing::error;
 use tracing::info;
 #[cfg(target_os = "windows")]
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
@@ -81,8 +85,6 @@ async fn main() -> Result<()> {
         }
     };
 
-
-
     info!("==================================================");
     info!("RUNNER - Starting tray scheduler mode");
     info!("==================================================");
@@ -125,7 +127,6 @@ async fn main() -> Result<()> {
 
     #[cfg(target_os = "windows")]
     let event_loop = EventLoop::new()?;
-
 
     #[cfg(target_os = "windows")]
     let mut app = App {
