@@ -2,7 +2,7 @@ use crate::runner::config::RegisteredApp;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum RunnerCommand {
     RunAllNow {
         is_manual: bool,
@@ -14,15 +14,31 @@ pub enum RunnerCommand {
     SetTaskEnabled {
         task_id: String,
         enabled: bool,
+        reply: tokio::sync::oneshot::Sender<Result<(), String>>,
     },
     CreateWorkingHoursProfile {
         profile: crate::runner::config::WorkingHoursProfile,
+        reply: tokio::sync::oneshot::Sender<Result<(), String>>,
     },
     UpdateWorkingHoursProfile {
         profile: crate::runner::config::WorkingHoursProfile,
+        reply: tokio::sync::oneshot::Sender<Result<(), String>>,
     },
     DeleteWorkingHoursProfile {
         profile_id: String,
+        reply: tokio::sync::oneshot::Sender<Result<(), String>>,
+    },
+    CreateRegisteredApp {
+        app: crate::runner::config::RegisteredApp,
+        reply: tokio::sync::oneshot::Sender<Result<(), String>>,
+    },
+    UpdateRegisteredApp {
+        app: crate::runner::config::RegisteredApp,
+        reply: tokio::sync::oneshot::Sender<Result<(), String>>,
+    },
+    DeleteRegisteredApp {
+        app_id: String,
+        reply: tokio::sync::oneshot::Sender<Result<(), String>>,
     },
     Shutdown,
 }

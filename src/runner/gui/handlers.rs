@@ -149,22 +149,26 @@ pub(crate) async fn handle_enable_task(
     task_id: &str,
     enabled: bool,
 ) -> Result<(u16, &'static str, String)> {
-    let _ = handle
-        .command_tx
-        .send(RunnerCommand::SetTaskEnabled {
-            task_id: task_id.to_string(),
-            enabled,
-        })
-        .await;
-    Ok((
-        200,
-        "text/html; charset=utf-8",
-        render_redirect_to_dashboard(if enabled {
-            "Task enabled"
-        } else {
-            "Task disabled"
-        }),
-    ))
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    if handle.command_tx.send(RunnerCommand::SetTaskEnabled {
+        task_id: task_id.to_string(),
+        enabled,
+        reply: tx,
+    }).await.is_err() {
+        return Ok((500, "text/html; charset=utf-8", render_error_page("Error", "Scheduler channel closed.")));
+    }
+    match rx.await {
+        Ok(Ok(_)) => Ok((
+            200,
+            "text/html; charset=utf-8",
+            render_redirect_to_dashboard(if enabled {
+                "Task enabled"
+            } else {
+                "Task disabled"
+            }),
+        )),
+        _ => Ok((500, "text/html; charset=utf-8", render_error_page("Error", "Failed to toggle task.")))
+    }
 }
 
 pub(crate) async fn handle_wh_page(handle: &RunnerHandle) -> Result<(u16, &'static str, String)> {
@@ -238,16 +242,18 @@ pub(crate) async fn handle_wh_create(
         }
     }
     let profile = WorkingHoursProfile { id, name, days };
-    let _ = handle
-        .command_tx
-        .send(RunnerCommand::CreateWorkingHoursProfile { profile })
-        .await;
-    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-    Ok((
-        303,
-        "text/html; charset=utf-8",
-        "<meta http-equiv=\"refresh\" content=\"0; url=/working-hours\">".to_string(),
-    ))
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    if handle.command_tx.send(RunnerCommand::CreateWorkingHoursProfile { profile, reply: tx }).await.is_err() {
+        return Ok((500, "text/html; charset=utf-8", render_error_page("Error", "Scheduler channel closed.")));
+    }
+    match rx.await {
+        Ok(Ok(_)) => Ok((
+            303,
+            "text/html; charset=utf-8",
+            "<meta http-equiv=\"refresh\" content=\"0; url=/working-hours\">".to_string(),
+        )),
+        _ => Ok((500, "text/html; charset=utf-8", render_error_page("Error", "Failed to create profile.")))
+    }
 }
 
 pub(crate) async fn handle_wh_update(
@@ -287,34 +293,36 @@ pub(crate) async fn handle_wh_update(
         }
     }
     let profile = WorkingHoursProfile { id, name, days };
-    let _ = handle
-        .command_tx
-        .send(RunnerCommand::UpdateWorkingHoursProfile { profile })
-        .await;
-    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-    Ok((
-        303,
-        "text/html; charset=utf-8",
-        "<meta http-equiv=\"refresh\" content=\"0; url=/working-hours\">".to_string(),
-    ))
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    if handle.command_tx.send(RunnerCommand::UpdateWorkingHoursProfile { profile, reply: tx }).await.is_err() {
+        return Ok((500, "text/html; charset=utf-8", render_error_page("Error", "Scheduler channel closed.")));
+    }
+    match rx.await {
+        Ok(Ok(_)) => Ok((
+            303,
+            "text/html; charset=utf-8",
+            "<meta http-equiv=\"refresh\" content=\"0; url=/working-hours\">".to_string(),
+        )),
+        _ => Ok((500, "text/html; charset=utf-8", render_error_page("Error", "Failed to update profile.")))
+    }
 }
 
 pub(crate) async fn handle_wh_delete(
     handle: &RunnerHandle,
     id: &str,
 ) -> Result<(u16, &'static str, String)> {
-    let _ = handle
-        .command_tx
-        .send(RunnerCommand::DeleteWorkingHoursProfile {
-            profile_id: id.to_string(),
-        })
-        .await;
-    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-    Ok((
-        303,
-        "text/html; charset=utf-8",
-        "<meta http-equiv=\"refresh\" content=\"0; url=/working-hours\">".to_string(),
-    ))
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    if handle.command_tx.send(RunnerCommand::DeleteWorkingHoursProfile { profile_id: id.to_string(), reply: tx }).await.is_err() {
+        return Ok((500, "text/html; charset=utf-8", render_error_page("Error", "Scheduler channel closed.")));
+    }
+    match rx.await {
+        Ok(Ok(_)) => Ok((
+            303,
+            "text/html; charset=utf-8",
+            "<meta http-equiv=\"refresh\" content=\"0; url=/working-hours\">".to_string(),
+        )),
+        _ => Ok((500, "text/html; charset=utf-8", render_error_page("Error", "Failed to delete profile.")))
+    }
 }
 
 pub(crate) async fn handle_apps_page(handle: &RunnerHandle) -> Result<(u16, &'static str, String)> {
@@ -365,7 +373,6 @@ pub(crate) async fn handle_apps_create(
     handle: &RunnerHandle,
     values: &HashMap<String, String>,
 ) -> Result<(u16, &'static str, String)> {
-    let mut cfg = RunnerConfig::load(&handle.runner_config_path)?;
     let app = crate::runner::config::RegisteredApp {
         id: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -389,13 +396,19 @@ pub(crate) async fn handle_apps_create(
             "allow_concurrent_tasks",
         ),
     };
-    cfg.registered_apps.push(app);
-    cfg.save(&handle.runner_config_path)?;
-    Ok((
-        200,
-        "text/html; charset=utf-8",
-        render_redirect_to_dashboard("App registered"),
-    ))
+
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    if handle.command_tx.send(RunnerCommand::CreateRegisteredApp { app, reply: tx }).await.is_err() {
+        return Ok((500, "text/html; charset=utf-8", render_error_page("Error", "Scheduler channel closed.")));
+    }
+    match rx.await {
+        Ok(Ok(_)) => Ok((
+            200,
+            "text/html; charset=utf-8",
+            render_redirect_to_dashboard("App registered"),
+        )),
+        _ => Ok((500, "text/html; charset=utf-8", render_error_page("Error", "Failed to register app.")))
+    }
 }
 
 pub(crate) async fn handle_apps_update(
@@ -403,50 +416,60 @@ pub(crate) async fn handle_apps_update(
     app_id: &str,
     values: &HashMap<String, String>,
 ) -> Result<(u16, &'static str, String)> {
-    let mut cfg = RunnerConfig::load(&handle.runner_config_path)?;
     let decoded_app_id = urlencoding::decode(app_id)
         .map(|c| c.into_owned())
         .unwrap_or_else(|_| app_id.to_string());
-    if let Some(app) = cfg
-        .registered_apps
-        .iter_mut()
-        .find(|a| a.id == app_id || a.id == decoded_app_id)
-    {
-        app.name = values
+
+    let app = crate::runner::config::RegisteredApp {
+        id: decoded_app_id.clone(),
+        name: values
             .get("name")
             .map(|s| s.trim().to_string())
-            .unwrap_or_else(|| app.name.clone());
-        app.executable_path = values
+            .unwrap_or_default(),
+        executable_path: values
             .get("executable_path")
             .map(|s| s.trim().to_string())
-            .unwrap_or_else(|| app.executable_path.clone());
-        app.config_path = values
+            .unwrap_or_default(),
+        config_path: values
             .get("config_path")
             .map(|s| s.trim().to_string())
-            .unwrap_or_else(|| app.config_path.clone());
-        app.allow_concurrent_tasks =
-            crate::runner::gui::forms::parse_checkbox(values, "allow_concurrent_tasks");
-        cfg.save(&handle.runner_config_path)?;
+            .unwrap_or_default(),
+        allow_concurrent_tasks: crate::runner::gui::forms::parse_checkbox(
+            values,
+            "allow_concurrent_tasks",
+        ),
+    };
+
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    if handle.command_tx.send(RunnerCommand::UpdateRegisteredApp { app, reply: tx }).await.is_err() {
+        return Ok((500, "text/html; charset=utf-8", render_error_page("Error", "Scheduler channel closed.")));
     }
-    Ok((
-        200,
-        "text/html; charset=utf-8",
-        render_redirect_to_dashboard("App updated"),
-    ))
+    match rx.await {
+        Ok(Ok(_)) => Ok((
+            200,
+            "text/html; charset=utf-8",
+            render_redirect_to_dashboard("App updated"),
+        )),
+        _ => Ok((500, "text/html; charset=utf-8", render_error_page("Error", "Failed to update app.")))
+    }
 }
 
 pub(crate) async fn handle_apps_delete(
     handle: &RunnerHandle,
     app_id: &str,
 ) -> Result<(u16, &'static str, String)> {
-    let mut cfg = RunnerConfig::load(&handle.runner_config_path)?;
-    cfg.registered_apps.retain(|a| a.id != app_id);
-    cfg.save(&handle.runner_config_path)?;
-    Ok((
-        200,
-        "text/html; charset=utf-8",
-        render_redirect_to_dashboard("App deleted"),
-    ))
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    if handle.command_tx.send(RunnerCommand::DeleteRegisteredApp { app_id: app_id.to_string(), reply: tx }).await.is_err() {
+        return Ok((500, "text/html; charset=utf-8", render_error_page("Error", "Scheduler channel closed.")));
+    }
+    match rx.await {
+        Ok(Ok(_)) => Ok((
+            200,
+            "text/html; charset=utf-8",
+            render_redirect_to_dashboard("App deleted"),
+        )),
+        _ => Ok((500, "text/html; charset=utf-8", render_error_page("Error", "Failed to delete app.")))
+    }
 }
 
 pub(crate) async fn handle_api_apps_list(
