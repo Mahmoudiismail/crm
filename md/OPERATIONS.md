@@ -60,6 +60,11 @@ The CI stages are executed in the following order:
 
 ## Concurrency
 Task execution is concurrent, with an execution manager enforcing collision prevention rules.
+## Troubleshooting: Runner Startup
+- **Symptom:** Runner process terminates immediately on startup with a `CRITICAL ERROR: Failed to parse existing runner_config.json` message, rather than overwriting it with a blank UI.
+- **Cause:** The `runner_config.json` file contains invalid or corrupted JSON data. The daemon enforces strict parsing on existing configuration files to prevent data loss.
+- **Resolution:** Manually fix the JSON syntax in `runner_config.json` or delete it if a fresh installation is desired.
+
 ## Troubleshooting: PowerShell Execution & File Locks
 - **Symptom:** `PowerShell script exited with status: exit code: 1` or `The process cannot access the file ... because it is being used by another process`.
 - **Cause:** Historical bug on Windows where `tempfile` generated PowerShell (`.ps1`) scripts were locked by the Rust process.
@@ -73,4 +78,4 @@ Task execution is concurrent, with an execution manager enforcing collision prev
 - Running the tasker app via CLI with `--only-call-center` explicitly funnels data to the call center team bucket.
 - This mode automatically triggers the CRM lead generation report export as a secondary attachment alongside the primary ticket list, skipping standard branching logic.
 - **Runner Manifest Execution Limits:** The `handle_api_apps_manifest` endpoint enforces a strict 10-second timeout using `tokio::time::timeout`. If the application fails to return its manifest within 10 seconds, the child process tree is forcefully terminated using OS-level commands (`taskkill /F /T /PID` on Windows or `pkill -P` on Unix) to prevent process hanging and file handle exhaustion.
-- **TaskLogger I/O Isolation:** `TaskLogger` executes filesystem I/O (log directory creation, file creation, appending bytes, and flushing) using asynchronous `tokio::fs` coupled with Tokio `Mutex` serialization. This ensures Tokio's core executor pool is not stalled by slow I/O when generating large task logs, while also guaranteeing strict log line ordering without cloned file handles.
+- **TaskLogger I/O Isolation:** `TaskLogger` executes filesystem I/O (log directory creation, file creation, appending bytes, and flushing) using asynchronous `tokio::fs` coupled with Tokio `Mutex` serialization. This ensures Tokio's core executor pool is not stalled by slow I/O when generating large task logs, while also guaranteeing strict log line ordering without cloned file handles. The logger is lazily initialized on the first log line or path request, and safely retries initialization across temporary filesystem errors without permanent lock-out.

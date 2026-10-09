@@ -1,4 +1,120 @@
-use anyhow::Result;
+import subprocess
+
+# helpers.rs
+with open("src/runner/engine/dispatcher/helpers.rs", "r") as f:
+    text = f.read()
+
+text = text.replace(
+"""pub(crate) async fn modify_config<F>(path: &str, f: F) -> Result<()>
+where
+    F: FnOnce(&mut RunnerConfig) + Send + 'static,
+{
+    let _guard = CONFIG_LOCK.lock().await;
+    let path_str = path.to_string();
+    let path_str_save = path.to_string();
+    tokio::task::spawn_blocking(move || {
+        let mut cfg = RunnerConfig::load(&path_str)?;
+        f(&mut cfg);
+        cfg.save(&path_str_save)
+    })
+    .await
+    .context("spawn_blocking panic for modify_config")??;
+    Ok(())
+}""",
+"""pub(crate) async fn modify_config<F, T>(path: &str, f: F) -> Result<T>
+where
+    F: FnOnce(&mut RunnerConfig) -> Result<T> + Send + 'static,
+    T: Send + 'static,
+{
+    let _guard = CONFIG_LOCK.lock().await;
+    let path_str = path.to_string();
+    let path_str_save = path.to_string();
+    let res: Result<T> = tokio::task::spawn_blocking(move || {
+        let mut cfg = RunnerConfig::load(&path_str)?;
+        let r = f(&mut cfg)?;
+        cfg.save(&path_str_save)?;
+        Ok(r)
+    })
+    .await
+    .context("spawn_blocking panic for modify_config")?;
+    res
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn test_modify_config_concurrency_race() {
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().join("config.json");
+        let path_str = path.to_str().unwrap();
+
+        let cfg = RunnerConfig {
+            poll_interval_seconds: 0,
+            ..RunnerConfig::default()
+        };
+        cfg.save(path_str).unwrap();
+
+        let mut handles = vec![];
+        for _ in 0..10 {
+            let p = path_str.to_string();
+            handles.push(tokio::spawn(async move {
+                modify_config(&p, |c| {
+                    c.poll_interval_seconds += 1;
+                    Ok(())
+                }).await.unwrap();
+            }));
+        }
+
+        for h in handles {
+            h.await.unwrap();
+        }
+
+        let final_cfg = load_config(path_str).await.unwrap();
+        assert_eq!(final_cfg.poll_interval_seconds, 10);
+    }
+}"""
+)
+
+text = text.replace(
+"""pub(crate) async fn save_config(cfg: RunnerConfig, path: &str) -> Result<()> {
+    let _guard = CONFIG_LOCK.lock().await;
+    let path_str = path.to_string();
+    tokio::task::spawn_blocking(move || cfg.save(&path_str))
+        .await
+        .context("spawn_blocking panic for save_config")?
+}""",
+""
+)
+
+with open("src/runner/engine/dispatcher/helpers.rs", "w") as f:
+    f.write(text)
+
+# lifecycle.rs
+with open("src/runner/engine/dispatcher/lifecycle.rs", "r") as f:
+    lifecycle = f.read()
+
+lifecycle = lifecycle.replace(
+"""                                if let Some(t) = cfg.tasks.iter_mut().find(|t| t.id == task_id) {
+                                    t.last_status = last_status;
+                                }
+                            },""",
+"""                                if let Some(t) = cfg.tasks.iter_mut().find(|t| t.id == task_id) {
+                                    t.last_status = last_status;
+                                }
+                                Ok(())
+                            },"""
+)
+
+with open("src/runner/engine/dispatcher/lifecycle.rs", "w") as f:
+    f.write(lifecycle)
+
+
+# task_commands.rs
+with open("src/runner/engine/dispatcher/task_commands.rs", "w") as f:
+    f.write("""use anyhow::Result;
 use chrono::Utc;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
@@ -602,3 +718,133 @@ mod tests {
         );
     }
 }
+""")
+
+# app_commands.rs
+with open("src/runner/engine/dispatcher/app_commands.rs", "w") as f:
+    f.write("""use crate::runner::config::RegisteredApp;
+
+pub async fn create_registered_app(path: &str, app: RegisteredApp) -> anyhow::Result<()> {
+    crate::runner::engine::dispatcher::helpers::modify_config(path, move |cfg| {
+        cfg.registered_apps.push(app);
+        Ok(())
+    }).await
+}
+
+pub async fn update_registered_app(path: &str, app: RegisteredApp) -> anyhow::Result<()> {
+    crate::runner::engine::dispatcher::helpers::modify_config(path, move |cfg| {
+        if let Some(existing) = cfg.registered_apps.iter_mut().find(|a| a.id == app.id) {
+            existing.name = app.name;
+            existing.executable_path = app.executable_path;
+            existing.config_path = app.config_path;
+            existing.allow_concurrent_tasks = app.allow_concurrent_tasks;
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("App '{}' not found", app.id))
+        }
+    }).await
+}
+
+pub async fn delete_registered_app(path: &str, app_id: &str) -> anyhow::Result<()> {
+    let aid = app_id.to_string();
+    crate::runner::engine::dispatcher::helpers::modify_config(path, move |cfg| {
+        cfg.registered_apps.retain(|a| a.id != aid);
+        Ok(())
+    }).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::runner::config::RunnerConfig;
+    use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn test_update_nonexistent_registered_app_fails() {
+        let temp_dir = tempdir().unwrap();
+        let config_path = temp_dir.path().join("runner.json");
+        let path_str = config_path.to_str().unwrap();
+
+        let cfg = RunnerConfig::default();
+        cfg.save(path_str).unwrap();
+
+        let app = RegisteredApp {
+            id: "fake_id".to_string(),
+            name: "fake".to_string(),
+            executable_path: "fake.exe".to_string(),
+            config_path: "fake.json".to_string(),
+            allow_concurrent_tasks: false,
+        };
+
+        let res = update_registered_app(path_str, app).await;
+        assert!(res.is_err());
+        assert_eq!(res.unwrap_err().to_string(), "App 'fake_id' not found");
+    }
+}
+""")
+
+# profile_commands.rs
+with open("src/runner/engine/dispatcher/profile_commands.rs", "w") as f:
+    f.write("""use crate::runner::config::WorkingHoursProfile;
+use anyhow::Result;
+
+pub async fn create_working_hours_profile(path: &str, profile: WorkingHoursProfile) -> Result<()> {
+    crate::runner::engine::dispatcher::helpers::modify_config(path, move |cfg| {
+        if cfg.working_hours_profiles.iter().any(|p| p.id == profile.id) {
+            return Err(anyhow::anyhow!("Profile '{}' already exists", profile.id));
+        }
+        cfg.working_hours_profiles.push(profile);
+        Ok(())
+    }).await
+}
+
+pub async fn update_working_hours_profile(path: &str, profile: WorkingHoursProfile) -> Result<()> {
+    crate::runner::engine::dispatcher::helpers::modify_config(path, move |cfg| {
+        if let Some(pos) = cfg.working_hours_profiles.iter().position(|p| p.id == profile.id) {
+            cfg.working_hours_profiles[pos] = profile;
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Profile '{}' not found", profile.id))
+        }
+    }).await
+}
+
+pub async fn delete_working_hours_profile(path: &str, profile_id: String) -> Result<()> {
+    crate::runner::engine::dispatcher::helpers::modify_config(path, move |cfg| {
+        cfg.working_hours_profiles.retain(|p| p.id != profile_id);
+        for task in &mut cfg.tasks {
+            for schedule in &mut task.schedules {
+                match schedule {
+                    crate::runner::config::TaskSchedule::Interval {
+                        working_hours_profile_id,
+                        working_hours,
+                        ..
+                    }
+                    | crate::runner::config::TaskSchedule::DailyTimes {
+                        working_hours_profile_id,
+                        working_hours,
+                        ..
+                    }
+                    | crate::runner::config::TaskSchedule::Weekly {
+                        working_hours_profile_id,
+                        working_hours,
+                        ..
+                    }
+                    | crate::runner::config::TaskSchedule::Monthly {
+                        working_hours_profile_id,
+                        working_hours,
+                        ..
+                    } if working_hours_profile_id.as_deref() == Some(&profile_id) => {
+                        *working_hours_profile_id = None;
+                        *working_hours = None;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        Ok(())
+    }).await
+}
+""")
+
+print("success")

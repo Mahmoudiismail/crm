@@ -531,11 +531,15 @@ pub(crate) async fn handle_apps_delete(
     handle: &RunnerHandle,
     app_id: &str,
 ) -> Result<(u16, &'static str, String)> {
+    let decoded_app_id = urlencoding::decode(app_id)
+        .map(|c| c.into_owned())
+        .unwrap_or_else(|_| app_id.to_string());
+
     let (tx, rx) = tokio::sync::oneshot::channel();
     if handle
         .command_tx
         .send(RunnerCommand::DeleteRegisteredApp {
-            app_id: app_id.to_string(),
+            app_id: decoded_app_id,
             reply: tx,
         })
         .await
