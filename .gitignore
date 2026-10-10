@@ -18,3 +18,4 @@ GibsonSpewing
 greek/
 delayed/
 swim/
+logs/email_payloads/*.html
