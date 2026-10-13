@@ -55,5 +55,7 @@ Deleting files from the current tree does not remove historical versions from Gi
 - [x] Replace `tests/support/tasker/csv.rs` reads/copies from `TestingDownloads/` with fictional CSV/config fixtures created in temporary files and directories.
 - [x] Keep email delivery disabled and use reserved `.invalid` addresses in the fixture.
 - [x] Document the shared fixture policy in `md/TESTING.md`.
-- [ ] Complete required internal code review before running tests, then inspect the next CI result and fix any fixture/schema mismatches.
+- [x] Add a PRE-AUTHORIZATION ticket whose category/type/subtype map to that team, so the standard email bucket has matching ticket data.
+- [x] Set the synthetic lead status to `New`, which the lead report generator accepts (`new` or `follow-up`).
+- [ ] Inspect the CI run triggered by these fixture corrections and address any remaining failures.
 
