@@ -29,7 +29,7 @@ pub fn setup_test_dataset() -> TestDataset {
 
     std::fs::write(
         assignments_file.path(),
-        "Category,Type,Subtype,Auto agent/team assignment\nGeneral,Inquiry,Website,Call Center\nIncomplete Reservation,Booking,General,Incomplete Reservation\n",
+        "Category,Type,Subtype,Auto agent/team assignment\nGeneral,Inquiry,Website,Call Center\nIncomplete Reservation,Booking,General,Incomplete Reservation\nPre-Authorization,Authorization,Review,PRE-AUTHORIZATION\n",
     )
     .unwrap();
 
@@ -47,7 +47,7 @@ pub fn setup_test_dataset() -> TestDataset {
 
     std::fs::write(
         leads_file.path(),
-        "Lead Id,Assignee,Lead Type,Lead Sub-Type,Lead Category,Created At,Branch,Status\nL-2001,alice,General Enquiry,Website,General,2026-04-10 10:00:00,DSFH,Open\n",
+        "Lead Id,Assignee,Lead Type,Lead Sub-Type,Lead Category,Created At,Branch,Status\nL-2001,alice,General Enquiry,Website,General,2026-04-10 10:00:00,DSFH,New\n",
     )
     .unwrap();
     std::fs::copy(
