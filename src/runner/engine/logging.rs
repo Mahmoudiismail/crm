@@ -198,7 +198,6 @@ pub async fn cleanup_old_logs(log_retention_days: u64) {
 mod tests {
     use super::*;
 
-
     #[tokio::test]
     async fn test_task_logger_initialization_failure_retry() {
         let unique = format!(
@@ -216,7 +215,9 @@ mod tests {
                 .unwrap_or_else(|| std::path::PathBuf::from("logs").join(&safe_task_name)),
             Err(_) => std::path::PathBuf::from("logs").join(&safe_task_name),
         };
-        let log_parent = log_dir.parent().expect("log directory should have a parent");
+        let log_parent = log_dir
+            .parent()
+            .expect("log directory should have a parent");
         tokio::fs::create_dir_all(log_parent)
             .await
             .expect("log parent should be creatable");
@@ -229,8 +230,14 @@ mod tests {
 
         {
             let inner = logger.inner.lock().await;
-            assert!(!inner.initialized, "failed initialization must remain retryable");
-            assert!(inner.file.is_none(), "failed initialization must not retain a file");
+            assert!(
+                !inner.initialized,
+                "failed initialization must remain retryable"
+            );
+            assert!(
+                inner.file.is_none(),
+                "failed initialization must not retain a file"
+            );
         }
 
         tokio::fs::remove_file(&log_dir)
@@ -249,8 +256,12 @@ mod tests {
         assert!(!contents.contains("first initialization attempt"));
 
         drop(logger);
-        tokio::fs::remove_file(path).await.expect("test log should be removable");
-        tokio::fs::remove_dir(&log_dir).await.expect("test log directory should be removable");
+        tokio::fs::remove_file(path)
+            .await
+            .expect("test log should be removable");
+        tokio::fs::remove_dir(&log_dir)
+            .await
+            .expect("test log directory should be removable");
     }
 
     #[tokio::test]
@@ -259,7 +270,10 @@ mod tests {
         let task_id = "task_lazy_456";
         let logger = TaskLogger::new(task_id, task_name);
 
-        let path = logger.log_path_async().await.expect("Should initialize successfully");
+        let path = logger
+            .log_path_async()
+            .await
+            .expect("Should initialize successfully");
         assert!(path.to_string_lossy().contains("LazyInitTest"));
         assert!(path.to_string_lossy().contains("task_lazy_456"));
     }

@@ -20,7 +20,10 @@ pub async fn run_due_tasks(
     let queued_ids = st.queued_task_ids.clone();
     drop(st);
 
-    let tasks_to_queue: Vec<(crate::runner::config::RunnerTask, crate::runner::engine::state::ExecutionPolicy)> = crate::runner::engine::dispatcher::helpers::modify_config(path, move |cfg| {
+    let tasks_to_queue: Vec<(
+        crate::runner::config::RunnerTask,
+        crate::runner::engine::state::ExecutionPolicy,
+    )> = crate::runner::engine::dispatcher::helpers::modify_config(path, move |cfg| {
         let mut inner_queue = vec![];
         let now = Utc::now();
         let policy = policy_from_config(cfg);
@@ -38,13 +41,16 @@ pub async fn run_due_tasks(
             }
         }
         Ok(inner_queue)
-    }).await?;
+    })
+    .await?;
 
     for (task, policy) in tasks_to_queue {
-        let _ = exec_tx.send(ExecutionManagerCommand::QueueTask {
-            task: Box::new(task),
-            policy,
-        }).await;
+        let _ = exec_tx
+            .send(ExecutionManagerCommand::QueueTask {
+                task: Box::new(task),
+                policy,
+            })
+            .await;
     }
     Ok(())
 }
@@ -60,7 +66,10 @@ pub async fn run_all_tasks_now(
     let queued_ids = st.queued_task_ids.clone();
     drop(st);
 
-    let tasks_to_queue: Vec<(crate::runner::config::RunnerTask, crate::runner::engine::state::ExecutionPolicy)> = crate::runner::engine::dispatcher::helpers::modify_config(path, move |cfg| {
+    let tasks_to_queue: Vec<(
+        crate::runner::config::RunnerTask,
+        crate::runner::engine::state::ExecutionPolicy,
+    )> = crate::runner::engine::dispatcher::helpers::modify_config(path, move |cfg| {
         let mut inner_queue = vec![];
         let now = Utc::now();
         let policy = policy_from_config(cfg);
@@ -81,12 +90,15 @@ pub async fn run_all_tasks_now(
             }
         }
         Ok(inner_queue)
-    }).await?;
+    })
+    .await?;
     for (task, policy) in tasks_to_queue {
-        let _ = exec_tx.send(ExecutionManagerCommand::QueueTask {
-            task: Box::new(task),
-            policy,
-        }).await;
+        let _ = exec_tx
+            .send(ExecutionManagerCommand::QueueTask {
+                task: Box::new(task),
+                policy,
+            })
+            .await;
     }
     Ok(())
 }
@@ -117,7 +129,10 @@ pub async fn run_task_by_id(
     let queued_ids = st.queued_task_ids.clone();
     drop(st);
 
-    let task_to_queue: Option<(crate::runner::config::RunnerTask, crate::runner::engine::state::ExecutionPolicy)> = crate::runner::engine::dispatcher::helpers::modify_config(path, move |cfg| {
+    let task_to_queue: Option<(
+        crate::runner::config::RunnerTask,
+        crate::runner::engine::state::ExecutionPolicy,
+    )> = crate::runner::engine::dispatcher::helpers::modify_config(path, move |cfg| {
         let now = Utc::now();
         let policy = policy_from_config(cfg);
 
@@ -142,13 +157,16 @@ pub async fn run_task_by_id(
             return Ok(Some((task.clone(), policy.clone())));
         }
         Err(anyhow::anyhow!("Task '{}' not found", tid))
-    }).await?;
+    })
+    .await?;
 
     if let Some((t, p)) = task_to_queue {
-        let _ = exec_tx.send(ExecutionManagerCommand::QueueTask {
-            task: Box::new(t),
-            policy: p,
-        }).await;
+        let _ = exec_tx
+            .send(ExecutionManagerCommand::QueueTask {
+                task: Box::new(t),
+                policy: p,
+            })
+            .await;
     }
     Ok(())
 }
@@ -175,7 +193,8 @@ pub(crate) async fn set_task_enabled(path: &str, task_id: &str, enabled: bool) -
             return Ok(());
         }
         Err(anyhow::anyhow!("Task '{}' not found", tid))
-    }).await
+    })
+    .await
 }
 
 pub async fn create_task(path: &str, mut task: RunnerTask) -> Result<()> {
@@ -200,7 +219,8 @@ pub async fn create_task(path: &str, mut task: RunnerTask) -> Result<()> {
             "Task Created"
         );
         Ok(())
-    }).await
+    })
+    .await
 }
 
 pub async fn update_task(path: &str, task_id: &str, mut task: RunnerTask) -> Result<()> {
@@ -212,7 +232,12 @@ pub async fn update_task(path: &str, task_id: &str, mut task: RunnerTask) -> Res
         if task.id.trim().is_empty() {
             task.id = tid.clone();
         }
-        if cfg.tasks.iter().enumerate().any(|(idx, t)| idx != existing_idx && t.id == task.id) {
+        if cfg
+            .tasks
+            .iter()
+            .enumerate()
+            .any(|(idx, t)| idx != existing_idx && t.id == task.id)
+        {
             return Err(anyhow::anyhow!("Task '{}' already exists", task.id));
         }
 
@@ -220,43 +245,105 @@ pub async fn update_task(path: &str, task_id: &str, mut task: RunnerTask) -> Res
             if let Some(old_schedule) = cfg.tasks[existing_idx].schedules.get(i) {
                 let matches = match (new_schedule.clone(), old_schedule) {
                     (
-                        crate::runner::config::TaskSchedule::Interval { every_seconds: new_every, working_hours: new_wh, start_time: new_st, .. },
-                        crate::runner::config::TaskSchedule::Interval { every_seconds: old_every, working_hours: old_wh, start_time: old_st, next_run_at: old_next, .. },
+                        crate::runner::config::TaskSchedule::Interval {
+                            every_seconds: new_every,
+                            working_hours: new_wh,
+                            start_time: new_st,
+                            ..
+                        },
+                        crate::runner::config::TaskSchedule::Interval {
+                            every_seconds: old_every,
+                            working_hours: old_wh,
+                            start_time: old_st,
+                            next_run_at: old_next,
+                            ..
+                        },
                     ) => {
                         if new_every == *old_every && new_wh == *old_wh && new_st == *old_st {
-                            if let crate::runner::config::TaskSchedule::Interval { next_run_at, .. } = new_schedule {
+                            if let crate::runner::config::TaskSchedule::Interval {
+                                next_run_at,
+                                ..
+                            } = new_schedule
+                            {
                                 *next_run_at = old_next.clone();
                             }
                             true
-                        } else { false }
+                        } else {
+                            false
+                        }
                     }
                     (
-                        crate::runner::config::TaskSchedule::DailyTimes { times: new_times, working_hours: new_wh, .. },
-                        crate::runner::config::TaskSchedule::DailyTimes { times: old_times, working_hours: old_wh, next_run_at: old_next, .. },
+                        crate::runner::config::TaskSchedule::DailyTimes {
+                            times: new_times,
+                            working_hours: new_wh,
+                            ..
+                        },
+                        crate::runner::config::TaskSchedule::DailyTimes {
+                            times: old_times,
+                            working_hours: old_wh,
+                            next_run_at: old_next,
+                            ..
+                        },
                     ) => {
                         if new_times == *old_times && new_wh == *old_wh {
-                            if let crate::runner::config::TaskSchedule::DailyTimes { next_run_at, .. } = new_schedule {
+                            if let crate::runner::config::TaskSchedule::DailyTimes {
+                                next_run_at,
+                                ..
+                            } = new_schedule
+                            {
                                 *next_run_at = old_next.clone();
                             }
                             true
-                        } else { false }
+                        } else {
+                            false
+                        }
                     }
                     (
-                        crate::runner::config::TaskSchedule::Weekly { day_of_week: new_dow, at_time: new_time, working_hours: new_wh, .. },
-                        crate::runner::config::TaskSchedule::Weekly { day_of_week: old_dow, at_time: old_time, working_hours: old_wh, next_run_at: old_next, .. },
+                        crate::runner::config::TaskSchedule::Weekly {
+                            day_of_week: new_dow,
+                            at_time: new_time,
+                            working_hours: new_wh,
+                            ..
+                        },
+                        crate::runner::config::TaskSchedule::Weekly {
+                            day_of_week: old_dow,
+                            at_time: old_time,
+                            working_hours: old_wh,
+                            next_run_at: old_next,
+                            ..
+                        },
                     ) => {
                         if new_dow == *old_dow && new_time == *old_time && new_wh == *old_wh {
-                            if let crate::runner::config::TaskSchedule::Weekly { next_run_at, .. } = new_schedule {
+                            if let crate::runner::config::TaskSchedule::Weekly {
+                                next_run_at, ..
+                            } = new_schedule
+                            {
                                 *next_run_at = old_next.clone();
                             }
                             true
-                        } else { false }
+                        } else {
+                            false
+                        }
                     }
                     (
-                        crate::runner::config::TaskSchedule::Monthly { day_of_month: new_dom, at_time: new_time, working_hours: new_wh, .. },
-                        crate::runner::config::TaskSchedule::Monthly { day_of_month: old_dom, at_time: old_time, working_hours: old_wh, next_run_at: old_next, .. },
+                        crate::runner::config::TaskSchedule::Monthly {
+                            day_of_month: new_dom,
+                            at_time: new_time,
+                            working_hours: new_wh,
+                            ..
+                        },
+                        crate::runner::config::TaskSchedule::Monthly {
+                            day_of_month: old_dom,
+                            at_time: old_time,
+                            working_hours: old_wh,
+                            next_run_at: old_next,
+                            ..
+                        },
                     ) if new_dom == *old_dom && new_time == *old_time && new_wh == *old_wh => {
-                        if let crate::runner::config::TaskSchedule::Monthly { next_run_at, .. } = new_schedule {
+                        if let crate::runner::config::TaskSchedule::Monthly {
+                            next_run_at, ..
+                        } = new_schedule
+                        {
                             *next_run_at = old_next.clone();
                         }
                         true
@@ -291,7 +378,8 @@ pub async fn update_task(path: &str, task_id: &str, mut task: RunnerTask) -> Res
             "Task Updated"
         );
         Ok(())
-    }).await
+    })
+    .await
 }
 
 pub async fn delete_task(path: &str, task_id: &str) -> Result<()> {
@@ -315,7 +403,8 @@ pub async fn delete_task(path: &str, task_id: &str) -> Result<()> {
             );
         }
         Ok(())
-    }).await
+    })
+    .await
 }
 
 #[cfg(test)]
@@ -391,7 +480,9 @@ mod tests {
             _ => panic!("Expected QueueTask command"),
         }
 
-        let cfg = crate::runner::engine::dispatcher::helpers::load_config(path_str).await.unwrap();
+        let cfg = crate::runner::engine::dispatcher::helpers::load_config(path_str)
+            .await
+            .unwrap();
         let updated_task = cfg.tasks.first().unwrap();
 
         let updated_schedule_due = &updated_task.schedules[0];
@@ -496,7 +587,9 @@ mod tests {
         .await
         .unwrap();
 
-        let cfg = crate::runner::engine::dispatcher::helpers::load_config(path_str).await.unwrap();
+        let cfg = crate::runner::engine::dispatcher::helpers::load_config(path_str)
+            .await
+            .unwrap();
         let updated_task = cfg.tasks.first().unwrap();
 
         let updated_interval = &updated_task.schedules[0];
@@ -576,13 +669,17 @@ mod tests {
         let st1 = status.clone();
         let tx1 = exec_tx.clone();
         let handle1 =
-            tokio::spawn(async move { run_task_by_id(&p_str1, "race_task", &st1, &tx1, true).await });
+            tokio::spawn(
+                async move { run_task_by_id(&p_str1, "race_task", &st1, &tx1, true).await },
+            );
 
         let p_str2 = path_str.to_string();
         let st2 = status.clone();
         let tx2 = exec_tx.clone();
         let handle2 =
-            tokio::spawn(async move { run_task_by_id(&p_str2, "race_task", &st2, &tx2, true).await });
+            tokio::spawn(
+                async move { run_task_by_id(&p_str2, "race_task", &st2, &tx2, true).await },
+            );
 
         let res1 = handle1.await.unwrap();
         let res2 = handle2.await.unwrap();

@@ -3,23 +3,33 @@ use anyhow::Result;
 
 pub async fn create_working_hours_profile(path: &str, profile: WorkingHoursProfile) -> Result<()> {
     crate::runner::engine::dispatcher::helpers::modify_config(path, move |cfg| {
-        if cfg.working_hours_profiles.iter().any(|p| p.id == profile.id) {
+        if cfg
+            .working_hours_profiles
+            .iter()
+            .any(|p| p.id == profile.id)
+        {
             return Err(anyhow::anyhow!("Profile '{}' already exists", profile.id));
         }
         cfg.working_hours_profiles.push(profile);
         Ok(())
-    }).await
+    })
+    .await
 }
 
 pub async fn update_working_hours_profile(path: &str, profile: WorkingHoursProfile) -> Result<()> {
     crate::runner::engine::dispatcher::helpers::modify_config(path, move |cfg| {
-        if let Some(pos) = cfg.working_hours_profiles.iter().position(|p| p.id == profile.id) {
+        if let Some(pos) = cfg
+            .working_hours_profiles
+            .iter()
+            .position(|p| p.id == profile.id)
+        {
             cfg.working_hours_profiles[pos] = profile;
             Ok(())
         } else {
             Err(anyhow::anyhow!("Profile '{}' not found", profile.id))
         }
-    }).await
+    })
+    .await
 }
 
 pub async fn delete_working_hours_profile(path: &str, profile_id: String) -> Result<()> {
@@ -56,5 +66,6 @@ pub async fn delete_working_hours_profile(path: &str, profile_id: String) -> Res
             }
         }
         Ok(())
-    }).await
+    })
+    .await
 }

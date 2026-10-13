@@ -101,7 +101,10 @@ async fn main() -> Result<()> {
             match crm_tool::runner::config::RunnerConfig::load(&runner_config_path_str) {
                 Ok(c) => c,
                 Err(e) => {
-                    eprintln!("CRITICAL ERROR: Failed to parse existing runner_config.json: {}", e);
+                    eprintln!(
+                        "CRITICAL ERROR: Failed to parse existing runner_config.json: {}",
+                        e
+                    );
                     std::process::exit(1);
                 }
             }
