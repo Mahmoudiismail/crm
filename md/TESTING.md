@@ -25,3 +25,8 @@ This document tracks testing improvements and technical debt identified during t
 ## CI Recommendations
 * Ensure `cargo bench --workspace` is optionally run or gated for performance regressions. It's safe to run in CI but takes significant time. Consider adding it to a weekly cron or manual trigger rather than PR gating.
 * The tests are highly deterministic and can run in parallel quickly, the `test.yml` workflow looks robust right now.
+
+
+## Synthetic tasker test data
+
+Automated tests for the dashboard updater and CRM Open Sohail must create their input files in temporary directories using synthetic, fictional records. They must not read operational exports from `TestingDownloads/`. This directory is reserved for local-only operational files, which are excluded from version control. When extending these tests, keep fixtures minimal but representative of the CSV headers and behavior being exercised.
