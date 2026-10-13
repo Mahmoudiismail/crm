@@ -317,6 +317,11 @@ mod tests_queue {
         let config_path = config_file.to_str().unwrap().to_string();
 
         let mut cfg = RunnerConfig::default();
+        let marker = format!(
+            "runner_race_execution_{}_{}.txt",
+            std::process::id(),
+            Utc::now().timestamp_nanos_opt().unwrap_or_default()
+        );
         let task = RunnerTask {
             id: "race_task".to_string(),
             name: "Race Task".to_string(),
@@ -330,23 +335,13 @@ mod tests_queue {
                 mode: crate::runner::config::ExecutionMode::Sequential,
                 actions: vec![crate::runner::config::ActionSpec::ShellCommand(
                     crate::runner::config::ShellCommandSpec {
-                        command: {
-                            let marker = format!(
-                                "runner_race_execution_{}_{}.txt",
-                                std::process::id(),
-                                Utc::now().timestamp_nanos_opt().unwrap_or_default()
-                            );
-                            let command = if cfg!(target_os = "windows") {
-                                format!(
-                                    "cmd.exe /c \"echo run >> {} & ping 127.0.0.1 -n 3 > nul\"",
-                                    marker
-                                )
-                            } else {
-                                format!("bash -c \"echo run >> {}; sleep 2\"", marker)
-                            };
-                            // Store the unique relative marker path for the assertion below.
-                            std::env::set_var("CRM_RUNNER_RACE_MARKER", &marker);
-                            command
+                        command: if cfg!(target_os = "windows") {
+                            format!(
+                                "cmd.exe /c \"echo run >> {} & ping 127.0.0.1 -n 3 > nul\"",
+                                marker
+                            )
+                        } else {
+                            format!("bash -c \"echo run >> {}; sleep 2\"", marker)
                         },
                         continue_on_error: false,
                     },
@@ -405,9 +400,6 @@ mod tests_queue {
         // requests to reach the execution manager, then verify actual executions.
         tokio::time::sleep(Duration::from_secs(5)).await;
 
-        let marker = std::env::var("CRM_RUNNER_RACE_MARKER")
-            .expect("race marker path should be configured by the task");
-        std::env::remove_var("CRM_RUNNER_RACE_MARKER");
         let marker_path = std::path::PathBuf::from(&marker);
         let executions = tokio::fs::read_to_string(&marker_path)
             .await
