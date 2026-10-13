@@ -57,24 +57,24 @@ This document provides a reputation and trust audit of the primary dependencies 
 
 ## RustSec advisory-ignore review (October 14, 2026)
 
-This is a configuration review against the current `Cargo.lock` and the public RustSec advisory index. It is not a completed `cargo audit` or `cargo deny` run; the repository-mandated INTERNAL Code Review capability is unavailable in this environment, so runtime/build verification has not been performed here. The intended `deny.toml` cleanup could not be applied through the available GitHub write capability, so the current branch still contains the old ignore entries for RUSTSEC-2026-0194/-0195 and the withdrawn 2024 GTK advisories. This is an explicit outstanding item, not a completed remediation.
+This is a configuration review against the current `Cargo.lock` and the public RustSec advisory index. It is not a completed `cargo audit` or `cargo deny` run; the repository-mandated INTERNAL Code Review capability is unavailable in this environment, so runtime/build verification has not been performed here.
 
 ### Confirmed findings
 
 | Advisory | Current evidence | Disposition |
 | --- | --- | --- |
-| RUSTSEC-2026-0194 | `Cargo.lock` contains `quick-xml 0.39.4` as well as `0.41.0`. RustSec reports 0.41.0 as the fix for quadratic duplicate-attribute checks. | Active security issue to remediate. Do not treat the ignore as evidence of safety; identify which dependency requires 0.39.4 and upgrade that dependency path. |
-| RUSTSEC-2026-0195 | Same affected `quick-xml 0.39.4` lockfile entry; the advisory concerns unbounded namespace declarations in `NsReader`. | Active high-severity issue to remediate alongside RUSTSEC-2026-0194. |
+| RUSTSEC-2026-0194 | The original lockfile's `wayland-scanner 0.31.10` required `quick-xml 0.39.4`; this branch updates it to `wayland-scanner 0.31.11`, which requires `quick-xml ^0.41`. | The vulnerable lockfile path was updated to the fixed `quick-xml 0.41.0` family. Still requires cargo audit/deny and CI verification. |
+| RUSTSEC-2026-0195 | Same original `quick-xml 0.39.4` dependency path; fixed by the same `wayland-scanner 0.31.11` lockfile update, subject to verification. | Removed from `deny.toml`; confirm with cargo audit/deny and CI. |
 | RUSTSEC-2026-0192 | `Cargo.lock` contains `ttf-parser 0.25.1`; RustSec classifies this advisory as informational/unmaintained, with no fixed version stated. | Keep only as a documented maintenance exception while evaluating a maintained alternative or dependency upgrade. |
 | RUSTSEC-2024-0370 | `Cargo.lock` contains `proc-macro-error 1.0.4`; RustSec classifies it as unmaintained. | Keep only as a documented exception while tracing the transitive build-time dependency and evaluating an upstream upgrade path. |
 | RUSTSEC-2024-0412, -0413, -0415, -0416, -0418, -0419, -0420 | The public RustSec advisory index marks these advisories as withdrawn. | These entries should not be retained as active vulnerability suppressions. Remove them from `deny.toml` after verifying the installed cargo-deny version accepts the cleaned list. |
 
 ### Required follow-up
 
-1. Trace the dependency paths for `quick-xml 0.39.4` and upgrade the parent crate or dependency constraint so the vulnerable version is no longer selected.
+1. Verify the lockfile update from `wayland-scanner 0.31.10` to `0.31.11` using `cargo check --locked` and `cargo tree -i quick-xml`; ensure no `quick-xml 0.39.4` remains.
 2. Run `cargo deny check advisories` and `cargo audit` on the resulting lockfile.
 3. Revisit the informational ignores after confirming which dependency paths bring in `ttf-parser` and `proc-macro-error`.
-4. Refresh the version table above after the next dependency audit; the April 2026 version table below is historical and must not be read as a current inventory.
+4. Refresh the version table above after the next dependency audit; the April 2026 version table below is historical and must not be read as a current inventory. The lockfile edit has not yet been validated by Cargo.
 
 ### Sources
 
