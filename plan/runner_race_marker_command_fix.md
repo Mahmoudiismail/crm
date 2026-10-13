@@ -18,3 +18,22 @@
 - Keep the change limited to test setup and its diagnostics.
 - Do not weaken the exactly-one-execution invariant or alter production shell-task security defaults.
 - Do not use `git reset`.
+
+
+## Follow-up: Clippy field-reassignment lint
+
+### Finding
+The CI Clippy job reports `clippy::field-reassign-with-default` as an error because the test initializes `RunnerConfig::default()` and then assigns `allow_shell_tasks = true` in a separate statement. The workflow uses `-D warnings`, so this lint fails Clippy.
+
+### Minimal fix
+Use a struct update initializer instead:
+```rust
+let cfg = RunnerConfig {
+    allow_shell_tasks: true,
+    ..RunnerConfig::default()
+};
+```
+This preserves all other defaults and keeps shell execution enabled only in this isolated test configuration. Update the relevant operations documentation if needed. Do not change production defaults or the test invariant.
+
+### Verification
+The repository requires INTERNAL Code Review before tests. That capability is not available in the current environment, so do not claim review or run tests here. Confirm the updated Clippy and Test Suite CI results on PR #402 after the change.
