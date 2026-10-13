@@ -43,3 +43,10 @@ Deleting files from the current tree does not remove historical versions from Gi
 - [x] Replace the dashboard updater and CRM Open Sohail test helpers' dependency on `TestingDownloads/` with synthetic CSV inputs and an inline minimal tasker configuration.
 - [x] Document the synthetic-fixture requirement in `md/TESTING.md`.
 - [ ] Verify the commit with GitHub Actions; do not claim test success until the workflow completes.
+
+## Follow-up: Windows duplicate-admission test execution
+
+- [x] Make the Windows race-test command invoke Windows PowerShell through its explicit system path, avoiding reliance on PATH lookup on hosted runners.
+- [ ] Re-run the Test Suite on the PR and inspect the exact result. The previous run failed because the execution marker was absent; that does not by itself establish a duplicate-admission logic regression.
+- [ ] If the marker is still absent, inspect the task execution result and process logs before changing admission logic. Keep the assertion that concurrent duplicate requests execute exactly once.
+
