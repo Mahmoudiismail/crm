@@ -23,7 +23,7 @@ pub fn setup_test_dataset() -> TestDataset {
     // private operational exports and the developer's local filesystem.
     std::fs::write(
         users_file.path(),
-        "cognito_username,UserDepartmentName / Team Name\nalice,Call Center\nbob,Incomplete Reservation\n",
+        "cognito_username,UserDepartmentName / Team Name\nalice,Call Center\nbob,Incomplete Reservation\npreauth_agent,PRE-AUTHORIZATION\n",
     )
     .unwrap();
 
