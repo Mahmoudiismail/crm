@@ -4,7 +4,7 @@
 Close the remaining V1 verification gaps identified after PRs #397 and #398 were merged, using the smallest changes consistent with the existing Runner design.
 
 ## Scope
-1. **Duplicate task admission:** make admission authoritative at the execution manager boundary so concurrent callers cannot admit the same task while it is queued or running. Preserve legitimate subsequent reruns after completion and manual-run semantics.
+1. **Duplicate task admission:** verify the existing execution-manager admission boundary and preserve its queued/running duplicate rejection. Change production logic only if behavioral evidence demonstrates a real gap; preserve legitimate subsequent reruns and manual-run semantics.
 2. **Behavioral race regression:** replace or strengthen the timing-sensitive race test so it verifies actual execution count under concurrent admission, rather than inferring correctness from a short-lived queue/status snapshot.
 3. **TaskLogger retry regression:** exercise a real initialization failure, then make the log path writable and verify a later log call successfully initializes and writes the message. Keep test setup isolated and cross-platform.
 4. **Corrupt configuration startup regression:** add a focused process-level test proving an existing malformed runner_config.json exits unsuccessfully and is not silently replaced with defaults, if the existing binary/test structure allows deterministic isolation without introducing a test framework.
