@@ -50,3 +50,10 @@ Deleting files from the current tree does not remove historical versions from Gi
 - [ ] Re-run the Test Suite on the PR and inspect the exact result. The previous run failed because the execution marker was absent; that does not by itself establish a duplicate-admission logic regression.
 - [ ] If the marker is still absent, inspect the task execution result and process logs before changing admission logic. Keep the assertion that concurrent duplicate requests execute exactly once.
 
+## Follow-up: CSV integration fixtures
+
+- [x] Replace `tests/support/tasker/csv.rs` reads/copies from `TestingDownloads/` with fictional CSV/config fixtures created in temporary files and directories.
+- [x] Keep email delivery disabled and use reserved `.invalid` addresses in the fixture.
+- [x] Document the shared fixture policy in `md/TESTING.md`.
+- [ ] Complete required internal code review before running tests, then inspect the next CI result and fix any fixture/schema mismatches.
+
