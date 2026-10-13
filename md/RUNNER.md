@@ -17,7 +17,15 @@ Step-level application locking is managed by `AppLockManager`:
 - Multiple non-concurrent applications required within a step are sorted deterministically and acquired in order to prevent deadlocks.
 - Semaphores are held for the step duration and automatically released on step completion, error, or cancellation.
 - Tasks waiting for an application lock remain in `running_task_ids` with `waiting_for_app` status reported in the GUI.
-- **Duplicate Task Prevention**: The Execution Manager strictly inspects `running_task_ids` during scheduling evaluation to definitively block duplicate concurrent instances of the identical task ID from being scheduled or pushed into execution pipelines.
+- **Duplicate Task Prevention**: The Execution Manager is the authoritative admission point. It serializes queue commands and rejects a task ID that is already queued or running, preventing overlapping executions even when concurrent callers read the same earlier status snapshot. The regression test verifies the actual number of task process executions, not only a transient queue/status snapshot.
+
+
+## Runner V1 Regression Verification
+
+Focused regression coverage protects three runtime guarantees:
+- Concurrent requests for the same task ID result in one execution while that task is queued or running.
+- A `TaskLogger` initialization failure remains retryable; after the filesystem failure is removed, a later log call initializes the logger and writes its message.
+- An existing malformed `runner_config.json` causes the Runner process to exit unsuccessfully without replacing the file with defaults.
 
 ## HTTP GUI Security Constraints
 The Runner enforces strict application and network layer protections to secure its control plane:

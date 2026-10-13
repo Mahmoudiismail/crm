@@ -4,7 +4,8 @@ pub async fn create_registered_app(path: &str, app: RegisteredApp) -> anyhow::Re
     crate::runner::engine::dispatcher::helpers::modify_config(path, move |cfg| {
         cfg.registered_apps.push(app);
         Ok(())
-    }).await
+    })
+    .await
 }
 
 pub async fn update_registered_app(path: &str, app: RegisteredApp) -> anyhow::Result<()> {
@@ -18,7 +19,8 @@ pub async fn update_registered_app(path: &str, app: RegisteredApp) -> anyhow::Re
         } else {
             Err(anyhow::anyhow!("App '{}' not found", app.id))
         }
-    }).await
+    })
+    .await
 }
 
 pub async fn delete_registered_app(path: &str, app_id: &str) -> anyhow::Result<()> {
@@ -26,7 +28,8 @@ pub async fn delete_registered_app(path: &str, app_id: &str) -> anyhow::Result<(
     crate::runner::engine::dispatcher::helpers::modify_config(path, move |cfg| {
         cfg.registered_apps.retain(|a| a.id != aid);
         Ok(())
-    }).await
+    })
+    .await
 }
 
 #[cfg(test)]

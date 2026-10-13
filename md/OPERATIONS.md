@@ -50,13 +50,17 @@ CSV parsing errors encountered by the `tasker` log a ±20 line diagnostic contex
 
 ## CI/CD Pipeline
 
-The test workflow (`.github/workflows/test.yml`) ensures strict code formatting and linting prior to merging. The test workflow caches `target` artifacts across runs using `Swatinem/rust-cache` with `cache-targets: true`.
+The CI pipeline uses two workflows:
+- `.github/workflows/auto-format.yml` runs first on pull requests targeting `main`. It runs `cargo fmt`, commits and pushes formatting-only Rust changes when needed, and then runs `cargo fmt -- --check`. It requires `contents: write` to push formatting fixes.
+- `.github/workflows/test.yml` is triggered by completion of the `Auto Format` workflow. Its Clippy and test jobs run only when that workflow concludes successfully, and check out the updated PR branch. If formatting, the auto-commit, the push, or the format check fails, the test workflow skips both jobs.
 
 The CI stages are executed in the following order:
-1. `cargo fmt`
-2. `cargo clippy`
-3. `cargo test`
-4. `cargo build`
+1. `cargo fmt` and auto-commit changed Rust files, if any
+2. `cargo fmt -- --check`
+3. `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+4. `cargo test --workspace --all-targets --all-features`
+
+GitHub requires the `workflow_run` trigger to be present on the default branch before it can trigger `test.yml`. Therefore, the workflow-gating change must reach `main` before this cross-workflow dependency can govern future pull requests.
 
 ## Concurrency
 Task execution is concurrent, with an execution manager enforcing collision prevention rules.

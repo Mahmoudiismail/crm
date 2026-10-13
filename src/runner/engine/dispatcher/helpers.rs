@@ -15,8 +15,6 @@ pub(crate) async fn load_config(path: &str) -> Result<RunnerConfig> {
         .context("spawn_blocking panic for load_config")?
 }
 
-
-
 pub(crate) async fn modify_config<F, T>(path: &str, f: F) -> Result<T>
 where
     F: FnOnce(&mut RunnerConfig) -> Result<T> + Send + 'static,
@@ -60,7 +58,9 @@ mod tests {
                 modify_config(&p, |c| {
                     c.poll_interval_seconds += 1;
                     Ok(())
-                }).await.unwrap();
+                })
+                .await
+                .unwrap();
             }));
         }
 

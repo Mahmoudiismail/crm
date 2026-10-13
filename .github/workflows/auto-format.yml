@@ -1,0 +1,49 @@
+name: Auto Format
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    name: Format and Auto-fix
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+          components: rustfmt
+
+      - name: Format Rust files
+        run: cargo fmt
+
+      - name: Commit formatting changes when needed
+        shell: bash
+        env:
+          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          git diff --check
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -u -- '*.rs'
+            git commit -m "style: apply cargo fmt"
+            git push origin "HEAD:${PR_BRANCH}"
+          else
+            echo "Rust files are already formatted."
+          fi
+
+      - name: Verify formatting
+        run: cargo fmt -- --check

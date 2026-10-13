@@ -317,6 +317,11 @@ mod tests_queue {
         let config_path = config_file.to_str().unwrap().to_string();
 
         let mut cfg = RunnerConfig::default();
+        let marker = format!(
+            "runner_race_execution_{}_{}.txt",
+            std::process::id(),
+            Utc::now().timestamp_nanos_opt().unwrap_or_default()
+        );
         let task = RunnerTask {
             id: "race_task".to_string(),
             name: "Race Task".to_string(),
@@ -330,7 +335,14 @@ mod tests_queue {
                 mode: crate::runner::config::ExecutionMode::Sequential,
                 actions: vec![crate::runner::config::ActionSpec::ShellCommand(
                     crate::runner::config::ShellCommandSpec {
-                        command: "echo race_test".to_string(),
+                        command: if cfg!(target_os = "windows") {
+                            format!(
+                                "powershell.exe -NoProfile -NonInteractive -Command \"Add-Content -LiteralPath '{}' -Value run; Start-Sleep -Seconds 2\"",
+                                marker
+                            )
+                        } else {
+                            format!("bash -c \"echo run >> {}; sleep 2\"", marker)
+                        },
                         continue_on_error: false,
                     },
                 )],
@@ -384,24 +396,20 @@ mod tests_queue {
         assert!(r1.unwrap().is_ok());
         assert!(r2.unwrap().is_ok());
 
-        tokio::time::sleep(Duration::from_millis(50)).await;
+        // Keep the first process alive long enough for both concurrent admission
+        // requests to reach the execution manager, then verify actual executions.
+        tokio::time::sleep(Duration::from_secs(5)).await;
 
-        let st = status.lock().await;
-        let queued_count = st
-            .queued_task_ids
-            .iter()
-            .filter(|id| **id == "race_task")
-            .count();
-        let running_count = st
-            .running_task_ids
-            .iter()
-            .filter(|id| **id == "race_task")
-            .count();
-        let total_count = queued_count + running_count;
+        let marker_path = std::path::PathBuf::from(&marker);
+        let executions = tokio::fs::read_to_string(&marker_path)
+            .await
+            .expect("task should have written its execution marker");
+        let _ = tokio::fs::remove_file(&marker_path).await;
 
-        assert!(
-            total_count <= 1,
-            "No duplicate task instance may be admitted during race"
+        assert_eq!(
+            executions.lines().count(),
+            1,
+            "Concurrent requests for the same task must result in exactly one execution"
         );
     }
 }
