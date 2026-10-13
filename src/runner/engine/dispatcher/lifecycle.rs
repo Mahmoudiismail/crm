@@ -337,7 +337,7 @@ mod tests_queue {
                     crate::runner::config::ShellCommandSpec {
                         command: if cfg!(target_os = "windows") {
                             format!(
-                                "cmd.exe /c \"echo run >> {} & ping 127.0.0.1 -n 3 > nul\"",
+                                "powershell.exe -NoProfile -NonInteractive -Command \"Add-Content -LiteralPath '{}' -Value run; Start-Sleep -Seconds 2\"",
                                 marker
                             )
                         } else {
