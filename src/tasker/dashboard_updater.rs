@@ -532,8 +532,7 @@ mod tests {
     }
 
     pub(crate) fn setup_test_dataset() -> TestDataset {
-        // Keep test inputs synthetic and self-contained. Production exports are intentionally
-        // excluded from the repository and must never be required by automated tests.
+        // Synthetic data keeps automated tests independent of local operational exports.
         let users_file = tempfile::NamedTempFile::new().unwrap();
         let assignments_file = tempfile::NamedTempFile::new().unwrap();
         let download_dir = tempfile::tempdir().unwrap();
@@ -544,13 +543,11 @@ mod tests {
         std::fs::write(
             users_file.path(),
             "UserDepartmentName / Team Name,cognito_username\nSynthetic Team,synthetic.agent@example.test\n",
-        )
-        .unwrap();
+        ).unwrap();
         std::fs::write(
             assignments_file.path(),
             "type,subtype,Category,Auto agent/team assignment\nSynthetic Type,Synthetic Subtype,Synthetic Category,Synthetic Team\n",
-        )
-        .unwrap();
+        ).unwrap();
 
         let ticket_csv = concat!(
             "Ticket Id,Assignee,Ticket Type,Ticket Sub-Type,Ticket Category,Branch,Created At\n",
@@ -566,13 +563,11 @@ mod tests {
         std::fs::write(
             leads_file.path(),
             "Lead Id,Contact Name,Branch,Status,Created At\nSYNTHETIC-LEAD-001,Example Contact,Synthetic Branch,new,16-Apr-2026\n",
-        )
-        .unwrap();
+        ).unwrap();
         std::fs::copy(
             leads_file.path(),
             download_dir.path().join("lead_report_synthetic.csv"),
-        )
-        .unwrap();
+        ).unwrap();
 
         let config_json = r#"{
             "tasks": [{
@@ -586,21 +581,13 @@ mod tests {
                 "exclude_categories": [],
                 "output_file": "unused"
             }]
-        }"#
-        .to_string();
+        }"#.to_string();
         {
             let mut teams_wtr = csv::Writer::from_writer(teams_file.as_file());
-            teams_wtr
-                .write_record(["Team Name", "Receiver Name", "To Emails", "CC"])
-                .unwrap();
-            teams_wtr
-                .write_record([
-                    "Synthetic Team",
-                    "Synthetic Team",
-                    "synthetic-team@example.test",
-                    "",
-                ])
-                .unwrap();
+            teams_wtr.write_record(["Team Name", "Receiver Name", "To Emails", "CC"]).unwrap();
+            teams_wtr.write_record([
+                "Synthetic Team", "Synthetic Team", "synthetic-team@example.test", "",
+            ]).unwrap();
             teams_wtr.flush().unwrap();
         }
 
@@ -614,6 +601,7 @@ mod tests {
             config_json,
         }
     }
+
     #[test]
     fn test_task2_dashboard_updater() {
         let dataset = setup_test_dataset();
