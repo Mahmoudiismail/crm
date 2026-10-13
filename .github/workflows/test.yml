@@ -79,7 +79,7 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "rust-ci"
+          key: "rust-ci"
           cache-on-failure: true
 
       - name: Run clippy
@@ -106,7 +106,7 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "rust-ci"
+          key: "rust-ci"
           cache-on-failure: true
 
       - name: Run tests
