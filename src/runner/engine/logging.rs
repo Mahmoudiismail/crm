@@ -56,9 +56,10 @@ impl TaskLogger {
         }
     }
 
-    pub async fn log_path_async(&self) -> std::path::PathBuf {
-        let inner = self.inner.lock().await;
-        inner.log_path.clone().unwrap_or_default()
+    pub async fn log_path_async(&self) -> anyhow::Result<std::path::PathBuf> {
+        let mut inner = self.inner.lock().await;
+        inner.ensure_initialized().await?;
+        Ok(inner.log_path.clone().unwrap_or_default())
     }
 }
 
@@ -86,7 +87,6 @@ impl TaskLoggerInner {
         if self.initialized {
             return Ok(());
         }
-        self.initialized = true; // prevent retry loops if it fails
 
         let now = Local::now();
         let timestamp = now.format("%Y%m%d_%H%M%S").to_string();
@@ -134,6 +134,8 @@ impl TaskLoggerInner {
 
         self.file = Some(file);
         self.log_path = Some(log_path);
+
+        self.initialized = true; // Successfully initialized
 
         Ok(())
     }
@@ -196,6 +198,26 @@ pub async fn cleanup_old_logs(log_retention_days: u64) {
 mod tests {
     use super::*;
 
+
+    #[tokio::test]
+    async fn test_task_logger_initialization_failure_retry() {
+        let task_id = "task_fail_123";
+        let task_name = "task_fail_name";
+        let inner = TaskLoggerInner::new(task_id, task_name);
+        assert!(!inner.initialized);
+    }
+
+    #[tokio::test]
+    async fn test_task_logger_path_lazy_init() {
+        let task_name = "LazyInitTest";
+        let task_id = "task_lazy_456";
+        let logger = TaskLogger::new(task_id, task_name);
+
+        let path = logger.log_path_async().await.expect("Should initialize successfully");
+        assert!(path.to_string_lossy().contains("LazyInitTest"));
+        assert!(path.to_string_lossy().contains("task_lazy_456"));
+    }
+
     #[tokio::test]
     async fn test_task_logger_isolation_and_path() {
         let task_name = "Isolation_Test!";
@@ -218,7 +240,7 @@ mod tests {
 
         logger.log("Hello Isolation").await;
 
-        let path = logger.log_path_async().await;
+        let path = logger.log_path_async().await.unwrap();
         let path_str = path.to_string_lossy();
 
         assert!(

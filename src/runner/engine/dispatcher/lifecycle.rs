@@ -76,6 +76,7 @@ pub fn spawn_execution_manager(
                                 if let Some(t) = cfg.tasks.iter_mut().find(|t| t.id == task_id) {
                                     t.last_status = last_status;
                                 }
+                                Ok(())
                             },
                         )
                         .await;
