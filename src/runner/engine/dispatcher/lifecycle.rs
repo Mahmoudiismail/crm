@@ -336,7 +336,10 @@ mod tests_queue {
                 actions: vec![crate::runner::config::ActionSpec::ShellCommand(
                     crate::runner::config::ShellCommandSpec {
                         command: if cfg!(target_os = "windows") {
-                            format!("cmd.exe /C \"echo run >> {} & timeout /t 2 /nobreak > nul\"", marker)
+                            format!(
+                                "cmd.exe /C \"echo run >> {} & timeout /t 2 /nobreak > nul\"",
+                                marker
+                            )
                         } else {
                             format!("bash -c \"echo run >> {}; sleep 2\"", marker)
                         },
