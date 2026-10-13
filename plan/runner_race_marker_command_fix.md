@@ -1,21 +1,20 @@
-# Runner Race Marker Command Fix
+# Runner Race Marker Test Fix
 
-## Finding
-The race regression test currently constructs a compound `cmd.exe /C` command. The runner's `run_shell_command` does not pass the raw command string directly to a shell: it first tokenizes it with `parse_command_args`, then launches non-builtin executables directly. The nested `cmd.exe /C "echo ... & timeout ..."` therefore relies on multiple layers of quote handling and cmd.exe `/C` parsing, making the marker write unreliable. The test's missing marker shows the current command did not produce the expected file.
+## Root cause
+`RunnerConfig::default()` sets `allow_shell_tasks` to `false`. The real duplicate-admission race test creates its config with this default and never enables shell tasks, so the Runner correctly rejects the test's ShellCommand action before the marker command can run. The subsequent missing marker is a consequence of test setup, not proof of a Windows path or quoting failure.
 
 ## Scope
-- Keep the real duplicate-admission concurrency test and exactly-one-execution invariant.
-- Replace the Windows compound `cmd.exe` command with a single `powershell.exe -NoProfile -NonInteractive -Command` invocation that uses `Add-Content -LiteralPath` to write the marker and `Start-Sleep` to keep the process alive long enough for both admissions to race.
-- Escape single quotes in the literal path if necessary, so the PowerShell string remains valid.
-- Keep the Unix command unchanged unless review reveals an equivalent issue.
-- Update `md/OPERATIONS.md` to explain the marker's cross-platform behavior.
+- Explicitly set `cfg.allow_shell_tasks = true` in this test's isolated RunnerConfig so its ShellCommand action is permitted.
+- Keep the test's real concurrent admission requests and exactly-one-execution assertion.
+- Retain the absolute marker path and the Windows PowerShell marker command, which avoid relying on a relative working directory and nested `cmd.exe /C` quoting.
+- Update `md/OPERATIONS.md` to document the actual cause and test setup.
 
 ## Verification
-- Inspect `parse_command_args`, `run_shell_command`, and the regression test together to ensure the PowerShell script is passed as one argument and the path is quoted safely.
-- Repository policy requires INTERNAL Code Review before tests and a final review after implementation. That capability is unavailable in the current environment; do not claim it occurred or run tests in violation of policy.
-- Once the required review is available, run the targeted race test on Windows, then the full CI suite.
+- Code inspection confirms `default_allow_shell_tasks()` returns `false` and the test uses `RunnerConfig::default()`; the test must explicitly enable shell commands to exercise the behavior it intends to test.
+- The INTERNAL Code Review capability required by repository policy is not exposed in the current environment. Do not claim it occurred or run tests in violation of the policy.
+- After required review, run `test_real_duplicate_admission_race` on Windows, then the complete CI suite.
 
 ## Constraints
-- Minimal test-only behavior change; no dependencies or production execution changes.
-- Preserve exactly-one-execution assertion.
+- Keep the change limited to test setup and its diagnostics.
+- Do not weaken the exactly-one-execution invariant or alter production shell-task security defaults.
 - Do not use `git reset`.
