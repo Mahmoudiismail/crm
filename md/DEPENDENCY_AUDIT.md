@@ -67,7 +67,7 @@ This is a configuration review against the current `Cargo.lock` and the public R
 | RUSTSEC-2026-0195 | Same original `quick-xml 0.39.4` dependency path; fixed by the same `wayland-scanner 0.31.11` lockfile update, subject to verification. | Removed from `deny.toml`; confirm with cargo audit/deny and CI. |
 | RUSTSEC-2026-0192 | `Cargo.lock` contains `ttf-parser 0.25.1`; RustSec classifies this advisory as informational/unmaintained, with no fixed version stated. | Keep only as a documented maintenance exception while evaluating a maintained alternative or dependency upgrade. |
 | RUSTSEC-2024-0370 | `Cargo.lock` contains `proc-macro-error 1.0.4`; RustSec classifies it as unmaintained. | Keep only as a documented exception while tracing the transitive build-time dependency and evaluating an upstream upgrade path. |
-| RUSTSEC-2024-0412, -0413, -0415, -0416, -0418, -0419, -0420 | The public RustSec advisory index marks these advisories as withdrawn. | These entries should not be retained as active vulnerability suppressions. Remove them from `deny.toml` after verifying the installed cargo-deny version accepts the cleaned list. |
+| RUSTSEC-2024-0412, -0413, -0415, -0416, -0418, -0419, -0420 | The public RustSec advisory index marks these advisories as withdrawn. | Removed from `deny.toml`; re-run cargo-deny to confirm the current toolchain accepts the configuration. |
 
 ### Required follow-up
 
