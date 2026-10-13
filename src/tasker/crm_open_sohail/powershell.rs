@@ -681,7 +681,8 @@ mod tests {
         std::fs::copy(
             leads_file.path(),
             download_dir.path().join("lead_report_synthetic.csv"),
-        ).unwrap();
+        )
+        .unwrap();
 
         let config_json = r#"{
             "tasks": [{
@@ -695,13 +696,21 @@ mod tests {
                 "exclude_categories": [],
                 "output_file": "unused"
             }]
-        }"#.to_string();
+        }"#
+        .to_string();
         {
             let mut teams_wtr = csv::Writer::from_writer(teams_file.as_file());
-            teams_wtr.write_record(["Team Name", "Receiver Name", "To Emails", "CC"]).unwrap();
-            teams_wtr.write_record([
-                "Synthetic Team", "Synthetic Team", "synthetic-team@example.test", "",
-            ]).unwrap();
+            teams_wtr
+                .write_record(["Team Name", "Receiver Name", "To Emails", "CC"])
+                .unwrap();
+            teams_wtr
+                .write_record([
+                    "Synthetic Team",
+                    "Synthetic Team",
+                    "synthetic-team@example.test",
+                    "",
+                ])
+                .unwrap();
             teams_wtr.flush().unwrap();
         }
 
