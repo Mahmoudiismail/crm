@@ -344,7 +344,7 @@ mod tests_queue {
                     crate::runner::config::ShellCommandSpec {
                         command: if cfg!(target_os = "windows") {
                             format!(
-                                "powershell.exe -NoProfile -NonInteractive -Command \"Add-Content -LiteralPath '{}' -Value run; Start-Sleep -Seconds 2\"",
+                                r#"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -NonInteractive -Command "Add-Content -LiteralPath '{}' -Value run; Start-Sleep -Seconds 2""#,
                                 marker.replace('\'', "''")
                             )
                         } else {
