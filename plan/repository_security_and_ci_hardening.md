@@ -19,3 +19,19 @@ Deleting files from the current tree does not remove historical versions from Gi
 - The INTERNAL Code Review capability is not currently exposed in this environment; do not claim it was run or run tests as a substitute.
 - Preserve the ZIP password exactly as requested.
 - Do not use `git reset`.
+
+
+## Execution status (October 14, 2026)
+
+### Implemented on the branch
+- Removed the tracked contents of `TestingDownloads/` and retained only its README policy. Updated `.gitignore` so local-only data in that directory is not re-added accidentally.
+- Added the `format-approval` Environment to both the main test workflow's format job and the separate manual auto-format workflow.
+- Updated the release workflow to build from `main`, serialize releases by version, reject an existing version tag, and avoid overwriting release assets. The ZIP password remains exactly `123456`, as explicitly requested.
+- Updated the test workflow path filters so release workflow, `.gitignore`, and `deny.toml` changes trigger CI.
+- Updated `md/OPERATIONS.md` and `md/DEPENDENCY_AUDIT.md` with the new operational policy and verified advisory findings.
+
+### Outstanding / blocked
+- The available GitHub write capability blocked the proposed `deny.toml` update. The branch still suppresses RUSTSEC-2026-0194 and RUSTSEC-2026-0195 despite `Cargo.lock` containing vulnerable `quick-xml 0.39.4`, and still lists withdrawn 2024 GTK advisories. These entries need cleanup and the quick-xml dependency path needs a separate, verified upgrade.
+- The release tag-check step currently detects an existing tag but its current shell conditional does not distinguish a failed remote lookup from a missing tag. Strengthen this to fail closed before treating release publishing as complete.
+- Current-tree deletion does not remove the data from Git history. History rewriting has not been performed; coordinate it separately with the repository owner and any clone/fork users.
+- No tests or cargo audit were run because the required INTERNAL Code Review capability is unavailable. Do not treat this branch as verified until the required review is available and CI passes.
