@@ -9,6 +9,7 @@ permissions:
 jobs:
   format:
     name: Format and Auto-fix
+    environment: format-approval
     runs-on: windows-latest
     permissions:
       contents: write
