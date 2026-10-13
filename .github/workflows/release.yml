@@ -65,7 +65,11 @@ jobs:
         run: |
           set -euo pipefail
           TAG="v${VERSION}"
-          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+          TAG_REF="$(git ls-remote --tags origin "refs/tags/${TAG}")" || {
+            echo "Unable to check remote tag state; refusing to publish." >&2
+            exit 1
+          }
+          if [[ -n "$TAG_REF" ]]; then
             echo "Release tag ${TAG} already exists; refusing to overwrite an existing version." >&2
             exit 1
           fi
