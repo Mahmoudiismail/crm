@@ -36,3 +36,10 @@ Deleting files from the current tree does not remove historical versions from Gi
 - The required INTERNAL Code Review capability is not exposed in this environment. Do not run or claim verification until the required review can be performed. No manual self-review is being represented as an equivalent.
 - Current-tree deletion does not remove data from Git history, forks, cached archives, or existing clones. History rewriting has not been performed because it changes commit IDs and needs a coordinated explicit operation. Assess exposure and rotate any credentials found.
 - Keep PR #404 in draft until the required review and verification are complete.
+
+
+## Follow-up: restore test independence after export removal
+
+- [x] Replace the dashboard updater and CRM Open Sohail test helpers' dependency on `TestingDownloads/` with synthetic CSV inputs and an inline minimal tasker configuration.
+- [x] Document the synthetic-fixture requirement in `md/TESTING.md`.
+- [ ] Verify the commit with GitHub Actions; do not claim test success until the workflow completes.
