@@ -341,8 +341,8 @@ mod tests_queue {
                     crate::runner::config::ShellCommandSpec {
                         command: if cfg!(target_os = "windows") {
                             format!(
-                                "cmd.exe /C \"echo run >> {} & timeout /t 2 /nobreak > nul\"",
-                                marker
+                                "powershell.exe -NoProfile -NonInteractive -Command \"Add-Content -LiteralPath '{}' -Value run; Start-Sleep -Seconds 2\"",
+                                marker.replace('\\'', "''")
                             )
                         } else {
                             format!("bash -c \"echo run >> {}; sleep 2\"", marker)
