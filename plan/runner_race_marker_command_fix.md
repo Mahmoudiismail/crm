@@ -28,7 +28,7 @@ The CI Clippy job reports `clippy::field-reassign-with-default` as an error beca
 ### Minimal fix
 Use a struct update initializer instead:
 ```rust
-let cfg = RunnerConfig {
+let mut cfg = RunnerConfig {
     allow_shell_tasks: true,
     ..RunnerConfig::default()
 };
@@ -37,3 +37,7 @@ This preserves all other defaults and keeps shell execution enabled only in this
 
 ### Verification
 The repository requires INTERNAL Code Review before tests. That capability is not available in the current environment, so do not claim review or run tests here. Confirm the updated Clippy and Test Suite CI results on PR #402 after the change.
+
+
+### Follow-up from CI logs
+The first struct-update correction removed the Clippy field-reassignment lint, but CI then reported Rust error E0596 at `cfg.tasks.push(task)` because the binding was immutable. Keep the struct-update initializer and declare the binding `mut`; this is necessary because the test appends its task to the config. The uploaded run shows both Clippy and Test Suite failed at compilation on this same E0596 error, before the test suite could execute.
