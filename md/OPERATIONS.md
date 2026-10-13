@@ -50,29 +50,42 @@ CSV parsing errors encountered by the `tasker` log a ±20 line diagnostic contex
 
 ## CI/CD Pipeline
 
-The CI pipeline uses two workflows:
-- `.github/workflows/auto-format.yml` runs on pull requests targeting `main`. It runs `cargo fmt`, commits and pushes formatting-only Rust changes when needed, and then runs `cargo fmt -- --check`. It requires `contents: write` to push formatting fixes.
-- `.github/workflows/test.yml` is triggered by completion of the `Auto Format` workflow. Its Clippy and test jobs run only when that workflow concludes successfully, and check out the updated PR branch. If formatting, the auto-commit, the push, or the format check fails, both jobs are skipped.
-- The Test workflow also supports `workflow_dispatch` for manually running Clippy and tests against the branch selected in GitHub Actions.
+The automatic pull-request CI runs through `.github/workflows/test.yml`:
+- `Format and Auto-fix` runs first. It runs `cargo fmt`, commits and pushes formatting-only Rust changes when needed, and verifies `cargo fmt -- --check`. It has `contents: write` permission to push formatting fixes.
+- `Clippy Lints` depends on successful formatting and checks out the latest PR branch ref, including any formatting commit made by the first job.
+- `Test Suite` starts after formatting and after Clippy completes. It runs even if Clippy fails, provided formatting succeeded, so both validation results remain visible.
+- If formatting fails, neither Clippy nor Test Suite runs. The separate `.github/workflows/auto-format.yml` is retained for manual `workflow_dispatch` only to avoid racing the integrated PR workflow.
+- The integrated Test workflow runs on pull requests targeting `main` when Rust source files (`**/*.rs`), `Cargo.toml`, `Cargo.lock`, or either CI workflow changes. It also supports manual `workflow_dispatch`.
 
 ### Rust build cache
 
-Clippy and Test Suite run on separate ephemeral Windows runners, so they cannot share an on-disk `target` directory during the same run. `Swatinem/rust-cache` persists build artifacts across workflow runs. Each job uses a distinct cache key (`rust-clippy` and `rust-test`) to avoid competing writes to the same cache and to preserve the artifacts useful to that job. Cargo registry downloads are cached as well. A cache hit reduces repeat downloads and recompilation, but Rust still recompiles artifacts when source files, compiler/toolchain, features, or build flags require it.
+Clippy and Test Suite run on separate ephemeral Windows runners, so they cannot share an on-disk `target` directory directly. Both jobs use `Swatinem/rust-cache@v2` with the additional key `rust-ci` and `cache-on-failure: true`, while retaining the action's default job-specific cache key. This gives Clippy and Test Suite separate cache entries: the same immutable GitHub cache key is not shared between jobs, so a cache hit in Clippy cannot prevent Test Suite from saving its own compiled dependency artifacts. The action can save eligible cache data even when the command fails. Cargo may still compile artifacts when profiles, features, flags, toolchain, or source/dependency fingerprints differ; the cache primarily preserves dependencies and does not cache workspace crates by default. A cache hit therefore reduces repeat downloads and compatible dependency compilation, but does not guarantee a fully incremental build.
+
+The `test_real_duplicate_admission_race` regression test must initialize its isolated `RunnerConfig` with `allow_shell_tasks: true`: shell commands are disabled by default, so leaving the default in this test prevents the marker command from running and causes a misleading missing-marker failure. Use a struct update initializer (`..RunnerConfig::default()`) rather than reassigning a field after `Default::default()`, because Clippy treats `field-reassign-with-default` as an error in CI. The test keeps its absolute marker path and on Windows invokes PowerShell with `Add-Content -LiteralPath` and `Start-Sleep`; it still verifies exactly one execution for concurrent admissions.
 
 ### Manually run CI
 
 1. Open the repository's **Actions** tab.
 2. Select **Test**.
 3. Select **Run workflow**, choose the branch to validate, and start the run.
-4. Check both **Clippy Lints** and **Test Suite** results. A manual dispatch bypasses the Auto Format prerequisite, so run it only on a branch that has already passed formatting.
+4. Check **Format and Auto-fix**, **Clippy Lints**, and **Test Suite** results. Manual runs use the selected branch and follow the same job dependency order.
 
-The CI stages are executed in the following order for automatic pull request validation:
+The CI stages run in this order:
 1. `cargo fmt` and auto-commit changed Rust files, if any
 2. `cargo fmt -- --check`
 3. `cargo clippy --workspace --all-targets --all-features -- -D warnings`
 4. `cargo test --workspace --all-targets --all-features`
 
-GitHub requires the `workflow_run` trigger to be present on the default branch before it can trigger `test.yml`. Therefore, the workflow-gating change must reach `main` before this cross-workflow dependency can govern future pull requests.
+### Rust CI approval gate
+
+The `Test` workflow's `Format and Auto-fix` job references the GitHub Environment `format-approval`. To make the workflow wait for human approval before formatting or pushing formatting changes:
+
+1. Open the repository on GitHub and go to **Settings → Environments**.
+2. Create an environment named exactly `format-approval` (if it does not already exist).
+3. Under **Deployment protection rules**, enable **Required reviewers** and add the intended approver.
+4. Save the environment settings.
+
+When configured, a pull-request or manual workflow run pauses before the `format` job starts. After approval, the existing sequence continues: Format and Auto-fix → Clippy Lints → Test Suite. The YAML reference alone does not configure Required reviewers; verify the Environment settings in GitHub. Availability of Required reviewers for private repositories depends on the repository's GitHub plan.
 
 ## Concurrency
 

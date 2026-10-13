@@ -316,12 +316,19 @@ mod tests_queue {
         let config_file = temp_dir.path().join("runner.json");
         let config_path = config_file.to_str().unwrap().to_string();
 
-        let mut cfg = RunnerConfig::default();
-        let marker = format!(
-            "runner_race_execution_{}_{}.txt",
-            std::process::id(),
-            Utc::now().timestamp_nanos_opt().unwrap_or_default()
-        );
+        let mut cfg = RunnerConfig {
+            allow_shell_tasks: true,
+            ..RunnerConfig::default()
+        };
+        let marker = temp_dir
+            .path()
+            .join(format!(
+                "runner_race_execution_{}_{}.txt",
+                std::process::id(),
+                Utc::now().timestamp_nanos_opt().unwrap_or_default()
+            ))
+            .to_string_lossy()
+            .into_owned();
         let task = RunnerTask {
             id: "race_task".to_string(),
             name: "Race Task".to_string(),
@@ -338,7 +345,7 @@ mod tests_queue {
                         command: if cfg!(target_os = "windows") {
                             format!(
                                 "powershell.exe -NoProfile -NonInteractive -Command \"Add-Content -LiteralPath '{}' -Value run; Start-Sleep -Seconds 2\"",
-                                marker
+                                marker.replace('\'', "''")
                             )
                         } else {
                             format!("bash -c \"echo run >> {}; sleep 2\"", marker)

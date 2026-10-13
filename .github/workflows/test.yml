@@ -1,9 +1,14 @@
 name: Test
 
 on:
-  workflow_run:
-    workflows: ["Auto Format"]
-    types: [completed]
+  pull_request:
+    branches: [main]
+    paths:
+      - '**/*.rs'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/test.yml'
+      - '.github/workflows/auto-format.yml'
   workflow_dispatch:
 
 permissions:
@@ -13,16 +18,57 @@ env:
   RUSTFLAGS: "-Dwarnings"
 
 jobs:
+  format:
+    name: Format and Auto-fix
+    environment: format-approval
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+          components: rustfmt
+
+      - name: Format Rust files
+        run: cargo fmt
+
+      - name: Commit formatting changes when needed
+        shell: bash
+        env:
+          TARGET_BRANCH: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
+        run: |
+          git diff --check
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -u -- '*.rs'
+            git commit -m "style: apply cargo fmt"
+            git push origin "HEAD:${TARGET_BRANCH}"
+          else
+            echo "Rust files are already formatted."
+          fi
+
+      - name: Verify formatting
+        run: cargo fmt -- --check
+
   clippy:
     name: Clippy Lints
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    needs: format
     runs-on: windows-latest
 
     steps:
-      - name: Checkout source
+      - name: Checkout formatted source
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
           persist-credentials: false
 
       - name: Install Rust
@@ -34,21 +80,23 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "rust-clippy"
+          key: "rust-ci"
+          cache-on-failure: true
 
       - name: Run clippy
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
   test:
     name: Test Suite
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    needs: [format, clippy]
+    if: always() && needs.format.result == 'success'
     runs-on: windows-latest
 
     steps:
-      - name: Checkout source
+      - name: Checkout formatted source
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
           persist-credentials: false
 
       - name: Install Rust
@@ -59,7 +107,8 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "rust-test"
+          key: "rust-ci"
+          cache-on-failure: true
 
       - name: Run tests
         run: cargo test --workspace --all-targets --all-features
