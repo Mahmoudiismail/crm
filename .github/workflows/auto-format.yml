@@ -1,8 +1,7 @@
 name: Auto Format
 
 on:
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
