@@ -17,7 +17,7 @@ jobs:
       - name: Checkout PR branch
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
+          ref: ${{ github.ref_name }}
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -31,7 +31,7 @@ jobs:
       - name: Commit formatting changes when needed
         shell: bash
         env:
-          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
+          TARGET_BRANCH: ${{ github.ref_name }}
         run: |
           git diff --check
           if ! git diff --quiet; then
@@ -39,7 +39,7 @@ jobs:
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add -u -- '*.rs'
             git commit -m "style: apply cargo fmt"
-            git push origin "HEAD:${PR_BRANCH}"
+            git push origin "HEAD:${TARGET_BRANCH}"
           else
             echo "Rust files are already formatted."
           fi
