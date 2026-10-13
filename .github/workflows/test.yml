@@ -4,6 +4,7 @@ on:
   workflow_run:
     workflows: ["Auto Format"]
     types: [completed]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -14,14 +15,14 @@ env:
 jobs:
   clippy:
     name: Clippy Lints
-    if: github.event.workflow_run.conclusion == 'success'
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: windows-latest
 
     steps:
-      - name: Checkout formatted PR branch
+      - name: Checkout source
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.workflow_run.head_branch }}
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name }}
           persist-credentials: false
 
       - name: Install Rust
@@ -33,21 +34,21 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "rust-shared-ci"
+          shared-key: "rust-clippy"
 
       - name: Run clippy
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
   test:
     name: Test Suite
-    if: github.event.workflow_run.conclusion == 'success'
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: windows-latest
 
     steps:
-      - name: Checkout formatted PR branch
+      - name: Checkout source
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.workflow_run.head_branch }}
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name }}
           persist-credentials: false
 
       - name: Install Rust
@@ -58,7 +59,7 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "rust-shared-ci"
+          shared-key: "rust-test"
 
       - name: Run tests
         run: cargo test --workspace --all-targets --all-features
