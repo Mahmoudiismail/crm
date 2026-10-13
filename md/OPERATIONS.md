@@ -76,6 +76,17 @@ The CI stages run in this order:
 3. `cargo clippy --workspace --all-targets --all-features -- -D warnings`
 4. `cargo test --workspace --all-targets --all-features`
 
+### Rust CI approval gate
+
+The `Test` workflow's `Format and Auto-fix` job references the GitHub Environment `format-approval`. To make the workflow wait for human approval before formatting or pushing formatting changes:
+
+1. Open the repository on GitHub and go to **Settings → Environments**.
+2. Create an environment named exactly `format-approval` (if it does not already exist).
+3. Under **Deployment protection rules**, enable **Required reviewers** and add the intended approver.
+4. Save the environment settings.
+
+When configured, a pull-request or manual workflow run pauses before the `format` job starts. After approval, the existing sequence continues: Format and Auto-fix → Clippy Lints → Test Suite. The YAML reference alone does not configure Required reviewers; verify the Environment settings in GitHub. Availability of Required reviewers for private repositories depends on the repository's GitHub plan.
+
 ## Concurrency
 
 Task execution is concurrent, with an execution manager enforcing collision prevention rules.
