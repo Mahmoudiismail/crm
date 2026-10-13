@@ -50,13 +50,17 @@ CSV parsing errors encountered by the `tasker` log a ±20 line diagnostic contex
 
 ## CI/CD Pipeline
 
-The test workflow (`.github/workflows/test.yml`) runs on Windows and checks Rust formatting, Clippy, and tests. Its format job runs `cargo fmt` first and commits formatting-only changes to the checked-out branch when needed. Clippy and tests then check out that updated branch so they validate the formatted commit in the same workflow run. The auto-format job requires `contents: write`; the other jobs use read-only permissions. Pushes made with `GITHUB_TOKEN` do not recursively trigger another workflow run, so the current run performs the remaining checks against the updated branch.
+The CI pipeline uses two workflows:
+- `.github/workflows/auto-format.yml` runs first on pull requests targeting `main`. It runs `cargo fmt`, commits and pushes formatting-only Rust changes when needed, and then runs `cargo fmt -- --check`. It requires `contents: write` to push formatting fixes.
+- `.github/workflows/test.yml` is triggered by completion of the `Auto Format` workflow. Its Clippy and test jobs run only when that workflow concludes successfully, and check out the updated PR branch. If formatting, the auto-commit, the push, or the format check fails, the test workflow skips both jobs.
 
 The CI stages are executed in the following order:
 1. `cargo fmt` and auto-commit changed Rust files, if any
 2. `cargo fmt -- --check`
 3. `cargo clippy --workspace --all-targets --all-features -- -D warnings`
 4. `cargo test --workspace --all-targets --all-features`
+
+GitHub requires the `workflow_run` trigger to be present on the default branch before it can trigger `test.yml`. Therefore, the workflow-gating change must reach `main` before this cross-workflow dependency can govern future pull requests.
 
 ## Concurrency
 Task execution is concurrent, with an execution manager enforcing collision prevention rules.
