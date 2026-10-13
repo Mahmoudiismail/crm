@@ -41,6 +41,7 @@ jobs:
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
       BUILD_DATE: ${{ needs.prepare.outputs.build_date }}
+      BINARY_INPUT: ${{ inputs.binary }}
 
     steps:
       - uses: actions/checkout@v7
@@ -52,50 +53,58 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
 
-      - name: List Cache Contents
+      - name: Build and package selected binaries
         shell: bash
         run: |
-          echo "Listing target directory..."
-          find target/ -type f || true
-          echo "Listing cargo registry..."
-          find ~/.cargo/registry/ -type f || true
+          set -euo pipefail
 
-      - name: Build
-        shell: bash
-        run: |
-          if [ "${{ github.event.inputs.binary }}" == "all" ]; then
-            cargo build --release --bin crm --bin runner --bin yasweb --bin wcxx --bin tasker --bin crm_updater
+          ALL_BINS=(crm runner yasweb wcxx tasker crm_updater)
+          if [[ "$BINARY_INPUT" == "all" ]]; then
+            SELECTED_BINS=("${ALL_BINS[@]}")
           else
-            BINS="${{ github.event.inputs.binary }}"
-            IFS=',' read -ra BIN_ARRAY <<< "$BINS"
-            CMD="cargo build --release"
-            for bin in "${BIN_ARRAY[@]}"; do
-              bin=$(echo $bin | xargs)
-              if [ -n "$bin" ]; then
-                CMD="$CMD --bin $bin"
-              fi
-            done
-            eval $CMD
-          fi
+            IFS=',' read -r -a SELECTED_BINS <<< "$BINARY_INPUT"
+            if [[ ${#SELECTED_BINS[@]} -eq 0 ]]; then
+              echo "No binary selected." >&2
+              exit 1
+            fi
 
-      - name: Zip
-        shell: bash
-        run: |
-          cd target/release
-          EXE_FILES=""
-          if [ "${{ github.event.inputs.binary }}" == "all" ]; then
-            EXE_FILES="crm.exe runner.exe yasweb.exe wcxx.exe tasker.exe crm_updater.exe"
-          else
-            BINS="${{ github.event.inputs.binary }}"
-            IFS=',' read -ra BIN_ARRAY <<< "$BINS"
-            for bin in "${BIN_ARRAY[@]}"; do
-              bin=$(echo $bin | xargs)
-              if [ -n "$bin" ]; then
-                EXE_FILES="$EXE_FILES $bin.exe"
-              fi
+            for i in "${!SELECTED_BINS[@]}"; do
+              bin="$(echo "${SELECTED_BINS[$i]}" | xargs)"
+              case "$bin" in
+                crm|runner|yasweb|wcxx|tasker|crm_updater) ;;
+                *)
+                  echo "Unsupported binary: '$bin'. Allowed: ${ALL_BINS[*]}" >&2
+                  exit 1
+                  ;;
+              esac
+              SELECTED_BINS[$i]="$bin"
             done
           fi
-          7z a -p123456 crm_tool_v${{ env.VERSION }}_${{ env.BUILD_DATE }}_windows.zip $EXE_FILES
+
+          # Reject duplicate names to keep the requested selection unambiguous.
+          declare -A SEEN=()
+          for bin in "${SELECTED_BINS[@]}"; do
+            if [[ -n "${SEEN[$bin]+x}" ]]; then
+              echo "Duplicate binary: '$bin'." >&2
+              exit 1
+            fi
+            SEEN[$bin]=1
+          done
+
+          BUILD_ARGS=()
+          EXE_FILES=()
+          for bin in "${SELECTED_BINS[@]}"; do
+            BUILD_ARGS+=(--bin "$bin")
+            EXE_FILES+=("$bin.exe")
+          done
+
+          cargo build --release "${BUILD_ARGS[@]}"
+
+          ARCHIVE="crm_tool_v${VERSION}_${BUILD_DATE}_windows.zip"
+          (
+            cd target/release
+            7z a -p123456 "$ARCHIVE" "${EXE_FILES[@]}"
+          )
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v3
@@ -103,8 +112,8 @@ jobs:
           tag_name: v${{ env.VERSION }}
           name: Release v${{ env.VERSION }}
           body: |
-            Built binaries: ${{ github.event.inputs.binary }}
-            The application was builded in this action
+            Built binaries: ${{ inputs.binary }}
+            The application was built by this workflow.
           draft: false
           prerelease: false
           overwrite_files: true

@@ -52,7 +52,7 @@ jobs:
           shared-key: "rust-shared-ci"
 
       - name: Run clippy
-        run: cargo clippy --workspace --all-targets --all-features
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
   test:
     name: Test Suite
