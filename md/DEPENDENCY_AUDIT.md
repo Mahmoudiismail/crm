@@ -57,7 +57,7 @@ This document provides a reputation and trust audit of the primary dependencies 
 
 ## RustSec advisory-ignore review (October 14, 2026)
 
-This is a configuration review against the current `Cargo.lock` and the public RustSec advisory index. It is not a completed `cargo audit` or `cargo deny` run; the repository-mandated INTERNAL Code Review capability is unavailable in this environment, so runtime/build verification has not been performed here.
+This is a configuration review against the current `Cargo.lock` and the public RustSec advisory index. It is not a completed `cargo audit` or `cargo deny` run; the repository-mandated INTERNAL Code Review capability is unavailable in this environment, so runtime/build verification has not been performed here. The intended `deny.toml` cleanup could not be applied through the available GitHub write capability, so the current branch still contains the old ignore entries for RUSTSEC-2026-0194/-0195 and the withdrawn 2024 GTK advisories. This is an explicit outstanding item, not a completed remediation.
 
 ### Confirmed findings
 
