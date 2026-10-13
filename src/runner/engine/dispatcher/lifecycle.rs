@@ -317,11 +317,15 @@ mod tests_queue {
         let config_path = config_file.to_str().unwrap().to_string();
 
         let mut cfg = RunnerConfig::default();
-        let marker = format!(
-            "runner_race_execution_{}_{}.txt",
-            std::process::id(),
-            Utc::now().timestamp_nanos_opt().unwrap_or_default()
-        );
+        let marker = temp_dir
+            .path()
+            .join(format!(
+                "runner_race_execution_{}_{}.txt",
+                std::process::id(),
+                Utc::now().timestamp_nanos_opt().unwrap_or_default()
+            ))
+            .to_string_lossy()
+            .into_owned();
         let task = RunnerTask {
             id: "race_task".to_string(),
             name: "Race Task".to_string(),
