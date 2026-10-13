@@ -248,6 +248,7 @@ mod tests {
         assert!(contents.contains("retry succeeded"));
         assert!(!contents.contains("first initialization attempt"));
 
+        drop(logger);
         tokio::fs::remove_file(path).await.expect("test log should be removable");
         tokio::fs::remove_dir(&log_dir).await.expect("test log directory should be removable");
     }
