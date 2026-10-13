@@ -317,6 +317,7 @@ mod tests_queue {
         let config_path = config_file.to_str().unwrap().to_string();
 
         let mut cfg = RunnerConfig::default();
+        cfg.allow_shell_tasks = true;
         let marker = temp_dir
             .path()
             .join(format!(
