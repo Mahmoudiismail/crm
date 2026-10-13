@@ -61,7 +61,7 @@ The automatic pull-request CI runs through `.github/workflows/test.yml`:
 
 Clippy and Test Suite run on separate ephemeral Windows runners, so they cannot share an on-disk `target` directory directly. Both jobs use `Swatinem/rust-cache@v2` with the additional key `rust-ci` and `cache-on-failure: true`, while retaining the action's default job-specific cache key. This gives Clippy and Test Suite separate cache entries: the same immutable GitHub cache key is not shared between jobs, so a cache hit in Clippy cannot prevent Test Suite from saving its own compiled dependency artifacts. The action can save eligible cache data even when the command fails. Cargo may still compile artifacts when profiles, features, flags, toolchain, or source/dependency fingerprints differ; the cache primarily preserves dependencies and does not cache workspace crates by default. A cache hit therefore reduces repeat downloads and compatible dependency compilation, but does not guarantee a fully incremental build.
 
-The `test_real_duplicate_admission_race` regression test places its execution marker inside its temporary test directory and uses the absolute path in the shell command. This avoids depending on the child process's working directory when verifying that concurrent admissions produced exactly one execution.
+The `test_real_duplicate_admission_race` regression test places its execution marker inside its temporary test directory and uses an absolute path. On Windows it invokes PowerShell with `Add-Content -LiteralPath` and `Start-Sleep`, avoiding nested `cmd.exe /C` compound-command quoting through the runner's command tokenizer. The test still verifies that concurrent admissions produce exactly one execution.
 
 ### Manually run CI
 
