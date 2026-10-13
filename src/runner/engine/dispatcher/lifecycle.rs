@@ -342,7 +342,7 @@ mod tests_queue {
                         command: if cfg!(target_os = "windows") {
                             format!(
                                 "powershell.exe -NoProfile -NonInteractive -Command \"Add-Content -LiteralPath '{}' -Value run; Start-Sleep -Seconds 2\"",
-                                marker.replace('\\'', "''")
+                                marker.replace('\'', "''")
                             )
                         } else {
                             format!("bash -c \"echo run >> {}; sleep 2\"", marker)
