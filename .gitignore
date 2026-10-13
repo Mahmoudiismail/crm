@@ -19,3 +19,7 @@ greek/
 delayed/
 swim/
 logs/email_payloads/*.html
+
+# Local operational exports and real-world test data must never be committed.
+/TestingDownloads/**
+!/TestingDownloads/README.md
