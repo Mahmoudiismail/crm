@@ -5,7 +5,7 @@ Ensure formatting completes successfully before Clippy and tests begin, make all
 
 ## Scope
 - Put Format and Auto-fix, Clippy Lints, and Test Suite in `.github/workflows/test.yml`.
-- Use job dependencies so Clippy starts only after formatting succeeds and Test Suite starts only after Clippy succeeds.
+- Use job dependencies so Clippy starts only after formatting succeeds and Test Suite starts after Clippy completes, even if Clippy fails, provided formatting succeeded.
 - Have the format job run `cargo fmt`, commit/push formatting changes if needed, and verify `cargo fmt -- --check`.
 - Make downstream jobs checkout the PR branch ref after formatting, so they test any formatting commit created by the format job.
 - Use the same Rust cache shared key for Clippy and tests, with Test Suite depending on Clippy so its runner can restore the cache Clippy saved at job completion.
