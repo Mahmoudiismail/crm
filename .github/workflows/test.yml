@@ -15,13 +15,17 @@ env:
   RUSTFLAGS: "-Dwarnings"
 
 jobs:
-  fmt:
-    name: Format Check
+  format:
+    name: Format and Auto-fix
     runs-on: windows-latest
+    permissions:
+      contents: write
 
     steps:
-      - name: Checkout code
+      - name: Checkout PR branch
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -29,16 +33,36 @@ jobs:
           targets: x86_64-pc-windows-msvc
           components: rustfmt
 
-      - name: Run format check
+      - name: Format Rust files
+        run: cargo fmt
+
+      - name: Commit formatting changes when needed
+        shell: bash
+        run: |
+          git diff --check
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -u -- '*.rs'
+            git commit -m "style: apply cargo fmt"
+            git push origin "HEAD:${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          else
+            echo "Rust files are already formatted."
+          fi
+
+      - name: Verify formatting
         run: cargo fmt -- --check
 
   clippy:
     name: Clippy Lints
     runs-on: windows-latest
+    needs: format
 
     steps:
-      - name: Checkout code
+      - name: Checkout updated branch
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -57,10 +81,13 @@ jobs:
   test:
     name: Test Suite
     runs-on: windows-latest
+    needs: format
 
     steps:
-      - name: Checkout code
+      - name: Checkout updated branch
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
