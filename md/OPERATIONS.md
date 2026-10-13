@@ -23,7 +23,7 @@ If you need to bypass the runner, invoke the apps directly:
 
 **CRM One-Shot:**
 ```bash
-cargo run --bin crm -- --report tickets --config custom_config.json --start-date eomonth --end-date tomorrow --custom-download-folder "C:\temp\downloads"
+cargo run --bin crm -- --report tickets --config custom_config.json --start-date eomonth --end-date tomorrow --custom-download-folder "C:\\temp\\downloads"
 ```
 
 **Tasker Worker:**
@@ -73,7 +73,9 @@ The CI stages are executed in the following order for automatic pull request val
 4. `cargo test --workspace --all-targets --all-features`
 
 ## Concurrency
+
 Task execution is concurrent, with an execution manager enforcing collision prevention rules.
+
 ## Troubleshooting: Runner Startup
 - **Symptom:** Runner process terminates immediately on startup with a `CRITICAL ERROR: Failed to parse existing runner_config.json` message, rather than overwriting it with a blank UI.
 - **Cause:** The `runner_config.json` file contains invalid or corrupted JSON data. The daemon enforces strict parsing on existing configuration files to prevent data loss.
