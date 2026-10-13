@@ -29,9 +29,4 @@ This document tracks testing improvements and technical debt identified during t
 
 ## Synthetic tasker test data
 
-Automated tests for the dashboard updater and CRM Open Sohail must create their input files in temporary directories using synthetic, fictional records. They must not read operational exports from `TestingDownloads/`. This directory is reserved for local-only operational files, which are excluded from version control. When extending these tests, keep fixtures minimal but representative of the CSV headers and behavior being exercised.
-
-
-## Synthetic tasker test data
-
-Automated tests for the dashboard updater and CRM Open Sohail create input files in temporary directories using synthetic, fictional records. They must not read operational exports from `TestingDownloads/`. That directory is reserved for local-only operational files excluded from version control. Keep test inputs minimal but representative of the CSV headers and behavior being exercised.
+The shared CSV integration-test fixture in `tests/support/tasker/csv.rs` generates fictional users, assignments, ticket reports, lead reports, team mappings, and task configuration in temporary files/directories. Tests must not load operational exports from `TestingDownloads/`. Email sending is disabled in this fixture; use reserved `.invalid` addresses. Keep fixture records minimal but representative of the CSV headers and behaviors under test.
