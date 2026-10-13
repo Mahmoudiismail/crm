@@ -101,10 +101,10 @@ jobs:
           cargo build --release "${BUILD_ARGS[@]}"
 
           ARCHIVE="crm_tool_v${VERSION}_${BUILD_DATE}_windows.zip"
-          7z a -p123456 "$ARCHIVE" "${EXE_FILES[@]}" -w"$(pwd)/target/release"
-
-          # Keep the archive in the release directory for the upload steps.
-          mv "$ARCHIVE" target/release/
+          (
+            cd target/release
+            7z a -p123456 "$ARCHIVE" "${EXE_FILES[@]}"
+          )
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v3
