@@ -59,7 +59,9 @@ The automatic pull-request CI runs through `.github/workflows/test.yml`:
 
 ### Rust build cache
 
-Clippy and Test Suite run on separate ephemeral Windows runners and cannot share an on-disk `target` directory directly. Both jobs use the same `Swatinem/rust-cache` shared key (`rust-ci`). Test Suite waits for Clippy to finish, allowing the Clippy job to save its cache before the test runner restores it. The cache includes Cargo registry downloads and eligible build artifacts; Cargo may still compile artifacts when profiles, features, flags, toolchain, or source/dependency fingerprints differ. Cache use reduces repeat downloads and recompilation but does not guarantee a fully incremental build.
+Clippy and Test Suite run on separate ephemeral Windows runners and cannot share an on-disk `target` directory directly. Both jobs use the same `Swatinem/rust-cache` shared key (`rust-ci`) and set `cache-on-failure: true`, allowing the action to save eligible cache data even when the command fails. Test Suite waits for Clippy to finish, allowing the Clippy job to save its cache before the test runner restores it. The cache includes Cargo registry downloads and eligible build artifacts; Cargo may still compile artifacts when profiles, features, flags, toolchain, or source/dependency fingerprints differ. Cache use reduces repeat downloads and recompilation but does not guarantee a fully incremental build.
+
+The `test_real_duplicate_admission_race` regression test places its execution marker inside its temporary test directory and uses the absolute path in the shell command. This avoids depending on the child process's working directory when verifying that concurrent admissions produced exactly one execution.
 
 ### Manually run CI
 
