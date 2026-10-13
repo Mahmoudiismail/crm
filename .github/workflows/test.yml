@@ -9,6 +9,9 @@ on:
       - 'Cargo.lock'
       - '.github/workflows/test.yml'
       - '.github/workflows/auto-format.yml'
+      - '.github/workflows/release.yml'
+      - '.gitignore'
+      - 'deny.toml'
   workflow_dispatch:
 
 permissions:
