@@ -80,6 +80,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: "rust-ci"
+          cache-on-failure: true
 
       - name: Run clippy
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
@@ -106,6 +107,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: "rust-ci"
+          cache-on-failure: true
 
       - name: Run tests
         run: cargo test --workspace --all-targets --all-features
