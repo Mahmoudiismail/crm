@@ -50,17 +50,27 @@ CSV parsing errors encountered by the `tasker` log a ±20 line diagnostic contex
 
 ## CI/CD Pipeline
 
-The CI pipeline uses two workflows:
-- `.github/workflows/auto-format.yml` runs first on pull requests targeting `main`. It runs `cargo fmt`, commits and pushes formatting-only Rust changes when needed, and then runs `cargo fmt -- --check`. It requires `contents: write` to push formatting fixes.
-- `.github/workflows/test.yml` is triggered by completion of the `Auto Format` workflow. Its Clippy and test jobs run only when that workflow concludes successfully, and check out the updated PR branch. If formatting, the auto-commit, the push, or the format check fails, the test workflow skips both jobs.
+The CI pipeline uses two independent workflows:
+- `.github/workflows/auto-format.yml` runs on pull requests targeting `main`. It runs `cargo fmt`, commits and pushes formatting-only Rust changes when needed, and then runs `cargo fmt -- --check`. It requires `contents: write` to push formatting fixes.
+- `.github/workflows/test.yml` runs directly on pull requests targeting `main` when Rust source files (`**/*.rs`), `Cargo.toml`, `Cargo.lock`, or the test workflow itself change. Clippy and Test Suite check out the pull request head SHA, so their results appear as checks on that pull request. If Auto Format pushes a formatting commit, the pull-request update triggers validation for the new head too.
+- The Test workflow also supports `workflow_dispatch` for manually running Clippy and tests against the selected branch. Manual runs are separate from pull-request checks.
 
-The CI stages are executed in the following order:
+### Rust build cache
+
+Clippy and Test Suite run on separate ephemeral Windows runners, so they cannot share an on-disk `target` directory during the same run. `Swatinem/rust-cache` persists build artifacts across workflow runs. Each job uses a distinct cache key (`rust-clippy` and `rust-test`) to avoid competing writes to the same cache and to preserve the artifacts useful to that job. Cargo registry downloads are cached as well. A cache hit reduces repeat downloads and recompilation, but Rust still recompiles artifacts when source files, compiler/toolchain, features, or build flags require it.
+
+### Manually run CI
+
+1. Open the repository's **Actions** tab.
+2. Select **Test**.
+3. Select **Run workflow**, choose the branch to validate, and start the run.
+4. Check both **Clippy Lints** and **Test Suite** results. A manual dispatch runs against the selected branch and is separate from pull-request checks.
+
+The CI stages are executed in the following order for automatic pull request validation:
 1. `cargo fmt` and auto-commit changed Rust files, if any
 2. `cargo fmt -- --check`
 3. `cargo clippy --workspace --all-targets --all-features -- -D warnings`
 4. `cargo test --workspace --all-targets --all-features`
-
-GitHub requires the `workflow_run` trigger to be present on the default branch before it can trigger `test.yml`. Therefore, the workflow-gating change must reach `main` before this cross-workflow dependency can govern future pull requests.
 
 ## Concurrency
 Task execution is concurrent, with an execution manager enforcing collision prevention rules.
