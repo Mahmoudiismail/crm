@@ -38,6 +38,7 @@ pub fn setup_test_dataset() -> TestDataset {
         "T-1001,alice,Inquiry,Website,General,2026-04-10 10:00:00,DSFH,DSFH,Open,Fictional call center ticket\n",
         "T-1002,bob,Booking,General,Incomplete Reservation,2026-04-11 11:00:00,DSFH,DSFH,Open,Fictional exception ticket\n",
         "T-1003,alice,Inquiry,Website,General,2026-04-12 12:00:00,DSFH,DSFH,Open,Fictional duplicate-source ticket\n",
+        "T-1004,preauth_agent,Authorization,Review,Pre-Authorization,2026-04-13 13:00:00,DSFH,DSFH,Open,Fictional pre-authorization ticket\n",
     );
     std::fs::write(
         download_dir.path().join("ticket_report_synthetic.csv"),
