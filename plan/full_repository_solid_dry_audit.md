@@ -17,6 +17,12 @@ Implementation authorized by the user's explicit **START**. Work is being perfor
 - **Documentation drift (P2):** `md/ARCHITECTURE.md` says shared CSV readers use `.flexible(true)`, but current `src/utils.rs::build_csv_reader_builder` does not enable flexible parsing and has a strict-width regression test. Update the stale statement when the relevant docs are next touched; no runtime change is needed.
 - These are findings from the continuing scan, not included in the two current fetcher fixes. They remain unimplemented in this pass so the four requested items can be reviewed distinctly.
 
+## Follow-up fixes from continued scan
+- **YASWEB false-success handling (implemented):** `evaluate_automation_step` now rejects malformed JSON, missing/non-string statuses, and every status except explicit `SUCCESS` or `ERROR`. Added focused tests for malformed JSON, missing status, unknown status, success, and error. Updated `md/YASWEB_DEV.md` to state this contract.
+- **Signed URL disclosure in downloader (implemented):** `download_csv` no longer logs the signed URL, includes it in transport errors, or includes arbitrary HTTP response bodies in failures. Transport errors use `reqwest::Error::without_url()`; HTTP failures report only report key and status.
+- **CSV documentation drift (implemented):** `md/ARCHITECTURE.md` now documents the strict default reader and requires callers to opt in explicitly when flexible row widths are intended.
+- These fixes have been committed on the audit branch but remain unverified by local Cargo commands; CI approval is still required before claiming tests/formatting/Clippy/build passed.
+
 ## Current verification status
 - A draft PR was opened to run the repository's pull-request CI: [PR #410](https://github.com/Mahmoudiismail/crm/pull/410).
 - PR #410: https://github.com/Mahmoudiismail/crm/pull/410 remains draft and unmerged.
