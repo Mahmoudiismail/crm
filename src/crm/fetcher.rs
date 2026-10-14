@@ -449,8 +449,7 @@ pub async fn fetch_reports(
                     )
                     .await?;
 
-                    process_users_base64_payload(&v, &key, &download_dir, download_csv)
-                        .await?;
+                    process_users_base64_payload(&v, &key, &download_dir, download_csv).await?;
 
                     Ok((key, v))
                 }
@@ -728,8 +727,13 @@ async fn fetch_and_update_incomplete_reservations(
         }
 
         let text: String = res.text().await?;
-        let parsed: IncompleteReservationResponse = serde_json::from_str(&text)
-            .with_context(|| format!("Failed to parse incomplete-reservation response from {}", endpoint))?;
+        let parsed: IncompleteReservationResponse =
+            serde_json::from_str(&text).with_context(|| {
+                format!(
+                    "Failed to parse incomplete-reservation response from {}",
+                    endpoint
+                )
+            })?;
 
         for item in parsed.data.items {
             all_ids.push(item.id);
@@ -823,8 +827,12 @@ async fn fetch_and_update_incomplete_reservations(
     }
 
     let text = res.text().await?;
-    let parsed: Value = serde_json::from_str(&text)
-        .with_context(|| format!("Failed to parse bulk-update response from {}", patch_endpoint))?;
+    let parsed: Value = serde_json::from_str(&text).with_context(|| {
+        format!(
+            "Failed to parse bulk-update response from {}",
+            patch_endpoint
+        )
+    })?;
 
     Ok(parsed)
 }
@@ -1612,9 +1620,10 @@ async fn test_users_base64_processing_failure_is_propagated() {
     let result = process_users_base64_payload(&value, "users", dir.path(), true).await;
 
     assert!(result.is_err());
-    assert!(
-        result.unwrap_err().to_string().contains("Failed to process users Base64 payload")
-    );
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("Failed to process users Base64 payload"));
 }
 
 #[tokio::test]
@@ -1637,8 +1646,13 @@ async fn test_fetch_error_waits_for_download_processor_to_finish() {
     ));
     tokio::task::yield_now().await;
 
-    assert!(!finish_task.is_finished(), "fetch error must wait for processor");
-    release_tx.send(()).expect("download processor is still waiting");
+    assert!(
+        !finish_task.is_finished(),
+        "fetch error must wait for processor"
+    );
+    release_tx
+        .send(())
+        .expect("download processor is still waiting");
 
     let result = finish_task.await.expect("finish task should not panic");
     assert!(result.is_err());

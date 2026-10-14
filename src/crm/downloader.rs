@@ -38,7 +38,11 @@ pub async fn download_csv(
         Ok(r) => r,
         Err(e) => {
             let _ = tokio::fs::remove_file(&temp_dest_path).await;
-            anyhow::bail!("Failed to GET CSV for report {}: {}", report_key, e.without_url());
+            anyhow::bail!(
+                "Failed to GET CSV for report {}: {}",
+                report_key,
+                e.without_url()
+            );
         }
     };
 
