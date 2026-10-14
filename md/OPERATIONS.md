@@ -1,5 +1,21 @@
 # Operations Guide
 
+## Repository security and release operations
+
+### Local exports and test data
+`TestingDownloads/` is for local-only operational exports/configuration and is excluded from Git except for its policy README. Do not commit real employee/customer data, ticket/lead reports, assignment exports, email addresses, or production configuration. If tests need fixtures, use small synthetic fixtures with fictional values. Removing a file from the current tree does not remove it from Git history, forks, cached archives, or existing clones.
+
+If real personal or confidential data was public, treat it as a potential exposure: assess the contents and access window, follow the organization's incident-response process, and rotate any credentials found. History cleanup must be coordinated separately because rewriting history changes commit IDs and affects clones/forks.
+
+### CI formatting approval
+Both `.github/workflows/test.yml` and `.github/workflows/auto-format.yml` reference the `format-approval` Environment before running formatting jobs. The repository Environment must have **Required reviewers** configured in GitHub Settings for the pause to be enforced. Keep any future workflow that can commit/push formatting changes behind the same gate.
+
+### Release publishing
+The release workflow resolves `main` once in its prepare job and passes that exact commit SHA to the build job, so the version and binaries are built from the same source snapshot. It fails if the remote tag lookup cannot be completed or if a `vVERSION` tag already exists. A version tag is intended to be immutable; publish a new `Cargo.toml` version for new binaries instead of overwriting a previous release. The ZIP password setting is intentionally unchanged by this hardening change, per the repository owner's instruction. The fixed password is not secret and should not be treated as a security boundary.
+
+### RustSec audit
+See `md/DEPENDENCY_AUDIT.md` for the October 2026 review. The lockfile dependency path was updated from `wayland-scanner 0.31.10` to `0.31.11` so it can resolve `quick-xml >=0.41.0`; this edit still requires `cargo check --locked`, `cargo audit`, and `cargo deny` verification. Do not treat `deny.toml` ignores as proof that an advisory is not applicable.
+
 ## Managing the Runner
 
 The `runner` application sits in the system tray (on Windows) and exposes a web GUI at `http://127.0.0.1:8787`.

@@ -646,6 +646,7 @@ mod tests {
     }
 
     pub(crate) fn setup_test_dataset() -> TestDataset {
+        // Synthetic data keeps automated tests independent of local operational exports.
         let users_file = tempfile::NamedTempFile::new().unwrap();
         let assignments_file = tempfile::NamedTempFile::new().unwrap();
         let download_dir = tempfile::tempdir().unwrap();
@@ -653,39 +654,50 @@ mod tests {
         let leads_file = tempfile::NamedTempFile::new().unwrap();
         let teams_file = tempfile::NamedTempFile::new().unwrap();
 
-        let agents_csv = std::fs::read_to_string("TestingDownloads/users.csv").unwrap();
-        std::fs::write(users_file.path(), agents_csv).unwrap();
+        std::fs::write(
+            users_file.path(),
+            "UserDepartmentName / Team Name,cognito_username\nSynthetic Team,synthetic.agent@example.test\n",
+        ).unwrap();
+        std::fs::write(
+            assignments_file.path(),
+            "type,subtype,Category,Auto agent/team assignment\nSynthetic Type,Synthetic Subtype,Synthetic Category,Synthetic Team\n",
+        ).unwrap();
 
-        let assignment_csv =
-            std::fs::read_to_string("TestingDownloads/assignement settings.csv").unwrap();
-        std::fs::write(assignments_file.path(), assignment_csv).unwrap();
-
-        std::fs::copy(
-            "TestingDownloads/ticket_report_1783634497568.csv",
-            download_dir.path().join("ticket_report_1783634497568.csv"),
-        )
-        .unwrap();
-        std::fs::copy(
-            "TestingDownloads/ticket_report_1783634532999.csv",
-            download_dir.path().join("ticket_report_1783634532999.csv"),
-        )
-        .unwrap();
-        std::fs::copy(
-            "TestingDownloads/ticket_report_1783634535708.csv",
-            download_dir.path().join("ticket_report_1783634535708.csv"),
-        )
-        .unwrap();
-
-        let leads_bytes = std::fs::read("TestingDownloads/lead_report_1783627642439.csv").unwrap();
-        let leads_csv = String::from_utf8_lossy(&leads_bytes);
-        std::fs::write(leads_file.path(), leads_csv.as_bytes()).unwrap();
+        let ticket_csv = concat!(
+            "Ticket Id,Assignee,Ticket Type,Ticket Sub-Type,Ticket Category,Branch,Created At\n",
+            "SYNTHETIC-001,synthetic.agent@example.test,Synthetic Type,Synthetic Subtype,Synthetic Category,Synthetic Branch,16-Apr-2026 10:00 AM\n"
+        );
+        for filename in [
+            "ticket_report_synthetic_1.csv",
+            "ticket_report_synthetic_2.csv",
+            "ticket_report_synthetic_3.csv",
+        ] {
+            std::fs::write(download_dir.path().join(filename), ticket_csv).unwrap();
+        }
+        std::fs::write(
+            leads_file.path(),
+            "Lead Id,Contact Name,Branch,Status,Created At\nSYNTHETIC-LEAD-001,Example Contact,Synthetic Branch,new,16-Apr-2026\n",
+        ).unwrap();
         std::fs::copy(
             leads_file.path(),
-            download_dir.path().join("lead_report_1783627642439.csv"),
+            download_dir.path().join("lead_report_synthetic.csv"),
         )
         .unwrap();
 
-        let config_json = std::fs::read_to_string("TestingDownloads/tasker_config.json").unwrap();
+        let config_json = r#"{
+            "tasks": [{
+                "type": "csv_analysis",
+                "download_path": "unused",
+                "users_file": "unused",
+                "assignment_settings_file": "unused",
+                "minutes_ago": 60,
+                "start_date": "15-Apr-2026",
+                "exclude_branches": [],
+                "exclude_categories": [],
+                "output_file": "unused"
+            }]
+        }"#
+        .to_string();
         {
             let mut teams_wtr = csv::Writer::from_writer(teams_file.as_file());
             teams_wtr
@@ -693,22 +705,11 @@ mod tests {
                 .unwrap();
             teams_wtr
                 .write_record([
-                    "Incomplete Reservation",
-                    "Incomplete Reservation Team",
-                    "inc@example.com",
-                    "cc@example.com",
-                ])
-                .unwrap();
-            teams_wtr
-                .write_record([
-                    "PRE-AUTHORIZATION",
-                    "Pre-Auth Team",
-                    "preauth@example.com",
+                    "Synthetic Team",
+                    "Synthetic Team",
+                    "synthetic-team@example.test",
                     "",
                 ])
-                .unwrap();
-            teams_wtr
-                .write_record(["Call Center", "Call Center Team", "cc@example.com", ""])
                 .unwrap();
             teams_wtr.flush().unwrap();
         }

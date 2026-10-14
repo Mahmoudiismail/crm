@@ -1,4 +1,4 @@
-# Dependency Reputation Audit (April 2026)
+# Dependency Reputation Audit (historical notes: April 2026; advisory review: October 14, 2026)
 
 This document provides a reputation and trust audit of the primary dependencies used in the CRM Tool. All identified crates are well-established, high-reputation components of the Rust ecosystem.
 
@@ -55,5 +55,34 @@ This document provides a reputation and trust audit of the primary dependencies 
 | **tray-icon** | 0.22 | **High Reputation.** Developed by the Tauri team for tray management. |
 | **muda** | 0.17.2 | **High Reputation.** Developed by the Tauri team for menu management. |
 
-## Verdict
-The project uses a conservative and high-quality dependency stack. All libraries are actively maintained and widely vetted by the global Rust community.
+## RustSec advisory-ignore review (October 14, 2026)
+
+This is a configuration review against the current `Cargo.lock` and the public RustSec advisory index. It is not a completed `cargo audit` or `cargo deny` run; the repository-mandated INTERNAL Code Review capability is unavailable in this environment, so runtime/build verification has not been performed here.
+
+### Confirmed findings
+
+| Advisory | Current evidence | Disposition |
+| --- | --- | --- |
+| RUSTSEC-2026-0194 | The original lockfile's `wayland-scanner 0.31.10` required `quick-xml 0.39.4`; this branch updates it to `wayland-scanner 0.31.11`, which requires `quick-xml ^0.41`. | The vulnerable lockfile path was updated to the fixed `quick-xml 0.41.0` family. Still requires cargo audit/deny and CI verification. |
+| RUSTSEC-2026-0195 | Same original `quick-xml 0.39.4` dependency path; fixed by the same `wayland-scanner 0.31.11` lockfile update, subject to verification. | Removed from `deny.toml`; confirm with cargo audit/deny and CI. |
+| RUSTSEC-2026-0192 | `Cargo.lock` contains `ttf-parser 0.25.1`; RustSec classifies this advisory as informational/unmaintained, with no fixed version stated. | Keep only as a documented maintenance exception while evaluating a maintained alternative or dependency upgrade. |
+| RUSTSEC-2024-0370 | `Cargo.lock` contains `proc-macro-error 1.0.4`; RustSec classifies it as unmaintained. | Keep only as a documented exception while tracing the transitive build-time dependency and evaluating an upstream upgrade path. |
+| RUSTSEC-2024-0412, -0413, -0415, -0416, -0418, -0419, -0420 | The public RustSec advisory index marks these advisories as withdrawn. | Removed from `deny.toml`; re-run cargo-deny to confirm the current toolchain accepts the configuration. |
+
+### Required follow-up
+
+1. Verify the lockfile update from `wayland-scanner 0.31.10` to `0.31.11` using `cargo check --locked` and `cargo tree -i quick-xml`; ensure no `quick-xml 0.39.4` remains.
+2. Run `cargo deny check advisories` and `cargo audit` on the resulting lockfile.
+3. Revisit the informational ignores after confirming which dependency paths bring in `ttf-parser` and `proc-macro-error`.
+4. Refresh the version table above after the next dependency audit; the April 2026 version table below is historical and must not be read as a current inventory. The lockfile edit has not yet been validated by Cargo.
+
+### Sources
+
+- RustSec advisory index: https://rustsec.org/advisories/
+- RUSTSEC-2026-0194: https://rustsec.org/advisories/RUSTSEC-2026-0194.html
+- RUSTSEC-2026-0195: https://rustsec.org/advisories/RUSTSEC-2026-0195.html
+- RUSTSEC-2026-0192: https://rustsec.org/advisories/RUSTSEC-2026-0192.html
+- RUSTSEC-2024-0370: https://rustsec.org/advisories/RUSTSEC-2024-0370.html
+
+## Historical verdict (April 2026)
+The dependency reputation notes above were written in April 2026 and are not proof that all dependencies are currently maintained or vulnerability-free.

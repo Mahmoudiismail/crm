@@ -25,3 +25,8 @@ This document tracks testing improvements and technical debt identified during t
 ## CI Recommendations
 * Ensure `cargo bench --workspace` is optionally run or gated for performance regressions. It's safe to run in CI but takes significant time. Consider adding it to a weekly cron or manual trigger rather than PR gating.
 * The tests are highly deterministic and can run in parallel quickly, the `test.yml` workflow looks robust right now.
+
+
+## Synthetic tasker test data
+
+The shared CSV integration-test fixture in `tests/support/tasker/csv.rs` generates fictional users, assignments, ticket reports, lead reports, team mappings, and task configuration in temporary files/directories. Tests must not load operational exports from `TestingDownloads/`. Email sending is disabled in this fixture; use reserved `.invalid` addresses. Keep fixture records minimal but representative of the CSV headers and behaviors under test, including an explicitly mapped PRE-AUTHORIZATION ticket and a lead with an accepted status (`New` or `Follow-up`) when those outputs are asserted.
