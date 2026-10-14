@@ -1,0 +1,66 @@
+# Runner Simplification — V1 Plan
+
+## Status
+Plan only. No implementation or tests are authorized until the user explicitly replies with `START`.
+
+## Baseline
+- Repository: `Mahmoudiismail/crm`
+- Starting commit: `907581a5233b58005668fc5c2fc18651cea46d60`
+- Branch: `runner-simplification-plan-oct-2026`
+- Scope: Runner application only.
+- Guiding rule: smallest correct change; no new framework, no broad architectural rewrite, and no file splitting just to reduce line counts.
+
+## Goals
+1. Remove confirmed duplication in scheduling/preview code without changing intended behavior.
+2. Make custom/open-ended preview behavior explicit and correct.
+3. Reduce repeated working-hours parsing/weekday matching only where a small shared helper is clearly simpler.
+4. Avoid unrelated refactors in the scheduler, task dispatcher, pipeline, templates, and JavaScript.
+
+## Proposed scope
+
+### Phase 1 — Scheduling preview correctness and clarity
+File: `src/runner/config/schedule.rs`
+
+- Remove the three identical consecutive `effective_period_end_utc` definitions and redundant `#[allow(unused_variables)]` attributes, retaining one definition.
+- Review the custom period with no explicit end date. Verify the ordering of the `period_end_utc < now` early-continue check against the intended open-ended preview horizon; adjust only if the current ordering prevents the configured horizon from being used.
+- Review the 1,000-step guard for interval preview. Preserve it unless evidence demonstrates incorrect user-visible truncation; if behavior is intentionally bounded, document or test that boundary rather than removing the guard speculatively.
+- Keep schedule calculations in Rust and keep the GUI preview routed through the existing Rust endpoint.
+
+### Phase 2 — Minimal duplication reduction
+Files: `src/runner/config/schedule.rs`, `src/runner/gui/forms.rs`
+
+- Consider a small shared helper for weekday-range matching used by `is_within_working_hours` and `is_working_day`, preserving their different time/day semantics.
+- Consider one small helper for parsing inline working-hours definitions in `parse_schedules_text`, where the same `day=start-end` parsing repeats across schedule variants.
+- Do not redesign the schedule representation or add a generic parsing framework.
+- Preserve existing configuration compatibility, working-hours profile behavior, and accepted schedule syntax.
+
+### Explicitly out of scope for this V1
+- Splitting `templates.rs` or `forms.js` into multiple files.
+- Rewriting `task_commands.rs`, `pipeline.rs`, or process/shell execution.
+- Dependency changes, public API expansion, new architecture layers, broad formatting-only edits, or unrelated fixes.
+- Changes to other applications.
+
+These may be reconsidered after this small change is reviewed and its actual benefit is clear.
+
+## Verification plan (after explicit START only)
+1. Inspect existing tests and add focused regression coverage for any behavior changed, especially:
+   - open-ended Custom period preview after the current day's end;
+   - preview upper-bound behavior and result limit;
+   - weekday ranges and working-hours matching if the shared helper is changed;
+   - schedule parsing for inline working-hours data if parsing is refactored.
+2. Run `cargo fmt -- --check`.
+3. Run focused Runner tests, then `cargo test`.
+4. Run Clippy with warnings denied, using the repository's documented command/configuration.
+5. Inspect the final diff and confirm no unrelated application files changed.
+6. Update the relevant `md/` documentation for every code/config/dependency/script change, as required by `AGENTS.md`.
+7. Report exact commands, results, and any limitations.
+
+## Mandatory review gate and limitation
+The project workflow requires an actual `INTERNAL Code Review` before tests and again after fixes/final diff. That review has not been performed, and the available tool inventory did not expose that capability. Do not claim it occurred or run tests in violation of this gate. Before implementation proceeds, resolve access to the required review capability or explicitly revise the project workflow.
+
+## Acceptance criteria
+- Only confirmed, in-scope simplifications are implemented.
+- Intended preview/scheduling behavior and configuration compatibility are preserved.
+- Focused regression tests cover changed behavior.
+- Required documentation and review gates are satisfied.
+- No implementation starts until the user explicitly replies `START`.
