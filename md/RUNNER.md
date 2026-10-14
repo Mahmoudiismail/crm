@@ -17,7 +17,7 @@ Step-level application locking is managed by `AppLockManager`:
 - Multiple non-concurrent applications required within a step are sorted deterministically and acquired in order to prevent deadlocks.
 - Semaphores are held for the step duration and automatically released on step completion, error, or cancellation.
 - Tasks waiting for an application lock remain in `running_task_ids` with `waiting_for_app` status reported in the GUI.
-- **Duplicate Task Prevention**: The Execution Manager is the authoritative admission point. It serializes queue commands and rejects a task ID that is already queued or running, preventing overlapping executions even when concurrent callers read the same earlier status snapshot. The regression test verifies the actual number of task process executions, not only a transient queue/status snapshot.
+- **Duplicate Task Prevention**: The Execution Manager is the authoritative admission point. It serializes queue commands and rejects a task ID that is already queued or running, preventing overlapping executions even when concurrent callers read the same earlier status snapshot. The regression test verifies the actual number of task process executions, not only a transient queue/status snapshot. On Windows, the race test passes its PowerShell script using `-EncodedCommand` so the shell argument parser cannot strip the script's quoting.
 
 
 ## Runner V1 Regression Verification
