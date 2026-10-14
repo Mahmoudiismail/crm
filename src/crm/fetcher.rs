@@ -70,6 +70,40 @@ impl FetchContext {
     }
 }
 
+async fn process_users_base64_payload(
+    value: &Value,
+    report_key: &str,
+    download_dir: &Path,
+    download_csv: bool,
+) -> Result<()> {
+    if !download_csv {
+        return Ok(());
+    }
+
+    if let Some(payload) = value.get("base64_data").and_then(Value::as_str) {
+        crate::crm::downloader::process_base64_payload(payload, report_key, download_dir)
+            .await
+            .with_context(|| format!("Failed to process {} Base64 payload", report_key))?;
+    }
+
+    Ok(())
+}
+
+async fn finish_fetch_and_downloads<T>(
+    task_result: Result<T>,
+    download_processor: tokio::task::JoinHandle<Result<()>>,
+) -> Result<T> {
+    // Always join the processor before propagating a report-fetch error.
+    let download_result = download_processor.await;
+    let task_result = task_result?;
+
+    match download_result {
+        Ok(Ok(())) => Ok(task_result),
+        Ok(Err(e)) => Err(e).context("A download failed"),
+        Err(e) => Err(e).context("Download processor panicked"),
+    }
+}
+
 // ──────────────────────────────────────────────────────────────
 // Report definitions
 // ──────────────────────────────────────────────────────────────
@@ -415,19 +449,8 @@ pub async fn fetch_reports(
                     )
                     .await?;
 
-                    if download_csv {
-                        if let Some(base64_val) = v.get("base64_data").and_then(|b| b.as_str()) {
-                            if let Err(e) = crate::crm::downloader::process_base64_payload(
-                                base64_val,
-                                &key,
-                                &download_dir,
-                            )
-                            .await
-                            {
-                                error!("Failed to process {} Base64 payload: {:#}", key, e);
-                            }
-                        }
-                    }
+                    process_users_base64_payload(&v, &key, &download_dir, download_csv)
+                        .await?;
 
                     Ok((key, v))
                 }
@@ -515,19 +538,14 @@ pub async fn fetch_reports(
     // Drop the sender so the download_processor can finish when all downloads are queued
     drop(download_tx);
 
-    // Process up to 4 concurrent top-level fetch streams
-    let task_results: Vec<(String, Value)> = futures_util::stream::iter(futures)
+    // Process up to 4 concurrent top-level fetch streams. Preserve the result until
+    // the download processor has finished, even when a fetch future fails.
+    let task_results = futures_util::stream::iter(futures)
         .buffer_unordered(4)
-        .try_collect()
-        .await?;
+        .try_collect::<Vec<(String, Value)>>()
+        .await;
 
-    // Await all downloads to complete
-    let download_result = download_processor.await;
-    match download_result {
-        Ok(Err(e)) => anyhow::bail!("A download failed: {}", e),
-        Err(e) => anyhow::bail!("Download processor panicked: {}", e),
-        _ => {}
-    }
+    let task_results = finish_fetch_and_downloads(task_results, download_processor).await?;
 
     if let Some(days) = retention_days {
         if days > 0 {
@@ -1584,6 +1602,41 @@ mod tests {
         assert!(!redacted.contains("super_secret_token"));
         assert!(!redacted.contains("session_id=12345"));
     }
+}
+
+#[tokio::test]
+async fn test_users_base64_processing_failure_is_propagated() {
+    let dir = tempfile::tempdir().expect("temporary directory");
+    let value = serde_json::json!({"base64_data": "not-valid-base64"});
+
+    let result = process_users_base64_payload(&value, "users", dir.path(), true).await;
+
+    assert!(result.is_err());
+    assert!(
+        result.unwrap_err().to_string().contains("Failed to process users Base64 payload")
+    );
+}
+
+#[tokio::test]
+async fn test_fetch_error_waits_for_download_processor_to_finish() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    let processor_finished = Arc::new(AtomicBool::new(false));
+    let finished = Arc::clone(&processor_finished);
+    let processor = tokio::spawn(async move {
+        finished.store(true, Ordering::SeqCst);
+        Ok(())
+    });
+
+    let result: Result<()> = finish_fetch_and_downloads(
+        Err(anyhow::anyhow!("report fetch failed")),
+        processor,
+    )
+    .await;
+
+    assert!(result.is_err());
+    assert!(processor_finished.load(Ordering::SeqCst));
+    assert_eq!(result.unwrap_err().to_string(), "report fetch failed");
 }
 
 #[test]
