@@ -805,13 +805,29 @@ async fn test_concurrent_period_execution_overlapping() {
         let log_content = std::fs::read_to_string(&period_log)
             .unwrap_or_else(|error| panic!("Failed to read {period_log:?}: {error}"));
         let lines: Vec<&str> = log_content.lines().collect();
-        assert_eq!(lines.len(), 2, "Log output for {start_date}:\n{log_content}");
-        assert!(lines[0].starts_with("START"), "Missing START for {start_date}");
-        assert!(lines[1].starts_with("FINISH"), "Missing FINISH for {start_date}");
+        assert_eq!(
+            lines.len(),
+            2,
+            "Log output for {start_date}:\n{log_content}"
+        );
+        assert!(
+            lines[0].starts_with("START"),
+            "Missing START for {start_date}"
+        );
+        assert!(
+            lines[1].starts_with("FINISH"),
+            "Missing FINISH for {start_date}"
+        );
         assert!(lines[0].contains(start_date));
         assert!(lines[1].contains(start_date));
-        starts += lines.iter().filter(|line| line.starts_with("START")).count();
-        finishes += lines.iter().filter(|line| line.starts_with("FINISH")).count();
+        starts += lines
+            .iter()
+            .filter(|line| line.starts_with("START"))
+            .count();
+        finishes += lines
+            .iter()
+            .filter(|line| line.starts_with("FINISH"))
+            .count();
     }
     assert_eq!(starts, 2);
     assert_eq!(finishes, 2);
