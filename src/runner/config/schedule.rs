@@ -1866,8 +1866,7 @@ mod tests_due_now {
             end_date_arg: None,
         };
 
-        let upcoming =
-            generate_upcoming_executions_for_app(&task, &app_spec, now, 10).unwrap();
+        let upcoming = generate_upcoming_executions_for_app(&task, &app_spec, now, 10).unwrap();
 
         assert!(
             !upcoming.is_empty(),
