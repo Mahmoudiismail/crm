@@ -4,7 +4,10 @@ use crm_tool::yasweb::browser::reports::generate_step6_js;
 fn test_generate_step6_js_normal_timeout() {
     let js = generate_step6_js(60);
     // Should inject 60 as timeoutMinutes param
-    assert!(js.contains("const deadline = Date.now() + timeoutMinutes * 60 * 1000;"));
+    assert!(js.contains("const timeoutMs = timeoutMinutes * 60 * 1000;"));
+    assert!(js.contains("const startDeadline = Date.now() + timeoutMs;"));
+    assert!(js.contains("const finishDeadline = Date.now() + timeoutMs;"));
+    assert!(js.contains("const exportDeadline = Date.now() + timeoutMs;"));
     assert!(js.contains("})(60);"));
     assert!(!js.contains("for(let i=0; i<1200; i++)")); // Should not have the hardcoded 120s limit
 }
