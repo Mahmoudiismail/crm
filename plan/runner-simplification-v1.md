@@ -1,7 +1,7 @@
 # Runner Simplification — V1 Plan
 
 ## Status
-Plan only. No implementation or tests are authorized until the user explicitly replies with `START`.
+Implementation authorized by the user with explicit `START`. Scope remains Runner-only and limited to the approved plan.
 
 ## Baseline
 - Repository: `Mahmoudiismail/crm`
@@ -55,8 +55,8 @@ These may be reconsidered after this small change is reviewed and its actual ben
 6. Update the relevant `md/` documentation for every code/config/dependency/script change, as required by `AGENTS.md`.
 7. Report exact commands, results, and any limitations.
 
-## Mandatory review gate and limitation
-The project workflow requires an actual `INTERNAL Code Review` before tests and again after fixes/final diff. That review has not been performed, and the available tool inventory did not expose that capability. Do not claim it occurred or run tests in violation of this gate. Before implementation proceeds, resolve access to the required review capability or explicitly revise the project workflow.
+## Review workflow
+The repository's `AGENTS.md` now makes INTERNAL Code Review mandatory when Jules or Claude is used. This work is being performed directly, not through Jules or Claude, so use careful manual review before tests and again on the final diff.
 
 ## Acceptance criteria
 - Only confirmed, in-scope simplifications are implemented.
