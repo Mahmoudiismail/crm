@@ -78,11 +78,13 @@ Operational impact:
 - A split report returns an array of successful API payloads instead of a single payload.
 - Non-signed-URL failures are not retried by this splitter.
 
-## Concurrency
+## Concurrency and failure handling
 
-- Each report or call batch runs in its own `tokio::spawn` task.
-- Completion is coordinated with `join_all`.
-- Partial failures do not block other tasks.
+- Up to four top-level report-fetch futures are processed concurrently.
+- Recursive date-range splits run concurrently, and signed-URL downloads are processed with up to six downloads in flight.
+- The users report's Base64 CSV processing errors are propagated instead of being logged and treated as success.
+- The fetcher waits for the download processor to finish before returning a report-fetch error, so queued downloads are not left running detached from the failed request.
+- A fetch or download failure causes the overall fetch operation to return an error; it is not represented as a successful report result.
 
 ## Result Shape
 
