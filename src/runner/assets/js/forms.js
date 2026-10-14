@@ -1143,6 +1143,9 @@
       };
       populateDateArgSelect(startArgSelect, startArgSelect && startArgSelect.dataset.selectedArg, "start-date");
       populateDateArgSelect(endArgSelect, endArgSelect && endArgSelect.dataset.selectedArg, "end-date");
+      if (startArgSelect && endArgSelect && startArgSelect.value && startArgSelect.value === endArgSelect.value) {
+        endArgSelect.value = "";
+      }
 
       const updateMappedDateArguments = () => {
         const mappedNames = new Set(
