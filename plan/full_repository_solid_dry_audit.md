@@ -1,7 +1,11 @@
 # Full Repository SOLID & DRY Audit — V1
 
 ## Status
-Planning only. No implementation is authorized until the user explicitly sends **START**.
+Implementation authorized by the user's explicit **START**. Work is being performed on `audit/solid-dry-v1-oct-2026`; do not merge into `main` without separate authorization.
+
+## Confirmed finding and change in progress
+- **Security/privacy — CRM incomplete-reservation payload logging:** `src/crm/fetcher.rs` logged the full serialized `task/bulk-ticket` PATCH body at DEBUG. The body contains operational ticket IDs, and project logging defaults can persist DEBUG/TRACE-level records. Change the log to report only the number of IDs and explicitly omit the body. Update `md/FETCHER.md` accordingly.
+- Other historical audit findings must be rechecked against current code; do not duplicate fixes already present (for example, current Tasker task errors are propagated with `bail!`, and the current download processor is awaited and propagates failures).
 
 ## Repository and constraints
 - Repository: `Mahmoudiismail/crm`
