@@ -124,3 +124,7 @@ To minimize performance overhead from reference counting when setting up many as
 ## Logging and sensitive operational data
 
 The incomplete-reservation bulk PATCH request logs its endpoint, redacted headers, and ticket count for diagnostics. The request body is intentionally omitted because it contains ticket IDs. Do not add full payloads or ticket identifiers to persistent logs; preserve useful aggregate diagnostics instead.
+
+## Response-body logging policy
+
+CRM response bodies are not written to logs or embedded in HTTP failure messages because they may contain signed download URLs, report data, or ticket identifiers. Diagnostics retain the endpoint, HTTP status, response size, and redacted headers. The signed-URL range-splitting path retains only the required `failed to generate signed url` marker so its retry behavior remains intact. Bulk incomplete-reservation PATCH logs include the number of ticket IDs, never the IDs or full request body.
