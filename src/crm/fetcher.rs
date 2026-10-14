@@ -1667,7 +1667,10 @@ fn test_sanitized_response_error_omits_body() {
         reqwest::StatusCode::INTERNAL_SERVER_ERROR,
         "sample response data",
     );
-    assert_eq!(err.to_string(), "sample-endpoint returned HTTP 500");
+    assert_eq!(
+        err.to_string(),
+        "sample-endpoint returned HTTP 500 Internal Server Error"
+    );
 }
 
 #[test]
