@@ -117,7 +117,20 @@
   function addScheduleRow() {
     const row = document.createElement("div");
     const existingSelect = document.querySelector(".schedule-wh-profile");
-    const profileOptions = existingSelect ? existingSelect.innerHTML : "<option value=''>Custom (Use days below)</option>";
+    let profileOptions = existingSelect ? existingSelect.innerHTML : "<option value=''>Custom (Use days below)</option>";
+    if (!existingSelect && scheduleRows) {
+      try {
+        const profiles = JSON.parse(scheduleRows.getAttribute("data-profiles") || "[]");
+        profiles.forEach((profile) => {
+          const option = document.createElement("option");
+          option.value = profile.id;
+          option.textContent = profile.name;
+          profileOptions += option.outerHTML;
+        });
+      } catch (err) {
+        console.error("Failed to load working hours profiles", err);
+      }
+    }
     row.className = "flex flex-col gap-3 p-4 border border-gray-200 rounded-md bg-white";
     row.innerHTML = `
       <div class='flex flex-wrap items-end gap-3 w-full'>
