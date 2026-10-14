@@ -885,6 +885,12 @@ pub fn generate_upcoming_executions_for_app(
             .unwrap_or_else(|| Utc::now().with_timezone(&Local))
             .with_timezone(&Utc);
 
+        // A one-shot task with no schedule has no future recurrence to preview.
+        // Do not turn an entirely historical data period into an execution at `now`.
+        if task.schedules.is_empty() && period_end_utc < now {
+            continue;
+        }
+
         let effective_period_end_utc = if period_index + 1 == period_count {
             period_end_utc.max(now + chrono::Duration::days(365 * 5))
         } else {
