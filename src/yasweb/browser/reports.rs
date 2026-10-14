@@ -803,80 +803,135 @@ pub fn generate_step6_js(timeout_minutes: u64) -> String {
     format!(
         r#"
         (async function(timeoutMinutes) {{
-            function sleep(ms) {{ return new Promise(r => setTimeout(r, ms)); }}
-            let logs = [];
-            let doc = document.querySelector('iframe').contentWindow.document;
+            function sleep(ms) {{ return new Promise(resolve => setTimeout(resolve, ms)); }}
+            const logs = [];
+            const timeoutMs = timeoutMinutes * 60 * 1000;
+            const pollMs = 10 * 1000;
+            const startedAt = Date.now();
 
-            logs.push("Waiting for report generation loader to finish...");
-            let reportGenerated = false;
+            function getReportDocument() {{
+                const iframe = document.querySelector('iframe');
+                try {{
+                    return iframe && iframe.contentWindow ? iframe.contentWindow.document : null;
+                }} catch (_) {{
+                    return null;
+                }}
+            }}
 
-            // Deadline in milliseconds
-            const deadline = Date.now() + timeoutMinutes * 60 * 1000;
-            let iterations = 0;
+            function isVisible(element) {{
+                if (!element) return false;
+                const view = element.ownerDocument && element.ownerDocument.defaultView;
+                if (!view) return false;
+                const style = view.getComputedStyle(element);
+                return style.display !== 'none' &&
+                    style.visibility !== 'hidden' &&
+                    style.opacity !== '0' &&
+                    element.getClientRects().length > 0;
+            }}
 
-            while (Date.now() <= deadline) {{
-                let loader = document.querySelector('#loader_svg, .loading-screen-wrapper, mat-progress-bar, .dx-loadpanel') || doc.querySelector('#loader_svg, .loading-screen-wrapper, mat-progress-bar, .dx-loadpanel');
-                let isLoaderVisible = false;
-                if (loader) {{
-                    let style = loader.ownerDocument.defaultView.getComputedStyle(loader);
-                    if (style.display !== 'none' && style.opacity !== '0' && style.visibility !== 'hidden') {{
-                        isLoaderVisible = true;
+            function findVisibleLoader() {{
+                const selector = '#loader_svg, .loading-screen-wrapper, mat-progress-bar, .dx-loadpanel';
+                const reportDoc = getReportDocument();
+                const docs = [document];
+                if (reportDoc && reportDoc !== document) docs.push(reportDoc);
+                for (const doc of docs) {{
+                    for (const element of doc.querySelectorAll(selector)) {{
+                        if (isVisible(element)) return element;
+                    }}
+                }}
+                return null;
+            }}
+
+            function findExportButton() {{
+                const reportDoc = getReportDocument();
+                if (!reportDoc) return null;
+
+                let button = reportDoc.querySelector('div[aria-label="Export"]');
+                if (isVisible(button)) return button;
+
+                for (const element of reportDoc.querySelectorAll('.dx-button-text')) {{
+                    if (element.textContent.trim().toLowerCase() === 'export') {{
+                        button = element.closest('div[role="button"], button');
+                        if (isVisible(button)) return button;
                     }}
                 }}
 
-                // If it's not visible, report is generated
-                if (!isLoaderVisible) {{
-                    reportGenerated = true;
+                for (const element of reportDoc.querySelectorAll('button, div[role="button"]')) {{
+                    if (element.textContent.trim().toLowerCase() === 'export' && isVisible(element)) {{
+                        return element;
+                    }}
+                }}
+                return null;
+            }}
+
+            // Phase 1: wait until generation actually starts. An initially hidden/missing
+            // loader must not be interpreted as a completed report.
+            logs.push("Waiting for report generation to start...");
+            const startDeadline = Date.now() + timeoutMs;
+            let loaderSeen = false;
+            while (Date.now() <= startDeadline) {{
+                if (findVisibleLoader()) {{
+                    loaderSeen = true;
+                    logs.push("Report loading detected.");
                     break;
                 }}
-
-                await sleep(100);
-                if (iterations % 50 === 0) logs.push("Still loading...");
-                iterations++;
+                await sleep(pollMs);
+            }}
+            if (!loaderSeen) {{
+                return JSON.stringify({{ status: "ERROR", msg: "Report loading did not start before timeout.", logs }});
             }}
 
-            // If the time ran out and it's still not generated
-            if (!reportGenerated) return JSON.stringify({{ status: "ERROR", msg: "Report generation timeout.", logs }});
-
-            await sleep(200); // UI breathing room
-
-            logs.push("Looking for Export button...");
-            let exportBtn = null;
-            const deadlineExportBtn = Date.now() + timeoutMinutes * 60 * 1000;
-            while (Date.now() <= deadlineExportBtn) {{
-                exportBtn = doc.querySelector('div[aria-label="Export"]');
-                if (exportBtn && exportBtn.offsetParent !== null) break;
-
-                let dxButtons = doc.querySelectorAll('.dx-button-text');
-                for (let b of dxButtons) {{
-                    if (b.textContent.trim() === 'Export') {{
-                        exportBtn = b.closest('div[role="button"]');
-                        break;
-                    }}
+            // Phase 2: wait until generation finishes, polling every 10 seconds.
+            logs.push("Waiting for report generation to finish...");
+            const finishDeadline = Date.now() + timeoutMs;
+            while (Date.now() <= finishDeadline) {{
+                if (!findVisibleLoader()) {{
+                    logs.push("Report loading finished.");
+                    break;
                 }}
-                if (exportBtn && exportBtn.offsetParent !== null) break;
-
-                let allButtons = doc.querySelectorAll('button, div[role="button"], span');
-                for (let b of allButtons) {{
-                    if (b.textContent.trim() === 'Export' && b.offsetParent !== null) {{
-                        exportBtn = b;
-                        break;
-                    }}
-                }}
-                if (exportBtn && exportBtn.offsetParent !== null) break;
-                await sleep(200);
+                await sleep(pollMs);
+            }}
+            if (findVisibleLoader()) {{
+                return JSON.stringify({{ status: "ERROR", msg: "Report generation timeout.", logs }});
             }}
 
-            if (!exportBtn) return JSON.stringify({{ status: "ERROR", msg: "Export button not found.", logs }});
+            // Phase 3: allow the report UI to expose Export for up to the configured timeout.
+            logs.push("Waiting for Export button...");
+            const exportDeadline = Date.now() + timeoutMs;
+            let exportButton = null;
+            while (Date.now() <= exportDeadline) {{
+                exportButton = findExportButton();
+                if (exportButton) break;
+                await sleep(pollMs);
+            }}
+            if (!exportButton) {{
+                return JSON.stringify({{ status: "ERROR", msg: "Export button not found before timeout.", logs }});
+            }}
 
-            exportBtn.click();
-            logs.push("Clicked Export button");
+            exportButton.click();
+            logs.push("Clicked Export button.");
             return JSON.stringify({{ status: "SUCCESS", logs }});
         }})({});
         "#,
         timeout_minutes
     )
 }
+
+#[cfg(test)]
+mod step6_wait_tests {
+    use super::generate_step6_js;
+
+    #[test]
+    fn report_waits_for_loading_to_start_finish_and_export() {
+        let js = generate_step6_js(7);
+        assert!(js.contains("Waiting for report generation to start"));
+        assert!(js.contains("Waiting for report generation to finish"));
+        assert!(js.contains("Waiting for Export button"));
+        assert!(js.contains("const pollMs = 10 * 1000"));
+        assert!(js.contains("})(7);"));
+    }
+}
+
 pub fn generate_mis_reports_wait_js(timeout_seconds: u64) -> String {
     format!(
         r#"
