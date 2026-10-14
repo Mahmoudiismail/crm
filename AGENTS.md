@@ -29,11 +29,11 @@ This section establishes mandatory rules for all future non-trivial work session
    - If a plan omits a requirement that exists in the original request, do not silently drop that requirement.
    - Raise the discrepancy and resolve it before implementation.
 
-4. **Mandatory INTERNAL Code Review before testing**
-   - For every non-trivial PR, use the INTERNAL Code Review capability before running the test suite.
-   - This must be an actual use of the internal Code Review capability, not merely a manual self-review.
-   - Review the complete relevant diff and repository context.
-   - Fix every valid finding before proceeding to testing.
+4. **INTERNAL Code Review when using Jules or Claude**
+   - The mandatory INTERNAL Code Review gate applies when Jules or Claude is used to perform implementation/review work.
+   - When using Jules or Claude for a non-trivial PR, perform an actual INTERNAL Code Review before running the test suite; manual self-review alone does not satisfy this gate.
+   - Review the complete relevant diff and repository context, and fix every valid finding before testing.
+   - When neither Jules nor Claude is being used, this repository rule does not require the INTERNAL Code Review capability; perform a careful manual review instead.
 
 5. **Testing does not replace code review**
    - Passing tests or CI is not sufficient evidence that the implementation is correct or complete.
@@ -52,10 +52,11 @@ This section establishes mandatory rules for all future non-trivial work session
    - Then rerun the complete required verification suite.
    - Do not stop after the first successful test run if fixes were made afterward.
 
-9. **Mandatory FINAL INTERNAL Code Review**
-   - After implementation, testing, and all fixes are complete, use the INTERNAL Code Review capability again on the final diff.
-   - Fix every valid finding from the final internal Code Review.
+9. **Final review when using Jules or Claude**
+   - When Jules or Claude is used, run INTERNAL Code Review again after implementation, testing, and fixes are complete.
+   - Fix every valid finding from that final review.
    - Rerun affected verification whenever the final review causes code or test changes.
+   - When neither Jules nor Claude is used, perform a careful manual review of the final diff instead.
 
 10. **No unsupported completion claims**
    - Never claim tests, CI, or another verification step passed unless it was actually executed and passed.
