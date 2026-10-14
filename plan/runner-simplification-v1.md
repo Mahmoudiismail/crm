@@ -21,8 +21,8 @@ Implementation authorized by the user with explicit `START`. Scope remains Runne
 ### Phase 1 — Scheduling preview correctness and clarity
 File: `src/runner/config/schedule.rs`
 
-- Remove the three identical consecutive `effective_period_end_utc` definitions and redundant `#[allow(unused_variables)]` attributes, retaining one definition.
-- Review the custom period with no explicit end date. Verify the ordering of the `period_end_utc < now` early-continue check against the intended open-ended preview horizon; adjust only if the current ordering prevents the configured horizon from being used.
+- Done: removed the three identical consecutive `effective_period_end_utc` definitions and redundant `#[allow(unused_variables)]` attributes, retaining one definition.
+- Done: the early-continue guard now compares against `effective_period_end_utc`, so an open-ended Custom period uses its five-year preview horizon. Added a focused regression test.
 - Review the 1,000-step guard for interval preview. Preserve it unless evidence demonstrates incorrect user-visible truncation; if behavior is intentionally bounded, document or test that boundary rather than removing the guard speculatively.
 - Keep schedule calculations in Rust and keep the GUI preview routed through the existing Rust endpoint.
 
@@ -52,8 +52,8 @@ These may be reconsidered after this small change is reviewed and its actual ben
 3. Run focused Runner tests, then `cargo test`.
 4. Run Clippy with warnings denied, using the repository's documented command/configuration.
 5. Inspect the final diff and confirm no unrelated application files changed.
-6. Update the relevant `md/` documentation for every code/config/dependency/script change, as required by `AGENTS.md`.
-7. Report exact commands, results, and any limitations.
+6. Done: updated `md/RUNNER.md` to explain the open-ended preview horizon. Review the final diff and documentation together.
+7. Report exact commands, results, and any limitations. The current execution environment cannot reach GitHub or run the repository's Cargo toolchain against this branch; do not claim test results until a CI run or local run confirms them.
 
 ## Review workflow
 The repository's `AGENTS.md` now makes INTERNAL Code Review mandatory when Jules or Claude is used. This work is being performed directly, not through Jules or Claude, so use careful manual review before tests and again on the final diff.
