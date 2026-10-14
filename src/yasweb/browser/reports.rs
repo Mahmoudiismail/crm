@@ -712,7 +712,7 @@ pub fn navigate_and_run_report(
 }
 
 fn generate_step1_js(report_type: &str) -> String {
-    // Avoid serializing the entire iframe DOM and running broad XPath queries on every retry.
+    // Avoid repeatedly serializing the full iframe markup or running broad XPath queries.
     // The report page can contain a large Angular DOM, so inspect only the relevant controls.
     let template = r#"
         (async function(reportType) {
