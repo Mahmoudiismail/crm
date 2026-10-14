@@ -9,7 +9,6 @@ The audit remediation was merged into `main` through [PR #410](https://github.co
 - **P1 — Download processor could outlive a failed report fetch (fixed and merged in PR #410):** `try_collect().await?` returned early before awaiting the spawned download processor. The fetch result is now retained, the processor is always joined, and only then is the fetch error propagated. A focused async test verifies that the processor has completed before a fetch error returns.
 - **DRY/documentation:** Consolidated the fetcher logging rule and corrected concurrency/failure documentation in `md/FETCHER.md`.
 - Historical findings were checked against current code before being considered: current Tasker task errors are propagated with `bail!`, and the CRM download processor reports exhausted download retries as errors. These are not re-reported as open defects.
-- **Unbounded download queue — assessed, no change yet:** the queue can accumulate tasks, but naively switching to bounded `mpsc` plus awaited sends is unsafe with the current `try_for_each_concurrent` processor: the processor exits on its first unrecoverable download error, which could stop draining the queue and leave producers blocked on `send().await`. Keep the current channel until the processor is changed to drain queued tasks while recording a failure and a behavioral backpressure test can verify no deadlock/lost task. This remains a resource-risk candidate, not a confirmed production defect.
 
 ## Additional findings now remediated
 - YASWEB false-success handling, signed download URL disclosure, and stale CSV-reader documentation were addressed in PR #410 and are merged into `main`. Their focused regression tests and documentation updates are included in the merged changes.
@@ -25,6 +24,9 @@ The audit remediation was merged into `main` through [PR #410](https://github.co
 - The final PR-head CI run [38648046753](https://github.com/Mahmoudiismail/crm/actions/runs/38648046753) passed on head commit `c44a58bbc098c5bc4fbed75f21400b4cfbe7726d`: **Format and Auto-fix**, **Clippy Lints**, and **Test Suite** all succeeded.
 - The earlier run [38643230918](https://github.com/Mahmoudiismail/crm/actions/runs/38643230918) failed one test because the expected sanitized HTTP status text was incomplete; commit `c44a58b` corrected the expectation, and the final PR-head run passed afterward.
 - Verification qualification: the successful run was on the PR head before merge. At the time this status was updated, no independent CI run on merge commit `b493602a6cc6e20f91ee3070ea1224217f783975` was found. Therefore this plan does not claim a separate post-merge CI run.
+
+## Deferred risks — not changed in PR #410
+- **Unbounded download queue:** the queue can accumulate tasks, but naively switching to bounded `mpsc` plus awaited sends is unsafe with the current `try_for_each_concurrent` processor: the processor exits on its first unrecoverable download error, which could stop draining the queue and leave producers blocked on `send().await`. Keep the current channel until the processor can drain queued tasks while recording a failure and a behavioral backpressure test verifies no deadlock or lost task. This remains a resource-risk candidate, not a confirmed production defect, and was not changed by PR #410.
 
 ## Repository and constraints
 - Repository: `Mahmoudiismail/crm`
