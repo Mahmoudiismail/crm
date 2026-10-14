@@ -120,3 +120,7 @@ Unit tests validate:
 ## Performance Optimization
 
 To minimize performance overhead from reference counting when setting up many asynchronous batch tasks, task context variables (`token`, `base_url`, `email`, `account_id`, `application_id`, `tz`) are consolidated into a single `FetchContext` struct, requiring only one `Arc` wrapper to be cloned per spawned task.
+
+## Logging and sensitive operational data
+
+The incomplete-reservation bulk PATCH request logs its endpoint, redacted headers, and ticket count for diagnostics. The request body is intentionally omitted because it contains ticket IDs. Do not add full payloads or ticket identifiers to persistent logs; preserve useful aggregate diagnostics instead.
