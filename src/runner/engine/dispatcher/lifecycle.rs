@@ -420,9 +420,21 @@ mod tests_queue {
         tokio::time::sleep(Duration::from_secs(5)).await;
 
         let marker_path = std::path::PathBuf::from(&marker);
-        let executions = tokio::fs::read_to_string(&marker_path)
-            .await
-            .expect("task should have written its execution marker");
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+        let executions = loop {
+            match tokio::fs::read_to_string(&marker_path).await {
+                Ok(contents) => break contents,
+                Err(error)
+                    if error.kind() == std::io::ErrorKind::NotFound
+                        && tokio::time::Instant::now() < deadline =>
+                {
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                }
+                Err(error) => {
+                    panic!("task should have written its execution marker: {error}");
+                }
+            }
+        };
         let _ = tokio::fs::remove_file(&marker_path).await;
 
         assert_eq!(
