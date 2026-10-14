@@ -12,7 +12,6 @@ on:
 permissions:
   contents: write
 
-# The history CSV is a shared repository file; serialize runs to avoid lost updates.
 concurrency:
   group: release-build-history
   cancel-in-progress: false
@@ -21,98 +20,52 @@ jobs:
   prepare:
     name: Prepare Build Info
     runs-on: ubuntu-latest
-
     outputs:
       version: ${{ steps.vars.outputs.version }}
       build_date: ${{ steps.vars.outputs.build_date }}
       source_sha: ${{ steps.vars.outputs.source_sha }}
-
+      started_at: ${{ steps.vars.outputs.started_at }}
     steps:
       - uses: actions/checkout@v7
         with:
           ref: main
-
       - id: vars
         shell: bash
         run: |
           set -euo pipefail
+          STARTED_AT=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
           VERSION=$(grep '^version =' Cargo.toml | head -n1 | awk -F '"' '{print $2}')
           BUILD_DATE=$(date -u +'%Y%m%d_%H%M%S')
           SOURCE_SHA=$(git rev-parse HEAD)
-
+          echo "started_at=$STARTED_AT" >> "$GITHUB_OUTPUT"
+          echo "build_date=$BUILD_DATE" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
           if [[ -z "$VERSION" ]]; then
             echo "Unable to determine package version from Cargo.toml." >&2
             exit 1
           fi
-
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "build_date=$BUILD_DATE" >> "$GITHUB_OUTPUT"
-          echo "source_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
 
   release:
     name: Build & Release
     needs: prepare
+    if: always() && needs.prepare.result == 'success'
     runs-on: windows-latest
-
+    outputs:
+      build_status: ${{ steps.summary.outputs.build_status }}
+      release_status: ${{ steps.summary.outputs.release_status }}
+      failure_reason: ${{ steps.summary.outputs.failure_reason }}
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
       BUILD_DATE: ${{ needs.prepare.outputs.build_date }}
-      SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
       BINARY_INPUT: ${{ inputs.binary }}
-
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.source_sha }}
           fetch-depth: 0
-
-      - name: Record release attempt
-        id: record_start
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const path = "plan/v1-release-build-history.csv";
-            const quote = (value) => '"' + String(value ?? "").replace(/"/g, '""').replace(/[\r\n]+/g, " ") + '"';
-            const row = [
-              new Date().toISOString(),
-              context.runId,
-              context.runAttempt,
-              process.env.SOURCE_SHA,
-              process.env.VERSION,
-              process.env.BINARY_INPUT,
-              "in_progress",
-              "not_started",
-              ""
-            ].map(quote).join(",");
-
-            const { data } = await github.rest.repos.getContent({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              path,
-              ref: "main"
-            });
-            if (Array.isArray(data) || data.type !== "file") {
-              throw new Error("Release history path is not a file.");
-            }
-
-            const content = Buffer.from(data.content, "base64").toString("utf8");
-            const marker = `,"${context.runId}","${context.runAttempt}",`;
-            if (content.split(/\r?\n/).some(line => line.includes(marker))) {
-              throw new Error("This workflow attempt is already recorded.");
-            }
-            const updated = content.replace(/\s*$/, "") + "\n" + row + "\n";
-            await github.rest.repos.updateFile({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              path,
-              message: `chore(release): record attempt ${context.runId}.${context.runAttempt}`,
-              content: Buffer.from(updated, "utf8").toString("base64"),
-              sha: data.sha,
-              branch: "main"
-            });
-
       - name: Reject an existing version tag
-        id: reject_tag
+        id: tag_guard
         shell: bash
         run: |
           set -euo pipefail
@@ -125,20 +78,19 @@ jobs:
             echo "Release tag ${TAG} already exists; refusing to overwrite an existing version." >&2
             exit 1
           fi
-
       - uses: dtolnay/rust-toolchain@stable
+        if: success()
         with:
           targets: x86_64-pc-windows-msvc
-
       - name: Rust Cache
+        if: success()
         uses: Swatinem/rust-cache@v2
-
       - name: Build and package selected binaries
         id: build
+        if: success()
         shell: bash
         run: |
           set -euo pipefail
-
           ALL_BINS=(crm runner yasweb wcxx tasker crm_updater)
           if [[ "$BINARY_INPUT" == "all" ]]; then
             SELECTED_BINS=("${ALL_BINS[@]}")
@@ -148,7 +100,6 @@ jobs:
               echo "No binary selected." >&2
               exit 1
             fi
-
             for i in "${!SELECTED_BINS[@]}"; do
               bin="$(echo "${SELECTED_BINS[$i]}" | xargs)"
               case "$bin" in
@@ -161,7 +112,6 @@ jobs:
               SELECTED_BINS[$i]="$bin"
             done
           fi
-
           declare -A SEEN=()
           for bin in "${SELECTED_BINS[@]}"; do
             if [[ -n "${SEEN[$bin]+x}" ]]; then
@@ -170,24 +120,21 @@ jobs:
             fi
             SEEN[$bin]=1
           done
-
           BUILD_ARGS=()
           EXE_FILES=()
           for bin in "${SELECTED_BINS[@]}"; do
             BUILD_ARGS+=(--bin "$bin")
             EXE_FILES+=("$bin.exe")
           done
-
           cargo build --release "${BUILD_ARGS[@]}"
-
           ARCHIVE="crm_tool_v${VERSION}_${BUILD_DATE}_windows.zip"
           (
             cd target/release
             7z a -p123456 "$ARCHIVE" "${EXE_FILES[@]}"
           )
-
       - name: Publish GitHub Release
         id: publish
+        if: success()
         uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ env.VERSION }}
@@ -202,71 +149,115 @@ jobs:
           files: target/release/crm_tool_v${{ env.VERSION }}_${{ env.BUILD_DATE }}_windows.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Upload Artifact
+        if: success()
         uses: actions/upload-artifact@v7
         with:
           name: crm_tool_windows_zip
           path: target/release/crm_tool_v${{ env.VERSION }}_${{ env.BUILD_DATE }}_windows.zip
           retention-days: 1
-
-      - name: Finalize release history
-        if: always() && steps.record_start.outcome == 'success'
-        uses: actions/github-script@v7
+      - name: Summarize release attempt
+        id: summary
+        if: always()
+        shell: bash
         env:
+          TAG_GUARD_OUTCOME: ${{ steps.tag_guard.outcome }}
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+          PUBLISH_OUTCOME: ${{ steps.publish.outcome }}
+        run: |
+          BUILD_STATUS=not_started
+          RELEASE_STATUS=not_started
+          FAILURE_REASON=
+          if [[ "$BUILD_OUTCOME" == "success" ]]; then
+            BUILD_STATUS=success
+          elif [[ "$BUILD_OUTCOME" == "failure" ]]; then
+            BUILD_STATUS=failed
+            FAILURE_REASON="binary build or packaging failed"
+          fi
+          if [[ "$PUBLISH_OUTCOME" == "success" ]]; then
+            RELEASE_STATUS=success
+          elif [[ "$PUBLISH_OUTCOME" == "failure" ]]; then
+            RELEASE_STATUS=failed
+            FAILURE_REASON="GitHub Release publication failed"
+          elif [[ "$TAG_GUARD_OUTCOME" == "failure" ]]; then
+            RELEASE_STATUS=blocked
+            FAILURE_REASON="release tag check failed or existing tag prevented publication"
+          fi
+          echo "build_status=$BUILD_STATUS" >> "$GITHUB_OUTPUT"
+          echo "release_status=$RELEASE_STATUS" >> "$GITHUB_OUTPUT"
+          echo "failure_reason=$FAILURE_REASON" >> "$GITHUB_OUTPUT"
+
+  record-history:
+    name: Record Build History
+    needs: [prepare, release]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: true
+      - name: Append attempt to V1 history
+        shell: bash
+        env:
+          STARTED_AT: ${{ needs.prepare.outputs.started_at }}
           SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
           VERSION: ${{ needs.prepare.outputs.version }}
-          BINARY_INPUT: ${{ inputs.binary }}
-          TAG_OUTCOME: ${{ steps.reject_tag.outcome }}
-          BUILD_OUTCOME: ${{ steps.build.outcome }}
-          RELEASE_OUTCOME: ${{ steps.publish.outcome }}
-        with:
-          script: |
-            const path = "plan/v1-release-build-history.csv";
-            const quote = (value) => '"' + String(value ?? "").replace(/"/g, '""').replace(/[\r\n]+/g, " ") + '"';
-            const stageStatus = (outcome) => outcome === "success" ? "success" : outcome === "failure" ? "failure" : "not_started";
-            let reason = "";
-            if (process.env.TAG_OUTCOME === "failure") reason = "tag_check_failed";
-            else if (process.env.BUILD_OUTCOME === "failure") reason = "build_failed";
-            else if (process.env.RELEASE_OUTCOME === "failure") reason = "release_failed";
+          SELECTED_BINARIES: ${{ inputs.binary }}
+          BUILD_STATUS: ${{ needs.release.outputs.build_status }}
+          RELEASE_STATUS: ${{ needs.release.outputs.release_status }}
+          FAILURE_REASON: ${{ needs.release.outputs.failure_reason }}
+          PREPARE_RESULT: ${{ needs.prepare.result }}
+          RELEASE_RESULT: ${{ needs.release.result }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          EVENT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import csv
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
 
-            const { data } = await github.rest.repos.getContent({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              path,
-              ref: "main"
-            });
-            if (Array.isArray(data) || data.type !== "file") {
-              throw new Error("Release history path is not a file.");
-            }
-
-            const content = Buffer.from(data.content, "base64").toString("utf8");
-            const lines = content.split(/\r?\n/);
-            const marker = `,"${context.runId}","${context.runAttempt}",`;
-            const index = lines.findIndex(line => line.includes(marker));
-            if (index < 0) throw new Error("Could not find the initial release history row.");
-
-            const timestampMatch = lines[index].match(/^"((?:[^"]|"")*)"/);
-            if (!timestampMatch) throw new Error("Invalid timestamp in release history row.");
-            const originalTimestamp = timestampMatch[1].replace(/""/g, '"');
-            lines[index] = [
-              originalTimestamp,
-              context.runId,
-              context.runAttempt,
-              process.env.SOURCE_SHA,
-              process.env.VERSION,
-              process.env.BINARY_INPUT,
-              stageStatus(process.env.BUILD_OUTCOME),
-              stageStatus(process.env.RELEASE_OUTCOME),
-              reason
-            ].map(quote).join(",");
-
-            await github.rest.repos.updateFile({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              path,
-              message: `chore(release): finalize attempt ${context.runId}.${context.runAttempt}`,
-              content: Buffer.from(lines.join("\n").replace(/\n+$/, "\n"), "utf8").toString("base64"),
-              sha: data.sha,
-              branch: "main"
-            });
+          path = Path("plan/v1-release-build-history.csv")
+          path.parent.mkdir(parents=True, exist_ok=True)
+          fields = [
+              "timestamp_utc", "run_id", "run_attempt", "source_sha", "version",
+              "binary_to_release", "build_status", "release_status", "failure_reason",
+          ]
+          timestamp = os.environ.get("STARTED_AT") or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+          build_status = os.environ.get("BUILD_STATUS") or "not_started"
+          release_status = os.environ.get("RELEASE_STATUS") or "not_started"
+          failure_reason = os.environ.get("FAILURE_REASON") or ""
+          if os.environ.get("PREPARE_RESULT") != "success":
+              failure_reason = "build preparation failed"
+          elif os.environ.get("RELEASE_RESULT") not in ("success", "failure"):
+              failure_reason = failure_reason or "release job did not complete"
+          row = {
+              "timestamp_utc": timestamp,
+              "run_id": os.environ["RUN_ID"],
+              "run_attempt": os.environ["RUN_ATTEMPT"],
+              "source_sha": os.environ.get("SOURCE_SHA") or os.environ["EVENT_SHA"],
+              "version": os.environ.get("VERSION") or "unknown",
+              "binary_to_release": os.environ.get("SELECTED_BINARIES") or "unknown",
+              "build_status": build_status,
+              "release_status": release_status,
+              "failure_reason": failure_reason,
+          }
+          exists = path.exists() and path.stat().st_size > 0
+          with path.open("a", newline="", encoding="utf-8") as stream:
+              writer = csv.DictWriter(stream, fieldnames=fields)
+              if not exists:
+                  writer.writeheader()
+              writer.writerow(row)
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add plan/v1-release-build-history.csv
+          if git diff --cached --quiet; then
+            echo "No history change to commit."
+            exit 0
+          fi
+          git commit -m "chore(release): record build attempt ${RUN_ID}.${RUN_ATTEMPT}"
+          git push origin HEAD:main
