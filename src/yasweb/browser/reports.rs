@@ -204,63 +204,7 @@ pub fn navigate_and_run_report(
                             "Executing JavaScript to select report type: {}",
                             active_report_type
                         );
-                        let step1_js = format!(
-                            r#"
-                                        (async function(reportType) {{
-                                            function sleep(ms) {{ return new Promise(r => setTimeout(r, ms)); }}
-                                            let logs = [];
-                                            let iframe = document.querySelector('iframe');
-                                            if (!iframe) return JSON.stringify({{ status: "ERROR", msg: "No iframe found.", logs }});
-                                            let doc = iframe.contentWindow.document;
-
-                                            let clickedType = false;
-                                            logs.push("Searching for reportType: " + reportType);
-
-                                            // Ensure the iframe has actually loaded some content
-                                            for(let i=0; i<30; i++) {{
-                                                if (doc.body && doc.body.innerHTML.trim().length > 0) break;
-                                                await sleep(500);
-                                            }}
-
-                                            for (let i = 0; i < 100; i++) {{
-                                                let xpathType = `//*[contains(normalize-space(.), '${{reportType}}')]/ancestor-or-self::mat-radio-button`;
-                                                let resultType = doc.evaluate(xpathType, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-                                                let matRadioButton = resultType.singleNodeValue;
-
-                                                if (matRadioButton) {{
-                                                    logs.push("Found mat-radio-button");
-                                                    let innerInput = matRadioButton.querySelector('input[type="radio"]');
-                                                    if (innerInput) {{
-                                                        innerInput.click();
-                                                        innerInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                                                        clickedType = true;
-                                                        logs.push("Clicked innerInput");
-                                                    }} else {{
-                                                        matRadioButton.click();
-                                                        clickedType = true;
-                                                        logs.push("Clicked matRadioButton");
-                                                    }}
-                                                }} else {{
-                                                    let fallbackXpath = `//label[contains(normalize-space(.), '${{reportType}}')]`;
-                                                    let fallbackResult = doc.evaluate(fallbackXpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-                                                    let labelNode = fallbackResult.singleNodeValue;
-                                                    if (labelNode) {{
-                                                        labelNode.click();
-                                                        clickedType = true;
-                                                        logs.push("Clicked label fallback");
-                                                    }}
-                                                }}
-
-                                                if (clickedType) break;
-                                                await sleep(500);
-                                            }}
-
-                                            if (!clickedType) return JSON.stringify({{ status: "ERROR", msg: "Report type not found: " + reportType, logs }});
-                                            return JSON.stringify({{ status: "SUCCESS", logs }});
-                                        }})({});
-                                        "#,
-                            serde_json::to_string(&active_report_type).unwrap()
-                        );
+                        let step1_js = generate_step1_js(&active_report_type);
 
                         debug::save_html_state(
                             tab,
@@ -765,6 +709,94 @@ pub fn navigate_and_run_report(
     }
 
     Ok(discovered_filters)
+}
+
+
+fn generate_step1_js(report_type: &str) -> String {
+    // Avoid serializing the entire iframe DOM and running broad XPath queries on every retry.
+    // The report page can contain a large Angular DOM, so inspect only the relevant controls.
+    let template = r#"
+        (async function(reportType) {
+            function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+            const logs = [];
+            const iframe = document.querySelector('iframe');
+            if (!iframe || !iframe.contentWindow) {
+                return JSON.stringify({ status: "ERROR", msg: "No iframe found.", logs });
+            }
+
+            let doc;
+            try {
+                doc = iframe.contentWindow.document;
+            } catch (error) {
+                return JSON.stringify({ status: "ERROR", msg: "Cannot access report iframe: " + error.message, logs });
+            }
+
+            const normalize = value => (value || "").replace(/\\s+/g, " ").trim().toLowerCase();
+            const target = normalize(reportType);
+
+            // Wait for the iframe document to exist without repeatedly materializing innerHTML.
+            for (let i = 0; i < 40; i++) {
+                if (doc.body && doc.body.childElementCount > 0) break;
+                await sleep(250);
+            }
+
+            for (let i = 0; i < 40; i++) {
+                const radios = doc.querySelectorAll('mat-radio-button');
+                let candidate = null;
+                for (const radio of radios) {
+                    if (normalize(radio.textContent).includes(target)) {
+                        candidate = radio;
+                        break;
+                    }
+                }
+
+                if (candidate) {
+                    const input = candidate.querySelector('input[type="radio"]');
+                    if (input) {
+                        input.click();
+                        input.dispatchEvent(new Event('change', { bubbles: true }));
+                    } else {
+                        candidate.click();
+                    }
+                    logs.push("Selected report type using mat-radio-button");
+                    return JSON.stringify({ status: "SUCCESS", logs });
+                }
+
+                for (const label of doc.querySelectorAll('label')) {
+                    if (normalize(label.textContent).includes(target)) {
+                        label.click();
+                        logs.push("Selected report type using label fallback");
+                        return JSON.stringify({ status: "SUCCESS", logs });
+                    }
+                }
+
+                await sleep(250);
+            }
+
+            return JSON.stringify({ status: "ERROR", msg: "Report type not found: " + reportType, logs });
+        })(__REPORT_TYPE_JSON__);
+    "#;
+
+    template.replace(
+        "__REPORT_TYPE_JSON__",
+        &serde_json::to_string(report_type).unwrap_or_else(|_| "\"\"".to_string()),
+    )
+}
+
+#[cfg(test)]
+mod report_type_js_tests {
+    use super::generate_step1_js;
+
+    #[test]
+    fn report_type_selection_avoids_full_dom_serialization_and_broad_xpath() {
+        let js = generate_step1_js("Standard Report");
+        assert!(js.contains("querySelectorAll('mat-radio-button')"));
+        assert!(js.contains("querySelectorAll('label')"));
+        assert!(!js.contains("innerHTML"));
+        assert!(!js.contains("doc.evaluate"));
+        assert!(!js.contains("normalize-space"));
+        assert!(js.contains("\"Standard Report\""));
+    }
 }
 
 pub fn generate_step6_js(timeout_minutes: u64) -> String {
