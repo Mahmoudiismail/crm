@@ -711,7 +711,7 @@ async fn fetch_and_update_incomplete_reservations(
 
         let text: String = res.text().await?;
         let parsed: IncompleteReservationResponse = serde_json::from_str(&text)
-            .with_context(|| format!("Failed to parse response: {}", text))?;
+            .with_context(|| format!("Failed to parse incomplete-reservation response from {}", endpoint))?;
 
         for item in parsed.data.items {
             all_ids.push(item.id);
@@ -806,7 +806,7 @@ async fn fetch_and_update_incomplete_reservations(
 
     let text = res.text().await?;
     let parsed: Value = serde_json::from_str(&text)
-        .with_context(|| format!("Failed to parse response: {}", text))?;
+        .with_context(|| format!("Failed to parse bulk-update response from {}", patch_endpoint))?;
 
     Ok(parsed)
 }
