@@ -23,7 +23,7 @@ Implementation authorized by the user's explicit **START**. Work is being perfor
 ## Current verification status
 - A draft PR was opened to run the repository's pull-request CI: [PR #410](https://github.com/Mahmoudiismail/crm/pull/410).
 - PR #410: https://github.com/Mahmoudiismail/crm/pull/410 remains draft and unmerged.
-- The source-change commit `b8074d416970164cfeb1675ceb62983a03186cbc` has Test workflow run https://github.com/Mahmoudiismail/crm/actions/runs/38639397361, currently waiting at the `Format and Auto-fix` job's approval gate. Later commits only update documentation/audit notes and did not create a new Rust-triggered run.
+- The fetcher fixes have Test workflow run https://github.com/Mahmoudiismail/crm/actions/runs/38639397361; the YASWEB and downloader changes have runs https://github.com/Mahmoudiismail/crm/actions/runs/38639742390 and https://github.com/Mahmoudiismail/crm/actions/runs/38639751054. These runs are currently waiting at the `Format and Auto-fix` job's approval gate. The latest branch head is `702ca26678dddb372a9f3b7f554e41957cd571aa`.
 - After the follow-up code commits, the current workflow must be rechecked. Formatting, tests, Clippy, and release build remain unverified until a workflow run completes successfully.
 
 ## Repository and constraints
