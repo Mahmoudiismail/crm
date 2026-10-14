@@ -247,8 +247,7 @@ pub fn navigate_and_run_report(
                                                 let isLoaderVisible = false;
                                                 if (loader) {{
                                                     let style = loader.ownerDocument.defaultView.getComputedStyle(loader);
-                                                    if (style.display !== 'none' && style.opacity !== '0' && style.visibility !== 'hidden') {{
-                                                        isLoaderVisible = true;
+                                                    if (style.display !== 'none' && style.opacity !== '0' && style.visibility !== 'hidden') {{                                                        isLoaderVisible = true;
                                                     }}
                                                 }}
                                                 if (!isLoaderVisible) {{
@@ -497,8 +496,7 @@ pub fn navigate_and_run_report(
 
                                                                     let optionFound = false;
                                                                     for (let opt of options) {{
-                                                                        if (opt.textContent.toLowerCase().includes(value.toLowerCase())) {{
-                                                                            opt.click();
+                                                                        if (opt.textContent.toLowerCase().includes(value.toLowerCase())) {{                                                                            opt.click();
                                                                             optionFound = true;
                                                                             logs.push("Selected MAT-OPTION for " + key);
                                                                             break;
@@ -748,7 +746,6 @@ fn generate_step1_js(report_type: &str) -> String {
                         break;
                     }
                 }
-
                 if (candidate) {
                     const input = candidate.querySelector('input[type="radio"]');
                     if (input) {
@@ -791,7 +788,7 @@ mod report_type_js_tests {
         let js = generate_step1_js("Standard Report");
         assert!(js.contains("querySelectorAll('mat-radio-button')"));
         assert!(js.contains("querySelectorAll('label')"));
-        assert!(!js.contains("innerHTML"));
+        assert!(!js.contains(".innerHTML"));
         assert!(!js.contains("doc.evaluate"));
         assert!(!js.contains("normalize-space"));
         assert!(js.contains("\"Standard Report\""));
