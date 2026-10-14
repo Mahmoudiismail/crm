@@ -1252,3 +1252,50 @@ fn test_live_preview_monthly_full_year_generation() {
         "Should generate exactly 10 upcoming executions when end_date is unbounded"
     );
 }
+
+#[test]
+fn test_live_preview_keeps_recurring_schedule_when_custom_end_date_is_past() {
+    use chrono::{TimeZone, Utc};
+    use crm_tool::runner::config::{Repetition, RunnerTask, TaskSchedule};
+
+    let now = Utc.with_ymd_and_hms(2026, 10, 14, 12, 0, 0).unwrap();
+    let task = RunnerTask {
+        id: "past_period_task".to_string(),
+        name: "Past Period Task".to_string(),
+        enabled: true,
+        repetition: Repetition::Repeat,
+        frequency_seconds: 0,
+        next_run_at: String::new(),
+        schedules: vec![TaskSchedule::Interval {
+            enabled: true,
+            every_seconds: 3600,
+            next_run_at: String::new(),
+            working_hours: None,
+            working_hours_profile_id: None,
+            start_time: None,
+        }],
+        steps: vec![],
+        post_run_steps: vec![],
+        last_run_at: String::new(),
+        last_status: String::new(),
+        timeout_seconds: 0,
+    };
+    let app_spec = ExternalAppSpec {
+        app_id: "test_app".to_string(),
+        args: HashMap::new(),
+        period_mode: PeriodMode::Custom,
+        start_date: Some("2026-01-01".to_string()),
+        end_date: Some("2026-10-13".to_string()),
+        start_date_arg: None,
+        end_date_arg: None,
+    };
+
+    let executions = generate_upcoming_executions_for_app(&task, &app_spec, now, 10).unwrap();
+
+    assert_eq!(executions.len(), 10);
+    assert!(executions.iter().all(|item| item.scheduled_at >= now));
+    assert!(executions.iter().all(|item| {
+        item.period.start_date == NaiveDate::from_ymd_opt(2026, 1, 1).unwrap()
+            && item.period.end_date == NaiveDate::from_ymd_opt(2026, 10, 13).unwrap()
+    }));
+}

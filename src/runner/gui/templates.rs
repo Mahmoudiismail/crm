@@ -326,17 +326,19 @@ pub(crate) fn schedule_editor_html(
     } else {
         String::new()
     };
+    let profiles_json = serde_json::to_string(profiles).unwrap_or_else(|_| "[]".to_string());
 
     format!(
-        "<div class='space-y-3'>\
-            <div class='flex items-center justify-between'>\
-                <span class='text-sm font-semibold text-gray-800'>Schedules</span>\
-                <button type='button' id='add-schedule-row' class='rounded border border-gray-300 bg-emerald-600 text-white px-3 py-1 text-sm font-semibold hover:bg-emerald-700'>+ Add schedule</button>\
-            </div>\
-            <div id='schedule-rows' class='space-y-3'>{}</div>\
-            <input type='hidden' id='schedules-hidden' name='schedules' value=''>\
-            <p class='text-xs text-gray-500'>Select one or more schedules. Supports: Interval, Once, Daily at specific times, Weekly on day, or Monthly on day.</p>\
+        "<div class='space-y-3'>\\
+            <div class='flex items-center justify-between'>\\
+                <span class='text-sm font-semibold text-gray-800'>Schedules</span>\\
+                <button type='button' id='add-schedule-row' class='rounded border border-gray-300 bg-emerald-600 text-white px-3 py-1 text-sm font-semibold hover:bg-emerald-700'>+ Add schedule</button>\\
+            </div>\\
+            <div id='schedule-rows' class='space-y-3' data-profiles='{}'>{}</div>\\
+            <input type='hidden' id='schedules-hidden' name='schedules' value=''>\\
+            <p class='text-xs text-gray-500'>Select one or more schedules. Supports: Interval, Once, Daily at specific times, Weekly on day, or Monthly on day.</p>\\
         </div>",
+        escape_html(&profiles_json),
         rows
     )
 }
@@ -1055,5 +1057,33 @@ pub(crate) fn human_schedule(schedule: &TaskSchedule) -> String {
             ..
         } => format!("Monthly on day {} at {}", day_of_month, at_time),
         TaskSchedule::Once { .. } => "Run Once".to_string(),
+    }
+}
+
+#[cfg(test)]
+mod working_hours_profile_ui_tests {
+    use super::*;
+
+    #[test]
+    fn schedule_editor_embeds_working_hours_profiles_for_client_side_selection() {
+        let profiles = vec![crate::runner::config::WorkingHoursProfile {
+            id: "WeekDays_7~12".to_string(),
+            name: "WeekDays 7~12".to_string(),
+            days: std::collections::HashMap::from([(
+                "Monday".to_string(),
+                crate::runner::config::WorkingHours {
+                    start: "07:00".to_string(),
+                    end: "23:59".to_string(),
+                },
+            )]),
+        }];
+
+        let html = schedule_editor_html(None, &profiles);
+
+        assert!(html.contains("id='schedule-rows'"));
+        assert!(html.contains("data-profiles="));
+        assert!(html.contains("WeekDays_7~12"));
+        assert!(html.contains("07:00"));
+        assert!(html.contains("23:59"));
     }
 }
