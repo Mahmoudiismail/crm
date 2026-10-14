@@ -869,8 +869,10 @@ pub fn generate_upcoming_executions_for_app(
 
     let mut results = Vec::new();
 
-    // 3. Evaluate schedule over periods
-    for period in periods {
+    // Keep execution timing independent from the requested data-period end date.
+    // Historical/custom periods can still be used by recurring future executions.
+    let period_count = periods.len();
+    for (period_index, period) in periods.into_iter().enumerate() {
         let period_start_utc = Local
             .from_local_datetime(&period.start_date.and_hms_opt(0, 0, 0).unwrap())
             .earliest()
@@ -883,12 +885,11 @@ pub fn generate_upcoming_executions_for_app(
             .unwrap_or_else(|| Utc::now().with_timezone(&Local))
             .with_timezone(&Utc);
 
-        let effective_period_end_utc =
-            if app_spec.period_mode == PeriodMode::Custom && app_spec.end_date.is_none() {
-                period_end_utc + chrono::Duration::days(365 * 5)
-            } else {
-                period_end_utc
-            };
+        let effective_period_end_utc = if period_index + 1 == period_count {
+            period_end_utc.max(now + chrono::Duration::days(365 * 5))
+        } else {
+            period_end_utc
+        };
 
         if effective_period_end_utc < now {
             continue;
