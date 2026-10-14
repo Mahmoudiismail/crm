@@ -1620,20 +1620,27 @@ async fn test_users_base64_processing_failure_is_propagated() {
 #[tokio::test]
 async fn test_fetch_error_waits_for_download_processor_to_finish() {
     use std::sync::atomic::{AtomicBool, Ordering};
+    use tokio::sync::oneshot;
 
     let processor_finished = Arc::new(AtomicBool::new(false));
     let finished = Arc::clone(&processor_finished);
+    let (release_tx, release_rx) = oneshot::channel();
     let processor = tokio::spawn(async move {
+        release_rx.await.expect("test releases download processor");
         finished.store(true, Ordering::SeqCst);
         Ok(())
     });
 
-    let result: Result<()> = finish_fetch_and_downloads(
+    let finish_task = tokio::spawn(finish_fetch_and_downloads(
         Err(anyhow::anyhow!("report fetch failed")),
         processor,
-    )
-    .await;
+    ));
+    tokio::task::yield_now().await;
 
+    assert!(!finish_task.is_finished(), "fetch error must wait for processor");
+    release_tx.send(()).expect("download processor is still waiting");
+
+    let result = finish_task.await.expect("finish task should not panic");
     assert!(result.is_err());
     assert!(processor_finished.load(Ordering::SeqCst));
     assert_eq!(result.unwrap_err().to_string(), "report fetch failed");
