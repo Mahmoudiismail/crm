@@ -17,7 +17,7 @@ Step-level application locking is managed by `AppLockManager`:
 - Multiple non-concurrent applications required within a step are sorted deterministically and acquired in order to prevent deadlocks.
 - Semaphores are held for the step duration and automatically released on step completion, error, or cancellation.
 - Tasks waiting for an application lock remain in `running_task_ids` with `waiting_for_app` status reported in the GUI.
-- **Duplicate Task Prevention**: The Execution Manager is the authoritative admission point. It serializes queue commands and rejects a task ID that is already queued or running, preventing overlapping executions even when concurrent callers read the same earlier status snapshot. The regression test verifies the actual number of task process executions, not only a transient queue/status snapshot.
+- **Duplicate Task Prevention**: The Execution Manager is the authoritative admission point. It serializes queue commands and rejects a task ID that is already queued or running, preventing overlapping executions even when concurrent callers read the same earlier status snapshot. The regression test verifies the actual number of task process executions, not only a transient queue/status snapshot. On Windows, the race test passes its PowerShell script using `-EncodedCommand` so the shell argument parser cannot strip the script's quoting.
 
 
 ## Runner V1 Regression Verification
@@ -64,6 +64,10 @@ Date expressions are evaluated sequentially:
 3. For relative weekday expressions (e.g. `next sat` for both Start and End), date resolution evaluates both to the exact same upcoming occurrence rather than advancing the End Date to the subsequent week.
 
 ## Live Execution Preview
+
+For a Custom period with no explicit end date, preview generation uses a bounded five-year horizon from the generated period end. The scheduler must compare the current time against that effective horizon (not the raw end of the initial date period), otherwise a preview requested after today's end would incorrectly return no upcoming executions.
+
+
 External Application sections feature a robust **Preview** button displaying a visual calendar of upcoming periodic invocations directly within the GUI.
 The preview is strictly bounded to the upcoming 10 evaluations (preventing unbounded computational recursion for tightly-scheduled tasks).
 

@@ -724,12 +724,12 @@ async fn test_concurrent_period_execution_overlapping() {
     use tokio::sync::Mutex;
 
     let temp_dir = tempfile::tempdir().unwrap();
-    let log_file = temp_dir.path().join("execution_log.txt");
+    let log_file = temp_dir.path().join("execution_log");
     let log_path_str = log_file.to_str().unwrap().replace("\\", "/");
 
     let py_script = format!(
-        "import sys, time; args = ' '.join(sys.argv); f = open('{}', 'a'); f.write('START ' + args + chr(10)); f.close(); time.sleep(0.5); f = open('{}', 'a'); f.write('FINISH ' + args + chr(10)); f.close()",
-        log_path_str, log_path_str
+        "import os, sys, time; args = ' '.join(sys.argv); base = '{}'; start = sys.argv[sys.argv.index('--start-date') + 1]; path = base + '_' + start + '.txt'; f = open(path, 'a'); f.write('START ' + args + chr(10)); f.close(); deadline = time.monotonic() + 3; first = base + '_2026-01-01.txt'; second = base + '_2026-02-01.txt'; exec('while not (os.path.exists(first) and os.path.exists(second)):\\n if time.monotonic() >= deadline: sys.exit(2)\\n time.sleep(0.01)'); f = open(path, 'a'); f.write('FINISH ' + args + chr(10)); f.close()",
+        log_path_str
     );
 
     let app_concurrent = RegisteredApp {
@@ -796,23 +796,41 @@ async fn test_concurrent_period_execution_overlapping() {
     let res = run_task_inner(&mut task, &policy, &status, &app_lock_mgr).await;
     assert!(res.success);
 
-    let log_content = std::fs::read_to_string(&log_file).unwrap_or_default();
-    let lines: Vec<&str> = log_content.lines().collect();
-    assert_eq!(lines.len(), 4, "Log output: \n{}", log_content);
-
     let mut starts = 0;
     let mut finishes = 0;
-    for line in &lines {
-        if line.starts_with("START") {
-            starts += 1;
-        } else if line.starts_with("FINISH") {
-            finishes += 1;
-        }
+    for start_date in ["2026-01-01", "2026-02-01"] {
+        let period_log = temp_dir
+            .path()
+            .join(format!("execution_log_{}.txt", start_date));
+        let log_content = std::fs::read_to_string(&period_log)
+            .unwrap_or_else(|error| panic!("Failed to read {period_log:?}: {error}"));
+        let lines: Vec<&str> = log_content.lines().collect();
+        assert_eq!(
+            lines.len(),
+            2,
+            "Log output for {start_date}:\n{log_content}"
+        );
+        assert!(
+            lines[0].starts_with("START"),
+            "Missing START for {start_date}"
+        );
+        assert!(
+            lines[1].starts_with("FINISH"),
+            "Missing FINISH for {start_date}"
+        );
+        assert!(lines[0].contains(start_date));
+        assert!(lines[1].contains(start_date));
+        starts += lines
+            .iter()
+            .filter(|line| line.starts_with("START"))
+            .count();
+        finishes += lines
+            .iter()
+            .filter(|line| line.starts_with("FINISH"))
+            .count();
     }
     assert_eq!(starts, 2);
     assert_eq!(finishes, 2);
-    assert!(lines[0].starts_with("START"));
-    assert!(lines[1].starts_with("START"));
 }
 
 #[tokio::test]

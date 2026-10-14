@@ -883,7 +883,6 @@ pub fn generate_upcoming_executions_for_app(
             .unwrap_or_else(|| Utc::now().with_timezone(&Local))
             .with_timezone(&Utc);
 
-        #[allow(unused_variables)]
         let effective_period_end_utc =
             if app_spec.period_mode == PeriodMode::Custom && app_spec.end_date.is_none() {
                 period_end_utc + chrono::Duration::days(365 * 5)
@@ -891,23 +890,7 @@ pub fn generate_upcoming_executions_for_app(
                 period_end_utc
             };
 
-        #[allow(unused_variables)]
-        let effective_period_end_utc =
-            if app_spec.period_mode == PeriodMode::Custom && app_spec.end_date.is_none() {
-                period_end_utc + chrono::Duration::days(365 * 5)
-            } else {
-                period_end_utc
-            };
-
-        #[allow(unused_variables)]
-        let effective_period_end_utc =
-            if app_spec.period_mode == PeriodMode::Custom && app_spec.end_date.is_none() {
-                period_end_utc + chrono::Duration::days(365 * 5)
-            } else {
-                period_end_utc
-            };
-
-        if period_end_utc < now {
+        if effective_period_end_utc < now {
             continue;
         }
 
@@ -1843,5 +1826,52 @@ mod tests_due_now {
             next_run_at: future.to_rfc3339(),
         };
         assert!(!schedule_future.due_now(now));
+    }
+
+    #[test]
+    fn open_ended_custom_preview_keeps_generating_after_initial_period_end() {
+        let now = Utc::now();
+        let start_date = (Local::now().date_naive() - chrono::Duration::days(1))
+            .format("%Y-%m-%d")
+            .to_string();
+
+        let task = RunnerTask {
+            id: "preview-test".to_string(),
+            name: "Preview test".to_string(),
+            enabled: true,
+            repetition: Repetition::Once,
+            frequency_seconds: 0,
+            next_run_at: String::new(),
+            schedules: vec![TaskSchedule::Interval {
+                enabled: true,
+                every_seconds: 3_600,
+                working_hours: None,
+                working_hours_profile_id: None,
+                start_time: None,
+                next_run_at: String::new(),
+            }],
+            steps: Vec::new(),
+            post_run_steps: Vec::new(),
+            last_run_at: String::new(),
+            last_status: String::new(),
+            timeout_seconds: 0,
+        };
+        let app_spec = ExternalAppSpec {
+            app_id: "preview-test".to_string(),
+            args: std::collections::HashMap::new(),
+            period_mode: PeriodMode::Custom,
+            start_date: Some(start_date),
+            end_date: None,
+            start_date_arg: None,
+            end_date_arg: None,
+        };
+
+        let upcoming = generate_upcoming_executions_for_app(&task, &app_spec, now, 10).unwrap();
+
+        assert!(
+            !upcoming.is_empty(),
+            "an open-ended Custom preview must not stop at the initial day's end"
+        );
+        assert!(upcoming.iter().all(|item| item.scheduled_at >= now));
     }
 }
