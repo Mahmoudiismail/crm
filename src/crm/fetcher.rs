@@ -1108,20 +1108,12 @@ async fn fetch_single(
     );
 
     if !status.is_success() {
-        // Preserve the signal required for recursive range splitting without retaining
-        // arbitrary server response bodies in errors or persistent logs.
-        if is_signed_url_generation_failure(&anyhow::anyhow!("{}", body)) {
-            let err = anyhow::anyhow!(
-                "{} returned HTTP {}: failed to generate signed url",
-                endpoint,
-                status
-            );
+        let err = sanitized_response_error(endpoint, status, &body);
+        if is_signed_url_generation_failure(&err) {
             info!("{}", err);
-            return Err(err);
+        } else {
+            error!("{}", err);
         }
-
-        let err = anyhow::anyhow!("{} returned HTTP {}", endpoint, status);
-        error!("{}", err);
         return Err(err);
     }
 
@@ -1130,6 +1122,22 @@ async fn fetch_single(
         serde_json::from_str(&body).with_context(|| format!("Invalid JSON from {}", endpoint))?;
     trace!("Successfully parsed JSON from {}.", endpoint);
     Ok(parsed)
+}
+
+fn sanitized_response_error(
+    endpoint: &str,
+    status: reqwest::StatusCode,
+    body: &str,
+) -> anyhow::Error {
+    if is_signed_url_generation_failure(&anyhow::anyhow!("{}", body)) {
+        anyhow::anyhow!(
+            "{} returned HTTP {}: failed to generate signed url",
+            endpoint,
+            status
+        )
+    } else {
+        anyhow::anyhow!("{} returned HTTP {}", endpoint, status)
+    }
 }
 
 fn is_signed_url_generation_failure(err: &anyhow::Error) -> bool {
@@ -1576,6 +1584,27 @@ mod tests {
         assert!(!redacted.contains("super_secret_token"));
         assert!(!redacted.contains("session_id=12345"));
     }
+}
+
+#[test]
+fn test_sanitized_response_error_omits_body() {
+    let err = sanitized_response_error(
+        "sample-endpoint",
+        reqwest::StatusCode::INTERNAL_SERVER_ERROR,
+        "sample response data",
+    );
+    assert_eq!(err.to_string(), "sample-endpoint returned HTTP 500");
+}
+
+#[test]
+fn test_sanitized_response_error_keeps_signed_url_marker() {
+    let err = sanitized_response_error(
+        "sample-endpoint",
+        reqwest::StatusCode::INTERNAL_SERVER_ERROR,
+        "Failed to generate signed URL",
+    );
+    assert!(is_signed_url_generation_failure(&err));
+    assert!(!err.to_string().contains("response data"));
 }
 
 #[test]
