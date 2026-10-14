@@ -764,13 +764,15 @@ async fn fetch_and_update_incomplete_reservations(
         ids: all_ids,
     };
 
+    let ticket_count = payload.ids.len();
     let payload_str = serde_json::to_string(&payload)?;
 
+    // Ticket IDs are operational data; never copy the full PATCH body into persistent logs.
     debug!(
-        "PATCH {} - headers: {}, body: {}",
+        "PATCH {} - headers: {}, ticket_count: {} (request body omitted)",
         patch_url,
         format_redacted_headers(&headers),
-        payload_str
+        ticket_count
     );
 
     let mut res = client
