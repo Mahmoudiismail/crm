@@ -16,6 +16,8 @@
       const edDyn = contentDiv.querySelector(".app-end-date-dyn");
 
       const appIdInput = contentDiv.querySelector(".app-id-hidden");
+      const startDateArg = contentDiv.querySelector(".app-start-date-arg");
+      const endDateArg = contentDiv.querySelector(".app-end-date-arg");
 
       let startDateVal = "";
       if (sdModeSelect) {
@@ -30,6 +32,8 @@
       if (pmSelect) formData.append("period_mode", pmSelect.value);
       if (startDateVal) formData.append("start_date", startDateVal);
       if (endDateVal) formData.append("end_date", endDateVal);
+      if (startDateArg) formData.append("start_date_arg", startDateArg.value);
+      if (endDateArg) formData.append("end_date_arg", endDateArg.value);
       if (appIdInput) formData.append("app_id", appIdInput.value);
 
       const dynContainer = contentDiv.querySelector(".app-dynamic-inputs");
@@ -672,6 +676,8 @@
               const edDynSel = contentDiv.querySelector(".app-end-date-dyn");
               const sdArgSel = contentDiv.querySelector(".app-start-date-arg");
               const edArgSel = contentDiv.querySelector(".app-end-date-arg");
+              if (sdArgSel) sdArgSel.dataset.selectedArg = action && action.type === "external_app" ? (action.start_date_arg || "") : "";
+              if (edArgSel) edArgSel.dataset.selectedArg = action && action.type === "external_app" ? (action.end_date_arg || "") : "";
 
               if (sdModeSel) {
                   sdModeSel.addEventListener("change", () => {
@@ -863,7 +869,9 @@
                               args: args,
                               period_mode: periodModeVal,
                               start_date: startDateVal ? startDateVal : null,
-                              end_date: endDateVal ? endDateVal : null
+                              end_date: endDateVal ? endDateVal : null,
+                              start_date_arg: actionBlock.querySelector(".app-start-date-arg")?.value || null,
+                              end_date_arg: actionBlock.querySelector(".app-end-date-arg")?.value || null
                           });
                       }
                   } else {
@@ -1117,6 +1125,58 @@
       });
 
       dynamicInputs.innerHTML = html;
+
+      const actionContent = dynamicInputs.closest(".action-content");
+      const startArgSelect = actionContent && actionContent.querySelector(".app-start-date-arg");
+      const endArgSelect = actionContent && actionContent.querySelector(".app-end-date-arg");
+      const normalizeArgName = (name) => (name || "").toLowerCase().replace(/^--+/, "").replace(/_/g, "-");
+      const populateDateArgSelect = (select, preferredName, expectedName) => {
+        if (!select) return;
+        select.replaceChildren(new Option("-- Hardcoded / None --", ""));
+        manifest.arguments.forEach((arg) => {
+          const option = new Option(arg.name, arg.name);
+          select.add(option);
+        });
+        const autoMatch = manifest.arguments.find((arg) => normalizeArgName(arg.name) === expectedName);
+        const requestedName = preferredName || (autoMatch ? autoMatch.name : "");
+        select.value = manifest.arguments.some((arg) => arg.name === requestedName) ? requestedName : "";
+      };
+      populateDateArgSelect(startArgSelect, startArgSelect && startArgSelect.dataset.selectedArg, "start-date");
+      populateDateArgSelect(endArgSelect, endArgSelect && endArgSelect.dataset.selectedArg, "end-date");
+
+      const updateMappedDateArguments = () => {
+        const mappedNames = new Set(
+          [startArgSelect && startArgSelect.value, endArgSelect && endArgSelect.value].filter(Boolean),
+        );
+        dynamicInputs.querySelectorAll(".arg-container").forEach((container) => {
+          const argInput = container.querySelector("[data-arg-name]");
+          container.classList.toggle("hidden", Boolean(argInput && mappedNames.has(argInput.dataset.argName)));
+        });
+        if (startArgSelect && endArgSelect) {
+          Array.from(startArgSelect.options).forEach((option) => {
+            if (option.value) option.disabled = option.value === endArgSelect.value;
+          });
+          Array.from(endArgSelect.options).forEach((option) => {
+            if (option.value) option.disabled = option.value === startArgSelect.value;
+          });
+          startArgSelect.options[0].disabled = false;
+          endArgSelect.options[0].disabled = false;
+        }
+      };
+      if (startArgSelect) startArgSelect.addEventListener("change", () => {
+        updateMappedDateArguments();
+        updateAppPreview(actionContent);
+      });
+      if (endArgSelect) endArgSelect.addEventListener("change", () => {
+        updateMappedDateArguments();
+        updateAppPreview(actionContent);
+      });
+      updateMappedDateArguments();
+      if (actionContent) {
+        dynamicInputs.onchange = () => updateAppPreview(actionContent);
+        dynamicInputs.oninput = () => updateAppPreview(actionContent);
+        updateAppPreview(actionContent);
+      }
 
       function evaluateDependencies() {
         const containers = dynamicInputs.querySelectorAll(".arg-container[data-depends]");
