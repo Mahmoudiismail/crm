@@ -24,6 +24,7 @@ File: `src/runner/config/schedule.rs`
 - Done: removed the three identical consecutive `effective_period_end_utc` definitions and redundant `#[allow(unused_variables)]` attributes, retaining one definition.
 - Done: the early-continue guard now compares against `effective_period_end_utc`, so an open-ended Custom period uses its five-year preview horizon. Added a focused regression test.
 - Done: corrected the Windows command in `test_real_duplicate_admission_race` to pass its PowerShell script through `-EncodedCommand` (UTF-16LE Base64), avoiding quote/argument loss in the shell command parser. The marker read now retries briefly after the existing race window and reports the underlying I/O error. CI verification is still required.
+- Done: made `test_concurrent_period_execution_overlapping` use separate log files per period and a start barrier. This preserves the concurrency assertion while avoiding concurrent append writes to one shared file; CI verification is still required.
 - Review the 1,000-step guard for interval preview. Preserve it unless evidence demonstrates incorrect user-visible truncation; if behavior is intentionally bounded, document or test that boundary rather than removing the guard speculatively.
 - Keep schedule calculations in Rust and keep the GUI preview routed through the existing Rust endpoint.
 
