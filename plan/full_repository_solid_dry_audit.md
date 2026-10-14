@@ -3,9 +3,15 @@
 ## Status
 Implementation authorized by the user's explicit **START**. Work is being performed on `audit/solid-dry-v1-oct-2026`; do not merge into `main` without separate authorization.
 
-## Confirmed finding and change in progress
-- **Security/privacy — CRM incomplete-reservation payload logging:** `src/crm/fetcher.rs` logged the full serialized `task/bulk-ticket` PATCH body at DEBUG. The body contains operational ticket IDs, and project logging defaults can persist DEBUG/TRACE-level records. Change the log to report only the number of IDs and explicitly omit the body. Update `md/FETCHER.md` accordingly.
-- Other historical audit findings must be rechecked against current code; do not duplicate fixes already present (for example, current Tasker task errors are propagated with `bail!`, and the current download processor is awaited and propagates failures).
+## Confirmed finding and remediation
+- **Security/privacy — CRM response payload logging (fixed on this branch):** `src/crm/fetcher.rs` logged the full incomplete-reservation PATCH body and full CRM API response bodies at DEBUG; arbitrary response bodies were also embedded in several HTTP errors and malformed JSON contexts. Responses can contain signed download URLs, report data, and ticket IDs. The change now logs response metadata/byte count, omits PATCH body contents (logs only ticket count), and sanitizes HTTP/parse errors. It preserves the `failed to generate signed url` marker needed by recursive date-range splitting.
+- **DRY/documentation:** Consolidated the fetcher logging rule into one policy section in `md/FETCHER.md`.
+- Historical findings were checked against current code before being considered: current Tasker task errors are propagated with `bail!`, and the current CRM download processor is awaited and propagates download failures. These are not re-reported as open defects.
+- **Candidate for continued review, not yet classified as a defect:** CRM report scheduling uses an unbounded MPSC queue for download tasks. Assess whether real date-range workloads can accumulate enough queued tasks to justify bounded backpressure; do not change it without a safe concurrency review and behavioral test.
+
+## Current verification status
+- A draft PR was opened to run the repository's pull-request CI: [PR #410](https://github.com/Mahmoudiismail/crm/pull/410).
+- The workflow is currently waiting at the `Format and Auto-fix` job's approval gate. Formatting, tests, Clippy, and release build have **not** been claimed as passed. Continue after the required GitHub Environment approval and inspect the final workflow results.
 
 ## Repository and constraints
 - Repository: `Mahmoudiismail/crm`
