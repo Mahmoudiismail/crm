@@ -204,7 +204,7 @@ pub fn navigate_and_run_report(
                             "Executing JavaScript to select report type: {}",
                             active_report_type
                         );
-                        let step1_js = generate_step1_js(&active_report_type);
+                        let step1_js = generate_step1_js(active_report_type);
 
                         debug::save_html_state(
                             tab,
