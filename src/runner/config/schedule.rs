@@ -883,7 +883,6 @@ pub fn generate_upcoming_executions_for_app(
             .unwrap_or_else(|| Utc::now().with_timezone(&Local))
             .with_timezone(&Utc);
 
-        #[allow(unused_variables)]
         let effective_period_end_utc =
             if app_spec.period_mode == PeriodMode::Custom && app_spec.end_date.is_none() {
                 period_end_utc + chrono::Duration::days(365 * 5)
@@ -891,23 +890,7 @@ pub fn generate_upcoming_executions_for_app(
                 period_end_utc
             };
 
-        #[allow(unused_variables)]
-        let effective_period_end_utc =
-            if app_spec.period_mode == PeriodMode::Custom && app_spec.end_date.is_none() {
-                period_end_utc + chrono::Duration::days(365 * 5)
-            } else {
-                period_end_utc
-            };
-
-        #[allow(unused_variables)]
-        let effective_period_end_utc =
-            if app_spec.period_mode == PeriodMode::Custom && app_spec.end_date.is_none() {
-                period_end_utc + chrono::Duration::days(365 * 5)
-            } else {
-                period_end_utc
-            };
-
-        if period_end_utc < now {
+        if effective_period_end_utc < now {
             continue;
         }
 
