@@ -978,7 +978,7 @@
           arg.arg_type === "date_var"
       );
 
-      const contentDiv = dynamicInputs.closest(".action-content");
+      const contentDiv = dynamicInputs.closest(".action-editor");
       if (contentDiv) {
           const appPreviewBox = contentDiv.querySelector(".app-preview-box");
           const periodizationContainer = contentDiv.querySelector(".app-periodization-container");
@@ -1126,7 +1126,7 @@
 
       dynamicInputs.innerHTML = html;
 
-      const actionContent = dynamicInputs.closest(".action-content");
+      const actionContent = dynamicInputs.closest(".action-editor");
       const startArgSelect = actionContent && actionContent.querySelector(".app-start-date-arg");
       const endArgSelect = actionContent && actionContent.querySelector(".app-end-date-arg");
       const normalizeArgName = (name) => (name || "").toLowerCase().replace(/^--+/, "").replace(/_/g, "-");
@@ -1150,7 +1150,10 @@
         );
         dynamicInputs.querySelectorAll(".arg-container").forEach((container) => {
           const argInput = container.querySelector("[data-arg-name]");
-          container.classList.toggle("hidden", Boolean(argInput && mappedNames.has(argInput.dataset.argName)));
+          const isMapped = Boolean(argInput && mappedNames.has(argInput.dataset.argName));
+          container.classList.toggle("hidden", isMapped);
+          container.dataset.mappedDateArg = isMapped ? "true" : "false";
+          if (isMapped) container.style.display = "none";
         });
         if (startArgSelect && endArgSelect) {
           Array.from(startArgSelect.options).forEach((option) => {
@@ -1211,7 +1214,7 @@
                }
            }
 
-           if (allMet) {
+           if (allMet && container.dataset.mappedDateArg !== "true") {
                container.style.display = "block";
            } else {
                container.style.display = "none";
