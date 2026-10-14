@@ -1153,7 +1153,7 @@
           const isMapped = Boolean(argInput && mappedNames.has(argInput.dataset.argName));
           container.classList.toggle("hidden", isMapped);
           container.dataset.mappedDateArg = isMapped ? "true" : "false";
-          if (isMapped) container.style.display = "none";
+          container.style.display = isMapped ? "none" : "";
         });
         if (startArgSelect && endArgSelect) {
           Array.from(startArgSelect.options).forEach((option) => {
