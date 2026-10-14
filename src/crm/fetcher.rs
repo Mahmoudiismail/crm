@@ -610,7 +610,7 @@ async fn fetch_users_report(
         .with_context(|| format!("Failed to read response body from {}", endpoint))?;
 
     if !status.is_success() {
-        anyhow::bail!("{} HTTP {}: {}", endpoint, status, body);
+        anyhow::bail!("{} returned HTTP {}", endpoint, status);
     }
 
     let duration = start_time.elapsed();
@@ -706,11 +706,10 @@ async fn fetch_and_update_incomplete_reservations(
 
         if !res.status().is_success() {
             let status = res.status();
-            let body = res.text().await.unwrap_or_default();
-            anyhow::bail!("GET {} failed with status {}: {}", url, status, body);
+            anyhow::bail!("GET {} failed with status {}", endpoint, status);
         }
 
-        let text: String = res.text().await.unwrap_or_default();
+        let text: String = res.text().await?;
         let parsed: IncompleteReservationResponse = serde_json::from_str(&text)
             .with_context(|| format!("Failed to parse response: {}", text))?;
 
@@ -802,13 +801,7 @@ async fn fetch_and_update_incomplete_reservations(
 
     if !res.status().is_success() {
         let status = res.status();
-        let body = res.text().await.unwrap_or_default();
-        anyhow::bail!(
-            "PATCH {} failed with status {}: {}",
-            patch_url,
-            status,
-            body
-        );
+        anyhow::bail!("PATCH {} failed with status {}", patch_endpoint, status);
     }
 
     let text = res.text().await?;
@@ -1107,19 +1100,28 @@ async fn fetch_single(
         .with_context(|| format!("Failed to read response body from {}", endpoint))?;
 
     debug!(
-        "Response from {} — status: {}, headers: {}",
-        endpoint, status, headers
+        "Response from {} — status: {}, headers: {}, body_bytes: {}",
+        endpoint,
+        status,
+        headers,
+        body.len()
     );
-    debug!("Response body from {}: {}", endpoint, body);
 
     if !status.is_success() {
-        let err_msg = format!("{} returned HTTP {}: {}", endpoint, status, body);
-        let err = anyhow::anyhow!("{}", err_msg);
-        if is_signed_url_generation_failure(&err) {
-            info!("{} failed with HTTP {}: {}", endpoint, status, body);
-        } else {
-            error!("{} failed with HTTP {}: {}", endpoint, status, body);
+        // Preserve the signal required for recursive range splitting without retaining
+        // arbitrary server response bodies in errors or persistent logs.
+        if is_signed_url_generation_failure(&anyhow::anyhow!("{}", body)) {
+            let err = anyhow::anyhow!(
+                "{} returned HTTP {}: failed to generate signed url",
+                endpoint,
+                status
+            );
+            info!("{}", err);
+            return Err(err);
         }
+
+        let err = anyhow::anyhow!("{} returned HTTP {}", endpoint, status);
+        error!("{}", err);
         return Err(err);
     }
 
