@@ -204,63 +204,7 @@ pub fn navigate_and_run_report(
                             "Executing JavaScript to select report type: {}",
                             active_report_type
                         );
-                        let step1_js = format!(
-                            r#"
-                                        (async function(reportType) {{
-                                            function sleep(ms) {{ return new Promise(r => setTimeout(r, ms)); }}
-                                            let logs = [];
-                                            let iframe = document.querySelector('iframe');
-                                            if (!iframe) return JSON.stringify({{ status: "ERROR", msg: "No iframe found.", logs }});
-                                            let doc = iframe.contentWindow.document;
-
-                                            let clickedType = false;
-                                            logs.push("Searching for reportType: " + reportType);
-
-                                            // Ensure the iframe has actually loaded some content
-                                            for(let i=0; i<30; i++) {{
-                                                if (doc.body && doc.body.innerHTML.trim().length > 0) break;
-                                                await sleep(500);
-                                            }}
-
-                                            for (let i = 0; i < 100; i++) {{
-                                                let xpathType = `//*[contains(normalize-space(.), '${{reportType}}')]/ancestor-or-self::mat-radio-button`;
-                                                let resultType = doc.evaluate(xpathType, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-                                                let matRadioButton = resultType.singleNodeValue;
-
-                                                if (matRadioButton) {{
-                                                    logs.push("Found mat-radio-button");
-                                                    let innerInput = matRadioButton.querySelector('input[type="radio"]');
-                                                    if (innerInput) {{
-                                                        innerInput.click();
-                                                        innerInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                                                        clickedType = true;
-                                                        logs.push("Clicked innerInput");
-                                                    }} else {{
-                                                        matRadioButton.click();
-                                                        clickedType = true;
-                                                        logs.push("Clicked matRadioButton");
-                                                    }}
-                                                }} else {{
-                                                    let fallbackXpath = `//label[contains(normalize-space(.), '${{reportType}}')]`;
-                                                    let fallbackResult = doc.evaluate(fallbackXpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-                                                    let labelNode = fallbackResult.singleNodeValue;
-                                                    if (labelNode) {{
-                                                        labelNode.click();
-                                                        clickedType = true;
-                                                        logs.push("Clicked label fallback");
-                                                    }}
-                                                }}
-
-                                                if (clickedType) break;
-                                                await sleep(500);
-                                            }}
-
-                                            if (!clickedType) return JSON.stringify({{ status: "ERROR", msg: "Report type not found: " + reportType, logs }});
-                                            return JSON.stringify({{ status: "SUCCESS", logs }});
-                                        }})({});
-                                        "#,
-                            serde_json::to_string(&active_report_type).unwrap()
-                        );
+                        let step1_js = generate_step1_js(active_report_type);
 
                         debug::save_html_state(
                             tab,
@@ -303,8 +247,7 @@ pub fn navigate_and_run_report(
                                                 let isLoaderVisible = false;
                                                 if (loader) {{
                                                     let style = loader.ownerDocument.defaultView.getComputedStyle(loader);
-                                                    if (style.display !== 'none' && style.opacity !== '0' && style.visibility !== 'hidden') {{
-                                                        isLoaderVisible = true;
+                                                    if (style.display !== 'none' && style.opacity !== '0' && style.visibility !== 'hidden') {{                                                        isLoaderVisible = true;
                                                     }}
                                                 }}
                                                 if (!isLoaderVisible) {{
@@ -553,8 +496,7 @@ pub fn navigate_and_run_report(
 
                                                                     let optionFound = false;
                                                                     for (let opt of options) {{
-                                                                        if (opt.textContent.toLowerCase().includes(value.toLowerCase())) {{
-                                                                            opt.click();
+                                                                        if (opt.textContent.toLowerCase().includes(value.toLowerCase())) {{                                                                            opt.click();
                                                                             optionFound = true;
                                                                             logs.push("Selected MAT-OPTION for " + key);
                                                                             break;
@@ -767,84 +709,225 @@ pub fn navigate_and_run_report(
     Ok(discovered_filters)
 }
 
+fn generate_step1_js(report_type: &str) -> String {
+    // Avoid repeatedly serializing the full iframe markup or running broad XPath queries.
+    // The report page can contain a large Angular DOM, so inspect only the relevant controls.
+    let template = r#"
+        (async function(reportType) {
+            function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+            const logs = [];
+            const iframe = document.querySelector('iframe');
+            if (!iframe || !iframe.contentWindow) {
+                return JSON.stringify({ status: "ERROR", msg: "No iframe found.", logs });
+            }
+
+            let doc;
+            try {
+                doc = iframe.contentWindow.document;
+            } catch (error) {
+                return JSON.stringify({ status: "ERROR", msg: "Cannot access report iframe: " + error.message, logs });
+            }
+
+            const normalize = value => (value || "").replace(/\s+/g, " ").trim().toLowerCase();
+            const target = normalize(reportType);
+
+            // Wait for the iframe document to exist without repeatedly materializing innerHTML.
+            for (let i = 0; i < 40; i++) {
+                if (doc.body && doc.body.childElementCount > 0) break;
+                await sleep(250);
+            }
+
+            for (let i = 0; i < 40; i++) {
+                const radios = doc.querySelectorAll('mat-radio-button');
+                let candidate = null;
+                for (const radio of radios) {
+                    if (normalize(radio.textContent).includes(target)) {
+                        candidate = radio;
+                        break;
+                    }
+                }
+                if (candidate) {
+                    const input = candidate.querySelector('input[type="radio"]');
+                    if (input) {
+                        input.click();
+                        input.dispatchEvent(new Event('change', { bubbles: true }));
+                    } else {
+                        candidate.click();
+                    }
+                    logs.push("Selected report type using mat-radio-button");
+                    return JSON.stringify({ status: "SUCCESS", logs });
+                }
+
+                for (const label of doc.querySelectorAll('label')) {
+                    if (normalize(label.textContent).includes(target)) {
+                        label.click();
+                        logs.push("Selected report type using label fallback");
+                        return JSON.stringify({ status: "SUCCESS", logs });
+                    }
+                }
+
+                await sleep(250);
+            }
+
+            return JSON.stringify({ status: "ERROR", msg: "Report type not found: " + reportType, logs });
+        })(__REPORT_TYPE_JSON__);
+    "#;
+
+    template.replace(
+        "__REPORT_TYPE_JSON__",
+        &serde_json::to_string(report_type).unwrap_or_else(|_| "\"\"".to_string()),
+    )
+}
+
+#[cfg(test)]
+mod report_type_js_tests {
+    use super::generate_step1_js;
+
+    #[test]
+    fn report_type_selection_avoids_full_dom_serialization_and_broad_xpath() {
+        let js = generate_step1_js("Standard Report");
+        assert!(js.contains("querySelectorAll('mat-radio-button')"));
+        assert!(js.contains("querySelectorAll('label')"));
+        assert!(!js.contains(".innerHTML"));
+        assert!(!js.contains("doc.evaluate"));
+        assert!(!js.contains("normalize-space"));
+        assert!(js.contains("\"Standard Report\""));
+    }
+}
+
 pub fn generate_step6_js(timeout_minutes: u64) -> String {
     format!(
         r#"
         (async function(timeoutMinutes) {{
-            function sleep(ms) {{ return new Promise(r => setTimeout(r, ms)); }}
-            let logs = [];
-            let doc = document.querySelector('iframe').contentWindow.document;
+            function sleep(ms) {{ return new Promise(resolve => setTimeout(resolve, ms)); }}
+            const logs = [];
+            const timeoutMs = timeoutMinutes * 60 * 1000;
+            const pollMs = 10 * 1000;
+            const startedAt = Date.now();
 
-            logs.push("Waiting for report generation loader to finish...");
-            let reportGenerated = false;
+            function getReportDocument() {{
+                const iframe = document.querySelector('iframe');
+                try {{
+                    return iframe && iframe.contentWindow ? iframe.contentWindow.document : null;
+                }} catch (_) {{
+                    return null;
+                }}
+            }}
 
-            // Deadline in milliseconds
-            const deadline = Date.now() + timeoutMinutes * 60 * 1000;
-            let iterations = 0;
+            function isVisible(element) {{
+                if (!element) return false;
+                const view = element.ownerDocument && element.ownerDocument.defaultView;
+                if (!view) return false;
+                const style = view.getComputedStyle(element);
+                return style.display !== 'none' &&
+                    style.visibility !== 'hidden' &&
+                    style.opacity !== '0' &&
+                    element.getClientRects().length > 0;
+            }}
 
-            while (Date.now() <= deadline) {{
-                let loader = document.querySelector('#loader_svg, .loading-screen-wrapper, mat-progress-bar, .dx-loadpanel') || doc.querySelector('#loader_svg, .loading-screen-wrapper, mat-progress-bar, .dx-loadpanel');
-                let isLoaderVisible = false;
-                if (loader) {{
-                    let style = loader.ownerDocument.defaultView.getComputedStyle(loader);
-                    if (style.display !== 'none' && style.opacity !== '0' && style.visibility !== 'hidden') {{
-                        isLoaderVisible = true;
+            function findVisibleLoader() {{
+                const selector = '#loader_svg, .loading-screen-wrapper, mat-progress-bar, .dx-loadpanel';
+                const reportDoc = getReportDocument();
+                const docs = [document];
+                if (reportDoc && reportDoc !== document) docs.push(reportDoc);
+                for (const doc of docs) {{
+                    for (const element of doc.querySelectorAll(selector)) {{
+                        if (isVisible(element)) return element;
+                    }}
+                }}
+                return null;
+            }}
+
+            function findExportButton() {{
+                const reportDoc = getReportDocument();
+                if (!reportDoc) return null;
+
+                let button = reportDoc.querySelector('div[aria-label="Export"]');
+                if (isVisible(button)) return button;
+
+                for (const element of reportDoc.querySelectorAll('.dx-button-text')) {{
+                    if (element.textContent.trim().toLowerCase() === 'export') {{
+                        button = element.closest('div[role="button"], button');
+                        if (isVisible(button)) return button;
                     }}
                 }}
 
-                // If it's not visible, report is generated
-                if (!isLoaderVisible) {{
-                    reportGenerated = true;
+                for (const element of reportDoc.querySelectorAll('button, div[role="button"]')) {{
+                    if (element.textContent.trim().toLowerCase() === 'export' && isVisible(element)) {{
+                        return element;
+                    }}
+                }}
+                return null;
+            }}
+
+            // Phase 1: wait until generation actually starts. An initially hidden/missing
+            // loader must not be interpreted as a completed report.
+            logs.push("Waiting for report generation to start...");
+            const startDeadline = Date.now() + timeoutMs;
+            let loaderSeen = false;
+            while (Date.now() <= startDeadline) {{
+                if (findVisibleLoader()) {{
+                    loaderSeen = true;
+                    logs.push("Report loading detected.");
                     break;
                 }}
-
-                await sleep(100);
-                if (iterations % 50 === 0) logs.push("Still loading...");
-                iterations++;
+                await sleep(pollMs);
+            }}
+            if (!loaderSeen) {{
+                return JSON.stringify({{ status: "ERROR", msg: "Report loading did not start before timeout.", logs }});
             }}
 
-            // If the time ran out and it's still not generated
-            if (!reportGenerated) return JSON.stringify({{ status: "ERROR", msg: "Report generation timeout.", logs }});
-
-            await sleep(200); // UI breathing room
-
-            logs.push("Looking for Export button...");
-            let exportBtn = null;
-            const deadlineExportBtn = Date.now() + timeoutMinutes * 60 * 1000;
-            while (Date.now() <= deadlineExportBtn) {{
-                exportBtn = doc.querySelector('div[aria-label="Export"]');
-                if (exportBtn && exportBtn.offsetParent !== null) break;
-
-                let dxButtons = doc.querySelectorAll('.dx-button-text');
-                for (let b of dxButtons) {{
-                    if (b.textContent.trim() === 'Export') {{
-                        exportBtn = b.closest('div[role="button"]');
-                        break;
-                    }}
+            // Phase 2: wait until generation finishes, polling every 10 seconds.
+            logs.push("Waiting for report generation to finish...");
+            const finishDeadline = Date.now() + timeoutMs;
+            while (Date.now() <= finishDeadline) {{
+                if (!findVisibleLoader()) {{
+                    logs.push("Report loading finished.");
+                    break;
                 }}
-                if (exportBtn && exportBtn.offsetParent !== null) break;
-
-                let allButtons = doc.querySelectorAll('button, div[role="button"], span');
-                for (let b of allButtons) {{
-                    if (b.textContent.trim() === 'Export' && b.offsetParent !== null) {{
-                        exportBtn = b;
-                        break;
-                    }}
-                }}
-                if (exportBtn && exportBtn.offsetParent !== null) break;
-                await sleep(200);
+                await sleep(pollMs);
+            }}
+            if (findVisibleLoader()) {{
+                return JSON.stringify({{ status: "ERROR", msg: "Report generation timeout.", logs }});
             }}
 
-            if (!exportBtn) return JSON.stringify({{ status: "ERROR", msg: "Export button not found.", logs }});
+            // Phase 3: allow the report UI to expose Export for up to the configured timeout.
+            logs.push("Waiting for Export button...");
+            const exportDeadline = Date.now() + timeoutMs;
+            let exportButton = null;
+            while (Date.now() <= exportDeadline) {{
+                exportButton = findExportButton();
+                if (exportButton) break;
+                await sleep(pollMs);
+            }}
+            if (!exportButton) {{
+                return JSON.stringify({{ status: "ERROR", msg: "Export button not found before timeout.", logs }});
+            }}
 
-            exportBtn.click();
-            logs.push("Clicked Export button");
+            exportButton.click();
+            logs.push("Clicked Export button.");
             return JSON.stringify({{ status: "SUCCESS", logs }});
         }})({});
         "#,
         timeout_minutes
     )
 }
+
+#[cfg(test)]
+mod step6_wait_tests {
+    use super::generate_step6_js;
+
+    #[test]
+    fn report_waits_for_loading_to_start_finish_and_export() {
+        let js = generate_step6_js(7);
+        assert!(js.contains("Waiting for report generation to start"));
+        assert!(js.contains("Waiting for report generation to finish"));
+        assert!(js.contains("Waiting for Export button"));
+        assert!(js.contains("const pollMs = 10 * 1000"));
+        assert!(js.contains("})(7);"));
+    }
+}
+
 pub fn generate_mis_reports_wait_js(timeout_seconds: u64) -> String {
     format!(
         r#"
