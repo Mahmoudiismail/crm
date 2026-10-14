@@ -11,11 +11,8 @@ Implementation authorized by the user's explicit **START**. Work is being perfor
 - Historical findings were checked against current code before being considered: current Tasker task errors are propagated with `bail!`, and the CRM download processor reports exhausted download retries as errors. These are not re-reported as open defects.
 - **Unbounded download queue — assessed, no change yet:** the queue can accumulate tasks, but naively switching to bounded `mpsc` plus awaited sends is unsafe with the current `try_for_each_concurrent` processor: the processor exits on its first unrecoverable download error, which could stop draining the queue and leave producers blocked on `send().await`. Keep the current channel until the processor is changed to drain queued tasks while recording a failure and a behavioral backpressure test can verify no deadlock/lost task. This remains a resource-risk candidate, not a confirmed production defect.
 
-## Additional repository-wide findings to prioritize after the current four items
-- **P1 candidate — YASWEB JavaScript result parsing can report false success:** `src/yasweb/browser/javascript.rs::evaluate_automation_step` uses `serde_json::from_str(s).unwrap_or_default()`, then treats every status other than the exact string `ERROR` as success. Malformed JSON or a valid JSON object missing/invalid `status` can therefore be logged as successful automation. This contradicts `md/YASWEB_DEV.md`'s stated contract that automation steps must return a valid `SUCCESS` or `ERROR` result. Confirm all callers and add focused tests before fixing.
-- **P1 security candidate — signed download URLs can leak to persistent logs/errors:** `src/crm/downloader.rs::download_csv` logs the full signed URL at INFO and includes it in GET transport errors. Signed URLs may be bearer-style access credentials. Redact URL query parameters and avoid including raw URL/body content in errors; add tests that verify sensitive query values never appear.
-- **Documentation drift (P2):** `md/ARCHITECTURE.md` says shared CSV readers use `.flexible(true)`, but current `src/utils.rs::build_csv_reader_builder` does not enable flexible parsing and has a strict-width regression test. Update the stale statement when the relevant docs are next touched; no runtime change is needed.
-- These are findings from the continuing scan, not included in the two current fetcher fixes. They remain unimplemented in this pass so the four requested items can be reviewed distinctly.
+## Additional findings now remediated
+- YASWEB false-success handling, signed download URL disclosure, and stale CSV-reader documentation were addressed in the follow-up commits below. Their regression tests/documentation are included in the branch; verification is still pending.
 
 ## Follow-up fixes from continued scan
 - **YASWEB false-success handling (implemented):** `evaluate_automation_step` now rejects malformed JSON, missing/non-string statuses, and every status except explicit `SUCCESS` or `ERROR`. Added focused tests for malformed JSON, missing status, unknown status, success, and error. Updated `md/YASWEB_DEV.md` to state this contract.
@@ -27,7 +24,7 @@ Implementation authorized by the user's explicit **START**. Work is being perfor
 - A draft PR was opened to run the repository's pull-request CI: [PR #410](https://github.com/Mahmoudiismail/crm/pull/410).
 - PR #410: https://github.com/Mahmoudiismail/crm/pull/410 remains draft and unmerged.
 - The source-change commit `b8074d416970164cfeb1675ceb62983a03186cbc` has Test workflow run https://github.com/Mahmoudiismail/crm/actions/runs/38639397361, currently waiting at the `Format and Auto-fix` job's approval gate. Later commits only update documentation/audit notes and did not create a new Rust-triggered run.
-- Per the user's request, the test phase has not started yet. Formatting, tests, Clippy, and release build have **not** been claimed as passed.
+- After the follow-up code commits, the current workflow must be rechecked. Formatting, tests, Clippy, and release build remain unverified until a workflow run completes successfully.
 
 ## Repository and constraints
 - Repository: `Mahmoudiismail/crm`
