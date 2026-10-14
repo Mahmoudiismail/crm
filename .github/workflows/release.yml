@@ -64,20 +64,8 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.source_sha }}
           fetch-depth: 0
-      - name: Reject an existing version tag
-        id: tag_guard
-        shell: bash
-        run: |
-          set -euo pipefail
-          TAG="v${VERSION}"
-          TAG_REF="$(git ls-remote --tags origin "refs/tags/${TAG}")" || {
-            echo "Unable to check remote tag state; refusing to publish." >&2
-            exit 1
-          }
-          if [[ -n "$TAG_REF" ]]; then
-            echo "Release tag ${TAG} already exists; refusing to overwrite an existing version." >&2
-            exit 1
-          fi
+      # Existing version tags are allowed: the ZIP filename contains a unique UTC
+      # build timestamp and overwrite_files=false preserves every prior asset.
       - uses: dtolnay/rust-toolchain@stable
         if: success()
         with:
@@ -161,7 +149,6 @@ jobs:
         if: always()
         shell: bash
         env:
-          TAG_GUARD_OUTCOME: ${{ steps.tag_guard.outcome }}
           BUILD_OUTCOME: ${{ steps.build.outcome }}
           PUBLISH_OUTCOME: ${{ steps.publish.outcome }}
         run: |
@@ -179,9 +166,6 @@ jobs:
           elif [[ "$PUBLISH_OUTCOME" == "failure" ]]; then
             RELEASE_STATUS=failed
             FAILURE_REASON="GitHub Release publication failed"
-          elif [[ "$TAG_GUARD_OUTCOME" == "failure" ]]; then
-            RELEASE_STATUS=blocked
-            FAILURE_REASON="release tag check failed or existing tag prevented publication"
           fi
           echo "build_status=$BUILD_STATUS" >> "$GITHUB_OUTPUT"
           echo "release_status=$RELEASE_STATUS" >> "$GITHUB_OUTPUT"
