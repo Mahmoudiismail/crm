@@ -1640,7 +1640,7 @@ async fn test_fetch_error_waits_for_download_processor_to_finish() {
         Ok(())
     });
 
-    let finish_task = tokio::spawn(finish_fetch_and_downloads(
+    let finish_task = tokio::spawn(finish_fetch_and_downloads::<()>(
         Err(anyhow::anyhow!("report fetch failed")),
         processor,
     ));
