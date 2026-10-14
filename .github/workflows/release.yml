@@ -59,7 +59,6 @@ jobs:
       BUILD_DATE: ${{ needs.prepare.outputs.build_date }}
       SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
       BINARY_INPUT: ${{ inputs.binary }}
-      ATTEMPT_TIMESTAMP: ${{ github.run_started_at }}
 
     steps:
       - uses: actions/checkout@v7
@@ -75,7 +74,7 @@ jobs:
             const path = "plan/v1-release-build-history.csv";
             const quote = (value) => '"' + String(value ?? "").replace(/"/g, '""').replace(/[\r\n]+/g, " ") + '"';
             const row = [
-              process.env.ATTEMPT_TIMESTAMP,
+              new Date().toISOString(),
               context.runId,
               context.runAttempt,
               process.env.SOURCE_SHA,
@@ -215,7 +214,6 @@ jobs:
         if: always() && steps.record_start.outcome == 'success'
         uses: actions/github-script@v7
         env:
-          ATTEMPT_TIMESTAMP: ${{ github.run_started_at }}
           SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
           VERSION: ${{ needs.prepare.outputs.version }}
           BINARY_INPUT: ${{ inputs.binary }}
@@ -248,8 +246,11 @@ jobs:
             const index = lines.findIndex(line => line.includes(marker));
             if (index < 0) throw new Error("Could not find the initial release history row.");
 
+            const timestampMatch = lines[index].match(/^"((?:[^"]|"")*)"/);
+            if (!timestampMatch) throw new Error("Invalid timestamp in release history row.");
+            const originalTimestamp = timestampMatch[1].replace(/""/g, '"');
             lines[index] = [
-              process.env.ATTEMPT_TIMESTAMP,
+              originalTimestamp,
               context.runId,
               context.runAttempt,
               process.env.SOURCE_SHA,
