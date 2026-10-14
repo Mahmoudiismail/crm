@@ -26,10 +26,7 @@ pub async fn download_csv(
     let (filename, temp_dest_path, dest_path, file) =
         create_unique_temp_file(target_dir, &raw_filename).await?;
 
-    info!(
-        "[{}] Downloading CSV: {} → {:?}",
-        report_key, url, dest_path
-    );
+    info!("[{}] Downloading CSV to {:?}", report_key, dest_path);
 
     let resp = match client
         .get(url)
@@ -41,15 +38,14 @@ pub async fn download_csv(
         Ok(r) => r,
         Err(e) => {
             let _ = tokio::fs::remove_file(&temp_dest_path).await;
-            anyhow::bail!("Failed to GET {}: {}", url, e);
+            anyhow::bail!("Failed to GET CSV for report {}: {}", report_key, e.without_url());
         }
     };
 
     let status = resp.status();
     if !status.is_success() {
-        let body = resp.text().await.unwrap_or_default();
         let _ = tokio::fs::remove_file(&temp_dest_path).await;
-        anyhow::bail!("[{}] Download HTTP {}: {}", report_key, status, body);
+        anyhow::bail!("[{}] Download failed with HTTP {}", report_key, status);
     }
 
     let content_length = resp.content_length();
