@@ -65,7 +65,7 @@ Date expressions are evaluated sequentially:
 
 ## Live Execution Preview
 
-For a Custom period with no explicit end date, preview generation uses a bounded five-year horizon from the generated period end. The scheduler must compare the current time against that effective horizon (not the raw end of the initial date period), otherwise a preview requested after today's end would incorrectly return no upcoming executions.
+Execution schedules determine when an app runs independently of the report's Start Date and End Date. Preview generation evaluates future schedule times against a bounded five-year horizon from the last generated period, even when that period's explicit end date is in the past; the period dates remain the report range passed to the app.
 
 
 External Application sections feature a robust **Preview** button displaying a visual calendar of upcoming periodic invocations directly within the GUI.
