@@ -334,7 +334,7 @@ pub(crate) fn schedule_editor_html(
                 <span class='text-sm font-semibold text-gray-800'>Schedules</span>\\
                 <button type='button' id='add-schedule-row' class='rounded border border-gray-300 bg-emerald-600 text-white px-3 py-1 text-sm font-semibold hover:bg-emerald-700'>+ Add schedule</button>\\
             </div>\\
-            <div id='schedule-rows' class='space-y-3' data-profiles='{}'>{}</div>\\
+            <div id='schedule-rows' class='space-y-3' data-profiles="{}">{}</div>\\
             <input type='hidden' id='schedules-hidden' name='schedules' value=''>\\
             <p class='text-xs text-gray-500'>Select one or more schedules. Supports: Interval, Once, Daily at specific times, Weekly on day, or Monthly on day.</p>\\
         </div>",
