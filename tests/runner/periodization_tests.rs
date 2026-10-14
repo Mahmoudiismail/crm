@@ -1253,7 +1253,6 @@ fn test_live_preview_monthly_full_year_generation() {
     );
 }
 
-
 #[test]
 fn test_live_preview_keeps_recurring_schedule_when_custom_end_date_is_past() {
     use chrono::{TimeZone, Utc};

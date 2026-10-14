@@ -618,8 +618,14 @@ pub(crate) async fn handle_api_task_preview(
         period_mode,
         start_date,
         end_date,
-        start_date_arg: values.get("start_date_arg").cloned().filter(|s| !s.is_empty()),
-        end_date_arg: values.get("end_date_arg").cloned().filter(|s| !s.is_empty()),
+        start_date_arg: values
+            .get("start_date_arg")
+            .cloned()
+            .filter(|s| !s.is_empty()),
+        end_date_arg: values
+            .get("end_date_arg")
+            .cloned()
+            .filter(|s| !s.is_empty()),
     };
     if let Some(args_str) = values.get("args") {
         if let Ok(args_map) = serde_json::from_str::<HashMap<String, String>>(args_str) {
