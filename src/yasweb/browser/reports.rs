@@ -731,7 +731,7 @@ fn generate_step1_js(report_type: &str) -> String {
                 return JSON.stringify({ status: "ERROR", msg: "Cannot access report iframe: " + error.message, logs });
             }
 
-            const normalize = value => (value || "").replace(/\\s+/g, " ").trim().toLowerCase();
+            const normalize = value => (value || "").replace(/\s+/g, " ").trim().toLowerCase();
             const target = normalize(reportType);
 
             // Wait for the iframe document to exist without repeatedly materializing innerHTML.
