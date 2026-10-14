@@ -70,6 +70,40 @@ impl FetchContext {
     }
 }
 
+async fn process_users_base64_payload(
+    value: &Value,
+    report_key: &str,
+    download_dir: &Path,
+    download_csv: bool,
+) -> Result<()> {
+    if !download_csv {
+        return Ok(());
+    }
+
+    if let Some(payload) = value.get("base64_data").and_then(Value::as_str) {
+        crate::crm::downloader::process_base64_payload(payload, report_key, download_dir)
+            .await
+            .with_context(|| format!("Failed to process {} Base64 payload", report_key))?;
+    }
+
+    Ok(())
+}
+
+async fn finish_fetch_and_downloads<T>(
+    task_result: Result<T>,
+    download_processor: tokio::task::JoinHandle<Result<()>>,
+) -> Result<T> {
+    // Always join the processor before propagating a report-fetch error.
+    let download_result = download_processor.await;
+    let task_result = task_result?;
+
+    match download_result {
+        Ok(Ok(())) => Ok(task_result),
+        Ok(Err(e)) => Err(e).context("A download failed"),
+        Err(e) => Err(e).context("Download processor panicked"),
+    }
+}
+
 // ──────────────────────────────────────────────────────────────
 // Report definitions
 // ──────────────────────────────────────────────────────────────
@@ -415,19 +449,7 @@ pub async fn fetch_reports(
                     )
                     .await?;
 
-                    if download_csv {
-                        if let Some(base64_val) = v.get("base64_data").and_then(|b| b.as_str()) {
-                            if let Err(e) = crate::crm::downloader::process_base64_payload(
-                                base64_val,
-                                &key,
-                                &download_dir,
-                            )
-                            .await
-                            {
-                                error!("Failed to process {} Base64 payload: {:#}", key, e);
-                            }
-                        }
-                    }
+                    process_users_base64_payload(&v, &key, &download_dir, download_csv).await?;
 
                     Ok((key, v))
                 }
@@ -515,19 +537,14 @@ pub async fn fetch_reports(
     // Drop the sender so the download_processor can finish when all downloads are queued
     drop(download_tx);
 
-    // Process up to 4 concurrent top-level fetch streams
-    let task_results: Vec<(String, Value)> = futures_util::stream::iter(futures)
+    // Process up to 4 concurrent top-level fetch streams. Preserve the result until
+    // the download processor has finished, even when a fetch future fails.
+    let task_results = futures_util::stream::iter(futures)
         .buffer_unordered(4)
-        .try_collect()
-        .await?;
+        .try_collect::<Vec<(String, Value)>>()
+        .await;
 
-    // Await all downloads to complete
-    let download_result = download_processor.await;
-    match download_result {
-        Ok(Err(e)) => anyhow::bail!("A download failed: {}", e),
-        Err(e) => anyhow::bail!("Download processor panicked: {}", e),
-        _ => {}
-    }
+    let task_results = finish_fetch_and_downloads(task_results, download_processor).await?;
 
     if let Some(days) = retention_days {
         if days > 0 {
@@ -610,7 +627,7 @@ async fn fetch_users_report(
         .with_context(|| format!("Failed to read response body from {}", endpoint))?;
 
     if !status.is_success() {
-        anyhow::bail!("{} HTTP {}: {}", endpoint, status, body);
+        anyhow::bail!("{} returned HTTP {}", endpoint, status);
     }
 
     let duration = start_time.elapsed();
@@ -706,13 +723,17 @@ async fn fetch_and_update_incomplete_reservations(
 
         if !res.status().is_success() {
             let status = res.status();
-            let body = res.text().await.unwrap_or_default();
-            anyhow::bail!("GET {} failed with status {}: {}", url, status, body);
+            anyhow::bail!("GET {} failed with status {}", endpoint, status);
         }
 
-        let text: String = res.text().await.unwrap_or_default();
-        let parsed: IncompleteReservationResponse = serde_json::from_str(&text)
-            .with_context(|| format!("Failed to parse response: {}", text))?;
+        let text: String = res.text().await?;
+        let parsed: IncompleteReservationResponse =
+            serde_json::from_str(&text).with_context(|| {
+                format!(
+                    "Failed to parse incomplete-reservation response from {}",
+                    endpoint
+                )
+            })?;
 
         for item in parsed.data.items {
             all_ids.push(item.id);
@@ -764,13 +785,15 @@ async fn fetch_and_update_incomplete_reservations(
         ids: all_ids,
     };
 
+    let ticket_count = payload.ids.len();
     let payload_str = serde_json::to_string(&payload)?;
 
+    // Ticket IDs are operational data; never copy the full PATCH body into persistent logs.
     debug!(
-        "PATCH {} - headers: {}, body: {}",
+        "PATCH {} - headers: {}, ticket_count: {} (request body omitted)",
         patch_url,
         format_redacted_headers(&headers),
-        payload_str
+        ticket_count
     );
 
     let mut res = client
@@ -800,18 +823,16 @@ async fn fetch_and_update_incomplete_reservations(
 
     if !res.status().is_success() {
         let status = res.status();
-        let body = res.text().await.unwrap_or_default();
-        anyhow::bail!(
-            "PATCH {} failed with status {}: {}",
-            patch_url,
-            status,
-            body
-        );
+        anyhow::bail!("PATCH {} failed with status {}", patch_endpoint, status);
     }
 
     let text = res.text().await?;
-    let parsed: Value = serde_json::from_str(&text)
-        .with_context(|| format!("Failed to parse response: {}", text))?;
+    let parsed: Value = serde_json::from_str(&text).with_context(|| {
+        format!(
+            "Failed to parse bulk-update response from {}",
+            patch_endpoint
+        )
+    })?;
 
     Ok(parsed)
 }
@@ -1105,18 +1126,19 @@ async fn fetch_single(
         .with_context(|| format!("Failed to read response body from {}", endpoint))?;
 
     debug!(
-        "Response from {} — status: {}, headers: {}",
-        endpoint, status, headers
+        "Response from {} — status: {}, headers: {}, body_bytes: {}",
+        endpoint,
+        status,
+        headers,
+        body.len()
     );
-    debug!("Response body from {}: {}", endpoint, body);
 
     if !status.is_success() {
-        let err_msg = format!("{} returned HTTP {}: {}", endpoint, status, body);
-        let err = anyhow::anyhow!("{}", err_msg);
+        let err = sanitized_response_error(endpoint, status, &body);
         if is_signed_url_generation_failure(&err) {
-            info!("{} failed with HTTP {}: {}", endpoint, status, body);
+            info!("{}", err);
         } else {
-            error!("{} failed with HTTP {}: {}", endpoint, status, body);
+            error!("{}", err);
         }
         return Err(err);
     }
@@ -1126,6 +1148,22 @@ async fn fetch_single(
         serde_json::from_str(&body).with_context(|| format!("Invalid JSON from {}", endpoint))?;
     trace!("Successfully parsed JSON from {}.", endpoint);
     Ok(parsed)
+}
+
+fn sanitized_response_error(
+    endpoint: &str,
+    status: reqwest::StatusCode,
+    body: &str,
+) -> anyhow::Error {
+    if is_signed_url_generation_failure(&anyhow::anyhow!("{}", body)) {
+        anyhow::anyhow!(
+            "{} returned HTTP {}: failed to generate signed url",
+            endpoint,
+            status
+        )
+    } else {
+        anyhow::anyhow!("{} returned HTTP {}", endpoint, status)
+    }
 }
 
 fn is_signed_url_generation_failure(err: &anyhow::Error) -> bool {
@@ -1572,6 +1610,78 @@ mod tests {
         assert!(!redacted.contains("super_secret_token"));
         assert!(!redacted.contains("session_id=12345"));
     }
+}
+
+#[tokio::test]
+async fn test_users_base64_processing_failure_is_propagated() {
+    let dir = tempfile::tempdir().expect("temporary directory");
+    let value = serde_json::json!({"base64_data": "not-valid-base64"});
+
+    let result = process_users_base64_payload(&value, "users", dir.path(), true).await;
+
+    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("Failed to process users Base64 payload"));
+}
+
+#[tokio::test]
+async fn test_fetch_error_waits_for_download_processor_to_finish() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use tokio::sync::oneshot;
+
+    let processor_finished = Arc::new(AtomicBool::new(false));
+    let finished = Arc::clone(&processor_finished);
+    let (release_tx, release_rx) = oneshot::channel();
+    let processor = tokio::spawn(async move {
+        release_rx.await.expect("test releases download processor");
+        finished.store(true, Ordering::SeqCst);
+        Ok(())
+    });
+
+    let finish_task = tokio::spawn(finish_fetch_and_downloads::<()>(
+        Err(anyhow::anyhow!("report fetch failed")),
+        processor,
+    ));
+    tokio::task::yield_now().await;
+
+    assert!(
+        !finish_task.is_finished(),
+        "fetch error must wait for processor"
+    );
+    release_tx
+        .send(())
+        .expect("download processor is still waiting");
+
+    let result = finish_task.await.expect("finish task should not panic");
+    assert!(result.is_err());
+    assert!(processor_finished.load(Ordering::SeqCst));
+    assert_eq!(result.unwrap_err().to_string(), "report fetch failed");
+}
+
+#[test]
+fn test_sanitized_response_error_omits_body() {
+    let err = sanitized_response_error(
+        "sample-endpoint",
+        reqwest::StatusCode::INTERNAL_SERVER_ERROR,
+        "sample response data",
+    );
+    assert_eq!(
+        err.to_string(),
+        "sample-endpoint returned HTTP 500 Internal Server Error"
+    );
+}
+
+#[test]
+fn test_sanitized_response_error_keeps_signed_url_marker() {
+    let err = sanitized_response_error(
+        "sample-endpoint",
+        reqwest::StatusCode::INTERNAL_SERVER_ERROR,
+        "Failed to generate signed URL",
+    );
+    assert!(is_signed_url_generation_failure(&err));
+    assert!(!err.to_string().contains("response data"));
 }
 
 #[test]

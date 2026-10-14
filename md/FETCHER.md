@@ -78,11 +78,13 @@ Operational impact:
 - A split report returns an array of successful API payloads instead of a single payload.
 - Non-signed-URL failures are not retried by this splitter.
 
-## Concurrency
+## Concurrency and failure handling
 
-- Each report or call batch runs in its own `tokio::spawn` task.
-- Completion is coordinated with `join_all`.
-- Partial failures do not block other tasks.
+- Up to four top-level report-fetch futures are processed concurrently.
+- Recursive date-range splits run concurrently, and signed-URL downloads are processed with up to six downloads in flight.
+- The users report's Base64 CSV processing errors are propagated instead of being logged and treated as success.
+- The fetcher waits for the download processor to finish before returning a report-fetch error, so queued downloads are not left running detached from the failed request.
+- A fetch or download failure causes the overall fetch operation to return an error; it is not represented as a successful report result.
 
 ## Result Shape
 
@@ -120,3 +122,7 @@ Unit tests validate:
 ## Performance Optimization
 
 To minimize performance overhead from reference counting when setting up many asynchronous batch tasks, task context variables (`token`, `base_url`, `email`, `account_id`, `application_id`, `tz`) are consolidated into a single `FetchContext` struct, requiring only one `Arc` wrapper to be cloned per spawned task.
+
+## Response-body logging policy
+
+CRM response bodies are not written to logs or embedded in HTTP failure messages because they may contain signed download URLs, report data, or ticket identifiers. Diagnostics retain the endpoint, HTTP status, response size, and redacted headers. The signed-URL range-splitting path retains only the required `failed to generate signed url` marker so its retry behavior remains intact. Bulk incomplete-reservation PATCH logs include the number of ticket IDs, never the IDs or full request body.

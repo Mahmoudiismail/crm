@@ -1,7 +1,30 @@
 # Full Repository SOLID & DRY Audit — V1
 
 ## Status
-Planning only. No implementation is authorized until the user explicitly sends **START**.
+Implementation authorized by the user's explicit **START**. Work is being performed on `audit/solid-dry-v1-oct-2026`; do not merge into `main` without separate authorization.
+
+## Confirmed findings and remediation
+- **Security/privacy — CRM response payload logging (implemented on this branch):** `src/crm/fetcher.rs` logged the full incomplete-reservation PATCH body and full CRM API response bodies at DEBUG; arbitrary response bodies were also embedded in several HTTP errors and malformed JSON contexts. Responses can contain signed download URLs, report data, and ticket IDs. The change now logs response metadata/byte count, omits PATCH body contents (logs only ticket count), and sanitizes HTTP/parse errors. Focused unit tests verify that response bodies are omitted from errors while the `failed to generate signed url` marker needed by recursive date-range splitting is preserved.
+- **P1 — Users Base64 processing failure was swallowed (fixed on this branch):** the users-report future logged `process_base64_payload` errors and still returned `Ok((key, value))`. It now propagates the error with report context. A focused async regression test supplies malformed Base64 and asserts the failure reaches the caller.
+- **P1 — Download processor could outlive a failed report fetch (fixed on this branch):** `try_collect().await?` returned early before awaiting the spawned download processor. The fetch result is now retained, the processor is always joined, and only then is the fetch error propagated. A focused async test verifies that the processor has completed before a fetch error returns.
+- **DRY/documentation:** Consolidated the fetcher logging rule and corrected concurrency/failure documentation in `md/FETCHER.md`.
+- Historical findings were checked against current code before being considered: current Tasker task errors are propagated with `bail!`, and the CRM download processor reports exhausted download retries as errors. These are not re-reported as open defects.
+- **Unbounded download queue — assessed, no change yet:** the queue can accumulate tasks, but naively switching to bounded `mpsc` plus awaited sends is unsafe with the current `try_for_each_concurrent` processor: the processor exits on its first unrecoverable download error, which could stop draining the queue and leave producers blocked on `send().await`. Keep the current channel until the processor is changed to drain queued tasks while recording a failure and a behavioral backpressure test can verify no deadlock/lost task. This remains a resource-risk candidate, not a confirmed production defect.
+
+## Additional findings now remediated
+- YASWEB false-success handling, signed download URL disclosure, and stale CSV-reader documentation were addressed in the follow-up commits below. Their regression tests/documentation are included in the branch; verification is still pending.
+
+## Follow-up fixes from continued scan
+- **YASWEB false-success handling (implemented):** `evaluate_automation_step` now rejects malformed JSON, missing/non-string statuses, and every status except explicit `SUCCESS` or `ERROR`. Added focused tests for malformed JSON, missing status, unknown status, success, and error. Updated `md/YASWEB_DEV.md` to state this contract.
+- **Signed URL disclosure in downloader (implemented):** `download_csv` no longer logs the signed URL, includes it in transport errors, or includes arbitrary HTTP response bodies in failures. Transport errors use `reqwest::Error::without_url()`; HTTP failures report only report key and status.
+- **CSV documentation drift (implemented):** `md/ARCHITECTURE.md` now documents the strict default reader and requires callers to opt in explicitly when flexible row widths are intended.
+- These fixes have been committed on the audit branch but remain unverified by local Cargo commands; CI approval is still required before claiming tests/formatting/Clippy/build passed.
+
+## Current verification status
+- A draft PR was opened to run the repository's pull-request CI: [PR #410](https://github.com/Mahmoudiismail/crm/pull/410).
+- PR #410: https://github.com/Mahmoudiismail/crm/pull/410 remains draft and unmerged.
+- The fetcher fixes have Test workflow run https://github.com/Mahmoudiismail/crm/actions/runs/38639397361; the YASWEB and downloader changes have runs https://github.com/Mahmoudiismail/crm/actions/runs/38639742390 and https://github.com/Mahmoudiismail/crm/actions/runs/38639751054. These runs are currently waiting at the `Format and Auto-fix` job's approval gate. The latest branch head is `702ca26678dddb372a9f3b7f554e41957cd571aa`.
+- After the follow-up code commits, the current workflow must be rechecked. Formatting, tests, Clippy, and release build remain unverified until a workflow run completes successfully.
 
 ## Repository and constraints
 - Repository: `Mahmoudiismail/crm`
