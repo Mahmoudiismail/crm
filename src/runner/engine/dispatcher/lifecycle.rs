@@ -267,7 +267,7 @@ pub fn start_scheduler(runner_config_path: String) -> RunnerHandle {
 #[cfg(test)]
 mod tests_queue {
     use super::*;
-    use crate::runner::config::Repetition;
+    use crate::runner::config::{Repetition, TaskSchedule};
     use crate::runner::engine::dispatcher::run_task_by_id;
     use tempfile::tempdir;
     use tokio::sync::mpsc;
@@ -442,5 +442,94 @@ mod tests_queue {
             1,
             "Concurrent requests for the same task must result in exactly one execution"
         );
+    }
+
+    #[tokio::test]
+    async fn test_scheduler_executes_task_scheduled_ten_seconds_ahead() {
+        let temp_dir = tempdir().unwrap();
+        let config_file = temp_dir.path().join("runner.json");
+        let config_path = config_file.to_str().unwrap().to_string();
+        let marker_path = temp_dir.path().join("scheduled-task-ran.txt");
+        let marker = marker_path.to_string_lossy().into_owned();
+
+        let task = RunnerTask {
+            id: "scheduled_10s_task".to_string(),
+            name: "Scheduled 10-second task".to_string(),
+            enabled: true,
+            schedules: vec![TaskSchedule::Once {
+                enabled: true,
+                next_run_at: (Utc::now() + chrono::Duration::seconds(10)).to_rfc3339(),
+            }],
+            repetition: Repetition::Once,
+            frequency_seconds: 0,
+            next_run_at: String::new(),
+            steps: vec![crate::runner::config::TaskStep {
+                name: None,
+                mode: crate::runner::config::ExecutionMode::Sequential,
+                actions: vec![crate::runner::config::ActionSpec::ShellCommand(
+                    crate::runner::config::ShellCommandSpec {
+                        command: if cfg!(target_os = "windows") {
+                            use base64::Engine as _;
+                            let script = format!(
+                                "Set-Content -LiteralPath '{}' -Value ran",
+                                marker.replace('\'', "''")
+                            );
+                            let encoded_script = base64::engine::general_purpose::STANDARD.encode(
+                                script
+                                    .encode_utf16()
+                                    .flat_map(|unit| unit.to_le_bytes())
+                                    .collect::<Vec<_>>(),
+                            );
+                            format!(
+                                r#"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -NonInteractive -EncodedCommand {}"#,
+                                encoded_script
+                            )
+                        } else {
+                            format!("bash -c \"printf ran > '{}'\"", marker.replace('\'', "'\\''"))
+                        },
+                        continue_on_error: false,
+                    },
+                )],
+            }],
+            post_run_steps: vec![],
+            last_run_at: String::new(),
+            last_status: String::new(),
+            timeout_seconds: 60,
+        };
+
+        let cfg = RunnerConfig {
+            allow_shell_tasks: true,
+            poll_interval_seconds: 5,
+            tasks: vec![task],
+            ..RunnerConfig::default()
+        };
+        cfg.save(&config_path).unwrap();
+
+        let handle = start_scheduler(config_path);
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(35);
+        let marker_contents = loop {
+            match tokio::fs::read_to_string(&marker_path).await {
+                Ok(contents) => break Some(contents),
+                Err(error)
+                    if error.kind() == std::io::ErrorKind::NotFound
+                        && tokio::time::Instant::now() < deadline =>
+                {
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => break None,
+                Err(error) => panic!("failed to read scheduled-task marker: {error}"),
+            }
+        };
+
+        // Allow the task's completion bookkeeping to finish before shutting down.
+        if marker_contents.is_some() {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+        }
+        let _ = handle.command_tx.send(RunnerCommand::Shutdown).await;
+
+        let contents = marker_contents.unwrap_or_else(|| {
+            panic!("scheduler did not execute the task scheduled 10 seconds ahead within 35 seconds")
+        });
+        assert_eq!(contents.trim(), "ran");
     }
 }
