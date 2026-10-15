@@ -210,7 +210,7 @@ pub(crate) fn stat_card(title: &str, value: &str, description: &str) -> String {
             <dd class="mt-1 text-sm text-gray-500">{description}</dd>
         </div>"#,
         title = escape_html(title),
-        value = escape_html(value)
+        value = escape_html(value),
         description = escape_html(description)
     )
 }
@@ -383,4 +383,18 @@ pub(crate) fn textarea(id: &str, name: &str, value: &str, placeholder: &str, row
         placeholder = escape_html(placeholder),
         value = escape_html(value)
     )
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::stat_card;
+
+    #[test]
+    fn stat_card_escapes_dynamic_value() {
+        let html = stat_card("Status", "<img src=x onerror='alert(1)'>", "description");
+        assert!(!html.contains("<img"));
+        assert!(html.contains("&lt;img"));
+        assert!(html.contains("&#39;alert(1)&#39;"));
+    }
 }
