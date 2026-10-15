@@ -78,3 +78,17 @@ pub(crate) fn js_escape(value: &str) -> String {
         .replace('\n', "\\n")
         .replace('\r', "\\r")
 }
+
+
+#[cfg(test)]
+mod html_escape_tests {
+    use super::escape_html;
+
+    #[test]
+    fn escapes_html_text_and_single_quoted_attributes() {
+        assert_eq!(
+            escape_html("<tag data-value='x'>&\""),
+            "&lt;tag data-value=&#39;x&#39;&gt;&amp;&quot;"
+        );
+    }
+}
