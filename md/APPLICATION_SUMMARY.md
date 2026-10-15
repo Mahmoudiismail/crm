@@ -38,7 +38,6 @@ The system is a collection of Rust binaries designed to:
 - `crm`: Fetches logs and API payloads via CLI arguments.
 - `runner`: Exposes the HTTP dashboard and pipeline engine.
 - `tasker`: Parses CSV structures, manipulates DOM arrays, communicates to Excel COM systems, and issues Emails dynamically.
-- `wcxx`: Handles standard API metric fetching asynchronously.
 - `yasweb`: Performs automated Headless Chrome iterations utilizing CDP events, concurrent isolates, and advanced wait conditions dynamically processing MIS filters.
 
 ## Common paths
@@ -48,4 +47,3 @@ The system is a collection of Rust binaries designed to:
 - `teams.csv`, `users.csv` for structural mapping tasks.
 - `runner.log` for runner executable.
 - `logs/<task_name>/YYYYMMDD_HHMMSS_<task_name>_<task_id>.log` for detailed per-task execution logs.
-- `wcxx.log` for wcxx execution logs.
