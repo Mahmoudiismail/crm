@@ -28,3 +28,11 @@ Verify that the Runner scheduler automatically executes an enabled task whose sc
 
 ## Stop conditions
 Do not implement until the user explicitly replies `START`. Do not merge without separate authorization.
+
+
+## Additional requested work: manual coverage workflow
+- Add a separate `.github/workflows/coverage.yml` with `workflow_dispatch` only; it must not run on pushes or pull requests.
+- Use the repository's Windows runner and Rust toolchain, cache dependencies, run `cargo llvm-cov` with all targets/features, and upload HTML plus LCOV reports as an Actions artifact.
+- Install `cargo-llvm-cov` in the workflow rather than adding it to project dependencies.
+- Keep the existing test workflow unchanged.
+- Verify workflow syntax and review command compatibility with this repository's Cargo package (not a true multi-package workspace).
