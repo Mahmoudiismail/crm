@@ -147,7 +147,6 @@ pub struct CsvAnalysisConfig {
 5. Injects JS into the DOM iframe to fill dates/filters and trigger `.xlsx` generation.
 6. Moves completed downloads to a central output folder.
 
-
 ### `tasker`
 1. If args contain `--manifest`, prints the JSON schema and exits 0.
 2. Loads `tasker_config.json`.
