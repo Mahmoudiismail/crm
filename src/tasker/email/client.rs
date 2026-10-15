@@ -275,7 +275,10 @@ where
         if bucket_name.eq_ignore_ascii_case("call center") && !effective_send_exceptions {
             match generate_leads_report(download_dir, minutes_ago, exclude_branches) {
                 Ok(path_opt) => leads_report_path = path_opt,
-                Err(e) => error!("Failed to generate leads report for Call Center: {}", e),
+                Err(e) => {
+                    error!("Failed to generate leads report for Call Center: {}", e);
+                    return Err(e);
+                }
             }
         }
 
