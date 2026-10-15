@@ -9,7 +9,7 @@ pub use reader::*;
 mod processing;
 mod writer;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use tracing::{error, info, warn};
 use walkdir::WalkDir;
 
@@ -141,8 +141,51 @@ pub fn generate_csv(params: &CsvAnalysisParams<'_>) -> Result<Option<std::path::
     }
 
     if let (Some(c_idx), Some(t_idx)) = (cognito_idx, team_idx) {
-        for result in users_rdr.records() {
-            let record = result?;
+        let mut records = users_rdr.records();
+        let mut previous_records: VecDeque<(usize, String)> = VecDeque::with_capacity(10);
+        let mut record_number = 1usize;
+        while let Some(result) = records.next() {
+            let record = match result {
+                Ok(record) => record,
+                Err(error) => {
+                    error!(
+                        "Failed to read users CSV record {} from {}: {}",
+                        record_number, users_file_path.display(), error
+                    );
+                    for (number, row) in &previous_records {
+                        error!(
+                            "Users CSV context before error at record {}: record {}: {}",
+                            record_number, number, row
+                        );
+                    }
+                    for offset in 1..=10 {
+                        match records.next() {
+                            Some(Ok(row)) => error!(
+                                "Users CSV context after error at record {}: record {}: {}",
+                                record_number,
+                                record_number + offset,
+                                row.iter().collect::<Vec<_>>().join(" | ")
+                            ),
+                            Some(Err(next_error)) => error!(
+                                "Additional users CSV read error after record {} (lookahead {}): {}",
+                                record_number, offset, next_error
+                            ),
+                            None => break,
+                        }
+                    }
+                    return Err(error.into());
+                }
+            };
+
+            previous_records.push_back((
+                record_number,
+                record.iter().collect::<Vec<_>>().join(" | "),
+            ));
+            if previous_records.len() > 10 {
+                previous_records.pop_front();
+            }
+            record_number += 1;
+
             if let (Some(cognito), Some(team_str)) = (record.get(c_idx), record.get(t_idx)) {
                 let cognito = cognito.trim();
                 if cognito.is_empty() {
