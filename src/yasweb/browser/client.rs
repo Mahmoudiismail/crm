@@ -69,7 +69,7 @@ pub fn enable_network_logging(
 
 /// Removes query strings and fragments, which commonly contain session or signed URL data.
 fn redact_url(url: &str) -> String {
-    let end = url.find(['?', '#']).unwrap_or(url.len());
+    let end = url.find(|ch| ch == '?' || ch == '#').unwrap_or(url.len());
     url[..end].to_string()
 }
 
