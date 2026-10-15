@@ -13,7 +13,6 @@ The system consists of five main binaries:
 - **`crm`**: Handles CRM data fetching, downloading, and reporting via authenticated APIs.
 - **`yasweb`**: Automates headless Chrome interactions for legacy web systems (MIS modules).
 - **`tasker`**: Stateless worker for background processes like CSV processing, Excel automation (via PowerShell COM), and dispatching formatted emails.
-- **`wcxx`**: Dedicated fetcher for Webex Contact Center metadata and metrics.
 
 For a detailed architectural breakdown, see [`md/ARCHITECTURE.md`](./md/ARCHITECTURE.md).
 
@@ -39,7 +38,6 @@ cargo build --release --bin crm
 cargo build --release --bin runner
 cargo build --release --bin yasweb
 cargo build --release --bin tasker
-cargo build --release --bin wcxx
 ```
 
 ### Running
