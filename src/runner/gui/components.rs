@@ -210,7 +210,7 @@ pub(crate) fn stat_card(title: &str, value: &str, description: &str) -> String {
             <dd class="mt-1 text-sm text-gray-500">{description}</dd>
         </div>"#,
         title = escape_html(title),
-        value = value, // Assumed pre-escaped or raw HTML/numbers
+        value = escape_html(value)
         description = escape_html(description)
     )
 }
