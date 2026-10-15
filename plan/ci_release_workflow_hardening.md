@@ -6,7 +6,7 @@ Apply the approved, minimal repository optimizations to GitHub Actions without c
 ## Scope
 1. Harden `.github/workflows/release.yml`:
    - Read the manually supplied binary selection through an environment variable rather than interpolating it into shell source.
-   - Accept only the six existing binary targets: `crm`, `runner`, `yasweb`, `wcxx`, `tasker`, and `crm_updater`.
+   - Accept only the five remaining binary targets: `crm`, `runner`, `yasweb`, `tasker`, and `crm_updater`.
    - Reject empty selections, unknown names, and malformed comma-separated values.
    - Build and package using Bash arrays; remove dynamic command construction and `eval`.
    - Preserve the `all` selection and current release artifact naming.

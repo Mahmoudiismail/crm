@@ -18,7 +18,6 @@ Or build a specific binary:
 cargo build --release --bin runner
 cargo build --release --bin crm
 cargo build --release --bin yasweb
-cargo build --release --bin wcxx
 cargo build --release --bin tasker
 cargo build --release --bin crm_updater
 ```
@@ -34,7 +33,7 @@ To run the full suite as a user would, ensure the executables are placed togethe
    cargo run --bin runner
    ```
 2. The Runner GUI will be available at `http://127.0.0.1:8787`.
-3. Configure CRM, Yasweb, WCXX, and Tasker instances from the GUI, or add them via the **Apps** page for dynamic manifest orchestration.
+3. Configure CRM, Yasweb, and Tasker instances from the GUI, or add them via the **Apps** page for dynamic manifest orchestration.
 
 ### Dynamic App Execution
 
@@ -43,7 +42,6 @@ Executables supporting the `AppManifest` standard can be queried independently:
 ```bash
 cargo run --bin crm -- --manifest
 cargo run --bin yasweb -- --manifest
-cargo run --bin wcxx -- --manifest
 cargo run --bin tasker -- --manifest
 ```
 
@@ -72,7 +70,6 @@ The manually triggered **Release Binaries** workflow accepts `all` or a comma-se
 - `crm`
 - `runner`
 - `yasweb`
-- `wcxx`
 - `tasker`
 - `crm_updater`
 

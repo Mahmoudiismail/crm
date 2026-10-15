@@ -90,7 +90,6 @@ Reference policy: `md/AI_DOC_POLICY.md`
 2. Update the corresponding markdown files under `md/`.
 3. Keep examples and commands runnable.
 4. Ensure docs mention new flags, config fields, and operational impacts.
-5. Provide Webex Contact Center metrics logic inside `src/bin/wcxx.rs`.
 
 ## Completion Criteria
 
@@ -106,7 +105,7 @@ If you modify `src/tasker/csv_task.rs` or any logic related to the `csv_analysis
 - Commit codebase refactoring and remediation changes incrementally, making individual 'one by one' Git commits for each distinct fix.
 - The crm tool's configuration logic normalizes from_date, to_date, and calls_from_date to ISO format upon loading and finalization (finalize_runtime_fields) to ensure consistent data processing regardless of the format used in config.json.
 - The yasweb application maps global --start-date and --end-date arguments into a report's active filters using the start_date_key and end_date_key defined in yasweb_config.json. These keys are optional; if missing, date filtering is skipped and --monthly execution runs the report once instead of chunking by month.
-- System-wide logging verbosity is set to TRACE across all binaries (crm, yasweb, tasker, wcxx, runner) for the file logs, while stdout is set to DEBUG. This includes detailed tracing of browser actions, network requests/responses (with headers), and data processing steps to ensure maximum visibility for debugging and script improvement.
+- System-wide logging verbosity is set to TRACE across all binaries (crm, yasweb, tasker, runner) for the file logs, while stdout is set to DEBUG. This includes detailed tracing of browser actions, network requests/responses (with headers), and data processing steps to ensure maximum visibility for debugging and script improvement.
 - The yasweb binary can append a timestamp (_{HHMMSS}) to output filenames if the --add-time-to-file CLI flag is used.
 - Avoid unnecessary intermediate Vec allocations, such as using .collect::<Vec<_>>().join("") when .collect::<String>() can be used directly.
 - For complex HTML generation in the runner's GUI (src/runner/gui.rs), the format! macro should use named arguments to enhance readability and maintainability.
@@ -119,7 +118,7 @@ If you modify `src/tasker/csv_task.rs` or any logic related to the `csv_analysis
 - The test.yml GitHub Actions workflow should only trigger on Pull Requests when there are changes to Rust files (**/*.rs), Cargo.toml, or Cargo.lock.
 - In the tasker application, the send_exceptions mode (CLI --send-exceptions) suppresses all specialized Call Center logic, including lead report generation and the unique Call Center email body format. Any 'Call Center' tickets that are exceptions are instead processed and reported as standard team exceptions.
 - In the tasker application's configuration, exclude_categories acts as a base filter to remove tickets. category_exceptions acts as an assignment override; if a ticket matches the exception's branch and category, its team is overridden to the exception's team and it is kept (bypassing the exclusion).
-- The project uses the clap crate (specifically with the derive feature) for all CLI argument parsing across its binaries (crm, runner, tasker, wcxx, yasweb).
+- The project uses the clap crate (specifically with the derive feature) for all CLI argument parsing across its binaries (crm, runner, tasker, yasweb).
 - Redundant wildcard patterns in struct destructuring (e.g., working_hours: _, ..) must be avoided as they trigger the clippy::unneeded_wildcard_pattern lint, which is treated as an error in the project's CI.
 - In tasker email exports (HTML and Excel), the 'Position' column is entirely excluded. The 'Team' column is also hidden when sending emails specific to a single team.
 - In tasker email configurations, teams listed in send_per_team_all_branches are processed regardless of whether their branch is present in send_per_branch_branches.
@@ -128,7 +127,7 @@ If you modify `src/tasker/csv_task.rs` or any logic related to the `csv_analysis
 - The user permits adding new external crates (dependencies) to the project, provided they are proven safe and do not significantly increase the application's overall binary size.
 - Lead report CSV files in the tasker application are parsed with dynamic delimiter detection (supporting both commas and tabs) to handle variations in CRM data exports.
 - The GitHub Actions release workflow (release.yml) builds Windows binaries and packages them into a single zip file named crm_tool_v<version>_<datetime>_windows.zip, which is published directly as a GitHub Release (overwriting existing assets on the same tag). Google Drive uploads are not used.
-- The repository manages all of its multiple Rust binaries (runner, crm, yasweb, wcxx, tasker) via a single Cargo.toml file (package crm_tool) with autobins = false and explicit [[bin]] entries, rather than utilizing a Cargo workspace.
+- The repository manages all of its multiple Rust binaries (runner, crm, yasweb, tasker) via a single Cargo.toml file (package crm_tool) with autobins = false and explicit [[bin]] entries, rather than utilizing a Cargo workspace.
 - The tasker application resolves its download directory path relative to the executable directory and must use `std::time::SystemTime` for all file age and modification threshold comparisons across tasks (e.g., ticket data, leads data) to ensure reliable discovery without being affected by local timezone offsets or Daylight Saving Time shifts (e.g., discrepancies between Tasker execution time and PC time).
 - The crm binary accepts --start-date and --end-date CLI arguments to override configuration values. It normalizes various input formats (including DD-MM-YYYY and abbreviated months) to ISO format (YYYY-MM-DD) utilizing the shared parse_flexible_date and to_iso_date utilities.
 - Do not use lazy defaults like .unwrap_or_default() unless semantically correct for the business logic. Avoid .unwrap() and .expect() in domain logic outside of tests to prevent panics.

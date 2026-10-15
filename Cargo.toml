@@ -68,10 +68,6 @@ name = "yasweb"
 path = "src/bin/yasweb.rs"
 
 [[bin]]
-name = "wcxx"
-path = "src/bin/wcxx.rs"
-
-[[bin]]
 name = "tasker"
 path = "src/bin/tasker.rs"
 

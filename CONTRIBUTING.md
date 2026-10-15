@@ -14,7 +14,7 @@ First off, thank you for considering contributing to the CRM Tool! It's people l
 
 ## Repository Structure
 
-- `src/bin/`: Entry points for the executable binaries (`crm`, `runner`, `yasweb`, `tasker`, `wcxx`).
+- `src/bin/`: Entry points for the executable binaries (`crm`, `runner`, `yasweb`, `tasker`).
 - `src/crm/`: CRM domain logic (fetching, authentication).
 - `src/runner/`: Task runner orchestration and GUI scheduler.
 - `src/tasker/`: Background task processing (CSV analysis, emailing, Excel automation).

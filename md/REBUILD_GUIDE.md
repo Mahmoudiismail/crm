@@ -7,7 +7,7 @@ This document provides the essential structural and architectural blueprint requ
 The system is a decentralized, multi-binary orchestration suite primarily targeting Windows.
 
 - **The `runner` daemon** is the central nervous system. It schedules tasks, exposes a local HTTP GUI, and orchestrates other executables via `tokio::process`.
-- **Worker Apps (`crm`, `yasweb`, `wcxx`, `tasker`)** are independent CLI tools that perform specific domain tasks (fetching data, web scraping, processing CSVs).
+- **Worker Apps (`crm`, `yasweb`, `tasker`)** are independent CLI tools that perform specific domain tasks (fetching data, web scraping, processing CSVs).
 - **The Orchestration Contract (`AppManifest`)**: Instead of hardcoding how to run every worker, the `runner` dynamically registers them. If executed with `--manifest`, any worker app must print a JSON schema (the `AppManifest`) describing its required/optional CLI arguments and immediately exit. The `runner` uses this schema to generate GUI forms and spawn the worker with the correct parameters.
 
 ## 2. Core Data Models
@@ -146,12 +146,6 @@ pub struct CsvAnalysisConfig {
 4. Uses the Chrome DevTools Protocol (`Page.setDownloadBehavior`) to assign unique temp directories per concurrent download tab.
 5. Injects JS into the DOM iframe to fill dates/filters and trigger `.xlsx` generation.
 6. Moves completed downloads to a central output folder.
-
-### `wcxx`
-1. If args contain `--manifest`, prints the JSON schema and exits 0.
-2. Loads `wcxx_config.json`.
-3. Uses a static Bearer Token to hit Webex CC APIs (e.g. `/calendars`, `/agents`).
-4. Generates an HTML report embedding the JSON data and automatically opens the user's default browser to view it.
 
 ### `tasker`
 1. If args contain `--manifest`, prints the JSON schema and exits 0.

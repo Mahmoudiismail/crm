@@ -19,7 +19,6 @@ This document tracks testing improvements and technical debt identified during t
 
 ## Remaining Testing Technical Debt
 * Many tasks inside `tasker/email.rs` heavily rely on filesystem I/O and PowerShell execution. They are hard to unit test in an isolated manner. Refactoring those modules to use Dependency Injection or Traits for Command execution would significantly improve testability.
-* Network and Webex specific APIs in `wcxx` need mocked server tests instead of testing against live/fake tokens.
 * Yasweb's browser automation tests require a headless environment, currently not isolated nicely enough in standard CI. A robust page-object or isolated mocked Chrome test would bring better coverage without flakiness.
 
 ## CI Recommendations

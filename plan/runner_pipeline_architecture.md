@@ -2,7 +2,7 @@
 
 ## 1. Current Architecture
 
-The Runner daemon is the core orchestrator of the CRM Tool suite. It schedules tasks, runs a local HTTP GUI, and orchestrates worker apps (`crm`, `yasweb`, `wcxx`, `tasker`) via `tokio::process`.
+The Runner daemon is the core orchestrator of the CRM Tool suite. It schedules tasks, runs a local HTTP GUI, and orchestrates worker apps (`crm`, `yasweb`, `tasker`) via `tokio::process`.
 
 ### Configuration Layer
 - Driven by `src/runner/config.rs`.

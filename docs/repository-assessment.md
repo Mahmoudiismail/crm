@@ -103,7 +103,6 @@ graph TD
         Tasker(Tasker<br>Sync/Async Tasks)
         CRM(CRM<br>Async Fetcher)
         Yasweb(Yasweb<br>Browser Automation)
-        Wcxx(Wcxx<br>Metrics)
     end
 
     subgraph External Systems
@@ -118,7 +117,6 @@ graph TD
     Runner -->|Spawns| Tasker
     Runner -->|Spawns| CRM
     Runner -->|Spawns| Yasweb
-    Runner -->|Spawns| Wcxx
 
     Tasker -->|Reads/Writes CSV| FS
     Tasker -->|Generates & Executes .ps1| PS
