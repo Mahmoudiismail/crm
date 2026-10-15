@@ -426,12 +426,11 @@ try {
     $UpdateFailed = $true
 } finally {
     Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue
-    if ($UpdateFailed) {
-
     if (Test-Path -LiteralPath $ReplacementMapPath) {
         Remove-Item -LiteralPath $ReplacementMapPath -Force -ErrorAction SilentlyContinue
     }
-    exit 1
+    if ($UpdateFailed) {
+        exit 1
     }
 }
 "#;
