@@ -47,16 +47,16 @@ pub fn enable_network_logging(
             Event::NetworkRequestWillBeSent(req) => {
                 info!(
                     "Request: {} {}",
-                    req.params.request.method, req.params.request.url
+                    req.params.request.method,
+                    redact_url(&req.params.request.url)
                 );
             }
             Event::NetworkResponseReceived(res) => {
                 info!(
-                    "Response: {} {} {} Headers: {:?}",
+                    "Response: {} {} {}",
                     res.params.response.status,
-                    res.params.response.url,
-                    res.params.response.mime_type,
-                    res.params.response.headers
+                    redact_url(&res.params.response.url),
+                    res.params.response.mime_type
                 );
             }
             _ => {}
@@ -64,4 +64,25 @@ pub fn enable_network_logging(
         .context("Failed to add event listener")?;
 
     Ok(events)
+}
+
+
+/// Removes query strings and fragments, which commonly contain session or signed URL data.
+fn redact_url(url: &str) -> String {
+    let end = url.find(['?', '#']).unwrap_or(url.len());
+    url[..end].to_string()
+}
+
+#[cfg(test)]
+mod network_logging_tests {
+    use super::redact_url;
+
+    #[test]
+    fn redacts_query_strings_and_fragments() {
+        assert_eq!(
+            redact_url("https://example.test/report?token=secret#section"),
+            "https://example.test/report"
+        );
+        assert_eq!(redact_url("https://example.test/report"), "https://example.test/report");
+    }
 }
