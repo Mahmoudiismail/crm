@@ -8,7 +8,7 @@ This project provides automated management, downloading, and reporting for CRM s
 
 ### Architecture Overview
 
-The system consists of five main binaries:
+The system consists of four main binaries:
 - **`runner`**: Orchestrates and executes configured tasks, featuring a system tray GUI and interval-based scheduling.
 - **`crm`**: Handles CRM data fetching, downloading, and reporting via authenticated APIs.
 - **`yasweb`**: Automates headless Chrome interactions for legacy web systems (MIS modules).
