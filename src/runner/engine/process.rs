@@ -213,7 +213,7 @@ async fn test_real_bounded_process_output_cap_above_10mb() {
         c.args([
             "-NoProfile",
             "-Command",
-            "$str = 'A' * 1024; for ($i=0; $i -lt 12000; $i++) { Write-Host $str }",
+            "$bytes = New-Object byte[] 12582912; [Console]::OpenStandardOutput().Write($bytes, 0, $bytes.Length)",
         ]);
         c
     } else {
