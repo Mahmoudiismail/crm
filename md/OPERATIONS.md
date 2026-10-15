@@ -47,7 +47,6 @@ cargo run --bin crm -- --report tickets --config custom_config.json --start-date
 cargo run --bin tasker -- --task 1 --only-call-center --send-exceptions
 ```
 
-
 ## Logs and Debugging
 
 Every application writes highly detailed tracing logs to local files in the same directory as the executables (set to `TRACE` level for file output, and `DEBUG` for `stdout`).
