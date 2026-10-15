@@ -418,9 +418,19 @@ mod tests_queue {
                 {
                     tokio::time::sleep(Duration::from_millis(100)).await;
                 }
-                Err(error) => {
-                    panic!("task should have written its execution marker: {error}");
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    let task_status = RunnerConfig::load(&config_path)
+                        .ok()
+                        .and_then(|cfg| {
+                            cfg.tasks
+                                .into_iter()
+                                .find(|task| task.id == "race_task")
+                                .map(|task| task.last_status)
+                        })
+                        .unwrap_or_else(|| "task status unavailable".to_string());
+                    panic!("task did not write its execution marker; last task status: {task_status}");
                 }
+                Err(error) => panic!("failed to read task execution marker: {error}"),
             }
         };
         let _ = tokio::fs::remove_file(&marker_path).await;
