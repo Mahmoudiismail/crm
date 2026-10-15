@@ -54,7 +54,6 @@ Executables spawned via the runner or manually have their own configurations.
   }
   ```
 - **`yasweb_config.json`:** Browser automation configurations, cached filter mappings, and report timeout limits. The `timeout_minutes` field independently controls the maximum wait time for report generation (Step 6 loader) and the subsequent XLSX file download. It does not act as a global UI timeout for navigation or filter readiness. `start_date_key` and `end_date_key` are dictionaries containing `key` and `format` fields to specify both the web UI filter name and its exact expected date/time format (e.g. `{"key": "FromDate", "format": "%d-%m-%Y 00:00"}`).
-- **`wcxx_config.json`:** Webex CC token and organization endpoints.
 - **`tasker_config.json`:** Tasker tasks like CSV pivoting, team mappings, Outlook configuration, and leads reporting for the Call Center. Includes `send_exceptions` to dynamically read from `category_exceptions` and skip standard team branch logic for exception tickets.
 
 ### Merging and Persistence Behavior
