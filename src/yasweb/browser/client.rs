@@ -52,11 +52,29 @@ pub fn enable_network_logging(
                 );
             }
             Event::NetworkResponseReceived(res) => {
+                let headers = res
+                    .params
+                    .response
+                    .headers
+                    .iter()
+                    .map(|(name, value)| {
+                        let lower_name = name.to_ascii_lowercase();
+                        if matches!(
+                            lower_name.as_str(),
+                            "authorization" | "proxy-authorization" | "cookie" | "set-cookie"
+                        ) {
+                            format!("{name}: [REDACTED]")
+                        } else {
+                            format!("{name}: {value:?}")
+                        }
+                    })
+                    .collect::<Vec<_>>();
                 info!(
-                    "Response: {} {} {}",
+                    "Response: {} {} {} Headers: {:?}",
                     res.params.response.status,
                     redact_url(&res.params.response.url),
-                    res.params.response.mime_type
+                    res.params.response.mime_type,
+                    headers
                 );
             }
             _ => {}
