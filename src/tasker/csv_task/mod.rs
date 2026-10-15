@@ -143,7 +143,6 @@ pub fn generate_csv(params: &CsvAnalysisParams<'_>) -> Result<Option<std::path::
     if let (Some(c_idx), Some(t_idx)) = (cognito_idx, team_idx) {
         for result in users_rdr.records() {
             let record = result?;
-            tracing::trace!("Processing user record: {:?}", record);
             if let (Some(cognito), Some(team_str)) = (record.get(c_idx), record.get(t_idx)) {
                 let cognito = cognito.trim();
                 if cognito.is_empty() {
