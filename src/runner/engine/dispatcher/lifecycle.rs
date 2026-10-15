@@ -428,7 +428,9 @@ mod tests_queue {
                                 .map(|task| task.last_status)
                         })
                         .unwrap_or_else(|| "task status unavailable".to_string());
-                    panic!("task did not write its execution marker; last task status: {task_status}");
+                    panic!(
+                        "task did not write its execution marker; last task status: {task_status}"
+                    );
                 }
                 Err(error) => panic!("failed to read task execution marker: {error}"),
             }
@@ -472,7 +474,10 @@ mod tests_queue {
                                 marker.replace('\'', "''")
                             )
                         } else {
-                            format!("bash -c \"printf ran > '{}'\"", marker.replace('\'', "'\\''"))
+                            format!(
+                                "bash -c \"printf ran > '{}'\"",
+                                marker.replace('\'', "'\\''")
+                            )
                         },
                         continue_on_error: false,
                     },
@@ -515,7 +520,9 @@ mod tests_queue {
         let _ = handle.command_tx.send(RunnerCommand::Shutdown).await;
 
         let contents = marker_contents.unwrap_or_else(|| {
-            panic!("scheduler did not execute the task scheduled 10 seconds ahead within 35 seconds")
+            panic!(
+                "scheduler did not execute the task scheduled 10 seconds ahead within 35 seconds"
+            )
         });
         assert_eq!(contents.trim(), "ran");
     }
