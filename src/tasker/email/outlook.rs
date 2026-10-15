@@ -1,4 +1,5 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
+use std::io::Write;
 
 pub fn send_email(
     to: &str,
@@ -15,7 +16,7 @@ param(
     [string]$To,
     [string]$Cc,
     [string]$Subject,
-    [string]$HtmlBody,
+    [string]$HtmlBodyPath,
     [string]$AttachmentPath,
     [string]$LeadsPath,
     [string]$DisplayOrSend
@@ -29,7 +30,7 @@ try {
     if ($To) { $Mail.To = $To }
     if ($Cc) { $Mail.CC = $Cc }
     if ($Subject) { $Mail.Subject = $Subject }
-    if ($HtmlBody) { $Mail.HTMLBody = $HtmlBody }
+    if ($HtmlBodyPath -and (Test-Path -LiteralPath $HtmlBodyPath)) { $Mail.HTMLBody = Get-Content -LiteralPath $HtmlBodyPath -Raw }
 
     if ($AttachmentPath -and (Test-Path $AttachmentPath)) {
         $Mail.Attachments.Add($AttachmentPath)
@@ -53,13 +54,19 @@ try {
     let script_manager = crate::tasker::script_manager::ScriptManager::new();
     let script_path = script_manager.get_or_create_script("Email", "send_email.ps1", template)?;
 
+    // Keep potentially large email HTML out of the Windows command line.
+    let mut html_file = tempfile::NamedTempFile::new().context("Failed to create temporary email body file")?;
+    html_file.write_all(html_body.as_bytes()).context("Failed to write temporary email body file")?;
+    html_file.flush().context("Failed to flush temporary email body file")?;
+    let html_path = html_file.path().to_string_lossy().into_owned();
+
     script_manager.execute_script_with_args(
         &script_path,
         &[
             ("-To", to),
             ("-Cc", cc),
             ("-Subject", subject),
-            ("-HtmlBody", html_body),
+            ("-HtmlBodyPath", &html_path),
             ("-AttachmentPath", attachment_path.unwrap_or("")),
             ("-LeadsPath", leads_path.unwrap_or("")),
             ("-DisplayOrSend", display_or_send),
@@ -88,7 +95,9 @@ mod tests {
         assert!(src.contains("[string]$To"));
         assert!(src.contains("[string]$Cc"));
         assert!(src.contains("[string]$Subject"));
-        assert!(src.contains("[string]$HtmlBody"));
+        assert!(src.contains("[string]$HtmlBodyPath"));
+        assert!(src.contains("Get-Content -LiteralPath $HtmlBodyPath -Raw"));
+        assert!(src.contains("NamedTempFile::new"));
         assert!(src.contains("[string]$AttachmentPath"));
         assert!(src.contains("[string]$LeadsPath"));
         assert!(src.contains("[string]$DisplayOrSend"));
