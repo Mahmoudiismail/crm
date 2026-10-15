@@ -67,7 +67,6 @@ overflow-checks = false
 name = "yasweb"
 path = "src/bin/yasweb.rs"
 
-
 [[bin]]
 name = "tasker"
 path = "src/bin/tasker.rs"
