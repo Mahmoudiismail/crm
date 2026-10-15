@@ -1,162 +1,65 @@
-# Session 4 — Full Security & Reliability Audit
+# Security & Reliability Audit — Current Status
 
-## 1. Executive Summary
-This read-only audit assessed the CRM Tool architecture, focusing on the Runner execution pipeline, configuration ingestion, Custom TCP HTTP server, CSV processing, and process life-cycle. The review confirmed the codebase correctly limits external command execution by decoupling arguments from execution logic `(tokio::process::Command::arg)`. However, several P1 and P2 reliability/security issues were uncovered regarding unbounded reads in the custom TCP server, blocking `std::fs` calls within Tokio async contexts (starvation risk), PowerShell string interpolation risks, and the persistence of `.flexible(true)` within the `tasker` CSV configuration against explicit rules.
+## Scope and status
 
-## 2. Overall Security Risk
-**Medium.** The application boundary is relatively tight because the Runner is designed to run locally (binding to `127.0.0.1` by default). However, the lack of authentication on the GUI API routes and the use of unescaped string interpolation in PowerShell commands present significant lateral movement and command injection risks if an attacker gains access to the local network or configuration files.
+This document originated as a historical audit. Some findings in the original version no longer match the current code and must not be treated as confirmed current vulnerabilities without revalidation. This update corrects findings directly contradicted by the current source; it does not claim that every historical concern has been exhaustively re-audited.
 
-## 3. Overall Reliability Risk
-**High.** The most critical reliability risks stem from the custom TCP HTTP server implementation, which lacks bounds checking and can be trivially memory-exhausted. Furthermore, synchronous file I/O operations (like `walkdir` and `std::fs::remove_file`) inside async Tokio workers present a starvation risk to the scheduler.
+## Findings checked against current source
 
-## 4. P0 Findings
-None identified.
+### Runner HTTP request bounds — previous unbounded-read finding is stale
 
-## 5. P1 Findings
+Current `src/runner/gui/mod.rs` defines `MAX_HEADER_BYTES = 64 * 1024` and `MAX_BODY_BYTES = 2 * 1024 * 1024`, and applies a 10-second timeout while reading requests. The previous statement that the server resizes the request buffer without bounds is not accurate for the current implementation.
 
-### [P1] Unbounded Request Parsing in Custom HTTP Server
-**Confidence:** High
-**Location:** `src/runner/gui/mod.rs:read_http_request`
-**Evidence:** The TCP listener dynamically resizes a `vec![0u8; 8192]` infinitely (`buf.resize(buf.len() * 2, 0)`) while waiting for a `\r\n\r\n` boundary or full `Content-Length`.
-**Trigger:** An unauthenticated attacker sending an infinitely long HTTP header line without `\r\n\r\n` or a massive payload.
-**Impact:** Denial of Service (DoS). The vector will grow until Out-Of-Memory (OOM), killing the `runner` daemon.
-**Affected component:** Runner GUI
-**Recommended remediation:** Enforce a hard cap (e.g., 1MB) on `buf.len()` during the read loop and immediately terminate the socket if exceeded.
-**Regression test:** A test opening a TCP connection and sending 5MB of garbage data without `\r\n\r\n` to ensure it drops the connection without crashing.
+**Status:** The original unbounded-read finding is superseded by these bounds. This is not a claim that every HTTP protocol edge case (for example, all transfer-encoding behavior) has been exhaustively tested.
 
-### [P1] `std::fs::remove_file` and `walkdir` block Tokio Worker Threads
-**Confidence:** High
-**Location:** `src/runner/engine/logging.rs:cleanup_old_logs`
-**Evidence:** The daily scheduler spawns `cleanup_old_logs` onto a standard `tokio::spawn` worker. Inside, it uses synchronous `walkdir::WalkDir` and `std::fs::remove_file` inside a loop over log files.
-**Trigger:** Triggered automatically every 24 hours via cron schedule.
-**Impact:** If the `logs/` directory contains thousands of files, the synchronous iteration and deletion will lock a Tokio worker thread for hundreds of milliseconds or seconds, stalling async scheduling and execution pipelines.
-**Affected component:** Runner Dispatcher
-**Recommended remediation:** Wrap `cleanup_old_logs` in `tokio::task::spawn_blocking` or use `tokio::fs::remove_file` and `tokio::fs::read_dir`.
-**Regression test:** `test_log_cleanup_does_not_block_executor` asserting async yields occur during massive directory sweeps.
+### CSV row-width validation — previous `.flexible(true)` finding is stale
 
-### [P1] `csv::ReaderBuilder` continues to bypass strict validation (`.flexible(true)`)
-**Confidence:** High
-**Location:** `src/tasker/csv_task.rs:generate_csv`
-**Evidence:** The CSV parser is explicitly configured with `csv::ReaderBuilder::new().flexible(true)`.
-**Trigger:** Parsing dynamically grouped reports via `tasker` background jobs.
-**Impact:** Malformed CSV datasets with missing/extra columns will be silently accepted, violating the strict validation mandated in `AGENTS.md`. Downstream index-based lookups may misalign or panic.
-**Affected component:** Tasker
-**Recommended remediation:** Change `.flexible(true)` to `.flexible(false)` and allow `from_reader` to propagate validation errors.
-**Regression test:** A unit test verifying `generate_csv` strictly rejects jagged CSV inputs.
+The current `src/tasker/csv_task/reader.rs` uses the shared `crate::utils::build_csv_reader_from_reader` helper rather than the old `csv_task.rs` implementation described in the historical finding. The repository’s current CSV-reader documentation also describes strict parsing as the default and requires explicit opt-in for flexible row widths.
 
-## 6. P2 Findings
+**Status:** The original location and evidence are stale; do not report `.flexible(true)` in `src/tasker/csv_task.rs` as a current confirmed defect.
 
-### [P2] Path Traversal bypassing `resolve_relative_to_exe_dir`
-**Confidence:** High
-**Location:** `src/runner/engine/validation.rs:resolve_relative_to_exe_dir`
-**Evidence:** The helper checks `if p.is_absolute() { return p; }` and immediately returns absolute paths without enforcing a jail.
-**Trigger:** A user or script configures an `ExternalApp` config or a `CsvAnalysisConfig` download path to `/etc/shadow` or `C:\Windows\System32`.
-**Impact:** While it prevents `../../` escapes relative to the exe, it completely permits accessing absolute root locations on disk, allowing configuration to arbitrarily manipulate the host filesystem.
-**Affected component:** Runner, Tasker
-**Recommended remediation:** Check if absolute paths are allowed globally, or strictly sandbox configurations by validating the canonicalized path is a sub-directory of `current_exe()`.
-**Regression test:** Assert that `resolve_relative_to_exe_dir("/etc/passwd")` fails or strips the absolute boundary if strict jailing is desired.
+### Runner GUI network exposure — qualify the earlier unauthenticated-route claim
 
-### [P2] PowerShell Script Execution via string interpolation
-**Confidence:** Medium
-**Location:** `src/tasker/department_split.rs:run`
-**Evidence:** Extensive use of `format!(r#" $outDir = '{out_dir}' "#)` to dynamically generate `.ps1` files.
-**Trigger:** A user crafts a filename or CSV config mapping containing a single quote `'` (e.g., `' ; Invoke-WebRequest... ; #`).
-**Impact:** PowerShell command injection. Dynamic inputs or paths flowing into `ps_script` break the execution trust boundary.
-**Affected component:** Tasker
-**Recommended remediation:** Pass variables to PowerShell scripts via explicit script parameters (`-File script.ps1 -OutDir ...`) instead of string interpolation.
-**Regression test:** Test executing `department_split` with a dashboard path containing `' ; Exit 1 ; #` to ensure it safely resolves as a literal string.
+Current `src/runner/config/validation.rs` restricts GUI bind addresses to loopback values (`127.0.0.1`, `localhost`, `::1`, and `[::1]`). Routes should still be treated as privileged local controls, but the historical claim of direct remote-network access is not supported without evidence of a non-loopback binding path that bypasses validation.
 
-## 7. P3 Findings
+**Status:** Keep local access control as a hardening consideration; do not describe remote RCE as confirmed from the route handlers alone.
 
-### [P3] Headless Chrome 60-Second Sleep on Failure
-**Confidence:** High
-**Location:** `src/yasweb/browser/mod.rs:run_browser_tab`
-**Evidence:** If `login::execute_login` fails and `config.keep_open` is true, the thread executes `std::thread::sleep(Duration::from_secs(60))`.
-**Trigger:** A login failure or UI timeout while `--keep-open` is active.
-**Impact:** Since `run_browser_tab` is inside `tokio::task::spawn_blocking`, it won't starve the async executor, but it needlessly consumes a dedicated OS blocking thread for 60 seconds.
-**Affected component:** YasWeb
-**Recommended remediation:** Remove the blocking sleep and rely on native Playwright/DevTools tracing or external debugger attachments.
-**Regression test:** Assert that YasWeb execution returns an error immediately upon login failure without blocking for 60 seconds.
+## Current V1 follow-up
 
-### [P3] Unauthenticated Task Management
-**Confidence:** High
-**Location:** `src/runner/gui/routes.rs:route_request`
-**Evidence:** The Runner HTTP API (`/create`, `/run`, `/update`) performs zero authentication checks.
-**Trigger:** A user navigates to `/run/task_id` or posts to `/create`.
-**Impact:** Because tasks can be `ShellCommand` types, an attacker on the same network interface could achieve RCE via the `/create` API. Mitigated heavily by default `127.0.0.1` bindings.
-**Affected component:** Runner GUI
-**Recommended remediation:** Introduce basic API token authentication or HTTP Basic Auth for GUI routes.
-**Regression test:** A test hitting `/create` without an Authorization header ensuring it returns 401 Unauthorized.
+### Runner config load errors in task handlers
 
-### [P3] Secret Exposure in `Debug` Prints
-**Confidence:** Medium
-**Location:** `src/bin/crm.rs:main`
-**Evidence:** The application prints `info!("Loaded config: {:#?}", config);`. The `AppConfig` struct explicitly implements a custom `Debug` that redacts the `password` field via `***REDACTED***`.
-**Trigger:** Standard application startup logs `AppConfig`.
-**Impact:** Mitigated by the custom `Debug` implementation. However, any new structs embedding `password: String` directly risk exposure.
-**Affected component:** CRM, YasWeb
-**Recommended remediation:** Use `secrecy::SecretString` for password fields to enforce zeroize and redaction natively.
-**Regression test:** Assert that `format!("{:?}", config)` does not contain the literal password string.
+In `src/runner/gui/handlers.rs`, task creation, task update, and the new-task page previously used `RunnerConfig::load(...).unwrap_or_default()`, while other pages propagated load errors. The edit page also loaded the same configuration a second time after already loading it successfully. The V1 follow-up changes these task handlers to propagate load errors consistently and reuse the already-loaded edit-page configuration.
 
-## 8. HTTP Security
-The custom TCP implementation (`src/runner/gui/mod.rs`) manually reads streams into a resizing vector until it matches `Content-Length`. It completely ignores standard HTTP protections like `Transfer-Encoding`, connection timeouts, and maximum header limits, leaving the `runner` highly exposed to Slowloris and OOM DoS attacks.
+**Expected behavior:** If configuration loading fails, the handler returns an error rather than continuing with a fabricated default configuration. This change does not alter the config schema or public API.
 
-## 9. Authentication & Authorization
-The Runner application completely lacks authentication. The GUI routes (`/create`, `/run`, `/update`) in `src/runner/gui/routes.rs` accept unauthenticated parameters directly into the configuration persistence layer and execution dispatcher. This grants full control over daemon scheduling to anyone able to access the TCP port.
+## Historical findings requiring fresh evidence before being classified as open defects
 
-## 10. Command Execution
-The Runner execution engine cleanly separates executables and arguments via `tokio::process::Command::arg`, neutralizing bash injection for `ExternalApp`s. Shell tasks safely execute via `cmd.exe /c` (Windows) behind the `allow_shell_tasks` safety toggle. However, `Tasker` PowerShell scripts are dynamically generated via `format!()` string interpolation, which crosses the trust boundary and creates PS injection vulnerabilities.
+The following claims appeared in the original audit but have not been confirmed as current defects by this update. Reinspect their current call paths and trust boundaries before implementing a fix:
 
-## 11. Filesystem & Path Security
-Paths across the application are resolved via `resolve_relative_to_exe_dir`. While this securely anchors relative paths (`./config.json`), it explicitly permits absolute paths (`C:\...`) to bypass the jail. Temporary files (`tempfile::Builder`) are used securely and deleted via `FileCleanupGuard`, preventing persistent predictable-temp-file vulnerabilities.
+- Synchronous filesystem work in `src/runner/engine/logging.rs` and its actual impact on Tokio scheduling.
+- Absolute path handling in `src/runner/engine/validation.rs`; allowing an explicitly configured absolute path is not automatically a path traversal vulnerability.
+- PowerShell string interpolation in `src/tasker/department_split.rs`; trace each interpolated value to establish whether untrusted input can reach script source.
+- The 60-second headless-browser wait on failure; establish whether it remains present and whether the delay is required by the current debugging contract.
+- Secret handling beyond the custom `Debug` redaction already present; identify a concrete leak path before proposing a larger secret-type migration.
+- HTTP protocol edge cases not covered by the current size and timeout limits.
 
-## 12. CSV/Data Processing
-The `crm` binary accurately parses strict base64 downloaded CSVs with `.flexible(false)`. However, `tasker` (`src/tasker/csv_task.rs`) utilizes `.flexible(true)`, flagrantly violating `AGENTS.md` and allowing malformed CSV rows with differing column counts to process silently, risking downstream panics.
+These are **revalidation candidates**, not current confirmed findings or an instruction to perform broad refactors.
 
-## 13. Browser/YasWeb Lifecycle
-The headless chrome implementation manages tabs safely but relies on explicit manual `std::thread::sleep` loops (`for i in 0..120`) injected via JavaScript. If a tab crashes, the `tab.evaluate` future returns an error successfully, preventing infinite blocking. However, failing tabs with `--keep-open` hold Rust threads hostage for 60 seconds.
+## Deferred resource risk
 
-## 14. Scheduler & Pipeline Reliability
-The pipeline engine (`src/runner/engine/pipeline.rs`) executes tasks properly, tracking failures and cancelling downstream sequential steps. Parallel steps utilize `tokio::spawn` correctly. The main scheduler loop `start_scheduler` correctly avoids duplicate task execution by checking `running_tasks.iter().any(|t| t.id == task.id)`.
+### Unbounded CRM download queue
 
-## 15. Async/Concurrency
-Concurrency is managed smoothly with Tokio bounded channels. Locks (`Arc<Mutex<RunnerStatus>>`) are obtained and dropped cleanly before `.await` yields. However, multiple blocking I/O calls (`std::fs::remove_file`, `std::fs::create_dir_all`, `walkdir`) occur directly inside Tokio async contexts (e.g., `cleanup_old_logs`), threatening executor thread pool starvation.
+The download queue in `src/crm/fetcher.rs` remains a resource-risk candidate. Do not replace it with a bounded channel and awaited sends without addressing consumer failure: the processor can stop on an unrecoverable download error, which could leave producers blocked while the queue is no longer being drained.
 
-## 16. Resource Exhaustion
-1. **Unbounded Request Bodies:** The HTTP server (`read_http_request`) reads infinitely if given an enormous `Content-Length`.
-2. **Unbounded Channels:** The `ExecutionManagerCommand` channel is bounded to 128 elements, properly protecting memory.
-3. **Log Growth:** The daily `cleanup_old_logs` limits log storage securely, mitigating local disk exhaustion.
+**Status:** Deferred. Any future change must include safe failure/drain behavior and a focused behavioral test for backpressure without deadlock or lost work.
 
-## 17. Logging & Secret Exposure
-Log levels are highly configurable. Secrets (Cognito tokens, Passwords) are explicitly handled via custom `Debug` implementations that emit `***REDACTED***`. However, plain `String` types are used for secrets, so raw memory dumps or accidental future logging additions could expose them.
+## Verification policy
 
-## 18. Dependency Audit
-`cargo-audit` was unavailable; automated advisory scanning was not performed. A manual review of `cargo tree` indicated stable libraries (`tokio v1.52`, `serde`, `reqwest`, `headless_chrome`) with no highly questionable transitive dependencies.
+- The source observations above are based on targeted inspection, not a claim that the entire repository was re-audited.
+- PR #410 passed Format and Auto-fix, Clippy Lints, and Test Suite on PR-head commit `c44a58bbc098c5bc4fbed75f21400b4cfbe7726d` in [workflow run 38648046753](https://github.com/Mahmoudiismail/crm/actions/runs/38648046753).
+- A separate CI run on merge commit `b493602a6cc6e20f91ee3070ea1224217f783975` was not found when the previous status was recorded. The commit status query currently returns no reported statuses, which is not equivalent to a failing run.
+- Do not claim local Cargo checks or post-merge CI unless those checks have actually been run and their results inspected.
 
-## 19. Previous Recommendation Verification
-- **Configuration Decomposition:** Fixed.
-- **YasWeb Decomposition:** Fixed.
-- **CSV Strictness:** **Regressed**. `flexible(true)` remains in `csv_task.rs`.
-- **Pipeline Execution:** Fixed.
+## V1 constraints
 
-## 20. Latest Three PR Review
-Verified PR `cab0614` via local git history and `PR_DESCRIPTION.md`. The PR replaced the legacy pipeline model with the new deterministic `TaskStep` sequential/parallel model. No security regressions were identified. The PR maintained proper timeouts and improved overall reliability by cleaning up execution state.
-
-## 21. Test Coverage / Regression Risks
-The codebase possesses excellent unit coverage for configuration serialization and scheduling math. However, the custom HTTP server has minimal edge-case test coverage for malformed protocols, and `tasker` lacks isolated testing for PowerShell generation, risking undetected regressions during refactors.
-
-## 22. Remediation Roadmap
-1. Limit `buf.len()` in `src/runner/gui/mod.rs` to 1MB.
-2. Refactor `cleanup_old_logs` using `tokio::fs` or `spawn_blocking`.
-3. Switch `.flexible(true)` to `.flexible(false)` in `src/tasker/csv_task.rs`.
-4. Refactor PowerShell scripts to use `-Command` with `-Args` instead of `format!()` string interpolation.
-5. Bind `resolve_relative_to_exe_dir` to explicitly deny arbitrary absolute paths.
-
-## 23. Required Regression Tests
-- Unbounded TCP Read DoS test (HTTP 1MB cap).
-- PowerShell injection payload validation test.
-- `csv_task.rs` malformed row rejection unit test (`flexible(false)`).
-- Log cleanup starvation test.
-
-## 24. Remaining Technical Debt
-The custom TCP HTTP server remains the highest liability. Replacing it with a minimal hardened framework like `axum` or `tiny_http` would resolve all Slowloris, boundary, and path parsing vulnerabilities inherently while keeping the binary size acceptable.
+Prefer the smallest correct production fix. Avoid architecture rewrites, unnecessary abstractions, public API expansion, or test infrastructure that is disproportionate to the behavior being changed. Keep broad refactors and nonessential coverage improvements out of V1.

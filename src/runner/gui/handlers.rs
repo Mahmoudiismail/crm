@@ -42,7 +42,7 @@ pub(crate) async fn handle_tasks_api(handle: &RunnerHandle) -> Result<(u16, &'st
 pub(crate) async fn handle_new_task_page(
     handle: &RunnerHandle,
 ) -> Result<(u16, &'static str, String)> {
-    let cfg = RunnerConfig::load(&handle.runner_config_path).unwrap_or_default();
+    let cfg = RunnerConfig::load(&handle.runner_config_path)?;
     let html = render_task_form(
         &cfg.working_hours_profiles,
         "Create Task",
@@ -61,7 +61,6 @@ pub(crate) async fn handle_edit_task_page(
     let cfg = RunnerConfig::load(&handle.runner_config_path)?;
     if let Some(task) = cfg.tasks.iter().find(|t| t.id == task_id) {
         let action = format!("/update/{}", escape_html(task_id));
-        let cfg = RunnerConfig::load(&handle.runner_config_path).unwrap_or_default();
         let html = render_task_form(
             &cfg.working_hours_profiles,
             "Edit Task",
@@ -83,7 +82,7 @@ pub(crate) async fn handle_create_task(
     handle: &RunnerHandle,
     values: &HashMap<String, String>,
 ) -> Result<(u16, &'static str, String)> {
-    let cfg = RunnerConfig::load(&handle.runner_config_path).unwrap_or_default();
+    let cfg = RunnerConfig::load(&handle.runner_config_path)?;
     let task = build_task_from_values(values, None, &cfg.working_hours_profiles)?;
 
     create_task(&handle.runner_config_path, task).await?;
@@ -99,7 +98,7 @@ pub(crate) async fn handle_update_task(
     task_id: &str,
     values: &HashMap<String, String>,
 ) -> Result<(u16, &'static str, String)> {
-    let cfg = RunnerConfig::load(&handle.runner_config_path).unwrap_or_default();
+    let cfg = RunnerConfig::load(&handle.runner_config_path)?;
     let task = build_task_from_values(
         values,
         Some(task_id.to_string()),
