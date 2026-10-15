@@ -67,6 +67,7 @@ pub(crate) fn escape_html(value: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
+        .replace('\'', "&#39;")
 }
 
 pub(crate) fn js_escape(value: &str) -> String {
