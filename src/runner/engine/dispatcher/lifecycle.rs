@@ -343,21 +343,9 @@ mod tests_queue {
                 actions: vec![crate::runner::config::ActionSpec::ShellCommand(
                     crate::runner::config::ShellCommandSpec {
                         command: if cfg!(target_os = "windows") {
-                            use base64::Engine as _;
-
-                            let script = format!(
-                                "Add-Content -LiteralPath '{}' -Value run; Start-Sleep -Seconds 2",
-                                marker.replace('\'', "''")
-                            );
-                            let encoded_script = base64::engine::general_purpose::STANDARD.encode(
-                                script
-                                    .encode_utf16()
-                                    .flat_map(|unit| unit.to_le_bytes())
-                                    .collect::<Vec<_>>(),
-                            );
                             format!(
-                                r#"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -NonInteractive -EncodedCommand {}"#,
-                                encoded_script
+                                r#"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -NonInteractive -Command "Add-Content -LiteralPath '{}' -Value run; Start-Sleep -Seconds 2""#,
+                                marker.replace('\'', "''")
                             )
                         } else {
                             format!("bash -c \"echo run >> {}; sleep 2\"", marker)
@@ -469,20 +457,9 @@ mod tests_queue {
                 actions: vec![crate::runner::config::ActionSpec::ShellCommand(
                     crate::runner::config::ShellCommandSpec {
                         command: if cfg!(target_os = "windows") {
-                            use base64::Engine as _;
-                            let script = format!(
-                                "Set-Content -LiteralPath '{}' -Value ran",
-                                marker.replace('\'', "''")
-                            );
-                            let encoded_script = base64::engine::general_purpose::STANDARD.encode(
-                                script
-                                    .encode_utf16()
-                                    .flat_map(|unit| unit.to_le_bytes())
-                                    .collect::<Vec<_>>(),
-                            );
                             format!(
-                                r#"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -NonInteractive -EncodedCommand {}"#,
-                                encoded_script
+                                r#"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -NonInteractive -Command "Set-Content -LiteralPath '{}' -Value ran""#,
+                                marker.replace('\'', "''")
                             )
                         } else {
                             format!("bash -c \"printf ran > '{}'\"", marker.replace('\'', "'\\''"))
