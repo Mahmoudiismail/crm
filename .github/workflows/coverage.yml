@@ -1,0 +1,51 @@
+name: Rust Coverage
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  RUSTFLAGS: "-Dwarnings"
+
+jobs:
+  coverage:
+    name: Rust Code Coverage
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+          components: llvm-tools-preview
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: "rust-coverage"
+          cache-on-failure: true
+
+      - name: Install cargo-llvm-cov
+        run: cargo install cargo-llvm-cov --locked
+
+      - name: Generate HTML coverage report
+        run: cargo llvm-cov --workspace --all-targets --all-features --html --output-dir coverage/html
+
+      - name: Generate LCOV report
+        run: cargo llvm-cov --workspace --all-targets --all-features --lcov --output-path coverage/lcov.info
+
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-coverage
+          path: coverage/
+          if-no-files-found: error
+          retention-days: 14
