@@ -13,8 +13,8 @@ We replaced the Rust-side element polling loop with an injected JavaScript execu
 The updated approach, `generate_mis_reports_wait_js`:
 1. Executes entirely in the browser context via `tab.evaluate(...)`.
 2. Loops and waits for known SPA loading indicators (`#loader_svg`, `mat-progress-bar`, `.dx-loadpanel`) to disappear completely by checking their existence and actual `getComputedStyle` visibility (`display`, `opacity`, `visibility`). We strictly **removed** the `.loading-screen-wrapper` check as it was confirmed to cause permanent hangups in the live environment.
-3. Only after the loader is gone, it uses `document.evaluate` to continuously poll for the "MIS Reports" button using its specific XPath.
-4. Checks that the "MIS Reports" element is actually visible to the user via a strict `getComputedStyle` check (`display !== 'none'` and `visibility !== 'hidden'`), safely **removing** `element.offsetParent !== null` to avoid unexpected hangups.
+3. Only after visible SPA loaders disappear, it scans all `.label.fw-bold` candidates and matches the normalized visible text `MIS Reports`, rather than relying on a single XPath result.
+4. Checks the element and its ancestors for hidden styles and requires a non-empty rendered rectangle. It does not rely on `offsetParent`, which can be null for elements that are still rendered.
 5. Emits structured JSON logs natively, and gracefully propagates timeouts as `anyhow::Result::Err`, maintaining our safety invariants of zero production panics (`unwrap`/`expect`).
 6. Enforces a 30-second hardcoded timeout (`timeout_seconds: 30`) specifically during the MIS Reports step transition, removing generic timeout injection limits (`timeout_minutes`).
 
@@ -22,3 +22,8 @@ This brings the intermediate waiting logic perfectly in line with our existing r
 
 ## Tests Added
 Unit tests added in `tests/yasweb/timeout.rs` verify that `generate_mis_reports_wait_js` accurately renders the JavaScript wait function, injecting `timeout_seconds` scaling natively inside JavaScript, and strictly enforcing the adjusted loader and visibility selectors.
+
+
+## Follow-up: MIS Reports visibility regression (2026-10-17)
+
+The latest failure HTML contained the `MIS Reports` label, but the runtime still rejected it because the implementation retained an `offsetParent !== null` condition despite the earlier documentation stating it had been removed. The wait now checks all matching labels, verifies computed visibility through the ancestor chain, and confirms the element has a rendered rectangle. Loader detection also checks all matching loader elements instead of only the first match. On timeout, diagnostic visibility details are returned in the structured logs.
