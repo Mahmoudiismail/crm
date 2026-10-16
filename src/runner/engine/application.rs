@@ -36,7 +36,7 @@ fn date_args_from_manifest(manifest: &serde_json::Value) -> (Option<String>, Opt
         let words: Vec<&str> = normalized.split('-').collect();
         if start.is_none()
             && (words.iter().any(|word| *word == "start" || *word == "from"))
-            && words.iter().any(|word| *word == "date")
+            && words.contains(&"date")
         {
             start = Some(name.to_string());
         } else if end.is_none()
@@ -125,8 +125,8 @@ pub async fn run_external_app(
     if period.is_some() {
         // Explicit task mappings always win. If they are absent, use the app manifest
         // to discover non-standard date flags, then retain the legacy flag names as fallback.
-        let needs_manifest = spec.start_date_arg.as_deref().map_or(true, str::is_empty)
-            || spec.end_date_arg.as_deref().map_or(true, str::is_empty);
+        let needs_manifest = spec.start_date_arg.as_deref().is_none_or(str::is_empty)
+            || spec.end_date_arg.as_deref().is_none_or(str::is_empty);
         let discovered = if needs_manifest {
             discover_date_args(app).await
         } else {
