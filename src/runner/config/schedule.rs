@@ -826,10 +826,9 @@ pub fn resolve_and_generate_execution_periods(
         crate::utils::parse_flexible_date_with_base(start_str, Some(&base_now_str))
             .ok_or_else(|| anyhow::anyhow!("Invalid start date expression '{}'", start_str))?;
 
-    // Dynamic end-date expressions (for example, "yesterday") are relative to
-    // the evaluation date, not the start date, so recurring runs advance their range.
+    let raw_start_fmt = raw_start_date.format("%Y-%m-%d").to_string();
     let raw_end_date = if let Some(ed_str) = end_date_str {
-        crate::utils::parse_flexible_date_with_base(ed_str, Some(&base_now_str))
+        crate::utils::parse_flexible_date_with_base(ed_str, Some(&raw_start_fmt))
             .ok_or_else(|| anyhow::anyhow!("Invalid end date expression '{}'", ed_str))?
     } else {
         raw_start_date
@@ -856,6 +855,29 @@ pub fn resolve_app_periods_at(
     app_spec: &ExternalAppSpec,
     execution_at: DateTime<Utc>,
 ) -> Result<Vec<ExecutionPeriod>> {
+    let end_expression = app_spec.end_date.as_deref().unwrap_or("");
+    let normalized_end = end_expression.trim().to_ascii_lowercase();
+    if matches!(normalized_end.as_str(), "today" | "yesterday" | "tomorrow") {
+        let local_date = execution_at.with_timezone(&Local).date_naive();
+        let offset = match normalized_end.as_str() {
+            "yesterday" => -1,
+            "tomorrow" => 1,
+            _ => 0,
+        };
+        let resolved_end = local_date
+            .checked_add_signed(chrono::TimeDelta::days(offset))
+            .ok_or_else(|| anyhow::anyhow!("End date expression is out of range"))?;
+        let resolved_end = resolved_end.format("%Y-%m-%d").to_string();
+        return resolve_and_generate_execution_periods(
+            app_spec.period_mode,
+            app_spec.start_date.as_deref(),
+            Some(&resolved_end),
+            execution_at,
+        );
+    }
+
+    // Preserve the established start-date-relative behavior for expressions
+    // such as eomonth, where the end is based on the resolved start date.
     resolve_and_generate_execution_periods(
         app_spec.period_mode,
         app_spec.start_date.as_deref(),
