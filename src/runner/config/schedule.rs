@@ -826,7 +826,6 @@ pub fn resolve_and_generate_execution_periods(
         crate::utils::parse_flexible_date_with_base(start_str, Some(&base_now_str))
             .ok_or_else(|| anyhow::anyhow!("Invalid start date expression '{}'", start_str))?;
 
-    let raw_start_fmt = raw_start_date.format("%Y-%m-%d").to_string();
     // Dynamic end-date expressions (for example, "yesterday") are relative to
     // the evaluation date, not the start date, so recurring runs advance their range.
     let raw_end_date = if let Some(ed_str) = end_date_str {
