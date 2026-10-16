@@ -215,6 +215,8 @@ impl From<RunnerTaskLegacy> for RunnerTask {
                         period_mode: None,
                         start_date: None,
                         end_date: None,
+                        start_date_arg: None,
+                        end_date_arg: None,
                     }));
                 }
             }
