@@ -41,6 +41,8 @@ Tasks define their execution pattern through one or multiple schedules (Interval
 ## External Application Date Periodization Modes
 Periodization and dates (`period_mode`, `start_date`, `end_date`) belong exclusively to `ExternalAppSpec`. `RunnerTask` does not own task-level periodization fields.
 
+When an external application runs with a period, Runner passes date arguments only when their names are explicitly configured in the action's `start_date_arg`/`end_date_arg` mappings or discovered from the application's manifest. It does not inject generic `--start-date` or `--end-date` flags when the target application does not declare them. The `{start_date}` and `{end_date}` placeholders in explicitly configured argument values continue to be substituted.
+
 Each External Application action configures its own periodization mode alongside Start Date and End Date inputs:
 - **Normal / Custom**: Standard single date range without period transformation (`[Start, End]`). Invalid/inverted date ranges (`start_date > end_date`) produce explicit errors.
 - **Monthly**: Normalizes date range to complete calendar months from 1st of Start month to last day of End month.
