@@ -57,7 +57,9 @@ pub fn enable_network_logging(
                     .response
                     .headers
                     .0
-                    .iter()
+                    .as_object()
+                    .into_iter()
+                    .flat_map(|headers| headers.iter())
                     .map(|(name, value)| {
                         let lower_name = name.to_ascii_lowercase();
                         if matches!(
@@ -66,7 +68,7 @@ pub fn enable_network_logging(
                         ) {
                             format!("{name}: [REDACTED]")
                         } else {
-                            format!("{name}: {value:?}")
+                            format!("{name}: {:?}", value.as_str().unwrap_or("[non-string value]"))
                         }
                     })
                     .collect::<Vec<_>>();
