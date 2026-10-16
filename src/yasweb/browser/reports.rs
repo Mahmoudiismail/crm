@@ -703,12 +703,12 @@ pub fn navigate_and_run_report(
         }
         Err(e) => {
             error!("Failed to find #menuPinnedBtn: {:?}", e);
-            if let Ok(html) = tab.get_content() {
-                error!("Page HTML at failure to find #menuPinnedBtn:\n{}", html);
-            }
+            debug::save_failure_diagnostics(tab, "find_menu_button");
+            return Err(e).context("Yasweb stage failed: find menu button");
         }
     }
 
+    info!("YASWEB STAGE END: navigate_and_run_report status=SUCCESS elapsed_ms={} discovered_filters={}", report_started.elapsed().as_millis(), discovered_filters.len());
     Ok(discovered_filters)
 }
 
