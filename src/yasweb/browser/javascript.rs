@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use headless_chrome::Tab;
 use std::sync::Arc;
+use std::time::Instant;
 use tracing::{error, info};
 
 pub fn evaluate_automation_step(
@@ -8,6 +9,8 @@ pub fn evaluate_automation_step(
     js_code: &str,
     step_name: &str,
 ) -> Result<serde_json::Value> {
+    let started = Instant::now();
+    info!("AUTOMATION STEP START: {} (javascript_bytes={})", step_name, js_code.len());
     match tab.evaluate(js_code, true) {
         Ok(res) => {
             let value = res
@@ -15,11 +18,22 @@ pub fn evaluate_automation_step(
                 .and_then(|value| value.as_str().map(str::to_owned))
                 .with_context(|| format!("Automation {} returned no result string", step_name))?;
 
-            parse_automation_result(&value, step_name)
+            match parse_automation_result(&value, step_name) {
+                Ok(result) => {
+                    info!("AUTOMATION STEP END: {} status=SUCCESS elapsed_ms={}", step_name, started.elapsed().as_millis());
+                    Ok(result)
+                }
+                Err(e) => {
+                    error!("AUTOMATION STEP END: {} status=ERROR elapsed_ms={} error={:#}", step_name, started.elapsed().as_millis(), e);
+                    crate::yasweb::browser::debug::save_failure_diagnostics(tab, step_name);
+                    Err(e)
+                }
+            }
         }
         Err(e) => {
-            error!("Failed to evaluate {} JS: {:?}", step_name, e);
-            Err(anyhow::anyhow!("Automation {} failed", step_name))
+            error!("AUTOMATION STEP END: {} status=EVALUATION_ERROR elapsed_ms={} error={:?}", step_name, started.elapsed().as_millis(), e);
+            crate::yasweb::browser::debug::save_failure_diagnostics(tab, step_name);
+            Err(anyhow::anyhow!("Automation {} JavaScript evaluation failed: {}", step_name, e))
         }
     }
 }
@@ -44,7 +58,7 @@ fn parse_automation_result(raw: &str, step_name: &str) -> Result<serde_json::Val
                 .and_then(serde_json::Value::as_str)
                 .unwrap_or("Unknown error");
             error!("{} Failed: {} | Logs: {}", step_name, msg, logs);
-            Err(anyhow::anyhow!("Automation {} failed", step_name))
+            Err(anyhow::anyhow!("Automation {} failed: {} | JavaScript logs: {}", step_name, msg, logs))
         }
         "SUCCESS" => {
             info!("{} Success | Logs: {}", step_name, logs);
