@@ -682,7 +682,12 @@ async fn main() -> Result<()> {
 
                 let results = futures_util::future::join_all(tasks).await;
 
-                for (discovered_filters, temp_dl_dir, final_filename) in results.into_iter().flatten() {
+                for task_result in results {
+                    let (discovered_filters, temp_dl_dir, final_filename) = match task_result {
+                        Ok(Ok(result)) => result,
+                        Ok(Err(e)) => return Err(e.context("Yasweb browser task failed")),
+                        Err(e) => return Err(anyhow::anyhow!("Yasweb browser task panicked or was cancelled: {e}")),
+                    };
                     let final_out_dir = if let Some(ref path) = cli_download_path_clone {
                         PathBuf::from(path)
                     } else if let Some(report) = config_clone.reports.get(&active_report_name_clone) {
@@ -751,10 +756,19 @@ async fn main() -> Result<()> {
 
     let results = futures_util::future::join_all(report_futures).await;
     for res in results {
-        if let Err(e) = res {
-            error!("Report execution failed: {:?}", e);
+        match res {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => {
+                error!("YASWEB REPORT FAILED: {:#}", e);
+                return Err(e);
+            }
+            Err(e) => {
+                error!("YASWEB REPORT TASK FAILED: {e}");
+                return Err(anyhow::anyhow!("Yasweb report task panicked or was cancelled: {e}"));
+            }
         }
     }
+    info!("YASWEB PROCESS END: status=SUCCESS reports_completed={}", active_report_names.len());
     Ok(())
 }
 
