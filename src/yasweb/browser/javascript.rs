@@ -102,6 +102,20 @@ mod tests {
     }
 
     #[test]
+    fn error_status_preserves_message_and_browser_logs() {
+        let error = parse_automation_result(
+            r#"{"status":"ERROR","msg":"Report list timeout","logs":["waiting for tree-view","search input missing"]}"#,
+            "Step 2 (Select Report)",
+        )
+        .expect_err("ERROR status must fail")
+        .to_string();
+
+        assert!(error.contains("Report list timeout"));
+        assert!(error.contains("waiting for tree-view"));
+        assert!(error.contains("search input missing"));
+    }
+
+    #[test]
     fn error_status_is_an_error() {
         assert!(parse_automation_result(
             r#"{"status":"ERROR","msg":"failed","logs":[]}"#,
