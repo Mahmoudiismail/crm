@@ -827,8 +827,10 @@ pub fn resolve_and_generate_execution_periods(
             .ok_or_else(|| anyhow::anyhow!("Invalid start date expression '{}'", start_str))?;
 
     let raw_start_fmt = raw_start_date.format("%Y-%m-%d").to_string();
+    // Dynamic end-date expressions (for example, "yesterday") are relative to
+    // the evaluation date, not the start date, so recurring runs advance their range.
     let raw_end_date = if let Some(ed_str) = end_date_str {
-        crate::utils::parse_flexible_date_with_base(ed_str, Some(&raw_start_fmt))
+        crate::utils::parse_flexible_date_with_base(ed_str, Some(&base_now_str))
             .ok_or_else(|| anyhow::anyhow!("Invalid end date expression '{}'", ed_str))?
     } else {
         raw_start_date
@@ -848,6 +850,26 @@ pub fn resolve_and_generate_execution_periods(
         raw_end_date,
     ))
 }
+fn period_for_scheduled_execution(
+    app_spec: &ExternalAppSpec,
+    scheduled_at: DateTime<Utc>,
+    period_index: usize,
+    fallback: &ExecutionPeriod,
+) -> Result<ExecutionPeriod> {
+    let periods = resolve_and_generate_execution_periods(
+        app_spec.period_mode,
+        app_spec.start_date.as_deref(),
+        app_spec.end_date.as_deref(),
+        scheduled_at,
+    )?;
+
+    Ok(periods
+        .get(period_index)
+        .or_else(|| periods.last())
+        .cloned()
+        .unwrap_or_else(|| fallback.clone()))
+}
+
 pub fn generate_upcoming_executions_for_app(
     task: &RunnerTask,
     app_spec: &ExternalAppSpec,
@@ -934,7 +956,7 @@ pub fn generate_upcoming_executions_for_app(
 
                     if dt >= now && dt >= period_start_utc && dt <= effective_period_end_utc {
                         results.push(ExecutionOccurrence {
-                            period: period.clone(),
+                            period: period_for_scheduled_execution(app_spec, dt, period_index, &period)?,
                             scheduled_at: dt,
                         });
                         if results.len() >= limit {
@@ -997,7 +1019,7 @@ pub fn generate_upcoming_executions_for_app(
 
                         if is_wh_ok && cursor >= now {
                             results.push(ExecutionOccurrence {
-                                period: period.clone(),
+                                period: period_for_scheduled_execution(app_spec, cursor, period_index, &period)?,
                                 scheduled_at: cursor,
                             });
                         }
@@ -1037,7 +1059,7 @@ pub fn generate_upcoming_executions_for_app(
                                         };
                                         if is_wh_ok {
                                             results.push(ExecutionOccurrence {
-                                                period: period.clone(),
+                                                period: period_for_scheduled_execution(app_spec, dt, period_index, &period)?,
                                                 scheduled_at: dt,
                                             });
                                             if results.len() >= limit {
@@ -1095,7 +1117,7 @@ pub fn generate_upcoming_executions_for_app(
                                     };
                                     if is_wh_ok {
                                         results.push(ExecutionOccurrence {
-                                            period: period.clone(),
+                                            period: period_for_scheduled_execution(app_spec, dt, period_index, &period)?,
                                             scheduled_at: dt,
                                         });
                                         if results.len() >= limit {
@@ -1148,7 +1170,7 @@ pub fn generate_upcoming_executions_for_app(
                                         };
                                         if is_wh_ok {
                                             results.push(ExecutionOccurrence {
-                                                period: period.clone(),
+                                                period: period_for_scheduled_execution(app_spec, dt, period_index, &period)?,
                                                 scheduled_at: dt,
                                             });
                                             if results.len() >= limit {
