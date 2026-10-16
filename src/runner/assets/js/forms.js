@@ -2,6 +2,17 @@
       return str && /^\d{4}-\d{2}-\d{2}$/.test(str.trim());
   }
 
+  function normalizeDateExpression(value) {
+      const normalized = (value || "").trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
+      const aliases = {
+          "end of month": "eomonth",
+          "end of current month": "eomonth",
+          "beginning of month": "beginning_of_month",
+          "beginning of previous month": "beginning_of_prev_month"
+      };
+      return aliases[normalized] || normalized;
+  }
+
   function updateAppPreview(contentDiv) {
       const previewContainer = contentDiv.querySelector(".app-preview-contents");
       if (!previewContainer) return;
@@ -39,7 +50,10 @@
       const dynContainer = contentDiv.querySelector(".app-dynamic-inputs");
       const argsHidden = contentDiv.querySelector(".app-args-hidden");
       if (dynContainer && argsHidden) {
-          window.validation.serializeExternalApp(dynContainer, argsHidden);
+          // Do not replace persisted arguments while the app manifest is still loading.
+          if (dynContainer.dataset.manifestLoaded === "true") {
+              window.validation.serializeExternalApp(dynContainer, argsHidden);
+          }
           formData.append("args", argsHidden.value);
       }
 
@@ -574,8 +588,8 @@
               const appArgs = (action && action.type === "external_app") ? action.args : {};
               const argsJson = JSON.stringify(appArgs).replace(/"/g, '&quot;');
               const periodMode = (action && action.type === "external_app" && action.period_mode) ? action.period_mode : "custom";
-              const startDate = (action && action.type === "external_app" && action.start_date) ? action.start_date : "";
-              const endDate = (action && action.type === "external_app" && action.end_date) ? action.end_date : "";
+              const startDate = normalizeDateExpression(action && action.type === "external_app" ? action.start_date : "");
+              const endDate = normalizeDateExpression(action && action.type === "external_app" ? action.end_date : "");
 
               contentDiv.innerHTML = `
                   <div class="space-y-3">
@@ -952,6 +966,7 @@
 
   async function loadAppManifest(appId, dynamicInputs, argsHidden, idPrefix) {
     if (!dynamicInputs) return;
+    dynamicInputs.dataset.manifestLoaded = "false";
     dynamicInputs.innerHTML =
       '<div class="text-sm text-gray-500">Loading manifest...</div>';
     try {
@@ -959,6 +974,7 @@
       if (!manifest || !manifest.arguments || manifest.arguments.length === 0) {
         dynamicInputs.innerHTML =
           '<span class="text-sm text-gray-500">No configurable arguments.</span>';
+        dynamicInputs.dataset.manifestLoaded = "true";
         return;
       }
 
@@ -1125,6 +1141,7 @@
       });
 
       dynamicInputs.innerHTML = html;
+      dynamicInputs.dataset.manifestLoaded = "true";
 
       const actionContent = dynamicInputs.closest(".action-editor");
       const startArgSelect = actionContent && actionContent.querySelector(".app-start-date-arg");
