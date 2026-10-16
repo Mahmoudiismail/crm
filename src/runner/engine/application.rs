@@ -49,6 +49,21 @@ fn date_args_from_manifest(manifest: &serde_json::Value) -> (Option<String>, Opt
     (start, end)
 }
 
+fn insert_period_args(
+    effective_args: &mut HashMap<String, String>,
+    start_arg: Option<String>,
+    end_arg: Option<String>,
+    start_date: &str,
+    end_date: &str,
+) {
+    if let Some(arg) = start_arg {
+        effective_args.insert(arg, start_date.to_string());
+    }
+    if let Some(arg) = end_arg {
+        effective_args.insert(arg, end_date.to_string());
+    }
+}
+
 async fn discover_date_args(app: &RegisteredApp) -> (Option<String>, Option<String>) {
     let executable = resolve_executable(&app.executable_path);
     let mut command = tokio::process::Command::new(executable);
@@ -137,18 +152,21 @@ pub async fn run_external_app(
             .as_deref()
             .filter(|name| !name.is_empty())
             .map(str::to_string)
-            .or(discovered.0)
-            .unwrap_or_else(|| "--start-date".to_string());
+            .or(discovered.0);
         let end_arg = spec
             .end_date_arg
             .as_deref()
             .filter(|name| !name.is_empty())
             .map(str::to_string)
-            .or(discovered.1)
-            .unwrap_or_else(|| "--end-date".to_string());
+            .or(discovered.1);
 
-        effective_args.insert(start_arg, start_str.clone());
-        effective_args.insert(end_arg, end_str.clone());
+        insert_period_args(
+            &mut effective_args,
+            start_arg,
+            end_arg,
+            &start_str,
+            &end_str,
+        );
     }
 
     let mut sorted_keys: Vec<&String> = effective_args.keys().collect();
@@ -203,7 +221,8 @@ pub async fn run_external_app(
 
 #[cfg(test)]
 mod tests {
-    use super::date_args_from_manifest;
+    use super::{date_args_from_manifest, insert_period_args};
+    use std::collections::HashMap;
 
     #[test]
     fn discovers_standard_and_custom_date_var_names() {
@@ -233,6 +252,33 @@ mod tests {
             ]
         });
         assert_eq!(date_args_from_manifest(&manifest), (None, None));
+    }
+
+    #[test]
+    fn does_not_inject_date_flags_when_app_declares_none() {
+        let mut args = HashMap::new();
+
+        insert_period_args(&mut args, None, None, "2026-10-01", "2026-10-17");
+
+        assert!(args.is_empty());
+    }
+
+    #[test]
+    fn inserts_only_configured_or_discovered_date_flags() {
+        let mut args = HashMap::new();
+
+        insert_period_args(
+            &mut args,
+            Some("--from-date".to_string()),
+            None,
+            "2026-10-01",
+            "2026-10-17",
+        );
+
+        assert_eq!(args.len(), 1);
+        assert_eq!(args.get("--from-date").map(String::as_str), Some("2026-10-01"));
+        assert!(!args.contains_key("--start-date"));
+        assert!(!args.contains_key("--end-date"));
     }
 
     #[test]
