@@ -55,9 +55,14 @@ try {
     let script_path = script_manager.get_or_create_script("Email", "send_email.ps1", template)?;
 
     // Keep potentially large email HTML out of the Windows command line.
-    let mut html_file = tempfile::NamedTempFile::new().context("Failed to create temporary email body file")?;
-    html_file.write_all(html_body.as_bytes()).context("Failed to write temporary email body file")?;
-    html_file.flush().context("Failed to flush temporary email body file")?;
+    let mut html_file =
+        tempfile::NamedTempFile::new().context("Failed to create temporary email body file")?;
+    html_file
+        .write_all(html_body.as_bytes())
+        .context("Failed to write temporary email body file")?;
+    html_file
+        .flush()
+        .context("Failed to flush temporary email body file")?;
     let html_path = html_file.path().to_string_lossy().into_owned();
 
     script_manager.execute_script_with_args(

@@ -150,7 +150,9 @@ pub fn generate_csv(params: &CsvAnalysisParams<'_>) -> Result<Option<std::path::
                 Err(error) => {
                     error!(
                         "Failed to read users CSV record {} from {}: {}",
-                        record_number, users_file_path.display(), error
+                        record_number,
+                        users_file_path.display(),
+                        error
                     );
                     for (number, row) in &previous_records {
                         error!(
@@ -177,10 +179,8 @@ pub fn generate_csv(params: &CsvAnalysisParams<'_>) -> Result<Option<std::path::
                 }
             };
 
-            previous_records.push_back((
-                record_number,
-                record.iter().collect::<Vec<_>>().join(" | "),
-            ));
+            previous_records
+                .push_back((record_number, record.iter().collect::<Vec<_>>().join(" | ")));
             if previous_records.len() > 10 {
                 previous_records.pop_front();
             }

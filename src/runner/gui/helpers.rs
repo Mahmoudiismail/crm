@@ -79,7 +79,6 @@ pub(crate) fn js_escape(value: &str) -> String {
         .replace('\r', "\\r")
 }
 
-
 #[cfg(test)]
 mod html_escape_tests {
     use super::escape_html;

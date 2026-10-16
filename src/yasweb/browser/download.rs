@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -23,7 +23,8 @@ pub fn configure_download_directory(
     if let Some(dl_dir) = download_dir {
         info!("Configuring download directory to {:?}", dl_dir);
         tab.call_method(headless_chrome::protocol::cdp::Page::SetDownloadBehavior {
-            behavior: headless_chrome::protocol::cdp::Page::SetDownloadBehaviorBehaviorOption::Allow,
+            behavior:
+                headless_chrome::protocol::cdp::Page::SetDownloadBehaviorBehaviorOption::Allow,
             download_path: Some(dl_dir.to_string_lossy().to_string()),
         })
         .context("Failed to configure browser download directory")?;
@@ -35,7 +36,9 @@ pub fn configure_download_directory(
 pub fn snapshot_downloads(download_dir: Option<&PathBuf>) -> Result<DownloadSnapshot> {
     let mut snapshot = DownloadSnapshot::new();
     if let Some(dir) = download_dir {
-        for entry in fs::read_dir(dir).with_context(|| format!("Failed to read download directory {:?}", dir))? {
+        for entry in fs::read_dir(dir)
+            .with_context(|| format!("Failed to read download directory {:?}", dir))?
+        {
             let path = entry?.path();
             if is_report_file(&path) {
                 let metadata = fs::metadata(&path)?;
@@ -48,7 +51,10 @@ pub fn snapshot_downloads(download_dir: Option<&PathBuf>) -> Result<DownloadSnap
 
 fn is_report_file(path: &Path) -> bool {
     matches!(
-        path.extension().and_then(|ext| ext.to_str()).map(str::to_ascii_lowercase).as_deref(),
+        path.extension()
+            .and_then(|ext| ext.to_str())
+            .map(str::to_ascii_lowercase)
+            .as_deref(),
         Some("xlsx" | "xls" | "csv")
     )
 }
@@ -58,7 +64,10 @@ fn report_file_changed(path: &Path, snapshot: &DownloadSnapshot) -> bool {
         return false;
     };
     let current = (metadata.len(), metadata.modified().ok());
-    snapshot.get(path).map(|old| old != &current).unwrap_or(true)
+    snapshot
+        .get(path)
+        .map(|old| old != &current)
+        .unwrap_or(true)
 }
 
 /// Waits until this export creates or changes a spreadsheet file and the file remains stable.
@@ -71,7 +80,10 @@ pub fn wait_for_download(
         return Ok(());
     };
 
-    info!("Waiting for a new or updated report download in {:?}...", dir);
+    info!(
+        "Waiting for a new or updated report download in {:?}...",
+        dir
+    );
     let timeout = Duration::from_secs(timeout_minutes.saturating_mul(60));
     let start = std::time::Instant::now();
     let mut last_candidate: Option<(PathBuf, u64, Option<SystemTime>)> = None;
@@ -86,7 +98,10 @@ pub fn wait_for_download(
         for entry in entries {
             let path = entry?.path();
             if matches!(
-                path.extension().and_then(|ext| ext.to_str()).map(str::to_ascii_lowercase).as_deref(),
+                path.extension()
+                    .and_then(|ext| ext.to_str())
+                    .map(str::to_ascii_lowercase)
+                    .as_deref(),
                 Some("crdownload" | "tmp")
             ) {
                 incomplete = true;
@@ -114,7 +129,10 @@ pub fn wait_for_download(
         std::thread::sleep(Duration::from_millis(200));
     }
 
-    bail!("Timed out waiting for a new or updated report download in {:?}", dir)
+    bail!(
+        "Timed out waiting for a new or updated report download in {:?}",
+        dir
+    )
 }
 
 #[cfg(test)]

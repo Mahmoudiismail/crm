@@ -149,7 +149,10 @@ where
                     record_number, results_file, error
                 );
                 for (number, row) in &previous_records {
-                    error!("CSV context before error at record {}: record {}: {}", record_number, number, row);
+                    error!(
+                        "CSV context before error at record {}: record {}: {}",
+                        record_number, number, row
+                    );
                 }
                 for offset in 1..=10 {
                     match records.next() {

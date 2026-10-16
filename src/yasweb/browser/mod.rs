@@ -65,7 +65,11 @@ pub fn run_browser_tab(
     };
 
     // Wait for download if applicable
-    download::wait_for_download(download_dir.as_ref(), config.timeout_minutes, &download_snapshot)?;
+    download::wait_for_download(
+        download_dir.as_ref(),
+        config.timeout_minutes,
+        &download_snapshot,
+    )?;
 
     // Clean up listeners
     if let Err(e) = tab.remove_event_listener(&events) {

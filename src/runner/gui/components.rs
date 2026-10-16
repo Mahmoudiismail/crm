@@ -385,7 +385,6 @@ pub(crate) fn textarea(id: &str, name: &str, value: &str, placeholder: &str, row
     )
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::stat_card;
