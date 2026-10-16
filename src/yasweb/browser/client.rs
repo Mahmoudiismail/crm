@@ -56,6 +56,7 @@ pub fn enable_network_logging(
                     .params
                     .response
                     .headers
+                    .0
                     .iter()
                     .map(|(name, value)| {
                         let lower_name = name.to_ascii_lowercase();
