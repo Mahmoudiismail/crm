@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use headless_chrome::Tab;
 use std::sync::Arc;
 use std::time::Instant;
