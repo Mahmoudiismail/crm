@@ -2,7 +2,7 @@ use anyhow::Result;
 use headless_chrome::Tab;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tracing::{error, info, warn};
 
 use crate::yasweb::browser::{debug, javascript};
@@ -54,6 +54,8 @@ pub fn navigate_and_run_report(
     timeout_minutes: u64,
     step_num: &mut u32,
 ) -> Result<Vec<String>> {
+    let report_started = Instant::now();
+    info!("YASWEB STAGE START: navigate_and_run_report report='{}' type='{}' filters_count={}", active_report_name, active_report_type, active_filters.len());
     let mut discovered_filters = Vec::new();
 
     // Replicate navigation block to find "MIS" and run steps
