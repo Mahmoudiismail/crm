@@ -57,7 +57,8 @@ pub fn enable_network_logging(
                     .response
                     .headers
                     .0
-                    .as_object()
+                    .as_ref()
+                    .and_then(|headers| headers.as_object())
                     .into_iter()
                     .flat_map(|headers| headers.iter())
                     .map(|(name, value)| {
