@@ -41,7 +41,7 @@ fn date_args_from_manifest(manifest: &serde_json::Value) -> (Option<String>, Opt
             start = Some(name.to_string());
         } else if end.is_none()
             && (words.iter().any(|word| *word == "end" || *word == "to"))
-            && words.iter().any(|word| *word == "date")
+            && words.contains(&"date")
         {
             end = Some(name.to_string());
         }
