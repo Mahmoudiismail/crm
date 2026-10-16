@@ -71,9 +71,7 @@ pub fn navigate_and_run_report(
                 info!("Clicking #menuPinnedBtn (Attempt {})...", attempt);
                 if let Err(e) = menu_btn.click() {
                     error!("Failed to click menu button: {:?}", e);
-                    if let Ok(html) = tab.get_content() {
-                        error!("Page HTML after failed menu click:\n{}", html);
-                    }
+                    debug::save_failure_diagnostics(tab, "menu_button_click");
                 } else {
                     let check_js_eval = r#"
                         new Promise(resolve => {
@@ -135,9 +133,7 @@ pub fn navigate_and_run_report(
                     "MIS module ('{}') not found after all attempts.",
                     mis_selector
                 );
-                if let Ok(html) = tab.get_content() {
-                    error!("Page HTML at MIS module wait timeout:\n{}", html);
-                }
+                debug::save_failure_diagnostics(tab, "mis_module_wait_timeout");
                 return Err(anyhow::anyhow!("MIS module wait timeout"));
             }
 
@@ -151,12 +147,7 @@ pub fn navigate_and_run_report(
                     } else {
                         info!("Clicked MIS successfully. Waiting for MIS Reports button...");
                         tracing::debug!("Waiting for MIS Reports button...");
-                        if let Ok(html) = tab.get_content() {
-                            tracing::trace!(
-                                "Page HTML immediately after clicking MIS module:\n{}",
-                                html
-                            );
-                        }
+                        info!("MIS module click returned; checking the SPA transition to MIS Reports.");
 
                         let mis_wait_started = Instant::now();
                         info!("YASWEB STAGE START: wait_for_mis_reports timeout_seconds=30");
