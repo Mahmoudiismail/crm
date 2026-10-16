@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use headless_chrome::Tab;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -146,9 +146,8 @@ pub fn navigate_and_run_report(
                     info!("Clicking on MIS module...");
                     if let Err(e) = mis_module.click() {
                         error!("Failed to click MIS module: {:?}", e);
-                        if let Ok(html) = tab.get_content() {
-                            error!("Page HTML after failed MIS module click:\n{}", html);
-                        }
+                        debug::save_failure_diagnostics(tab, "click_mis_module");
+                        return Err(e).context("Yasweb stage failed: click MIS module");
                     } else {
                         info!("Clicked MIS successfully. Waiting for MIS Reports button...");
                         tracing::debug!("Waiting for MIS Reports button...");
