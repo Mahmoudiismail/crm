@@ -59,9 +59,9 @@
 
       const schedulesHidden = document.getElementById("schedules-hidden");
       if (schedulesHidden) {
-          try {
-              if (typeof buildSchedules === "function") schedulesHidden.value = buildSchedules();
-          } catch(e) {}
+          if (typeof window.buildSchedules === "function") {
+              schedulesHidden.value = window.buildSchedules();
+          }
           formData.append("schedules", schedulesHidden.value);
       }
       const enabledCheck = document.querySelector("input[name='enabled']");
@@ -406,6 +406,10 @@
     return schedules.join("\n");
   }
 
+  // The live preview is defined outside this IIFE and needs the current
+  // schedule form state, not the stale hidden field from the saved task.
+  window.buildSchedules = buildSchedules;
+
   if (addScheduleBtn) {
     addScheduleBtn.addEventListener("click", addScheduleRow);
   }
@@ -639,10 +643,6 @@
                                   <select class="app-start-date-arg block w-full rounded border border-gray-300 px-2 py-1 text-sm bg-white"><option value="">-- Hardcoded / None --</option></select>
                               </div>
                               <div>
-                                  <label class="block text-xs font-medium text-gray-700 mb-1">Target Arg for End Date</label>
-                                  <select class="app-end-date-arg block w-full rounded border border-gray-300 px-2 py-1 text-sm bg-white"><option value="">-- Hardcoded / None --</option></select>
-                              </div>
-                              <div>
                                   <label class="block text-xs font-medium text-gray-700 mb-1">End Date</label>
                                   <div class="flex gap-1 mb-1">
                                       <select class="app-end-date-mode text-xs rounded border border-gray-300 px-1 py-1 bg-white">
@@ -668,6 +668,10 @@
                                           <option value="next sun" ${endDate === 'next sun' ? 'selected' : ''}>Next Sunday</option>
                                       </optgroup>
                                   </select>
+                              </div>
+                              <div>
+                                  <label class="block text-xs font-medium text-gray-700 mb-1">Target Arg for End Date</label>
+                                  <select class="app-end-date-arg block w-full rounded border border-gray-300 px-2 py-1 text-sm bg-white"><option value="">-- Hardcoded / None --</option></select>
                               </div>
                           </div>
                       </div>
