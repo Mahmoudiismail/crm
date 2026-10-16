@@ -276,7 +276,10 @@ mod tests {
         );
 
         assert_eq!(args.len(), 1);
-        assert_eq!(args.get("--from-date").map(String::as_str), Some("2026-10-01"));
+        assert_eq!(
+            args.get("--from-date").map(String::as_str),
+            Some("2026-10-01")
+        );
         assert!(!args.contains_key("--start-date"));
         assert!(!args.contains_key("--end-date"));
     }
