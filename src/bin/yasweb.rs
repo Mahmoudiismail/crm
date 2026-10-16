@@ -598,7 +598,9 @@ async fn main() -> Result<()> {
                     let active_report_name_for_dir = active_report_name.clone();
 
                     tracing::trace!("Spawning task for range: {} to {}", start_dt, end_dt);
-                    tasks.push(tokio::task::spawn_blocking(move || {
+                    tasks.push(tokio::task::spawn_blocking(move || -> Result<(Vec<String>, PathBuf, String)> {
+                        let task_started = std::time::Instant::now();
+                        tracing::info!("YASWEB TASK START: index={} report='{}' date_suffix='{}'", i, active_report_name_task, date_suffix);
                         tracing::info!("Starting browser tab automation for task {}...", i);
 
                         let mut user_data_dir = crm_tool::utils::executable_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
@@ -632,16 +634,16 @@ async fn main() -> Result<()> {
                         let launch_options = match launch_options {
                             Ok(opts) => opts,
                             Err(e) => {
-                                error!("Failed to configure browser launch options: {:?}", e);
-                                return (Vec::new(), temp_dl_dir_clone, final_filename);
+                                error!("YASWEB TASK FAILED: configure_launch_options task={} error={:#}", i, e);
+                                return Err(e.context("Failed to configure browser launch options"));
                             }
                         };
 
                         let browser = match headless_chrome::Browser::new(launch_options) {
                             Ok(b) => Arc::new(b),
                             Err(e) => {
-                                error!("Failed to launch browser: {:?}", e);
-                                return (Vec::new(), temp_dl_dir_clone, final_filename);
+                                error!("YASWEB TASK FAILED: launch_browser task={} error={:#}", i, e);
+                                return Err(anyhow::anyhow!("Failed to launch browser: {e}"));
                             }
                         };
 
@@ -663,15 +665,18 @@ async fn main() -> Result<()> {
                                 filters
                             }
                             Err(e) => {
-                                error!("Browser automation failed for task {}: {:?}", i, e);
-                                eprintln!("Browser automation failed for task {}: {:?}", i, e);
-                                Vec::new()
+                                error!("YASWEB TASK FAILED: browser_automation task={} elapsed_ms={} error={:#}", i, task_started.elapsed().as_millis(), e);
+                                eprintln!("Browser automation failed for task {}: {:#}", i, e);
+                                drop(browser);
+                                let _ = std::fs::remove_dir_all(&user_data_dir);
+                                return Err(e.context(format!("Browser automation failed for task {}", i)));
                             }
                         };
 
                         drop(browser);
                         let _ = std::fs::remove_dir_all(&user_data_dir);
-                        (res, temp_dl_dir_clone, final_filename)
+                        tracing::info!("YASWEB TASK END: status=SUCCESS task={} elapsed_ms={} discovered_filters={}", i, task_started.elapsed().as_millis(), res.len());
+                        Ok((res, temp_dl_dir_clone, final_filename))
                     }));
                 }
 
