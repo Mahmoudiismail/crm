@@ -14,6 +14,10 @@ pub struct ExternalAppSpecLegacy {
     pub start_date: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub end_date: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_date_arg: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end_date_arg: Option<String>,
 }
 
 impl From<ExternalAppSpecLegacy> for ExternalAppSpec {
@@ -24,8 +28,8 @@ impl From<ExternalAppSpecLegacy> for ExternalAppSpec {
             period_mode: legacy.period_mode.unwrap_or(PeriodMode::Custom),
             start_date: legacy.start_date,
             end_date: legacy.end_date,
-            start_date_arg: None,
-            end_date_arg: None,
+            start_date_arg: legacy.start_date_arg,
+            end_date_arg: legacy.end_date_arg,
         }
     }
 }
@@ -38,6 +42,8 @@ impl From<ExternalAppSpec> for ExternalAppSpecLegacy {
             period_mode: Some(spec.period_mode),
             start_date: spec.start_date,
             end_date: spec.end_date,
+            start_date_arg: spec.start_date_arg,
+            end_date_arg: spec.end_date_arg,
         }
     }
 }
@@ -182,6 +188,8 @@ impl From<RunnerTaskLegacy> for RunnerTask {
                                 period_mode: None,
                                 start_date: None,
                                 end_date: None,
+                                start_date_arg: None,
+                                end_date_arg: None,
                             })],
                         });
                     }
@@ -207,6 +215,8 @@ impl From<RunnerTaskLegacy> for RunnerTask {
                         period_mode: None,
                         start_date: None,
                         end_date: None,
+                        start_date_arg: None,
+                        end_date_arg: None,
                     }));
                 }
             }
@@ -237,8 +247,8 @@ impl From<RunnerTaskLegacy> for RunnerTask {
                             period_mode,
                             start_date,
                             end_date,
-                            start_date_arg: None,
-                            end_date_arg: None,
+                            start_date_arg: spec_legacy.start_date_arg,
+                            end_date_arg: spec_legacy.end_date_arg,
                         })
                     }
                 })

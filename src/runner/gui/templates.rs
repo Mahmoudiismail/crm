@@ -329,14 +329,14 @@ pub(crate) fn schedule_editor_html(
     let profiles_json = serde_json::to_string(profiles).unwrap_or_else(|_| "[]".to_string());
 
     format!(
-        "<div class='space-y-3'>\\
-            <div class='flex items-center justify-between'>\\
-                <span class='text-sm font-semibold text-gray-800'>Schedules</span>\\
-                <button type='button' id='add-schedule-row' class='rounded border border-gray-300 bg-emerald-600 text-white px-3 py-1 text-sm font-semibold hover:bg-emerald-700'>+ Add schedule</button>\\
-            </div>\\
-            <div id='schedule-rows' class='space-y-3' data-profiles='{}'>{}</div>\\
-            <input type='hidden' id='schedules-hidden' name='schedules' value=''>\\
-            <p class='text-xs text-gray-500'>Select one or more schedules. Supports: Interval, Once, Daily at specific times, Weekly on day, or Monthly on day.</p>\\
+        "<div class='space-y-3'>\
+            <div class='flex items-center justify-between'>\
+                <span class='text-sm font-semibold text-gray-800'>Schedules</span>\
+                <button type='button' id='add-schedule-row' class='rounded border border-gray-300 bg-emerald-600 text-white px-3 py-1 text-sm font-semibold hover:bg-emerald-700'>+ Add schedule</button>\
+            </div>\
+            <div id='schedule-rows' class='space-y-3' data-profiles='{}'>{}</div>\
+            <input type='hidden' id='schedules-hidden' name='schedules' value=''>\
+            <p class='text-xs text-gray-500'>Select one or more schedules. Supports: Interval, Once, Daily at specific times, Weekly on day, or Monthly on day.</p>\
         </div>",
         escape_html(&profiles_json),
         rows
@@ -1085,5 +1085,9 @@ mod working_hours_profile_ui_tests {
         assert!(html.contains("WeekDays_7~12"));
         assert!(html.contains("07:00"));
         assert!(html.contains("23:59"));
+        assert!(
+            !html.contains("\\\n"),
+            "schedule editor must not emit literal backslash-newline sequences"
+        );
     }
 }
