@@ -7,3 +7,29 @@ Yasweb Automation (Step Logging): JavaScript evaluations are refactored into dis
 ## Yasweb Process Cleanup
 * To prevent headless browser instances from persisting as zombie processes in the background (especially on Windows) when tasks timeout or fail, the `browser` process `Arc<Browser>` is explicitly dropped (`drop(browser);`) immediately after `run_browser_tab()` finishes execution in `src/bin/yasweb.rs`. This relies on `headless_chrome`'s internal Drop implementation which issues process termination commands (e.g. `.kill()`).
 Yasweb Automation (Error Handling): JavaScript micro-step evaluations must return a valid JSON string with an explicit `status` of `SUCCESS` or `ERROR`. Invalid JSON, a missing/invalid status, and unsupported status values must return a Rust `Err`; `ERROR` must also return `Err` through `evaluate_automation_step` so browser logic cannot silently continue on a broken DOM state.
+
+
+## Browser failure diagnostics
+
+Yasweb writes its normal application log according to `log_stdout_level` and
+`log_file_level` in `yasweb_config.json`. During browser automation, look for
+the `YASWEB RUN`, `YASWEB STAGE`, and `AUTOMATION STEP` entries. Each stage
+records its start/end, result, elapsed milliseconds, and the error chain when it
+fails.
+
+On a browser automation failure, Yasweb also writes a redacted diagnostic JSON
+file under `debug_html/` next to the executable. The file includes the current
+URL without query/fragment, page title/readiness, iframe metadata, and a DOM
+snapshot with form values removed. Existing numbered `step_*.html` snapshots
+are still available for the automation checkpoints; treat those HTML files as
+potentially sensitive because they can contain application data.
+
+Set `keep_open` to `true` in `yasweb_config.json` when you need the visible
+browser to remain open for up to 60 seconds after a failure. With
+`keep_open: false`, the browser closes after the failure, but diagnostic files
+are still saved. Never share logs or HTML snapshots publicly without reviewing
+them for usernames, patient/customer data, and other sensitive information.
+
+A failed menu lookup, MIS click, MIS Reports transition, report-type selection,
+report search, filter application, or download wait must return an error rather
+than being treated as a successful run with an empty filter list.
