@@ -68,7 +68,10 @@ pub fn enable_network_logging(
                         ) {
                             format!("{name}: [REDACTED]")
                         } else {
-                            format!("{name}: {:?}", value.as_str().unwrap_or("[non-string value]"))
+                            format!(
+                                "{name}: {:?}",
+                                value.as_str().unwrap_or("[non-string value]")
+                            )
                         }
                     })
                     .collect::<Vec<_>>();
