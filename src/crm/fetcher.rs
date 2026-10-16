@@ -733,7 +733,7 @@ async fn fetch_and_update_incomplete_reservations(
 
         if !res.status().is_success() {
             let status = res.status();
-            anyhow::bail!("GET {} failed with status {}", endpoint, status);
+            anyhow::bail!("GET {} failed with status {}", url, status);
         }
 
         let text: String = res.text().await?;
@@ -741,7 +741,7 @@ async fn fetch_and_update_incomplete_reservations(
             serde_json::from_str(&text).with_context(|| {
                 format!(
                     "Failed to parse incomplete-reservation response from {}",
-                    endpoint
+                    url
                 )
             })?;
 
