@@ -850,18 +850,28 @@ pub fn resolve_and_generate_execution_periods(
         raw_end_date,
     ))
 }
+/// Resolve an app's report periods for a specific execution timestamp.
+/// Both live execution and preview use this entry point so relative date
+/// expressions have identical semantics.
+pub fn resolve_app_periods_at(
+    app_spec: &ExternalAppSpec,
+    execution_at: DateTime<Utc>,
+) -> Result<Vec<ExecutionPeriod>> {
+    resolve_and_generate_execution_periods(
+        app_spec.period_mode,
+        app_spec.start_date.as_deref(),
+        app_spec.end_date.as_deref(),
+        execution_at,
+    )
+}
+
 fn period_for_scheduled_execution(
     app_spec: &ExternalAppSpec,
     scheduled_at: DateTime<Utc>,
     period_index: usize,
     fallback: &ExecutionPeriod,
 ) -> Result<ExecutionPeriod> {
-    let periods = resolve_and_generate_execution_periods(
-        app_spec.period_mode,
-        app_spec.start_date.as_deref(),
-        app_spec.end_date.as_deref(),
-        scheduled_at,
-    )?;
+    let periods = resolve_app_periods_at(app_spec, scheduled_at)?;
 
     Ok(periods
         .get(period_index)
