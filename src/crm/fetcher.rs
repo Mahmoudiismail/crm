@@ -666,13 +666,12 @@ async fn fetch_and_update_incomplete_reservations(
     context_opt: Option<Arc<FetchContext>>,
 ) -> Result<Value> {
     let mut all_ids = Vec::new();
-    let status_ids = vec![
-        "f38fafc3-bd3f-4dd0-ac6a-09dd7d51b6a0",
+    let status_ids = [
         "275688a4-df41-4725-ae56-fd2deab9c1c9",
+        "f38fafc3-bd3f-4dd0-ac6a-09dd7d51b6a0",
     ];
 
     for status_id in status_ids {
-        let endpoint = "task/ticket";
         let url = incomplete_reservation_url(base_url, limit, status_id);
 
         let mut headers = reqwest::header::HeaderMap::new();
