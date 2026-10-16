@@ -12,7 +12,10 @@ const MANIFEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10)
 /// Discover conventional start/end date argument names from an app's manifest.
 /// Only date-like arguments with an unambiguous start/from or end/to name are used.
 fn date_args_from_manifest(manifest: &serde_json::Value) -> (Option<String>, Option<String>) {
-    let Some(arguments) = manifest.get("arguments").and_then(serde_json::Value::as_array) else {
+    let Some(arguments) = manifest
+        .get("arguments")
+        .and_then(serde_json::Value::as_array)
+    else {
         return (None, None);
     };
 
@@ -25,7 +28,11 @@ fn date_args_from_manifest(manifest: &serde_json::Value) -> (Option<String>, Opt
         let Some(name) = arg.get("name").and_then(serde_json::Value::as_str) else {
             continue;
         };
-        let normalized = name.trim().trim_start_matches('-').to_ascii_lowercase().replace('_', "-");
+        let normalized = name
+            .trim()
+            .trim_start_matches('-')
+            .to_ascii_lowercase()
+            .replace('_', "-");
         let words: Vec<&str> = normalized.split('-').collect();
         if start.is_none()
             && (words.iter().any(|word| *word == "start" || *word == "from"))
@@ -62,7 +69,10 @@ async fn discover_date_args(app: &RegisteredApp) -> (Option<String>, Option<Stri
             }
         }
         Ok(Ok(output)) => {
-            warn!("Manifest discovery for app '{}' exited with status {}", app.name, output.status);
+            warn!(
+                "Manifest discovery for app '{}' exited with status {}",
+                app.name, output.status
+            );
             (None, None)
         }
         Ok(Err(error)) => {
@@ -206,7 +216,10 @@ mod tests {
         });
         assert_eq!(
             date_args_from_manifest(&manifest),
-            (Some("--from-date".to_string()), Some("--to-date".to_string()))
+            (
+                Some("--from-date".to_string()),
+                Some("--to-date".to_string())
+            )
         );
     }
 
@@ -224,6 +237,9 @@ mod tests {
 
     #[test]
     fn malformed_manifest_has_no_date_arguments() {
-        assert_eq!(date_args_from_manifest(&serde_json::json!({})), (None, None));
+        assert_eq!(
+            date_args_from_manifest(&serde_json::json!({})),
+            (None, None)
+        );
     }
 }
