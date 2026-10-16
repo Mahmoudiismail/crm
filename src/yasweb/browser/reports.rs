@@ -158,18 +158,19 @@ pub fn navigate_and_run_report(
                             );
                         }
 
+                        let mis_wait_started = Instant::now();
+                        info!("YASWEB STAGE START: wait_for_mis_reports timeout_seconds=30");
                         let wait_js = generate_mis_reports_wait_js(30);
                         if let Err(e) = javascript::evaluate_automation_step(
                             tab,
                             &wait_js,
                             "Wait for MIS Reports",
                         ) {
-                            error!("MIS Reports button wait timeout: {:?}", e);
-                            if let Ok(html) = tab.get_content() {
-                                error!("Page HTML at MIS Reports button wait timeout:\n{}", html);
-                            }
-                            return Err(anyhow::anyhow!("MIS Reports button wait timeout"));
+                            error!("YASWEB STAGE FAILED: wait_for_mis_reports elapsed_ms={} error={:#}", mis_wait_started.elapsed().as_millis(), e);
+                            debug::save_failure_diagnostics(tab, "wait_for_mis_reports");
+                            return Err(e).context("Yasweb stage failed: wait for MIS Reports");
                         }
+                        info!("YASWEB STAGE END: wait_for_mis_reports status=SUCCESS elapsed_ms={}", mis_wait_started.elapsed().as_millis());
                         info!("MIS Reports button successfully verified.");
                         println!("MIS Reports button successfully verified.");
                         debug::save_html_state(
