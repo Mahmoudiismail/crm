@@ -1085,6 +1085,9 @@ mod working_hours_profile_ui_tests {
         assert!(html.contains("WeekDays_7~12"));
         assert!(html.contains("07:00"));
         assert!(html.contains("23:59"));
-        assert!(!html.contains("\\\n"), "schedule editor must not emit literal backslash-newline sequences");
+        assert!(
+            !html.contains("\\\n"),
+            "schedule editor must not emit literal backslash-newline sequences"
+        );
     }
 }

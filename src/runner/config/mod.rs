@@ -91,5 +91,4 @@ mod startup_tests {
         assert_eq!(reloaded.tasks[0].schedules.len(), 1);
         assert_eq!(reloaded.tasks[0].frequency_seconds, 86400);
     }
-
 }
