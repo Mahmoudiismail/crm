@@ -84,7 +84,10 @@ mod startup_tests {
         };
         assert_eq!(app.start_date_arg.as_deref(), Some("--start-date"));
         assert_eq!(app.end_date_arg.as_deref(), Some("--end-date"));
-        assert_eq!(app.args.get("--report").map(String::as_str), Some("incomplete_reservation"));
+        assert_eq!(
+            app.args.get("--report").map(String::as_str),
+            Some("incomplete_reservation")
+        );
         assert_eq!(reloaded.tasks[0].schedules.len(), 1);
         assert_eq!(reloaded.tasks[0].frequency_seconds, 86400);
     }
