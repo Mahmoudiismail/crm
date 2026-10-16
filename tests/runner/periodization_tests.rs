@@ -1064,8 +1064,8 @@ async fn test_multiple_external_apps_execution_isolation() {
         period_mode: PeriodMode::Quarterly,
         start_date: Some("2026-04-01".to_string()),
         end_date: Some("2026-06-30".to_string()),
-        start_date_arg: None,
-        end_date_arg: None,
+        start_date_arg: Some("--start-date".to_string()),
+        end_date_arg: Some("--end-date".to_string()),
     };
 
     let mut task = RunnerTask {
