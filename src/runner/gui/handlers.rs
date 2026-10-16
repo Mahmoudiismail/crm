@@ -576,7 +576,16 @@ pub(crate) async fn handle_api_task_preview(
     handle: &RunnerHandle,
     values: &HashMap<String, String>,
 ) -> Result<(u16, &'static str, String)> {
-    let cfg = RunnerConfig::load(&handle.runner_config_path).unwrap_or_default();
+    let cfg = match RunnerConfig::load(&handle.runner_config_path) {
+        Ok(cfg) => cfg,
+        Err(error) => {
+            let body = serde_json::json!({
+                "success": false,
+                "error": format!("Failed to load runner configuration: {}", error)
+            });
+            return Ok((500, "application/json", body.to_string()));
+        }
+    };
     let task = match build_task_from_values(values, None, &cfg.working_hours_profiles) {
         Ok(t) => t,
         Err(e) => {

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use chrono::{Datelike, Local, NaiveDate};
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::fs::File;
 use tracing::{error, info};
 
@@ -136,9 +136,49 @@ where
     let mut ticket_rows = Vec::new();
     let mut dynamic_statuses = HashSet::new();
 
-    for result in rdr.records() {
-        let record = result?;
-        tracing::trace!("Processing email record: {:?}", record);
+    let mut records = rdr.records();
+    let mut previous_records: VecDeque<(usize, String)> = VecDeque::with_capacity(10);
+    let mut record_number = 1usize;
+
+    while let Some(result) = records.next() {
+        let record = match result {
+            Ok(record) => record,
+            Err(error) => {
+                error!(
+                    "Failed to read CSV record {} from {}: {}",
+                    record_number, results_file, error
+                );
+                for (number, row) in &previous_records {
+                    error!(
+                        "CSV context before error at record {}: record {}: {}",
+                        record_number, number, row
+                    );
+                }
+                for offset in 1..=10 {
+                    match records.next() {
+                        Some(Ok(row)) => error!(
+                            "CSV context after error at record {}: record {}: {}",
+                            record_number,
+                            record_number + offset,
+                            row.iter().collect::<Vec<_>>().join(" | ")
+                        ),
+                        Some(Err(next_error)) => error!(
+                            "Additional CSV read error after record {} (lookahead {}): {}",
+                            record_number, offset, next_error
+                        ),
+                        None => break,
+                    }
+                }
+                return Err(error.into());
+            }
+        };
+
+        let row_context = record.iter().collect::<Vec<_>>().join(" | ");
+        previous_records.push_back((record_number, row_context));
+        if previous_records.len() > 10 {
+            previous_records.pop_front();
+        }
+        record_number += 1;
 
         let is_exception_val = is_exception_idx
             .and_then(|idx| record.get(idx))
@@ -272,10 +312,17 @@ where
         let bucket_name = bucket_name_cleaned.as_str();
 
         let mut leads_report_path = None;
+        let mut leads_report_failed = false;
         if bucket_name.eq_ignore_ascii_case("call center") && !effective_send_exceptions {
             match generate_leads_report(download_dir, minutes_ago, exclude_branches) {
                 Ok(path_opt) => leads_report_path = path_opt,
-                Err(e) => error!("Failed to generate leads report for Call Center: {}", e),
+                Err(e) => {
+                    error!(
+                        "Failed to generate leads report for Call Center; sending the email without the Leads Report attachment: {}",
+                        e
+                    );
+                    leads_report_failed = true;
+                }
             }
         }
 
@@ -283,7 +330,7 @@ where
             rows.is_empty() || rows.iter().all(|r| r.status.eq_ignore_ascii_case("closed"));
 
         if all_closed {
-            if leads_report_path.is_none() {
+            if leads_report_path.is_none() && !leads_report_failed {
                 info!(
                     "Skipping email for {} because all tickets are closed or empty, and no leads report generated.",
                     raw_bucket_name

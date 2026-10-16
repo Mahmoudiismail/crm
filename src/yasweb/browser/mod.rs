@@ -30,7 +30,7 @@ pub fn run_browser_tab(
     let tab = client::get_or_create_tab(&browser)?;
 
     // Configure download behavior
-    download::configure_download_directory(&tab, download_dir.as_ref());
+    download::configure_download_directory(&tab, download_dir.as_ref())?;
 
     // Setup network listeners
     let events = client::enable_network_logging(&tab)?;
@@ -42,6 +42,9 @@ pub fn run_browser_tab(
         }
         return Err(e);
     }
+
+    // Snapshot existing files so a stale report cannot satisfy this export's wait.
+    let download_snapshot = download::snapshot_downloads(download_dir.as_ref())?;
 
     // Run report extraction
     let discovered_filters = match reports::navigate_and_run_report(
@@ -62,7 +65,11 @@ pub fn run_browser_tab(
     };
 
     // Wait for download if applicable
-    download::wait_for_download(download_dir.as_ref(), config.timeout_minutes);
+    download::wait_for_download(
+        download_dir.as_ref(),
+        config.timeout_minutes,
+        &download_snapshot,
+    )?;
 
     // Clean up listeners
     if let Err(e) = tab.remove_event_listener(&events) {

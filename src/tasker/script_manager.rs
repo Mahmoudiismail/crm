@@ -309,9 +309,10 @@ impl ScriptManager {
             anyhow::bail!("PowerShell script file does not exist at {:?}", script_path);
         }
 
+        let arg_names = args.iter().map(|(name, _)| *name).collect::<Vec<_>>();
         info!(
-            "Executing persistent PowerShell script: {:?} with args {:?}",
-            script_path, args
+            "Executing persistent PowerShell script: {:?} with parameters {:?}",
+            script_path, arg_names
         );
 
         let mut cmd = std::process::Command::new("powershell");

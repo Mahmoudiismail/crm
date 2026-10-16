@@ -1,7 +1,10 @@
-use std::path::PathBuf;
+use anyhow::{bail, Context, Result};
+use std::collections::HashMap;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
-use tracing::{error, info};
+use std::time::{Duration, SystemTime};
+use tracing::info;
 
 lazy_static::lazy_static! {
     static ref GLOBAL_DOWNLOAD_DIR: Mutex<Option<PathBuf>> = Mutex::new(None);
@@ -11,79 +14,147 @@ pub fn get_global_download_dir() -> Arc<Mutex<Option<PathBuf>>> {
     Arc::new(Mutex::new(None)) // To decouple, pass this from caller
 }
 
+pub type DownloadSnapshot = HashMap<PathBuf, (u64, Option<SystemTime>)>;
+
 pub fn configure_download_directory(
     tab: &Arc<headless_chrome::Tab>,
     download_dir: Option<&PathBuf>,
-) {
+) -> Result<()> {
     if let Some(dl_dir) = download_dir {
         info!("Configuring download directory to {:?}", dl_dir);
-        if let Err(e) = tab.call_method(headless_chrome::protocol::cdp::Page::SetDownloadBehavior {
+        tab.call_method(headless_chrome::protocol::cdp::Page::SetDownloadBehavior {
             behavior:
                 headless_chrome::protocol::cdp::Page::SetDownloadBehaviorBehaviorOption::Allow,
             download_path: Some(dl_dir.to_string_lossy().to_string()),
-        }) {
-            error!("Failed to set download behavior for tab: {:?}", e);
-        }
+        })
+        .context("Failed to configure browser download directory")?;
     }
+    Ok(())
 }
 
-/// Waits for a completed spreadsheet or CSV download in the specified directory.
-///
-/// A download is considered complete when the directory contains an `.xlsx`, `.xls`,
-/// or `.csv` file and no `.crdownload` or `.tmp` files. The wait ends when the
-/// download completes or the timeout expires.
-///
-/// # Examples
-///
-/// ```
-/// use std::fs;
-/// use std::path::PathBuf;
-/// use crm_tool::yasweb::browser::download::wait_for_download;
-///
-/// let download_dir = std::env::temp_dir().join("download-example");
-/// fs::create_dir_all(&download_dir).unwrap();
-/// fs::write(download_dir.join("report.csv"), b"data").unwrap();
-///
-/// wait_for_download(Some(&download_dir), 1);
-///
-/// fs::remove_dir_all(download_dir).unwrap();
-/// ```
-///
-/// `download_dir` of `None` leaves the function without waiting.
-pub fn wait_for_download(download_dir: Option<&PathBuf>, timeout_minutes: u64) {
-    if let Some(dl_dir) = download_dir {
-        info!("Waiting for download to complete in {:?}...", dl_dir);
-        let mut download_complete = false;
-        let timeout_duration = Duration::from_secs(timeout_minutes * 60);
-        let start_time = std::time::Instant::now();
-
-        while start_time.elapsed() < timeout_duration {
-            if let Ok(entries) = std::fs::read_dir(dl_dir) {
-                let mut found_incomplete = false;
-                let mut found_completed = false;
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    if let Some(ext) = path.extension() {
-                        if ext == "crdownload" || ext == "tmp" {
-                            found_incomplete = true;
-                        } else if ext == "xlsx" || ext == "xls" || ext == "csv" {
-                            found_completed = true;
-                        }
-                    }
-                }
-
-                if found_completed && !found_incomplete {
-                    download_complete = true;
-                    break;
-                }
+/// Captures spreadsheet files already present before the current report export.
+pub fn snapshot_downloads(download_dir: Option<&PathBuf>) -> Result<DownloadSnapshot> {
+    let mut snapshot = DownloadSnapshot::new();
+    if let Some(dir) = download_dir {
+        for entry in fs::read_dir(dir)
+            .with_context(|| format!("Failed to read download directory {:?}", dir))?
+        {
+            let path = entry?.path();
+            if is_report_file(&path) {
+                let metadata = fs::metadata(&path)?;
+                snapshot.insert(path, (metadata.len(), metadata.modified().ok()));
             }
-            std::thread::sleep(Duration::from_millis(200));
+        }
+    }
+    Ok(snapshot)
+}
+
+fn is_report_file(path: &Path) -> bool {
+    matches!(
+        path.extension()
+            .and_then(|ext| ext.to_str())
+            .map(str::to_ascii_lowercase)
+            .as_deref(),
+        Some("xlsx" | "xls" | "csv")
+    )
+}
+
+fn report_file_changed(path: &Path, snapshot: &DownloadSnapshot) -> bool {
+    let Ok(metadata) = fs::metadata(path) else {
+        return false;
+    };
+    let current = (metadata.len(), metadata.modified().ok());
+    snapshot
+        .get(path)
+        .map(|old| old != &current)
+        .unwrap_or(true)
+}
+
+/// Waits until this export creates or changes a spreadsheet file and the file remains stable.
+pub fn wait_for_download(
+    download_dir: Option<&PathBuf>,
+    timeout_minutes: u64,
+    snapshot: &DownloadSnapshot,
+) -> Result<()> {
+    let Some(dir) = download_dir else {
+        return Ok(());
+    };
+
+    info!(
+        "Waiting for a new or updated report download in {:?}...",
+        dir
+    );
+    let timeout = Duration::from_secs(timeout_minutes.saturating_mul(60));
+    let start = std::time::Instant::now();
+    let mut last_candidate: Option<(PathBuf, u64, Option<SystemTime>)> = None;
+    let mut stable_polls = 0u8;
+
+    while start.elapsed() < timeout {
+        let entries = fs::read_dir(dir)
+            .with_context(|| format!("Failed to read download directory {:?}", dir))?;
+        let mut incomplete = false;
+        let mut candidate = None;
+
+        for entry in entries {
+            let path = entry?.path();
+            if matches!(
+                path.extension()
+                    .and_then(|ext| ext.to_str())
+                    .map(str::to_ascii_lowercase)
+                    .as_deref(),
+                Some("crdownload" | "tmp")
+            ) {
+                incomplete = true;
+            } else if is_report_file(&path) && report_file_changed(&path, snapshot) {
+                let metadata = fs::metadata(&path)?;
+                candidate = Some((path, metadata.len(), metadata.modified().ok()));
+            }
         }
 
-        if download_complete {
-            info!("Download successfully completed in {:?}", dl_dir);
+        if let Some(current) = candidate {
+            if !incomplete && last_candidate.as_ref() == Some(&current) {
+                stable_polls = stable_polls.saturating_add(1);
+                if stable_polls >= 3 {
+                    info!("Report download completed: {:?}", current.0);
+                    return Ok(());
+                }
+            } else {
+                stable_polls = 0;
+            }
+            last_candidate = Some(current);
         } else {
-            error!("Download wait timeout or failed in {:?}", dl_dir);
+            last_candidate = None;
+            stable_polls = 0;
         }
+        std::thread::sleep(Duration::from_millis(200));
+    }
+
+    bail!(
+        "Timed out waiting for a new or updated report download in {:?}",
+        dir
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn existing_report_is_not_mistaken_for_current_download() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("report.csv");
+        fs::write(&path, b"old report").unwrap();
+        let snapshot = snapshot_downloads(Some(&dir.path().to_path_buf())).unwrap();
+        assert!(!report_file_changed(&path, &snapshot));
+    }
+
+    #[test]
+    fn new_report_is_detected() {
+        let dir = tempdir().unwrap();
+        let snapshot = snapshot_downloads(Some(&dir.path().to_path_buf())).unwrap();
+        let path = dir.path().join("report.csv");
+        fs::write(&path, b"new report").unwrap();
+        assert!(report_file_changed(&path, &snapshot));
     }
 }
