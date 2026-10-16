@@ -59,9 +59,9 @@
 
       const schedulesHidden = document.getElementById("schedules-hidden");
       if (schedulesHidden) {
-          try {
-              if (typeof buildSchedules === "function") schedulesHidden.value = buildSchedules();
-          } catch(e) {}
+          if (typeof window.buildSchedules === "function") {
+              schedulesHidden.value = window.buildSchedules();
+          }
           formData.append("schedules", schedulesHidden.value);
       }
       const enabledCheck = document.querySelector("input[name='enabled']");
@@ -405,6 +405,10 @@
     }
     return schedules.join("\n");
   }
+
+  // The live preview is defined outside this IIFE and needs the current
+  // schedule form state, not the stale hidden field from the saved task.
+  window.buildSchedules = buildSchedules;
 
   if (addScheduleBtn) {
     addScheduleBtn.addEventListener("click", addScheduleRow);
