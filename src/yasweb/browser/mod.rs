@@ -5,7 +5,7 @@ pub mod javascript;
 pub mod login;
 pub mod reports;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use headless_chrome::Browser;
 use std::collections::HashMap;
 use std::path::PathBuf;
