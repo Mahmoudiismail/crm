@@ -91,4 +91,51 @@ mod startup_tests {
         assert_eq!(reloaded.tasks[0].schedules.len(), 1);
         assert_eq!(reloaded.tasks[0].frequency_seconds, 86400);
     }
+
+    #[test]
+    fn legacy_task_level_dates_migrate_to_external_app() {
+        let temp_dir = tempdir().unwrap();
+        let config_path = temp_dir.path().join("runner.json");
+        let path_str = config_path.to_str().unwrap();
+        let legacy_json = r#"{
+            "tasks": [{
+                "id": "legacy_dates",
+                "name": "Legacy dates",
+                "period_mode": "custom",
+                "start_date": "Today",
+                "end_date": "End of Month",
+                "kind": {
+                    "type": "external_app",
+                    "app_id": "Tasker",
+                    "args": {"--task": "1", "--only-call-center": "true"}
+                }
+            }]
+        }"#;
+        std::fs::write(&config_path, legacy_json).unwrap();
+
+        let loaded = RunnerConfig::load(path_str).expect("legacy task should load");
+        let ActionSpec::ExternalApp(app) = &loaded.tasks[0].steps[0].actions[0] else {
+            panic!("expected migrated external app action");
+        };
+        assert_eq!(app.start_date.as_deref(), Some("Today"));
+        assert_eq!(app.end_date.as_deref(), Some("End of Month"));
+        assert_eq!(app.args.get("--task").map(String::as_str), Some("1"));
+        assert_eq!(
+            app.args.get("--only-call-center").map(String::as_str),
+            Some("true")
+        );
+
+        loaded.save(path_str).expect("migrated config should save");
+        let reloaded = RunnerConfig::load(path_str).expect("saved config should reload");
+        let ActionSpec::ExternalApp(app) = &reloaded.tasks[0].steps[0].actions[0] else {
+            panic!("expected external app action after reload");
+        };
+        assert_eq!(app.start_date.as_deref(), Some("Today"));
+        assert_eq!(app.end_date.as_deref(), Some("End of Month"));
+        assert_eq!(app.args.get("--task").map(String::as_str), Some("1"));
+        assert_eq!(
+            app.args.get("--only-call-center").map(String::as_str),
+            Some("true")
+        );
+    }
 }
