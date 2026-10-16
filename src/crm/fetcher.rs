@@ -644,6 +644,17 @@ async fn fetch_users_report(
 }
 
 #[allow(clippy::too_many_arguments)]
+fn incomplete_reservation_url(base_url: &str, limit: u32, status_id: &str) -> String {
+    let mut url = format!(
+        "{}task/ticket?offset=0&limit={}&status_id={}&event_name=incomplete_reservation",
+        base_url, limit, status_id
+    );
+    if status_id == "f38fafc3-bd3f-4dd0-ac6a-09dd7d51b6a0" {
+        url.push_str("&sort_column=follow_up_date&sort_val=ASC");
+    }
+    url
+}
+
 async fn fetch_and_update_incomplete_reservations(
     client: &reqwest::Client,
     token: &str,
@@ -662,13 +673,7 @@ async fn fetch_and_update_incomplete_reservations(
 
     for status_id in status_ids {
         let endpoint = "task/ticket";
-        let mut url = format!(
-            "{}{}?offset=0&limit={}&status_id={}&event_name=cc_booking_incomplete_reservation",
-            base_url, endpoint, limit, status_id
-        );
-        if status_id == "f38fafc3-bd3f-4dd0-ac6a-09dd7d51b6a0" {
-            url.push_str("&sort_column=follow_up_date&sort_val=ASC");
-        }
+        let url = incomplete_reservation_url(base_url, limit, status_id);
 
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert("accept", reqwest::header::HeaderValue::from_static("*/*"));
@@ -696,6 +701,12 @@ async fn fetch_and_update_incomplete_reservations(
             reqwest::header::CONTENT_TYPE,
             reqwest::header::HeaderValue::from_static("application/json"),
         );
+        if status_id == "f38fafc3-bd3f-4dd0-ac6a-09dd7d51b6a0" {
+            headers.insert(
+                "x-app-activity",
+                reqwest::header::HeaderValue::from_static("skip"),
+            );
+        }
 
         debug!(
             "GET {} - headers: {}",
@@ -835,6 +846,35 @@ async fn fetch_and_update_incomplete_reservations(
     })?;
 
     Ok(parsed)
+}
+
+#[cfg(test)]
+mod incomplete_reservation_tests {
+    use super::*;
+
+    #[test]
+    fn incomplete_reservation_urls_match_both_observed_get_requests() {
+        let base = "https://crm.fakeeh.care/medi-crm/vault/v1/";
+        assert_eq!(
+            incomplete_reservation_url(base, 100, "275688a4-df41-4725-ae56-fd2deab9c1c9"),
+            "https://crm.fakeeh.care/medi-crm/vault/v1/task/ticket?offset=0&limit=100&status_id=275688a4-df41-4725-ae56-fd2deab9c1c9&event_name=incomplete_reservation"
+        );
+        assert_eq!(
+            incomplete_reservation_url(base, 100, "f38fafc3-bd3f-4dd0-ac6a-09dd7d51b6a0"),
+            "https://crm.fakeeh.care/medi-crm/vault/v1/task/ticket?offset=0&limit=100&status_id=f38fafc3-bd3f-4dd0-ac6a-09dd7d51b6a0&event_name=incomplete_reservation&sort_column=follow_up_date&sort_val=ASC"
+        );
+    }
+
+    #[test]
+    fn incomplete_reservation_bulk_payload_contains_target_status_and_ids() {
+        let payload = BulkTicketPayload {
+            status_id: "46282444-7951-42eb-a27e-b2bc65c53727",
+            ids: vec!["ticket-1".to_string(), "ticket-2".to_string()],
+        };
+        let value = serde_json::to_value(payload).unwrap();
+        assert_eq!(value["status_id"], "46282444-7951-42eb-a27e-b2bc65c53727");
+        assert_eq!(value["ids"], serde_json::json!(["ticket-1", "ticket-2"]));
+    }
 }
 
 // ──────────────────────────────────────────────────────────────
