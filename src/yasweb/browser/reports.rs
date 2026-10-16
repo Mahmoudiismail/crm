@@ -976,7 +976,7 @@ pub fn generate_mis_reports_wait_js(timeout_seconds: u64) -> String {
             while (Date.now() <= deadline) {{
                 const candidates = document.querySelectorAll('.label.fw-bold');
                 for (const element of candidates) {{
-                    if ((element.textContent || "").replace(/\\s+/g, " ").trim() === "MIS Reports" &&
+                    if ((element.textContent || "").replace(/\s+/g, " ").trim() === "MIS Reports" &&
                         isVisible(element)) {{
                         logs.push("MIS Reports label is present and visible.");
                         return JSON.stringify({{ status: "SUCCESS", logs }});
