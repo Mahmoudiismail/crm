@@ -11,7 +11,7 @@
 1. Fix only the MIS Reports transition/visibility wait in `src/yasweb/browser/reports.rs`.
 2. Make waiting tolerant of Angular rendering and duplicate/hidden matching labels by scanning all matching candidates and testing computed visibility robustly.
 3. Do not claim success merely because hidden markup contains the text. Require a visible, interactive candidate in the active menu state.
-4. Preserve the existing 30-second transition timeout and loader semantics unless code inspection shows the current loader check is invalid for the captured failure state.
+4. Preserve the existing 30-second transition timeout. Check every matching loader and avoid `offsetParent` as the sole visibility signal.
 5. Add focused regression coverage to `tests/yasweb/timeout.rs` or module unit tests that asserts generated JavaScript uses candidate iteration and robust visibility checks, with no stale single-node/offsetParent dependency.
 6. Update the relevant `md/` Yasweb documentation and this plan.
 
@@ -24,3 +24,4 @@
 - Review the complete patch and current Yasweb flow.
 - Run targeted timeout tests and formatting if toolchain is available.
 - Confirm CI status after the branch push; do not claim tests passed unless an actual check reports success.
+- Review timeout diagnostics and ensure generated JavaScript explicitly returns the awaited async result.
