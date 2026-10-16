@@ -36,12 +36,7 @@ async fn execute_action(
         ActionSpec::ExternalApp(spec) => {
             if let Some(app) = policy.registered_apps.iter().find(|a| a.id == spec.app_id) {
                 let now = Utc::now();
-                let periods = crate::runner::config::resolve_and_generate_execution_periods(
-                    spec.period_mode,
-                    spec.start_date.as_deref(),
-                    spec.end_date.as_deref(),
-                    now,
-                )?;
+                let periods = crate::runner::config::resolve_app_periods_at(spec, now)?;
 
                 if app.allow_concurrent_tasks {
                     let total_periods = periods.len();

@@ -1299,3 +1299,93 @@ fn test_live_preview_keeps_recurring_schedule_when_custom_end_date_is_past() {
             && item.period.end_date == NaiveDate::from_ymd_opt(2026, 10, 13).unwrap()
     }));
 }
+
+#[test]
+fn preview_resolves_yesterday_against_each_scheduled_run_and_skips_week_offs() {
+    use chrono::Datelike;
+    use crm_tool::runner::config::{Repetition, TaskSchedule, WorkingHours};
+
+    let now = Local
+        .with_ymd_and_hms(2026, 10, 16, 20, 0, 0)
+        .single()
+        .unwrap()
+        .with_timezone(&Utc);
+    let mut working_days = HashMap::new();
+    for day in [
+        "Saturday",
+        "Sunday",
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+    ] {
+        working_days.insert(
+            day.to_string(),
+            WorkingHours {
+                start: "07:00".to_string(),
+                end: "21:00".to_string(),
+            },
+        );
+    }
+
+    let app = ExternalAppSpec {
+        app_id: "daily_report".to_string(),
+        args: HashMap::new(),
+        period_mode: PeriodMode::Custom,
+        start_date: Some("2026-10-01".to_string()),
+        end_date: Some("yesterday".to_string()),
+        start_date_arg: Some("--start-date".to_string()),
+        end_date_arg: Some("--end-date".to_string()),
+    };
+    let task = RunnerTask {
+        id: "daily_report".to_string(),
+        name: "Daily report".to_string(),
+        enabled: true,
+        repetition: Repetition::Repeat,
+        frequency_seconds: 0,
+        next_run_at: String::new(),
+        schedules: vec![TaskSchedule::DailyTimes {
+            enabled: true,
+            times: vec!["07:00".to_string()],
+            working_hours: Some(working_days),
+            working_hours_profile_id: None,
+            next_run_at: String::new(),
+        }],
+        steps: vec![],
+        post_run_steps: vec![],
+        last_run_at: String::new(),
+        last_status: String::new(),
+        timeout_seconds: 0,
+    };
+
+    let preview = generate_upcoming_executions_for_app(&task, &app, now, 10).unwrap();
+    assert_eq!(preview.len(), 10);
+
+    let first_local = preview[0].scheduled_at.with_timezone(&Local);
+    assert_eq!(
+        first_local.date_naive(),
+        NaiveDate::from_ymd_opt(2026, 10, 17).unwrap()
+    );
+    assert_eq!(
+        preview[0].period.start_date,
+        NaiveDate::from_ymd_opt(2026, 10, 1).unwrap()
+    );
+    assert_eq!(
+        preview[0].period.end_date,
+        NaiveDate::from_ymd_opt(2026, 10, 16).unwrap()
+    );
+
+    let second_local = preview[1].scheduled_at.with_timezone(&Local);
+    assert_eq!(
+        second_local.date_naive(),
+        NaiveDate::from_ymd_opt(2026, 10, 18).unwrap()
+    );
+    assert_eq!(
+        preview[1].period.end_date,
+        NaiveDate::from_ymd_opt(2026, 10, 17).unwrap()
+    );
+
+    assert!(preview
+        .iter()
+        .all(|item| { item.scheduled_at.with_timezone(&Local).weekday() != chrono::Weekday::Fri }));
+}

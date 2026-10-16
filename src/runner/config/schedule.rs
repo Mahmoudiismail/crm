@@ -848,6 +848,59 @@ pub fn resolve_and_generate_execution_periods(
         raw_end_date,
     ))
 }
+/// Resolve an app's report periods for a specific execution timestamp.
+/// Both live execution and preview use this entry point so relative date
+/// expressions have identical semantics.
+pub fn resolve_app_periods_at(
+    app_spec: &ExternalAppSpec,
+    execution_at: DateTime<Utc>,
+) -> Result<Vec<ExecutionPeriod>> {
+    let end_expression = app_spec.end_date.as_deref().unwrap_or("");
+    let normalized_end = end_expression.trim().to_ascii_lowercase();
+    if matches!(normalized_end.as_str(), "today" | "yesterday" | "tomorrow") {
+        let local_date = execution_at.with_timezone(&Local).date_naive();
+        let offset = match normalized_end.as_str() {
+            "yesterday" => -1,
+            "tomorrow" => 1,
+            _ => 0,
+        };
+        let resolved_end = local_date
+            .checked_add_signed(chrono::TimeDelta::days(offset))
+            .ok_or_else(|| anyhow::anyhow!("End date expression is out of range"))?;
+        let resolved_end = resolved_end.format("%Y-%m-%d").to_string();
+        return resolve_and_generate_execution_periods(
+            app_spec.period_mode,
+            app_spec.start_date.as_deref(),
+            Some(&resolved_end),
+            execution_at,
+        );
+    }
+
+    // Preserve the established start-date-relative behavior for expressions
+    // such as eomonth, where the end is based on the resolved start date.
+    resolve_and_generate_execution_periods(
+        app_spec.period_mode,
+        app_spec.start_date.as_deref(),
+        app_spec.end_date.as_deref(),
+        execution_at,
+    )
+}
+
+fn period_for_scheduled_execution(
+    app_spec: &ExternalAppSpec,
+    scheduled_at: DateTime<Utc>,
+    period_index: usize,
+    fallback: &ExecutionPeriod,
+) -> Result<ExecutionPeriod> {
+    let periods = resolve_app_periods_at(app_spec, scheduled_at)?;
+
+    Ok(periods
+        .get(period_index)
+        .or_else(|| periods.last())
+        .cloned()
+        .unwrap_or_else(|| fallback.clone()))
+}
+
 pub fn generate_upcoming_executions_for_app(
     task: &RunnerTask,
     app_spec: &ExternalAppSpec,
@@ -934,7 +987,12 @@ pub fn generate_upcoming_executions_for_app(
 
                     if dt >= now && dt >= period_start_utc && dt <= effective_period_end_utc {
                         results.push(ExecutionOccurrence {
-                            period: period.clone(),
+                            period: period_for_scheduled_execution(
+                                app_spec,
+                                dt,
+                                period_index,
+                                &period,
+                            )?,
                             scheduled_at: dt,
                         });
                         if results.len() >= limit {
@@ -997,7 +1055,12 @@ pub fn generate_upcoming_executions_for_app(
 
                         if is_wh_ok && cursor >= now {
                             results.push(ExecutionOccurrence {
-                                period: period.clone(),
+                                period: period_for_scheduled_execution(
+                                    app_spec,
+                                    cursor,
+                                    period_index,
+                                    &period,
+                                )?,
                                 scheduled_at: cursor,
                             });
                         }
@@ -1037,7 +1100,12 @@ pub fn generate_upcoming_executions_for_app(
                                         };
                                         if is_wh_ok {
                                             results.push(ExecutionOccurrence {
-                                                period: period.clone(),
+                                                period: period_for_scheduled_execution(
+                                                    app_spec,
+                                                    dt,
+                                                    period_index,
+                                                    &period,
+                                                )?,
                                                 scheduled_at: dt,
                                             });
                                             if results.len() >= limit {
@@ -1095,7 +1163,12 @@ pub fn generate_upcoming_executions_for_app(
                                     };
                                     if is_wh_ok {
                                         results.push(ExecutionOccurrence {
-                                            period: period.clone(),
+                                            period: period_for_scheduled_execution(
+                                                app_spec,
+                                                dt,
+                                                period_index,
+                                                &period,
+                                            )?,
                                             scheduled_at: dt,
                                         });
                                         if results.len() >= limit {
@@ -1148,7 +1221,12 @@ pub fn generate_upcoming_executions_for_app(
                                         };
                                         if is_wh_ok {
                                             results.push(ExecutionOccurrence {
-                                                period: period.clone(),
+                                                period: period_for_scheduled_execution(
+                                                    app_spec,
+                                                    dt,
+                                                    period_index,
+                                                    &period,
+                                                )?,
                                                 scheduled_at: dt,
                                             });
                                             if results.len() >= limit {
