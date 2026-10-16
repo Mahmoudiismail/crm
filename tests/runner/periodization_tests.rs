@@ -1302,6 +1302,7 @@ fn test_live_preview_keeps_recurring_schedule_when_custom_end_date_is_past() {
 
 #[test]
 fn preview_resolves_yesterday_against_each_scheduled_run_and_skips_week_offs() {
+    use chrono::Datelike;
     use crm_tool::runner::config::{Repetition, TaskSchedule, WorkingHours};
 
     let now = Local
