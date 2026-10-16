@@ -643,7 +643,6 @@ async fn fetch_users_report(
     }))
 }
 
-#[allow(clippy::too_many_arguments)]
 fn incomplete_reservation_url(base_url: &str, limit: u32, status_id: &str) -> String {
     let mut url = format!(
         "{}task/ticket?offset=0&limit={}&status_id={}&event_name=incomplete_reservation",
@@ -655,6 +654,7 @@ fn incomplete_reservation_url(base_url: &str, limit: u32, status_id: &str) -> St
     url
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn fetch_and_update_incomplete_reservations(
     client: &reqwest::Client,
     token: &str,
