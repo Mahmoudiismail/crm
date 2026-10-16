@@ -768,7 +768,7 @@ async fn main() -> Result<()> {
             }
         }
     }
-    info!("YASWEB PROCESS END: status=SUCCESS reports_completed={}", active_report_names.len());
+    info!("YASWEB PROCESS END: status=SUCCESS");
     Ok(())
 }
 
