@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use headless_chrome::Tab;
 use std::sync::Arc;
 use std::time::Instant;
@@ -13,10 +13,15 @@ pub fn evaluate_automation_step(
     info!("AUTOMATION STEP START: {} (javascript_bytes={})", step_name, js_code.len());
     match tab.evaluate(js_code, true) {
         Ok(res) => {
-            let value = res
-                .value
-                .and_then(|value| value.as_str().map(str::to_owned))
-                .with_context(|| format!("Automation {} returned no result string", step_name))?;
+            let value = match res.value.and_then(|value| value.as_str().map(str::to_owned)) {
+                Some(value) => value,
+                None => {
+                    let message = format!("Automation {} returned no result string", step_name);
+                    error!("AUTOMATION STEP END: {} status=NO_RESULT elapsed_ms={} error={}", step_name, started.elapsed().as_millis(), message);
+                    crate::yasweb::browser::debug::save_failure_diagnostics(tab, step_name);
+                    return Err(anyhow::anyhow!(message));
+                }
+            };
 
             match parse_automation_result(&value, step_name) {
                 Ok(result) => {
