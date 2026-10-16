@@ -695,9 +695,8 @@ pub fn navigate_and_run_report(
                 }
                 Err(e) => {
                     error!("Failed to find MIS module: {:?}", e);
-                    if let Ok(html) = tab.get_content() {
-                        error!("Page HTML at failure to find MIS module:\n{}", html);
-                    }
+                    debug::save_failure_diagnostics(tab, "find_mis_module");
+                    return Err(e).context("Yasweb stage failed: find MIS module");
                 }
             }
         }
