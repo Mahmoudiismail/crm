@@ -932,60 +932,74 @@ mod step6_wait_tests {
 pub fn generate_mis_reports_wait_js(timeout_seconds: u64) -> String {
     format!(
         r#"
-        (async function(timeoutSeconds) {{
-            function sleep(ms) {{ return new Promise(r => setTimeout(r, ms)); }}
-            let logs = [];
-
-            logs.push("Waiting for SPA loaders to disappear...");
+        return await (async function(timeoutSeconds) {{
+            function sleep(ms) {{ return new Promise(resolve => setTimeout(resolve, ms)); }}
+            const logs = [];
             const deadline = Date.now() + timeoutSeconds * 1000;
-            let loadersGone = false;
 
-            while (Date.now() <= deadline) {{
-                let loader = document.querySelector('#loader_svg, mat-progress-bar, .dx-loadpanel');
-                let isLoaderVisible = false;
-                if (loader) {{
-                    let style = window.getComputedStyle(loader);
-                    if (style.display !== 'none' && style.opacity !== '0' && style.visibility !== 'hidden') {{
-                        isLoaderVisible = true;
+            function isVisible(element) {{
+                if (!element) return false;
+                const view = element.ownerDocument.defaultView;
+                if (!view) return false;
+
+                for (let current = element; current && current.nodeType === Node.ELEMENT_NODE; current = current.parentElement) {{
+                    const style = view.getComputedStyle(current);
+                    if (style.display === 'none' ||
+                        style.visibility === 'hidden' ||
+                        style.visibility === 'collapse' ||
+                        Number(style.opacity) === 0) {{
+                        return false;
                     }}
                 }}
 
-                if (!isLoaderVisible) {{
-                    loadersGone = true;
-                    break;
+                const rects = element.getClientRects();
+                for (const rect of rects) {{
+                    if (rect.width > 0 && rect.height > 0) return true;
                 }}
-                await sleep(100);
+                return false;
             }}
 
-            if (!loadersGone) {{
+            function hasVisibleLoader() {{
+                const selector = '#loader_svg, mat-progress-bar, .dx-loadpanel';
+                return Array.from(document.querySelectorAll(selector)).some(isVisible);
+            }}
+
+            logs.push("Waiting for SPA loaders to disappear...");
+            while (Date.now() <= deadline && hasVisibleLoader()) {{
+                await sleep(100);
+            }}
+            if (hasVisibleLoader()) {{
                 return JSON.stringify({{ status: "ERROR", msg: "Timeout waiting for loader to disappear", logs }});
             }}
 
-            logs.push("Wait for MIS Reports button to be visible...");
-            let misReportsFound = false;
-            const misReportsXpath = "//div[contains(@class, 'label') and contains(@class, 'fw-bold') and contains(text(), 'MIS Reports')]";
-
+            logs.push("Waiting for MIS Reports label to be visible...");
             while (Date.now() <= deadline) {{
-                let result = document.evaluate(misReportsXpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-                let element = result.singleNodeValue;
-
-                if (element) {{
-                    let style = window.getComputedStyle(element);
-                    if (style.display !== 'none' && style.visibility !== 'hidden' && element.offsetParent !== null) {{
-                        misReportsFound = true;
-                        break;
+                const candidates = document.querySelectorAll('.label.fw-bold');
+                for (const element of candidates) {{
+                    if ((element.textContent || "").replace(/\\s+/g, " ").trim() === "MIS Reports" &&
+                        isVisible(element)) {{
+                        logs.push("MIS Reports label is present and visible.");
+                        return JSON.stringify({{ status: "SUCCESS", logs }});
                     }}
                 }}
                 await sleep(100);
             }}
 
-            if (!misReportsFound) {{
-                return JSON.stringify({{ status: "ERROR", msg: "MIS Reports button not found or not visible", logs }});
-            }}
-
-            logs.push("MIS Reports button is present and visible.");
-            return JSON.stringify({{ status: "SUCCESS", logs }});
-        }})({});
+            const diagnostics = Array.from(document.querySelectorAll('.label.fw-bold'))
+                .filter(element => (element.textContent || "").includes("MIS Reports"))
+                .map(element => {{
+                    const style = element.ownerDocument.defaultView.getComputedStyle(element);
+                    return {{
+                        text: (element.textContent || "").trim(),
+                        display: style.display,
+                        visibility: style.visibility,
+                        opacity: style.opacity,
+                        rectCount: element.getClientRects().length
+                    }};
+                }});
+            logs.push("Matching label diagnostics: " + JSON.stringify(diagnostics));
+            return JSON.stringify({{ status: "ERROR", msg: "MIS Reports button not found or not visible", logs }});
+        }})({}); 
         "#,
         timeout_seconds
     )
