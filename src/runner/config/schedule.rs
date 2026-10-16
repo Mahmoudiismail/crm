@@ -965,7 +965,12 @@ pub fn generate_upcoming_executions_for_app(
 
                     if dt >= now && dt >= period_start_utc && dt <= effective_period_end_utc {
                         results.push(ExecutionOccurrence {
-                            period: period_for_scheduled_execution(app_spec, dt, period_index, &period)?,
+                            period: period_for_scheduled_execution(
+                                app_spec,
+                                dt,
+                                period_index,
+                                &period,
+                            )?,
                             scheduled_at: dt,
                         });
                         if results.len() >= limit {
@@ -1028,7 +1033,12 @@ pub fn generate_upcoming_executions_for_app(
 
                         if is_wh_ok && cursor >= now {
                             results.push(ExecutionOccurrence {
-                                period: period_for_scheduled_execution(app_spec, cursor, period_index, &period)?,
+                                period: period_for_scheduled_execution(
+                                    app_spec,
+                                    cursor,
+                                    period_index,
+                                    &period,
+                                )?,
                                 scheduled_at: cursor,
                             });
                         }
@@ -1068,7 +1078,12 @@ pub fn generate_upcoming_executions_for_app(
                                         };
                                         if is_wh_ok {
                                             results.push(ExecutionOccurrence {
-                                                period: period_for_scheduled_execution(app_spec, dt, period_index, &period)?,
+                                                period: period_for_scheduled_execution(
+                                                    app_spec,
+                                                    dt,
+                                                    period_index,
+                                                    &period,
+                                                )?,
                                                 scheduled_at: dt,
                                             });
                                             if results.len() >= limit {
@@ -1126,7 +1141,12 @@ pub fn generate_upcoming_executions_for_app(
                                     };
                                     if is_wh_ok {
                                         results.push(ExecutionOccurrence {
-                                            period: period_for_scheduled_execution(app_spec, dt, period_index, &period)?,
+                                            period: period_for_scheduled_execution(
+                                                app_spec,
+                                                dt,
+                                                period_index,
+                                                &period,
+                                            )?,
                                             scheduled_at: dt,
                                         });
                                         if results.len() >= limit {
@@ -1179,7 +1199,12 @@ pub fn generate_upcoming_executions_for_app(
                                         };
                                         if is_wh_ok {
                                             results.push(ExecutionOccurrence {
-                                                period: period_for_scheduled_execution(app_spec, dt, period_index, &period)?,
+                                                period: period_for_scheduled_execution(
+                                                    app_spec,
+                                                    dt,
+                                                    period_index,
+                                                    &period,
+                                                )?,
                                                 scheduled_at: dt,
                                             });
                                             if results.len() >= limit {

@@ -1311,7 +1311,14 @@ fn preview_resolves_yesterday_against_each_scheduled_run_and_skips_week_offs() {
         .unwrap()
         .with_timezone(&Utc);
     let mut working_days = HashMap::new();
-    for day in ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"] {
+    for day in [
+        "Saturday",
+        "Sunday",
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+    ] {
         working_days.insert(
             day.to_string(),
             WorkingHours {
@@ -1355,15 +1362,30 @@ fn preview_resolves_yesterday_against_each_scheduled_run_and_skips_week_offs() {
     assert_eq!(preview.len(), 10);
 
     let first_local = preview[0].scheduled_at.with_timezone(&Local);
-    assert_eq!(first_local.date_naive(), NaiveDate::from_ymd_opt(2026, 10, 17).unwrap());
-    assert_eq!(preview[0].period.start_date, NaiveDate::from_ymd_opt(2026, 10, 1).unwrap());
-    assert_eq!(preview[0].period.end_date, NaiveDate::from_ymd_opt(2026, 10, 16).unwrap());
+    assert_eq!(
+        first_local.date_naive(),
+        NaiveDate::from_ymd_opt(2026, 10, 17).unwrap()
+    );
+    assert_eq!(
+        preview[0].period.start_date,
+        NaiveDate::from_ymd_opt(2026, 10, 1).unwrap()
+    );
+    assert_eq!(
+        preview[0].period.end_date,
+        NaiveDate::from_ymd_opt(2026, 10, 16).unwrap()
+    );
 
     let second_local = preview[1].scheduled_at.with_timezone(&Local);
-    assert_eq!(second_local.date_naive(), NaiveDate::from_ymd_opt(2026, 10, 18).unwrap());
-    assert_eq!(preview[1].period.end_date, NaiveDate::from_ymd_opt(2026, 10, 17).unwrap());
+    assert_eq!(
+        second_local.date_naive(),
+        NaiveDate::from_ymd_opt(2026, 10, 18).unwrap()
+    );
+    assert_eq!(
+        preview[1].period.end_date,
+        NaiveDate::from_ymd_opt(2026, 10, 17).unwrap()
+    );
 
-    assert!(preview.iter().all(|item| {
-        item.scheduled_at.with_timezone(&Local).weekday() != chrono::Weekday::Fri
-    }));
+    assert!(preview
+        .iter()
+        .all(|item| { item.scheduled_at.with_timezone(&Local).weekday() != chrono::Weekday::Fri }));
 }
