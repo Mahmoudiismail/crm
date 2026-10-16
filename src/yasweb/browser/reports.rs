@@ -337,10 +337,11 @@ pub fn navigate_and_run_report(
                                             }}
                                             if (!reportFound) return JSON.stringify({{ status: "ERROR", msg: "Report name not found: " + reportName, logs }});
                                             return JSON.stringify({{ status: "SUCCESS", logs }});
-                                        }})({}, {});
+                                        }})({}, {}, {});
                                         "#,
                             serde_json::to_string(&active_report_type).unwrap(),
-                            serde_json::to_string(&active_report_name).unwrap()
+                            serde_json::to_string(&active_report_name).unwrap(),
+                            timeout_minutes
                         );
 
                         info!("Searching & Selecting Report: {}", active_report_name);
