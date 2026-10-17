@@ -235,7 +235,7 @@ mod tests {
         assert!(src.contains("[string]$Subject"));
         assert!(src.contains("[string]$HtmlBodyPath"));
         assert!(src.contains("Get-Content -LiteralPath $HtmlBodyPath -Raw -Encoding UTF8"));
-        assert!(src.contains("("-HtmlBodyPath", html_path.to_string_lossy().as_ref())"));
-        assert!(!src.contains("("-HtmlBody", final_html.as_str())"));
+        assert!(src.contains(r#"("-HtmlBodyPath", html_path.to_string_lossy().as_ref())"#));
+        assert!(!src.contains(r#"("-HtmlBody", final_html.as_str())"#));
     }
 }
