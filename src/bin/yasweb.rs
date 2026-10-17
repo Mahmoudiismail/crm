@@ -757,16 +757,10 @@ async fn main() -> Result<()> {
     let results = futures_util::future::join_all(report_futures).await;
     for res in results {
         match res {
-            Ok(Ok(())) => {}
-            Ok(Err(e)) => {
+            Ok(()) => {}
+            Err(e) => {
                 error!("YASWEB REPORT FAILED: {:#}", e);
                 return Err(e);
-            }
-            Err(e) => {
-                error!("YASWEB REPORT TASK FAILED: {e}");
-                return Err(anyhow::anyhow!(
-                    "Yasweb report task panicked or was cancelled: {e}"
-                ));
             }
         }
     }
