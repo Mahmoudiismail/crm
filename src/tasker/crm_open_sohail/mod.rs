@@ -247,7 +247,9 @@ mod tests {
         assert!(src.contains("[string]$HtmlBodyPath"));
         assert!(src.contains("Get-Content -LiteralPath $HtmlBodyPath -Raw -Encoding UTF8"));
         assert!(src.contains(r#"$AdditionalCc = "miismail@fakeeh.care""#));
-        assert!(src.contains(r#"$ReplyMail.CC = $CurrentCc.TrimEnd(';', ' ', ',') + "; " + $AdditionalCc"#));
+        assert!(src.contains(
+            r#"$ReplyMail.CC = $CurrentCc.TrimEnd(';', ' ', ',') + "; " + $AdditionalCc"#
+        ));
         assert!(src.contains("ReplyAll"));
         assert!(src.contains(r#"("-HtmlBodyPath", html_path.to_string_lossy().as_ref())"#));
         let old_call = [r#"("-HtmlBody", "#, "final_html.as_str())"].concat();

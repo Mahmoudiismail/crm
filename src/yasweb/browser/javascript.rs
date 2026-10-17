@@ -138,7 +138,8 @@ mod tests {
 
     #[test]
     fn ordinary_expression_scripts_are_preserved() {
-        let source = r#"(async function() { return JSON.stringify({ status: "SUCCESS", logs: [] }); })()"#;
+        let source =
+            r#"(async function() { return JSON.stringify({ status: "SUCCESS", logs: [] }); })()"#;
         assert_eq!(prepare_automation_script(source), source);
     }
 
