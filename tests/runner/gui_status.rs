@@ -115,6 +115,10 @@ async fn test_gui_status_waiting_for_app_deterministic() {
             "App B",
             "GUI should correctly report that t1 is waiting for App B"
         );
+        assert!(st.queued_task_ids.iter().any(|id| id == "t1"));
+        assert!(!st.running_task_ids.iter().any(|id| id == "t1"));
+        assert_eq!(st.running_tasks_count, 0);
+        assert_eq!(st.queued_tasks_count, 1);
     }
 
     // Now release the permit

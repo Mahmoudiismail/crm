@@ -35,11 +35,7 @@ pub(crate) fn render_dashboard(
         &format!(
             "{} {} {}",
             secondary_button("Apps", Some("/apps"), Some(&icon_cube("w-4 h-4 mr-2"))),
-            secondary_button(
-                "Run All Now",
-                Some("/run-all"),
-                Some(&icon_play("w-4 h-4 mr-2"))
-            ),
+            run_all_now_button(),
             primary_button(
                 "New Task",
                 Some("/new-task"),
@@ -74,6 +70,17 @@ pub(crate) fn render_dashboard(
     layout(
         "Dashboard",
         &format!("{}{}{}{}", toast_html, header, stats_grid, card_html),
+    )
+}
+
+fn run_all_now_button() -> String {
+    format!(
+        r#"<form method='POST' action='/run-all' class='inline'>
+            <button type='submit' class='inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 shadow-sm'>
+                {}Run All Now
+            </button>
+        </form>"#,
+        icon_play("w-4 h-4 mr-2")
     )
 }
 
@@ -1089,5 +1096,19 @@ mod working_hours_profile_ui_tests {
             !html.contains("\\\n"),
             "schedule editor must not emit literal backslash-newline sequences"
         );
+    }
+}
+
+#[cfg(test)]
+mod run_all_button_tests {
+    use super::run_all_now_button;
+
+    #[test]
+    fn run_all_now_uses_post_form() {
+        let html = run_all_now_button();
+        assert!(html.contains("method='POST'"));
+        assert!(html.contains("action='/run-all'"));
+        assert!(html.contains("type='submit'"));
+        assert!(!html.contains("<a "));
     }
 }
