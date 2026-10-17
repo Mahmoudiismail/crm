@@ -55,7 +55,12 @@ pub fn navigate_and_run_report(
     step_num: &mut u32,
 ) -> Result<Vec<String>> {
     let report_started = Instant::now();
-    info!("YASWEB STAGE START: navigate_and_run_report report='{}' type='{}' filters_count={}", active_report_name, active_report_type, active_filters.len());
+    info!(
+        "YASWEB STAGE START: navigate_and_run_report report='{}' type='{}' filters_count={}",
+        active_report_name,
+        active_report_type,
+        active_filters.len()
+    );
     let mut discovered_filters = Vec::new();
 
     // Replicate navigation block to find "MIS" and run steps
@@ -161,7 +166,10 @@ pub fn navigate_and_run_report(
                             debug::save_failure_diagnostics(tab, "wait_for_mis_reports");
                             return Err(e).context("Yasweb stage failed: wait for MIS Reports");
                         }
-                        info!("YASWEB STAGE END: wait_for_mis_reports status=SUCCESS elapsed_ms={}", mis_wait_started.elapsed().as_millis());
+                        info!(
+                            "YASWEB STAGE END: wait_for_mis_reports status=SUCCESS elapsed_ms={}",
+                            mis_wait_started.elapsed().as_millis()
+                        );
                         info!("MIS Reports button successfully verified.");
                         println!("MIS Reports button successfully verified.");
                         debug::save_html_state(

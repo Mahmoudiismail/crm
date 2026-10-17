@@ -55,7 +55,6 @@ pub fn save_html_state(
     }
 }
 
-
 /// Saves a redacted page snapshot and browser metadata when an automation step fails.
 /// The diagnostic file is kept separate from routine step snapshots to make failures easy to find.
 pub fn save_failure_diagnostics(tab: &Arc<headless_chrome::Tab>, step_name: &str) {
@@ -136,19 +135,37 @@ pub fn save_failure_diagnostics(tab: &Arc<headless_chrome::Tab>, step_name: &str
     };
     path.push("debug_html");
     if let Err(e) = std::fs::create_dir_all(&path) {
-        error!("Cannot create failure diagnostics directory {:?}: {e}", path);
+        error!(
+            "Cannot create failure diagnostics directory {:?}: {e}",
+            path
+        );
         return;
     }
     path.push(format!("failure_{now}_{safe_step}.json"));
 
     match tab.evaluate(diagnostic_js, true) {
-        Ok(result) => match result.value.and_then(|value| value.as_str().map(str::to_owned)) {
+        Ok(result) => match result
+            .value
+            .and_then(|value| value.as_str().map(str::to_owned))
+        {
             Some(json) => match std::fs::write(&path, json) {
-                Ok(()) => error!("Saved redacted failure diagnostics for '{}' to {:?}", step_name, path),
-                Err(e) => error!("Failed to write failure diagnostics for '{}': {e}", step_name),
+                Ok(()) => error!(
+                    "Saved redacted failure diagnostics for '{}' to {:?}",
+                    step_name, path
+                ),
+                Err(e) => error!(
+                    "Failed to write failure diagnostics for '{}': {e}",
+                    step_name
+                ),
             },
-            None => error!("Failure diagnostics for '{}' returned no string result", step_name),
+            None => error!(
+                "Failure diagnostics for '{}' returned no string result",
+                step_name
+            ),
         },
-        Err(e) => error!("Failed to collect failure diagnostics for '{}': {e}", step_name),
+        Err(e) => error!(
+            "Failed to collect failure diagnostics for '{}': {e}",
+            step_name
+        ),
     }
 }

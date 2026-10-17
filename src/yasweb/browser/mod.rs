@@ -28,9 +28,17 @@ pub fn run_browser_tab(
     download_dir: Option<PathBuf>,
 ) -> Result<Vec<String>> {
     let task_started = Instant::now();
-    info!("YASWEB RUN START: report='{}' type='{}' keep_open={} headless={} timeout_minutes={}", active_report_name, active_report_type, config.keep_open, config.headless, config.timeout_minutes);
+    info!(
+        "YASWEB RUN START: report='{}' type='{}' keep_open={} headless={} timeout_minutes={}",
+        active_report_name,
+        active_report_type,
+        config.keep_open,
+        config.headless,
+        config.timeout_minutes
+    );
     let mut step_num = 1;
-    let tab = client::get_or_create_tab(&browser).context("Yasweb stage failed: create browser tab")?;
+    let tab =
+        client::get_or_create_tab(&browser).context("Yasweb stage failed: create browser tab")?;
     info!("YASWEB STAGE START: configure_downloads");
     download::configure_download_directory(&tab, download_dir.as_ref())
         .context("Yasweb stage failed: configure download directory")?;
@@ -42,7 +50,11 @@ pub fn run_browser_tab(
     info!("YASWEB STAGE START: login");
     let login_started = Instant::now();
     if let Err(e) = login::execute_login(&tab, config, active_report_name, &mut step_num) {
-        error!("YASWEB STAGE FAILED: login elapsed_ms={} error={:#}", login_started.elapsed().as_millis(), e);
+        error!(
+            "YASWEB STAGE FAILED: login elapsed_ms={} error={:#}",
+            login_started.elapsed().as_millis(),
+            e
+        );
         debug::save_failure_diagnostics(&tab, "login");
         if config.keep_open {
             info!("Keeping browser open for 60 seconds after login failure because keep_open=true");
@@ -50,7 +62,10 @@ pub fn run_browser_tab(
         }
         return Err(e.context("Yasweb stage failed: login"));
     }
-    info!("YASWEB STAGE END: login status=SUCCESS elapsed_ms={}", login_started.elapsed().as_millis());
+    info!(
+        "YASWEB STAGE END: login status=SUCCESS elapsed_ms={}",
+        login_started.elapsed().as_millis()
+    );
 
     // Snapshot existing files so a stale report cannot satisfy this export's wait.
     let download_snapshot = download::snapshot_downloads(download_dir.as_ref())
@@ -69,7 +84,11 @@ pub fn run_browser_tab(
     ) {
         Ok(filters) => filters,
         Err(e) => {
-            error!("YASWEB STAGE FAILED: report_navigation_and_export elapsed_ms={} error={:#}", report_started.elapsed().as_millis(), e);
+            error!(
+                "YASWEB STAGE FAILED: report_navigation_and_export elapsed_ms={} error={:#}",
+                report_started.elapsed().as_millis(),
+                e
+            );
             debug::save_failure_diagnostics(&tab, "report_navigation_and_export");
             if config.keep_open {
                 info!("Keeping browser open for 60 seconds after report failure because keep_open=true");
@@ -88,15 +107,24 @@ pub fn run_browser_tab(
         config.timeout_minutes,
         &download_snapshot,
     ) {
-        error!("YASWEB STAGE FAILED: wait_for_download elapsed_ms={} error={:#}", download_started.elapsed().as_millis(), e);
+        error!(
+            "YASWEB STAGE FAILED: wait_for_download elapsed_ms={} error={:#}",
+            download_started.elapsed().as_millis(),
+            e
+        );
         debug::save_failure_diagnostics(&tab, "wait_for_download");
         if config.keep_open {
-            info!("Keeping browser open for 60 seconds after download failure because keep_open=true");
+            info!(
+                "Keeping browser open for 60 seconds after download failure because keep_open=true"
+            );
             std::thread::sleep(Duration::from_secs(60));
         }
         return Err(e.context("Yasweb stage failed: wait for download"));
     }
-    info!("YASWEB STAGE END: wait_for_download status=SUCCESS elapsed_ms={}", download_started.elapsed().as_millis());
+    info!(
+        "YASWEB STAGE END: wait_for_download status=SUCCESS elapsed_ms={}",
+        download_started.elapsed().as_millis()
+    );
 
     // Clean up listeners
     if let Err(e) = tab.remove_event_listener(&events) {
@@ -108,6 +136,10 @@ pub fn run_browser_tab(
         std::thread::sleep(Duration::from_secs(60));
     }
 
-    info!("YASWEB RUN END: status=SUCCESS report='{}' elapsed_ms={}", active_report_name, task_started.elapsed().as_millis());
+    info!(
+        "YASWEB RUN END: status=SUCCESS report='{}' elapsed_ms={}",
+        active_report_name,
+        task_started.elapsed().as_millis()
+    );
     Ok(discovered_filters)
 }

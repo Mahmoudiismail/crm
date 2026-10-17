@@ -764,7 +764,9 @@ async fn main() -> Result<()> {
             }
             Err(e) => {
                 error!("YASWEB REPORT TASK FAILED: {e}");
-                return Err(anyhow::anyhow!("Yasweb report task panicked or was cancelled: {e}"));
+                return Err(anyhow::anyhow!(
+                    "Yasweb report task panicked or was cancelled: {e}"
+                ));
             }
         }
     }
