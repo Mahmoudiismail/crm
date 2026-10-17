@@ -223,14 +223,23 @@ fn extract_zip(zip_path: &Path, extract_dir: &Path, password: &[u8]) -> Result<V
 }
 
 fn unblock_file(path: &Path) {
-    let _ = std::process::Command::new("powershell")
+    // PowerShell's -Command mode treats trailing arguments as command text rather than
+    // binding them to a param() block. Pass the path through the environment instead,
+    // avoiding both the empty -LiteralPath seen in production and command injection.
+    let result = std::process::Command::new("powershell")
         .arg("-NoProfile")
         .arg("-ExecutionPolicy")
         .arg("Bypass")
         .arg("-Command")
-        .arg("param([string]$Path) Unblock-File -LiteralPath $Path")
-        .arg(path)
+        .arg("$ErrorActionPreference = 'Stop'; Unblock-File -LiteralPath $env:CRM_UPDATER_UNBLOCK_PATH")
+        .env("CRM_UPDATER_UNBLOCK_PATH", path)
         .status();
+
+    match result {
+        Ok(status) if status.success() => {}
+        Ok(status) => warn!("Failed to unblock extracted file {:?}: PowerShell exited with {}", path, status),
+        Err(error) => warn!("Failed to run PowerShell to unblock extracted file {:?}: {}", path, error),
+    }
 }
 
 fn clean_canonicalized_path(path: &Path) -> String {
