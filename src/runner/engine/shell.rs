@@ -122,7 +122,17 @@ pub async fn run_shell_command(
     #[cfg(target_os = "windows")]
     let cmd = {
         let prog = &args[0];
-        if is_cmd_builtin(prog) {
+        let is_vbscript = std::path::Path::new(prog)
+            .extension()
+            .is_some_and(|ext| ext.to_string_lossy().eq_ignore_ascii_case("vbs"));
+
+        if is_vbscript {
+            // Invoke Windows Script Host explicitly; .vbs file associations may
+            // not be available to the Runner process or its service account.
+            let mut c = tokio::process::Command::new("cscript.exe");
+            c.arg("//NoLogo").arg(prog).args(&args[1..]);
+            c
+        } else if is_cmd_builtin(prog) {
             let mut c = tokio::process::Command::new("cmd.exe");
             c.arg("/c").arg(prog).args(&args[1..]);
             c
