@@ -1058,12 +1058,9 @@ mod mis_reports_wait_tests {
     use super::generate_mis_reports_wait_js;
 
     #[test]
-    fn wait_script_returns_an_async_expression_without_top_level_return() {
+    fn wait_script_returns_the_async_result_expected_by_automation_evaluator() {
         let js = generate_mis_reports_wait_js(30);
-        assert!(js
-            .trim_start()
-            .starts_with("(async function(timeoutSeconds)"));
-        assert!(!js.trim_start().starts_with("return await"));
+        assert!(js.trim_start().starts_with("return await (async function(timeoutSeconds)"));
         assert!(js.contains("})(30);"));
     }
 
