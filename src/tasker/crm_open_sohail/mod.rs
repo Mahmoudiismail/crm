@@ -56,11 +56,14 @@ param(
     [string]$SenderAccount,
     [string]$SubjectPrefix,
     [string]$Subject,
-    [string]$HtmlBody
+    [string]$HtmlBodyPath
 )
 
 try {
     $ErrorActionPreference = "Stop"
+
+    # Read the HTML from disk instead of passing a large body on the command line.
+    $HtmlBody = Get-Content -LiteralPath $HtmlBodyPath -Raw -Encoding UTF8
 
     $Outlook = New-Object -ComObject Outlook.Application
     $Namespace = $Outlook.GetNamespace("MAPI")
@@ -194,7 +197,7 @@ try {
                 ("-SenderAccount", &sender_account_email),
                 ("-SubjectPrefix", &reply_subject_prefix),
                 ("-Subject", &subject),
-                ("-HtmlBody", final_html.as_str()),
+                ("-HtmlBodyPath", html_path.to_string_lossy().as_ref()),
             ],
         ) {
             error!("Failed to create/save reply draft: {}", e);
@@ -230,6 +233,10 @@ mod tests {
         assert!(src.contains("[string]$SenderAccount"));
         assert!(src.contains("[string]$SubjectPrefix"));
         assert!(src.contains("[string]$Subject"));
-        assert!(src.contains("[string]$HtmlBody"));
+        assert!(src.contains("[string]$HtmlBodyPath"));
+        assert!(src.contains("Get-Content -LiteralPath $HtmlBodyPath -Raw -Encoding UTF8"));
+        assert!(src.contains(r#"("-HtmlBodyPath", html_path.to_string_lossy().as_ref())"#));
+        let old_call = [r#"("-HtmlBody", "#, "final_html.as_str())"].concat();
+        assert!(!src.contains(&old_call));
     }
 }

@@ -45,11 +45,14 @@ fn test_generate_mis_reports_wait_js_normal_timeout() {
     assert!(js.contains("})(10);"));
 
     // Match the rendered label robustly and avoid offsetParent-based visibility checks.
-    assert!(js.contains("document.querySelectorAll('.label.fw-bold')"));
+    assert!(js.contains("entry.doc.querySelectorAll('.label.fw-bold')"));
     assert!(js.contains("=== \"MIS Reports\""));
     assert!(js.contains("function isVisible(element)"));
     assert!(js.contains("element.getClientRects()"));
-    assert!(js.contains("return await (async function(timeoutSeconds)"));
+    assert!(js
+        .trim_start()
+        .starts_with("(async function(timeoutSeconds)"));
+    assert!(!js.trim_start().starts_with("return await"));
     assert!(!js.contains("element.offsetParent !== null"));
 
     // Check loading indicator presence
