@@ -236,7 +236,11 @@ fn enrich_dataset(
                     }
                 }
                 None => {
-                    warn!("Missing team mapping for: {}", row.team);
+                    if row.team.trim().is_empty() {
+                        warn!("Dashboard row has an empty team name; using fallback OUL");
+                    } else {
+                        warn!("Missing team mapping for: {}", row.team.trim());
+                    }
                     fallback_oul_text.to_string()
                 }
             };

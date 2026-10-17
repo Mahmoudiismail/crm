@@ -1022,7 +1022,9 @@ fn fetch_recursive(
                                 context_opt: context_opt.clone(),
                                 key_prefix: key_prefix.clone(),
                             };
-                            let _ = download_tx.send(task);
+                            download_tx.send(task).context(
+                                "Download worker channel closed while queueing report download",
+                            )?;
                         }
                     }
                 }
