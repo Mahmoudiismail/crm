@@ -49,9 +49,9 @@ fn test_generate_mis_reports_wait_js_normal_timeout() {
     assert!(js.contains("Report Manager"));
     assert!(js.contains("searchVisible"));
     assert!(js.contains("reportUiReady"));
-    assert!(js.contains("Inspected route/content candidates"));
+    assert!(js.contains("MIS readiness timeout diagnostics"));
     assert!(!js.contains("element.offsetParent !== null"));
-    assert!(js.contains("#loader_svg, mat-progress-bar, .dx-loadpanel"));
+    assert!(js.contains("#loader_svg, .loading-screen-wrapper, mat-progress-bar, .dx-loadpanel"));
 }
 
 #[test]
