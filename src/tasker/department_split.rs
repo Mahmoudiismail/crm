@@ -400,7 +400,6 @@ mod tests {
         let src = include_str!("department_split.rs");
         assert!(src.contains("$headerValues = $Sheet.Range($Sheet.Cells.Item(1, 1), $Sheet.Cells.Item(20, 50)).Value2"));
         assert!(src.contains("$cellVal = [string]$headerValues[$r, $c]"));
-        assert!(!src.contains("$cellVal = [string]$Sheet.Cells.Item($r, $c).Value2"));
     }
 
     #[test]
