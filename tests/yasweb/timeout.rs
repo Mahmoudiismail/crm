@@ -42,7 +42,7 @@ fn test_generate_mis_reports_wait_js_normal_timeout() {
     assert!(js.contains("frame.contentDocument"));
     assert!(js.contains("function isVisible(element)"));
     assert!(js.contains("element.getClientRects()"));
-    assert!(js.contains(r"const routeMatches = /\/home\/mis-report\/module\//i.test(entry.url);"));
+    assert!(js.contains(r"const routePattern = /\\/home\\/mis-report\\/module\\//i;"));
     assert!(js.contains("input[formcontrolname=\"searchInput\"]"));
     assert!(js.contains("input[placeholder=\"Search\"]"));
     assert!(js.contains("Standard Report"));
