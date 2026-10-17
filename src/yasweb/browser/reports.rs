@@ -941,8 +941,9 @@ pub fn generate_mis_reports_wait_js(timeout_seconds: u64) -> String {
                 const entries = [{{ doc: document, url: document.location.href }}];
                 for (const frame of Array.from(document.querySelectorAll('iframe'))) {{
                     try {{
-                        if (frame.contentDocument) {{
-                            entries.push({{ doc: frame.contentDocument, url: frame.contentDocument.location.href }});
+                        const frameDocument = frame.contentWindow && frame.contentWindow.document;
+                        if (frameDocument) {{
+                            entries.push({{ doc: frameDocument, url: frameDocument.location.href }});
                         }}
                     }} catch (error) {{
                         logs.push("Cannot inspect iframe: " + (frame.src || "unknown src") + " (" + error.message + ")");
