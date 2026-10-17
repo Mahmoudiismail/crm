@@ -236,6 +236,7 @@ mod tests {
         assert!(src.contains("[string]$HtmlBodyPath"));
         assert!(src.contains("Get-Content -LiteralPath $HtmlBodyPath -Raw -Encoding UTF8"));
         assert!(src.contains(r#"("-HtmlBodyPath", html_path.to_string_lossy().as_ref())"#));
-        assert!(!src.contains(r#"("-HtmlBody", final_html.as_str())"#));
+        let old_call = [r#"("-HtmlBody", "#, "final_html.as_str())"].concat();
+        assert!(!src.contains(&old_call));
     }
 }
