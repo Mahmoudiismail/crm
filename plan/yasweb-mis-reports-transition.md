@@ -7,12 +7,11 @@
 - Prior HTML snapshots show an Angular SPA and the clicked MIS module, confirming asynchronous route/render transitions.
 
 ## Proposed implementation
-1. Update only `generate_mis_reports_wait_js` in `src/yasweb/browser/reports.rs`.
-2. During the existing 30-second deadline, inspect main and accessible iframe documents repeatedly, without treating text-only/zero-rectangle labels as ready.
-3. Define readiness from the expected report route plus an actual usable MIS Reports control/content in the active document. Keep all selector checks defensive for missing/detached frames and log each document URL, candidate visibility/rect metrics, route state, and loader state on timeout.
-4. Retain structured JSON results through the existing automation evaluator and keep the 30-second timeout.
-5. Extend focused tests in `tests/yasweb/timeout.rs` to guard against false success from zero-rectangle candidates and to require route/content-aware diagnostics.
-6. Update `md/yasweb-spa-race-condition.md` and `md/OPERATIONS.md`; commit this plan under `plan/`.
+1. Update `generate_mis_reports_wait_js` in `src/yasweb/browser/reports.rs` to treat the main MIS route and embedded report UI as separate documents.
+2. During the existing timeout, inspect the main document and accessible iframes, requiring the MIS route plus visible `Standard Report`, `Report Manager`, and `Search` controls in the report document. A route or text label alone must not pass readiness.
+3. Keep the existing workflow order: select `active_report_type` (either `Standard Report` or `Report Manager`), then search for `active_report_name` in that selected type, select the matching result, and only then continue filters/export. Do not hard-code one report type for all reports.
+4. Keep iframe access defensive, preserve structured JSON results through the existing automation evaluator, and emit route/report-document/type/search/loader diagnostics on timeout.
+5. Add focused regression assertions in `src/yasweb/browser/reports.rs` and `tests/yasweb/timeout.rs` for both report types, iframe search readiness, and the evaluator return contract.
 
 ## Scope boundaries
 - This is one PR only, against `main`; do not open another until this PR is closed.
