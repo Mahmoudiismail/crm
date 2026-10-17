@@ -931,7 +931,7 @@ mod step6_wait_tests {
 
 pub fn generate_mis_reports_wait_js(timeout_seconds: u64) -> String {
     format!(
-        r#"
+        r##"
         return await (async function(timeoutSeconds) {{
             function sleep(ms) {{ return new Promise(resolve => setTimeout(resolve, ms)); }}
             const logs = [];
@@ -1048,7 +1048,7 @@ pub fn generate_mis_reports_wait_js(timeout_seconds: u64) -> String {
                 logs
             }});
         }})({});
-        "#,
+        "##,
         timeout_seconds
     )
 }
