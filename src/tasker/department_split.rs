@@ -155,16 +155,16 @@ try {
     $headerRow = -1
     $deptCol = -1
 
-    for ($r = 1; $r -le 20; $r++) {
+    $headerValues = $Sheet.Range($Sheet.Cells.Item(1, 1), $Sheet.Cells.Item(20, 50)).Value2
+    for ($r = 1; $r -le 20 -and $deptCol -eq -1; $r++) {
         for ($c = 1; $c -le 50; $c++) {
-            $cellVal = [string]$Sheet.Cells.Item($r, $c).Value2
+            $cellVal = [string]$headerValues[$r, $c]
             if ($cellVal -and $cellVal.Trim().ToUpper() -eq "DEPT") {
                 $headerRow = $r
                 $deptCol = $c
                 break
             }
         }
-        if ($deptCol -ne -1) { break }
     }
 
     if ($deptCol -eq -1) {
@@ -393,6 +393,15 @@ try {
 }
 
 #[cfg(test)]
+    #[test]
+    fn test_department_header_scan_reads_range_in_bulk() {
+        let src = include_str!("department_split.rs");
+        assert!(src.contains("$headerValues = $Sheet.Range($Sheet.Cells.Item(1, 1), $Sheet.Cells.Item(20, 50)).Value2"));
+        assert!(src.contains("$cellVal = [string]$headerValues[$r, $c]"));
+        assert!(!src.contains("$cellVal = [string]$Sheet.Cells.Item($r, $c).Value2"));
+    }
+
+
 #[allow(unused_imports)]
 mod tests {
     // use super::*;
