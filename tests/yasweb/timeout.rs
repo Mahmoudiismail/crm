@@ -21,6 +21,7 @@ fn test_generate_step6_js_large_timeout() {
 fn test_generate_step6_js_zero_timeout() {
     let js = generate_step6_js(0);
     assert!(js.contains("})(0);"));
+    assert!(js.trim_start().starts_with("return await (async function(timeoutSeconds)"));
 }
 
 #[test]
@@ -37,6 +38,7 @@ fn test_generate_mis_reports_wait_js_normal_timeout() {
     let js = generate_mis_reports_wait_js(10);
     assert!(js.contains("const deadline = Date.now() + timeoutSeconds * 1000;"));
     assert!(js.contains("})(10);"));
+    assert!(js.trim_start().starts_with("return await (async function(timeoutSeconds)"));
     assert!(js.contains("frame.contentDocument"));
     assert!(js.contains("function isVisible(element)"));
     assert!(js.contains("element.getClientRects()"));
@@ -52,6 +54,7 @@ fn test_generate_mis_reports_wait_js_normal_timeout() {
 fn test_generate_mis_reports_wait_js_large_timeout() {
     let js = generate_mis_reports_wait_js(120);
     assert!(js.contains("})(120);"));
+    assert!(js.trim_start().starts_with("return await (async function(timeoutSeconds)"));
 }
 
 #[test]
