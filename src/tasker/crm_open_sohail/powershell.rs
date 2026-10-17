@@ -508,9 +508,23 @@ mod tests {
     #[test]
     fn test_pivot_extraction_uses_bulk_values_and_shared_extractor() {
         let src = include_str!("powershell.rs");
-        let script = src.split("let ps_script = r#\"").nth(1).unwrap().split("\"#;").next().unwrap();
-        assert_eq!(script.matches("function Add-PivotDataToCollection").count(), 1);
-        assert_eq!(script.matches("Add-PivotDataToCollection -PivotTable $Pivot").count(), 3);
+        let script = src
+            .split("let ps_script = r#\"")
+            .nth(1)
+            .unwrap()
+            .split("\"#;")
+            .next()
+            .unwrap();
+        assert_eq!(
+            script.matches("function Add-PivotDataToCollection").count(),
+            1
+        );
+        assert_eq!(
+            script
+                .matches("Add-PivotDataToCollection -PivotTable $Pivot")
+                .count(),
+            3
+        );
         assert!(script.contains("$values = $dataBody.Value2"));
         assert!(script.contains("$dataBody.Cells.Item($r, $c).Text"));
     }
@@ -518,7 +532,13 @@ mod tests {
     #[test]
     fn test_pivot_extraction_uses_linear_time_row_collection() {
         let src = include_str!("powershell.rs");
-        let script = src.split("let ps_script = r#\"").nth(1).unwrap().split("\"#;").next().unwrap();
+        let script = src
+            .split("let ps_script = r#\"")
+            .nth(1)
+            .unwrap()
+            .split("\"#;")
+            .next()
+            .unwrap();
         assert!(script.contains("$dataset = [System.Collections.Generic.List[object]]::new()"));
         assert!(script.contains("$dataset.Add($row)"));
         assert!(script.contains("data = $dataset.ToArray()"));

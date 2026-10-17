@@ -283,7 +283,8 @@ mod tests {
         assert!(script.contains("$excel.Visible = $true"));
         assert!(script.contains("$excel.WindowState = -4140"));
         assert!(script.contains("$dayColIdx = -1"));
-        assert!(script.contains("$exactRange.AutoFilter($dayColIdx, $todayDat, 1, [Type]::Missing, $false)"));
+        assert!(script
+            .contains("$exactRange.AutoFilter($dayColIdx, $todayDat, 1, [Type]::Missing, $false)"));
         assert!(script.contains("$chart.Export($imagePath, \"JPG\")"));
         assert!(script.contains("$mail.Attachments.Add($imagePath)"));
         assert!(!script.contains("$inspector.WordEditor"));

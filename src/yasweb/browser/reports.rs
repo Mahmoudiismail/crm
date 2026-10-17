@@ -1060,7 +1060,9 @@ mod mis_reports_wait_tests {
     #[test]
     fn wait_script_returns_the_async_result_expected_by_automation_evaluator() {
         let js = generate_mis_reports_wait_js(30);
-        assert!(js.trim_start().starts_with("return await (async function(timeoutSeconds)"));
+        assert!(js
+            .trim_start()
+            .starts_with("return await (async function(timeoutSeconds)"));
         assert!(js.contains("})(30);"));
     }
 

@@ -237,8 +237,14 @@ fn unblock_file(path: &Path) {
 
     match result {
         Ok(status) if status.success() => {}
-        Ok(status) => warn!("Failed to unblock extracted file {:?}: PowerShell exited with {}", path, status),
-        Err(error) => warn!("Failed to run PowerShell to unblock extracted file {:?}: {}", path, error),
+        Ok(status) => warn!(
+            "Failed to unblock extracted file {:?}: PowerShell exited with {}",
+            path, status
+        ),
+        Err(error) => warn!(
+            "Failed to run PowerShell to unblock extracted file {:?}: {}",
+            path, error
+        ),
     }
 }
 
