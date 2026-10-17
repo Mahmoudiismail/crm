@@ -932,7 +932,7 @@ mod step6_wait_tests {
 pub fn generate_mis_reports_wait_js(timeout_seconds: u64) -> String {
     format!(
         r#"
-        (async function(timeoutSeconds) {{
+        return await (async function(timeoutSeconds) {{
             function sleep(ms) {{ return new Promise(resolve => setTimeout(resolve, ms)); }}
             const logs = [];
             const deadline = Date.now() + timeoutSeconds * 1000;
