@@ -1045,7 +1045,9 @@ mod mis_reports_wait_tests {
     #[test]
     fn wait_script_returns_an_async_expression_without_top_level_return() {
         let js = generate_mis_reports_wait_js(30);
-        assert!(js.trim_start().starts_with("(async function(timeoutSeconds)"));
+        assert!(js
+            .trim_start()
+            .starts_with("(async function(timeoutSeconds)"));
         assert!(!js.trim_start().starts_with("return await"));
         assert!(js.contains("})(30);"));
     }
@@ -1054,7 +1056,9 @@ mod mis_reports_wait_tests {
     fn wait_script_checks_accessible_iframes_and_reports_diagnostics() {
         let js = generate_mis_reports_wait_js(30);
         assert!(js.contains("frame.contentDocument"));
-        assert!(js.contains("Waiting for visible MIS Reports label in main document or accessible iframes"));
+        assert!(js.contains(
+            "Waiting for visible MIS Reports label in main document or accessible iframes"
+        ));
         assert!(js.contains("Inspected documents: "));
         assert!(js.contains("status: \"SUCCESS\""));
         assert!(js.contains("status: \"ERROR\""));
