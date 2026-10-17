@@ -229,7 +229,7 @@ try {
         }
 
         $rowCount = $dataBody.Rows.Count
-        $dataset = @()
+        $dataset = [System.Collections.Generic.List[object]]::new()
         $rowOffset = $rowRange.Rows.Count - $rowCount
         for ($r = 1; $r -le $rowCount; $r++) {
             $teamName = $rowRange.Cells.Item($r + $rowOffset, 1).Text
@@ -258,13 +258,13 @@ try {
                     $row."Grand Total" = if ($value -as [double]) { $value -as [double] } elseif ([double]::TryParse($value, [ref]$null)) { [double]$value } else { 0 }
                 }
             }
-            $dataset += $row
+            $dataset.Add($row)
         }
         if ($dataset.Count -gt 0) {
             $Collector.Value += [PSCustomObject]@{
                 branch = $BranchCaption
                 month = $MonthTitle
-                data = @($dataset)
+                data = $dataset.ToArray()
             }
         }
     }
@@ -513,6 +513,16 @@ mod tests {
         assert_eq!(script.matches("Add-PivotDataToCollection -PivotTable $Pivot").count(), 3);
         assert!(script.contains("$values = $dataBody.Value2"));
         assert!(script.contains("$dataBody.Cells.Item($r, $c).Text"));
+    }
+
+    #[test]
+    fn test_pivot_extraction_uses_linear_time_row_collection() {
+        let src = include_str!("powershell.rs");
+        let script = src.split("let ps_script = r#\"").nth(1).unwrap().split("\"#;").next().unwrap();
+        assert!(script.contains("$dataset = [System.Collections.Generic.List[object]]::new()"));
+        assert!(script.contains("$dataset.Add($row)"));
+        assert!(script.contains("data = $dataset.ToArray()"));
+        assert!(!script.contains("$dataset += $row"));
     }
 
     #[test]
