@@ -393,6 +393,8 @@ try {
 }
 
 #[cfg(test)]
+#[allow(unused_imports)]
+mod tests {
     #[test]
     fn test_department_header_scan_reads_range_in_bulk() {
         let src = include_str!("department_split.rs");
@@ -400,11 +402,6 @@ try {
         assert!(src.contains("$cellVal = [string]$headerValues[$r, $c]"));
         assert!(!src.contains("$cellVal = [string]$Sheet.Cells.Item($r, $c).Value2"));
     }
-
-
-#[allow(unused_imports)]
-mod tests {
-    // use super::*;
 
     #[test]
     fn test_powershell_interpolation_safety() {
