@@ -27,3 +27,8 @@ Unit tests added in `tests/yasweb/timeout.rs` verify that `generate_mis_reports_
 ## Follow-up: MIS Reports visibility regression (2026-10-17)
 
 The latest failure HTML contained the `MIS Reports` label, but the runtime still rejected it because the implementation retained an `offsetParent !== null` condition despite the earlier documentation stating it had been removed. The wait now checks all matching labels, verifies computed visibility through the ancestor chain, and confirms the element has a rendered rectangle. Loader detection also checks all matching loader elements instead of only the first match. On timeout, diagnostic visibility details are returned in the structured logs.
+
+
+## Follow-up: MIS transition readiness correction (2026-10-17)
+
+The latest production run reached the MIS module route, but the wait still timed out because the matching label reported `display:block`, `visibility:visible`, and `opacity:1` while having no client rectangles. A label's text and computed styles alone are not a reliable readiness signal. The wait now polls the main document and accessible iframes until a rendered, interactive `MIS Reports` control or visible report-list controls exist on the expected MIS module route. It retains the 30-second deadline and records inspected document URLs, route matches, candidate counts, usable-control state, report-control state, and visible loader documents on timeout.
