@@ -49,7 +49,9 @@ fn test_generate_mis_reports_wait_js_normal_timeout() {
     assert!(js.contains("=== \"MIS Reports\""));
     assert!(js.contains("function isVisible(element)"));
     assert!(js.contains("element.getClientRects()"));
-    assert!(js.trim_start().starts_with("(async function(timeoutSeconds)"));
+    assert!(js
+        .trim_start()
+        .starts_with("(async function(timeoutSeconds)"));
     assert!(!js.trim_start().starts_with("return await"));
     assert!(!js.contains("element.offsetParent !== null"));
 
