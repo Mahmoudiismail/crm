@@ -971,73 +971,69 @@ pub fn generate_mis_reports_wait_js(timeout_seconds: u64) -> String {
                 return Array.from(element.getClientRects()).some(rect => rect.width > 0 && rect.height > 0);
             }}
 
-            function visibleLoaderDocuments() {{
+            function visibleLoaderUrls() {{
                 const selector = '#loader_svg, mat-progress-bar, .dx-loadpanel';
                 return getDocuments()
                     .filter(entry => Array.from(entry.doc.querySelectorAll(selector)).some(isVisible))
                     .map(entry => entry.url);
             }}
 
-            function findMisReports() {{
-                const matches = [];
+            function findUsableReportContent() {{
+                const candidates = [];
+                const loaders = visibleLoaderUrls();
                 for (const entry of getDocuments()) {{
-                    for (const element of Array.from(entry.doc.querySelectorAll('.label.fw-bold'))) {{
-                        const text = (element.textContent || "").replace(/\s+/g, " ").trim();
-                        if (text === "MIS Reports" && isVisible(element)) {{
-                            matches.push({{ url: entry.url, element }});
-                        }}
+                    const routeMatches = /\/home\/mis-report\/module\//i.test(entry.url);
+                    const labelCandidates = Array.from(entry.doc.querySelectorAll('.label.fw-bold, .label, button, [role="button"]'))
+                        .filter(element => (element.textContent || "").replace(/\s+/g, " ").trim() === "MIS Reports");
+                    const usableLabel = labelCandidates.some(element => isVisible(element) &&
+                        (element.matches('button, [role="button"]') ||
+                         element.querySelector('button, [role="button"], a') !== null ||
+                         element.closest('button, [role="button"], a') !== null));
+                    const reportControls = Array.from(entry.doc.querySelectorAll(
+                        '.tree-view, input[formcontrolname="searchInput"], input[placeholder="Search"], mat-radio-button'
+                    )).some(isVisible);
+                    const candidate = {{
+                        url: entry.url,
+                        routeMatches,
+                        labelCount: labelCandidates.length,
+                        usableLabel,
+                        reportControls,
+                        documentReady: entry.doc.readyState === "complete",
+                        hasVisibleLoader: loaders.includes(entry.url)
+                    }};
+                    candidates.push(candidate);
+
+                    // The route alone is not a readiness signal; wait for a rendered,
+                    // interactive report control or visible report-list controls.
+                    if (routeMatches && !candidate.hasVisibleLoader &&
+                        (usableLabel || reportControls)) {{
+                        logs.push("MIS report interface ready: " + JSON.stringify(candidate));
+                        return {{ ready: true, candidates }};
                     }}
                 }}
-                return matches;
+                return {{ ready: false, candidates }};
             }}
 
-            logs.push("Waiting for SPA loaders to disappear...");
-            while (Date.now() <= deadline && visibleLoaderDocuments().length > 0) {{
-                await sleep(100);
-            }}
-            const loaders = visibleLoaderDocuments();
-            if (loaders.length > 0) {{
-                logs.push("Visible loader documents: " + JSON.stringify(loaders));
-                return JSON.stringify({{ status: "ERROR", msg: "Timeout waiting for loader to disappear", logs }});
-            }}
-
-            logs.push("Waiting for visible MIS Reports label in main document or accessible iframes...");
+            logs.push("Waiting for MIS module route and usable report content...");
             while (Date.now() <= deadline) {{
-                const matches = findMisReports();
-                if (matches.length > 0) {{
-                    logs.push("MIS Reports label is visible in: " + matches.map(match => match.url).join(", "));
+                const result = findUsableReportContent();
+                if (result.ready) {{
                     return JSON.stringify({{ status: "SUCCESS", logs }});
                 }}
                 await sleep(100);
             }}
 
-            const documents = getDocuments().map(entry => {{
-                const labels = Array.from(entry.doc.querySelectorAll('.label.fw-bold'))
-                    .map(element => (element.textContent || "").replace(/\s+/g, " ").trim())
-                    .filter(text => text.length > 0)
-                    .slice(0, 30);
-                const matchingLabels = Array.from(entry.doc.querySelectorAll('.label.fw-bold'))
-                    .filter(element => (element.textContent || "").includes("MIS Reports"))
-                    .map(element => {{
-                        const style = element.ownerDocument.defaultView.getComputedStyle(element);
-                        return {{
-                            text: (element.textContent || "").trim(),
-                            display: style.display,
-                            visibility: style.visibility,
-                            opacity: style.opacity,
-                            rectCount: element.getClientRects().length
-                        }};
-                    }});
-                return {{ url: entry.url, readyState: entry.doc.readyState, labels, matchingLabels }};
-            }});
-            logs.push("Inspected documents: " + JSON.stringify(documents));
-            return JSON.stringify({{ status: "ERROR", msg: "MIS Reports label not found or not visible before timeout", logs }});
+            const loaderUrls = visibleLoaderUrls();
+            const finalState = findUsableReportContent();
+            logs.push("Visible loader documents: " + JSON.stringify(loaderUrls));
+            logs.push("Inspected route/content candidates: " + JSON.stringify(finalState.candidates));
+            logs.push("Inspected document URLs: " + JSON.stringify(getDocuments().map(entry => entry.url)));
+            return JSON.stringify({{ status: "ERROR", msg: "MIS Reports route reached but no usable report control/content became ready before timeout", logs }});
         }})({});
         "#,
         timeout_seconds
     )
 }
-
 #[cfg(test)]
 mod mis_reports_wait_tests {
     use super::generate_mis_reports_wait_js;
