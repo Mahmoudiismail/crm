@@ -1061,4 +1061,4 @@ mod mis_reports_wait_tests {
         assert!(js.contains("status: \\"SUCCESS\\""));
         assert!(js.contains("status: \\"ERROR\\""));
     }
-}}
+}
