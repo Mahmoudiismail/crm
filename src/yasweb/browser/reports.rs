@@ -255,7 +255,7 @@ pub fn navigate_and_run_report(
                                                     break;
                                                 }}
                                                 await sleep(500);
-                                            }}
+                                            }
 
                                             let listLoaded = false;
                                             logs.push("Waiting for report list to load (tree-view)...");
