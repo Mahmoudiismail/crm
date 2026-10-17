@@ -53,13 +53,6 @@ try {
     $exactRange = $ws.Range($ws.Cells.Item(1, 1), $ws.Cells.Item($realLastRow, $realLastCol))
     $headers = $exactRange.Rows(1).Value2
 
-    $realLastRow = $ws.Cells.Find("*", $ws.Cells.Item(1, 1), $xlValues, $xlPart, $xlByRows, $xlPrevious).Row
-    $realLastCol = $ws.Cells.Find("*", $ws.Cells.Item(1, 1), $xlValues, $xlPart, $xlByColumns, $xlPrevious).Column
-    if (-not $realLastRow) { $realLastRow = 1 }
-    if (-not $realLastCol) { $realLastCol = 1 }
-
-    $exactRange = $ws.Range($ws.Cells.Item(1, 1), $ws.Cells.Item($realLastRow, $realLastCol))
-
     $specialColIdx = -1
     $dateColIdx = -1
 
@@ -232,6 +225,13 @@ pub fn generate_and_email_image(cus_file_path: &Path, config: &OpdAnalysisConfig
 mod tests {
     use super::*;
     use std::path::PathBuf;
+
+    #[test]
+    fn test_opd_template_does_not_repeat_last_cell_scan() {
+        let script = get_opd_script_template();
+        assert_eq!(script.matches("$ws.Cells.Find(\"*\",").count(), 2);
+        assert_eq!(script.matches("$exactRange = $ws.Range(").count(), 1);
+    }
 
     #[test]
     fn test_regression_copy_picture_bounds() {
