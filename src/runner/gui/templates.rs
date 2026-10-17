@@ -75,11 +75,11 @@ pub(crate) fn render_dashboard(
 
 fn run_all_now_button() -> String {
     format!(
-        "<form method='POST' action='/run-all' class='inline'>\\
-            <button type='submit' class='inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 shadow-sm'>\\
-                {}Run All Now\\
-            </button>\\
-        </form>",
+        r#"<form method='POST' action='/run-all' class='inline'>
+            <button type='submit' class='inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 shadow-sm'>
+                {}Run All Now
+            </button>
+        </form>"#,
         icon_play("w-4 h-4 mr-2")
     )
 }
