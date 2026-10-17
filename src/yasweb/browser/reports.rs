@@ -1052,11 +1052,13 @@ mod mis_reports_wait_tests {
     fn wait_script_checks_accessible_iframes_and_reports_diagnostics() {
         let js = generate_mis_reports_wait_js(30);
         assert!(js.contains("frame.contentDocument"));
-        assert!(js.contains(
-            "Waiting for visible MIS Reports label in main document or accessible iframes"
-        ));
-        assert!(js.contains("Inspected documents: "));
-        assert!(js.contains("status: \"SUCCESS\""));
-        assert!(js.contains("status: \"ERROR\""));
+        assert!(js.contains("Waiting for MIS module route and usable report content"));
+        assert!(js.contains("Inspected route/content candidates"));
+        assert!(js.contains("Visible loader documents"));
+        assert!(js.contains("routeMatches"));
+        assert!(js.contains("usableLabel"));
+        assert!(js.contains("reportControls"));
+        assert!(js.contains("status: \\"SUCCESS\\""));
+        assert!(js.contains("status: \\"ERROR\\""));
     }
-}
+}}
