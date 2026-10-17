@@ -157,6 +157,17 @@ try {
     Write-Output "TRACE: Creating ReplyAll draft..."
     $ReplyMail = $TargetMail.ReplyAll()
 
+    # Append the additional stakeholder without replacing existing ReplyAll CC recipients.
+    $AdditionalCc = "miismail@fakeeh.care"
+    $CurrentCc = [string]$ReplyMail.CC
+    if ($CurrentCc -notmatch '(?i)miismail@fakeeh\.care') {
+        if ([string]::IsNullOrWhiteSpace($CurrentCc)) {
+            $ReplyMail.CC = $AdditionalCc
+        } else {
+            $ReplyMail.CC = $CurrentCc.TrimEnd(';', ' ', ',') + "; " + $AdditionalCc
+        }
+    }
+
     if ($Subject) {
         $ReplyMail.Subject = $Subject
     }
@@ -235,6 +246,9 @@ mod tests {
         assert!(src.contains("[string]$Subject"));
         assert!(src.contains("[string]$HtmlBodyPath"));
         assert!(src.contains("Get-Content -LiteralPath $HtmlBodyPath -Raw -Encoding UTF8"));
+        assert!(src.contains(r#"$AdditionalCc = "miismail@fakeeh.care""#));
+        assert!(src.contains(r#"$ReplyMail.CC = $CurrentCc.TrimEnd(';', ' ', ',') + "; " + $AdditionalCc"#));
+        assert!(src.contains("ReplyAll"));
         assert!(src.contains(r#"("-HtmlBodyPath", html_path.to_string_lossy().as_ref())"#));
         let old_call = [r#"("-HtmlBody", "#, "final_html.as_str())"].concat();
         assert!(!src.contains(&old_call));
