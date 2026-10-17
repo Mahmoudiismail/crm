@@ -43,8 +43,12 @@ fn test_generate_mis_reports_wait_js_normal_timeout() {
     assert!(js.contains("function isVisible(element)"));
     assert!(js.contains("element.getClientRects()"));
     assert!(js.contains(r"const routeMatches = /\/home\/mis-report\/module\//i.test(entry.url);"));
-    assert!(js.contains("reportControls"));
-    assert!(js.contains("usableLabel"));
+    assert!(js.contains("input[formcontrolname=\"searchInput\"]"));
+    assert!(js.contains("input[placeholder=\"Search\"]"));
+    assert!(js.contains("Standard Report"));
+    assert!(js.contains("Report Manager"));
+    assert!(js.contains("searchVisible"));
+    assert!(js.contains("reportUiReady"));
     assert!(js.contains("Inspected route/content candidates"));
     assert!(!js.contains("element.offsetParent !== null"));
     assert!(js.contains("#loader_svg, mat-progress-bar, .dx-loadpanel"));
