@@ -58,10 +58,12 @@ pub fn spawn_execution_manager(
 
                     {
                         let mut st = status.lock().await;
-                        if st.running_tasks_count > 0 {
+                        let was_running = st.running_task_ids.iter().any(|id| id == &task_id);
+                        st.running_task_ids.retain(|id| id != &task_id);
+                        if was_running && st.running_tasks_count > 0 {
                             st.running_tasks_count -= 1;
                         }
-                        st.running_task_ids.retain(|id| id != &task_id);
+                        st.queued_task_ids.retain(|id| id != &task_id);
                         st.waiting_for_app.remove(&task_id);
                         if let Some(err) = result.error {
                             st.last_error = err;
@@ -146,7 +148,7 @@ pub fn spawn_execution_manager(
 
             {
                 let mut st = status.lock().await;
-                st.queued_tasks_count = queued_tasks.len();
+                st.queued_tasks_count = queued_tasks.len() + st.waiting_for_app.len();
             }
         }
     });
