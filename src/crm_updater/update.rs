@@ -692,6 +692,9 @@ mod tests {
             !src.contains(&bad_pattern),
             "Found vulnerable string interpolation in unblock_file"
         );
+        assert!(src.contains(".env(\"CRM_UPDATER_UNBLOCK_PATH\", path)"));
+        assert!(src.contains("Unblock-File -LiteralPath $env:CRM_UPDATER_UNBLOCK_PATH"));
+        assert!(!src.contains("param([string]$Path) Unblock-File -LiteralPath $Path"));
 
         let malicious_path =
             Path::new("C:\\temp\\file_with 'single quote' & command; calc.exe.txt");
