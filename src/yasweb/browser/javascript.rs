@@ -4,18 +4,30 @@ use std::sync::Arc;
 use std::time::Instant;
 use tracing::{error, info};
 
+fn prepare_automation_script(js_code: &str) -> String {
+    // Runtime.evaluate expects an expression, not a top-level return statement.
+    // Wrap return-await snippets in an async function so CDP can await the Promise
+    // and expose the final JSON string to the Rust caller.
+    if js_code.trim_start().starts_with("return await ") {
+        format!("(async () => {{ {} }})()", js_code)
+    } else {
+        js_code.to_owned()
+    }
+}
+
 pub fn evaluate_automation_step(
     tab: &Arc<Tab>,
     js_code: &str,
     step_name: &str,
 ) -> Result<serde_json::Value> {
     let started = Instant::now();
+    let evaluation_script = prepare_automation_script(js_code);
     info!(
         "AUTOMATION STEP START: {} (javascript_bytes={})",
         step_name,
         js_code.len()
     );
-    match tab.evaluate(js_code, true) {
+    match tab.evaluate(&evaluation_script, true) {
         Ok(res) => {
             let value = match res
                 .value
@@ -113,7 +125,22 @@ fn parse_automation_result(raw: &str, step_name: &str) -> Result<serde_json::Val
 
 #[cfg(test)]
 mod tests {
-    use super::parse_automation_result;
+    use super::{parse_automation_result, prepare_automation_script};
+
+    #[test]
+    fn return_await_scripts_are_wrapped_as_awaitable_expressions() {
+        let script = prepare_automation_script(
+            r#"return await (async function() { return JSON.stringify({ status: "SUCCESS", logs: [] }); })()"#,
+        );
+        assert!(script.starts_with("(async () => { return await "));
+        assert!(script.ends_with("})()"));
+    }
+
+    #[test]
+    fn ordinary_expression_scripts_are_preserved() {
+        let source = r#"(async function() { return JSON.stringify({ status: "SUCCESS", logs: [] }); })()"#;
+        assert_eq!(prepare_automation_script(source), source);
+    }
 
     #[test]
     fn malformed_json_is_an_error() {
