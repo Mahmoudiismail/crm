@@ -211,6 +211,64 @@ try {
 
     Write-Output "Discovered $($branchItems.Count) branches and $($monthItems.Count) months."
 
+    function Add-PivotDataToCollection {
+        param($PivotTable, [string]$BranchCaption, [string]$MonthTitle, [ref]$Collector)
+
+        $PivotTable.RefreshTable()
+        $dataBody = $PivotTable.DataBodyRange
+        if ($null -eq $dataBody) { return }
+
+        $rowRange = $PivotTable.RowRange
+        $columnRange = $PivotTable.ColumnRange
+        $values = $dataBody.Value2
+        $columnCount = $dataBody.Columns.Count
+        $headerRow = $columnRange.Rows.Count
+        $headers = @{}
+        for ($c = 1; $c -le $columnCount; $c++) {
+            $headers[$c] = $columnRange.Cells.Item($headerRow, $c).Text
+        }
+
+        $rowCount = $dataBody.Rows.Count
+        $dataset = @()
+        $rowOffset = $rowRange.Rows.Count - $rowCount
+        for ($r = 1; $r -le $rowCount; $r++) {
+            $teamName = $rowRange.Cells.Item($r + $rowOffset, 1).Text
+            if ($teamName -eq "Grand Total") { continue }
+
+            $row = [PSCustomObject]@{
+                team = $teamName
+                closed = 0
+                open = 0
+                "% of closed" = "0%"
+                "% of open" = "0%"
+                "Grand Total" = 0
+            }
+            for ($c = 1; $c -le $columnCount; $c++) {
+                $header = $headers[$c]
+                $value = if ($values -is [System.Array]) { $values[$r, $c] } else { $values }
+                if ($header -eq "% of closed" -or $header -eq "% of open") {
+                    $text = $dataBody.Cells.Item($r, $c).Text
+                    if ($header -eq "% of closed") { $row."% of closed" = if ($text) { $text } else { "0%" } }
+                    else { $row."% of open" = if ($text) { $text } else { "0%" } }
+                } elseif ($header -eq "closed") {
+                    $row.closed = if ($value -as [double]) { $value -as [double] } elseif ([double]::TryParse($value, [ref]$null)) { [double]$value } else { 0 }
+                } elseif ($header -eq "open") {
+                    $row.open = if ($value -as [double]) { $value -as [double] } elseif ([double]::TryParse($value, [ref]$null)) { [double]$value } else { 0 }
+                } elseif ($header -match "Grand Total") {
+                    $row."Grand Total" = if ($value -as [double]) { $value -as [double] } elseif ([double]::TryParse($value, [ref]$null)) { [double]$value } else { 0 }
+                }
+            }
+            $dataset += $row
+        }
+        if ($dataset.Count -gt 0) {
+            $Collector.Value += [PSCustomObject]@{
+                branch = $BranchCaption
+                month = $MonthTitle
+                data = @($dataset)
+            }
+        }
+    }
+
     $AllData = @()
 
     foreach ($b in $branchItems) {
@@ -266,53 +324,7 @@ try {
             }
 
             Write-Output "Extracting data for Branch: $bCaption (All Months Combined)"
-            $Pivot.RefreshTable()
-            $DataBody = $Pivot.DataBodyRange
-            $RowRange = $Pivot.RowRange
-            $ColumnRange = $Pivot.ColumnRange
-
-            if ($null -ne $DataBody) {
-                $colHeaders = @{}
-                $colCount = $DataBody.Columns.Count
-                $headerRow = $ColumnRange.Rows.Count
-                for ($c = 1; $c -le $colCount; $c++) {
-                    $h = $ColumnRange.Cells.Item($headerRow, $c).Text
-                    $colHeaders[$c] = $h
-                }
-                $rowCount = $DataBody.Rows.Count
-                $DatasetData = @()
-                for ($r = 1; $r -le $rowCount; $r++) {
-                    $teamName = $RowRange.Cells.Item($r + ($RowRange.Rows.Count - $rowCount), 1).Text
-                    if ($teamName -eq "Grand Total") { continue }
-                    $rowObj = [PSCustomObject]@{
-                        team = $teamName
-                        closed = 0
-                        open = 0
-                        "% of closed" = "0%"
-                        "% of open" = "0%"
-                        "Grand Total" = 0
-                    }
-                    for ($c = 1; $c -le $colCount; $c++) {
-                        $header = $colHeaders[$c]
-                        $val = $DataBody.Cells.Item($r, $c).Value2
-                        $text = $DataBody.Cells.Item($r, $c).Text
-                        if ($header -eq "closed") { $rowObj.closed = if ($val -as [double]) { $val -as [double] } elseif ([double]::TryParse($val, [ref]$null)) { [double]$val } else { 0 } }
-                        if ($header -eq "open") { $rowObj.open = if ($val -as [double]) { $val -as [double] } elseif ([double]::TryParse($val, [ref]$null)) { [double]$val } else { 0 } }
-                        if ($header -eq "% of closed") { $rowObj."% of closed" = if ($text) { $text } else { "0%" } }
-                        if ($header -eq "% of open") { $rowObj."% of open" = if ($text) { $text } else { "0%" } }
-                        if ($header -match "Grand Total") { $rowObj."Grand Total" = if ($val -as [double]) { $val -as [double] } elseif ([double]::TryParse($val, [ref]$null)) { [double]$val } else { 0 } }
-                    }
-                    $DatasetData += $rowObj
-                }
-                $DatasetDataArray = @($DatasetData)
-                if ($DatasetDataArray.Count -gt 0) {
-                    $AllData += [PSCustomObject]@{
-                        branch = $bCaption
-                        month = "All Months"
-                        data = $DatasetDataArray
-                    }
-                }
-            }
+            Add-PivotDataToCollection -PivotTable $Pivot -BranchCaption $bCaption -MonthTitle "All Months" -Collector ([ref]$AllData)
         } else {
             $otherMonths = @()
             $currentMonthItem = $null
@@ -374,53 +386,7 @@ try {
                 }
 
                 Write-Output "Extracting data for Branch: $bCaption (All Months Except Current)"
-                $Pivot.RefreshTable()
-                $DataBody = $Pivot.DataBodyRange
-                $RowRange = $Pivot.RowRange
-                $ColumnRange = $Pivot.ColumnRange
-
-                if ($null -ne $DataBody) {
-                    $colHeaders = @{}
-                    $colCount = $DataBody.Columns.Count
-                    $headerRow = $ColumnRange.Rows.Count
-                    for ($c = 1; $c -le $colCount; $c++) {
-                        $h = $ColumnRange.Cells.Item($headerRow, $c).Text
-                        $colHeaders[$c] = $h
-                    }
-                    $rowCount = $DataBody.Rows.Count
-                    $DatasetData = @()
-                    for ($r = 1; $r -le $rowCount; $r++) {
-                        $teamName = $RowRange.Cells.Item($r + ($RowRange.Rows.Count - $rowCount), 1).Text
-                        if ($teamName -eq "Grand Total") { continue }
-                        $rowObj = [PSCustomObject]@{
-                            team = $teamName
-                            closed = 0
-                            open = 0
-                            "% of closed" = "0%"
-                            "% of open" = "0%"
-                            "Grand Total" = 0
-                        }
-                        for ($c = 1; $c -le $colCount; $c++) {
-                            $header = $colHeaders[$c]
-                            $val = $DataBody.Cells.Item($r, $c).Value2
-                            $text = $DataBody.Cells.Item($r, $c).Text
-                            if ($header -eq "closed") { $rowObj.closed = if ($val -as [double]) { $val -as [double] } elseif ([double]::TryParse($val, [ref]$null)) { [double]$val } else { 0 } }
-                            if ($header -eq "open") { $rowObj.open = if ($val -as [double]) { $val -as [double] } elseif ([double]::TryParse($val, [ref]$null)) { [double]$val } else { 0 } }
-                            if ($header -eq "% of closed") { $rowObj."% of closed" = if ($text) { $text } else { "0%" } }
-                            if ($header -eq "% of open") { $rowObj."% of open" = if ($text) { $text } else { "0%" } }
-                            if ($header -match "Grand Total") { $rowObj."Grand Total" = if ($val -as [double]) { $val -as [double] } elseif ([double]::TryParse($val, [ref]$null)) { [double]$val } else { 0 } }
-                        }
-                        $DatasetData += $rowObj
-                    }
-                    $DatasetDataArray = @($DatasetData)
-                    if ($DatasetDataArray.Count -gt 0) {
-                        $AllData += [PSCustomObject]@{
-                            branch = $bCaption
-                            month = $otherMonthsTitle
-                            data = $DatasetDataArray
-                        }
-                    }
-                }
+                Add-PivotDataToCollection -PivotTable $Pivot -BranchCaption $bCaption -MonthTitle $otherMonthsTitle -Collector ([ref]$AllData)
             }
 
             if ($null -ne $currentMonthItem) {
@@ -443,53 +409,7 @@ try {
                 if ($failedOlap) { continue }
 
                 Write-Output "Extracting data for Branch: $bCaption (Current Month)"
-                $Pivot.RefreshTable()
-                $DataBody = $Pivot.DataBodyRange
-                $RowRange = $Pivot.RowRange
-                $ColumnRange = $Pivot.ColumnRange
-
-                if ($null -ne $DataBody) {
-                    $colHeaders = @{}
-                    $colCount = $DataBody.Columns.Count
-                    $headerRow = $ColumnRange.Rows.Count
-                    for ($c = 1; $c -le $colCount; $c++) {
-                        $h = $ColumnRange.Cells.Item($headerRow, $c).Text
-                        $colHeaders[$c] = $h
-                    }
-                    $rowCount = $DataBody.Rows.Count
-                    $DatasetData = @()
-                    for ($r = 1; $r -le $rowCount; $r++) {
-                        $teamName = $RowRange.Cells.Item($r + ($RowRange.Rows.Count - $rowCount), 1).Text
-                        if ($teamName -eq "Grand Total") { continue }
-                        $rowObj = [PSCustomObject]@{
-                            team = $teamName
-                            closed = 0
-                            open = 0
-                            "% of closed" = "0%"
-                            "% of open" = "0%"
-                            "Grand Total" = 0
-                        }
-                        for ($c = 1; $c -le $colCount; $c++) {
-                            $header = $colHeaders[$c]
-                            $val = $DataBody.Cells.Item($r, $c).Value2
-                            $text = $DataBody.Cells.Item($r, $c).Text
-                            if ($header -eq "closed") { $rowObj.closed = if ($val -as [double]) { $val -as [double] } elseif ([double]::TryParse($val, [ref]$null)) { [double]$val } else { 0 } }
-                            if ($header -eq "open") { $rowObj.open = if ($val -as [double]) { $val -as [double] } elseif ([double]::TryParse($val, [ref]$null)) { [double]$val } else { 0 } }
-                            if ($header -eq "% of closed") { $rowObj."% of closed" = if ($text) { $text } else { "0%" } }
-                            if ($header -eq "% of open") { $rowObj."% of open" = if ($text) { $text } else { "0%" } }
-                            if ($header -match "Grand Total") { $rowObj."Grand Total" = if ($val -as [double]) { $val -as [double] } elseif ([double]::TryParse($val, [ref]$null)) { [double]$val } else { 0 } }
-                        }
-                        $DatasetData += $rowObj
-                    }
-                    $DatasetDataArray = @($DatasetData)
-                    if ($DatasetDataArray.Count -gt 0) {
-                        $AllData += [PSCustomObject]@{
-                            branch = $bCaption
-                            month = $currentMonth
-                            data = $DatasetDataArray
-                        }
-                    }
-                }
+                Add-PivotDataToCollection -PivotTable $Pivot -BranchCaption $bCaption -MonthTitle $currentMonth -Collector ([ref]$AllData)
             }
         }
     }
@@ -580,9 +500,19 @@ mod tests {
     fn test_task3_crm_open_sohail_pivot_safe_cast() {
         let src = include_str!("powershell.rs");
         assert!(
-            src.contains("if ($val -as [double]) {{ $val -as [double] }} elseif ([double]::TryParse($val, [ref]$null))"),
+            src.contains("if ($value -as [double]) { $value -as [double] } elseif ([double]::TryParse($value, [ref]$null))"),
             "Script must use safe casting (-as [double]) and TryParse to prevent 'Input string was not in a correct format' errors"
         );
+    }
+
+    #[test]
+    fn test_pivot_extraction_uses_bulk_values_and_shared_extractor() {
+        let src = include_str!("powershell.rs");
+        let script = src.split("let ps_script = r#\"").nth(1).unwrap().split("\"#;").next().unwrap();
+        assert_eq!(script.matches("function Add-PivotDataToCollection").count(), 1);
+        assert_eq!(script.matches("Add-PivotDataToCollection -PivotTable $Pivot").count(), 3);
+        assert!(script.contains("$values = $dataBody.Value2"));
+        assert!(script.contains("$dataBody.Cells.Item($r, $c).Text"));
     }
 
     #[test]
