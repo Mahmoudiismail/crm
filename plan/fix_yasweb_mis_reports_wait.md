@@ -1,24 +1,25 @@
-# Plan: Fix Yasweb MIS Reports Wait
+# Plan: Fix Yasweb MIS Reports Wait and Preserve Diagnostics
 
 ## Goal
-Fix the failure immediately after clicking the MIS module, where the automation reports that the JavaScript step returned no result string. Keep the V1 change narrow and preserve the existing report-selection/export flow.
+Fix the failure immediately after clicking the MIS module and ensure later Yasweb failures do not overwrite earlier diagnostic artifacts.
 
 ## Evidence
 - Latest Yasweb logs show login, menu opening, and clicking the MIS module succeed.
 - `Wait for MIS Reports` fails after approximately 17 ms with `returned no result string`, far earlier than its 30-second timeout.
 - The generated script starts with `return await (async function ...)`, unlike the other automation scripts that return an expression value to `Tab.evaluate(..., true)`.
-- The captured main document does not contain the exact `MIS Reports` label, while an auto-login iframe is present. The wait should inspect the main document and accessible same-origin iframe documents and report useful diagnostics if the label is still missing.
+- Routine HTML snapshots currently use deterministic filenames based on step number, step name, and report name, so a later run can overwrite them.
+- Failure diagnostics use second-resolution Unix timestamps, so same-step failures in the same second can collide.
 
 ## Implementation
 1. Change the generated JavaScript to evaluate an async IIFE expression directly, so Chrome's promise-await evaluation receives its returned JSON string.
-2. Search the main document and accessible iframe documents for the visible `MIS Reports` label and loader state; do not fail merely because the label is rendered in an accessible iframe.
-3. Preserve timeout behavior and return explicit JSON `SUCCESS` or `ERROR`; include inspected frame URLs and matching-label diagnostics in timeout errors.
-4. Add focused unit tests for the generated script's key contract if the current module structure allows testing without a live browser.
+2. Search the main document and accessible iframe documents for the visible `MIS Reports` label and loader state; include useful diagnostics if the label is missing.
+3. Make diagnostic artifacts collision-resistant so repeated runs retain prior evidence instead of overwriting files.
+4. Keep the change focused; do not refactor report filters or export behavior.
 
 ## Verification
 - Run formatting, focused tests, full tests, and Clippy through CI.
 - Inspect the diff and CI results.
-- A successful CI run does not replace a live Yasweb browser run; verify that the report flow proceeds to report selection and export using the built executable.
+- A successful CI run does not replace a live Yasweb browser run; verify the report flow against the real environment.
 
 ## Scope constraints
 No broad refactor, new framework, unrelated report-flow changes, or changes to filters/export behavior.
