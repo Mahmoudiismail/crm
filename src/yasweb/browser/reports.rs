@@ -936,14 +936,16 @@ pub fn generate_mis_reports_wait_js(timeout_seconds: u64) -> String {
             function sleep(ms) {{ return new Promise(resolve => setTimeout(resolve, ms)); }}
             const logs = [];
             const deadline = Date.now() + timeoutSeconds * 1000;
+            const routePattern = /\/home\/mis-report\/module\//i;
+            const typeNames = ["Standard Report", "Report Manager"];
 
             function getDocuments() {{
-                const entries = [{{ doc: document, url: document.location.href }}];
-                for (const frame of Array.from(document.querySelectorAll('iframe'))) {{
+                const entries = [{{ doc: document, url: document.location.href, frame: false }}];
+                for (const frame of Array.from(document.querySelectorAll("iframe"))) {{
                     try {{
                         const frameDocument = frame.contentDocument || (frame.contentWindow && frame.contentWindow.document);
                         if (frameDocument) {{
-                            entries.push({{ doc: frameDocument, url: frameDocument.location.href }});
+                            entries.push({{ doc: frameDocument, url: frameDocument.location.href, frame: true }});
                         }}
                     }} catch (error) {{
                         logs.push("Cannot inspect iframe: " + (frame.src || "unknown src") + " (" + error.message + ")");
@@ -952,88 +954,105 @@ pub fn generate_mis_reports_wait_js(timeout_seconds: u64) -> String {
                 return entries;
             }}
 
+            function normalize(value) {{
+                return (value || "").replace(/\s+/g, " ").trim().toLowerCase();
+            }}
+
             function isVisible(element) {{
                 if (!element) return false;
                 const doc = element.ownerDocument;
                 const view = doc && doc.defaultView;
                 if (!view) return false;
-
                 for (let current = element; current && current.nodeType === 1; current = current.parentElement) {{
                     const style = view.getComputedStyle(current);
-                    if (style.display === 'none' ||
-                        style.visibility === 'hidden' ||
-                        style.visibility === 'collapse' ||
-                        Number(style.opacity) === 0) {{
-                        return false;
-                    }}
+                    if (style.display === "none" || style.visibility === "hidden" ||
+                        style.visibility === "collapse" || Number(style.opacity) === 0) return false;
                 }}
-
                 return Array.from(element.getClientRects()).some(rect => rect.width > 0 && rect.height > 0);
             }}
 
-            function visibleLoaderUrls() {{
-                const selector = '#loader_svg, mat-progress-bar, .dx-loadpanel';
-                return getDocuments()
-                    .filter(entry => Array.from(entry.doc.querySelectorAll(selector)).some(isVisible))
-                    .map(entry => entry.url);
+            function visibleLoaderUrls(entries) {{
+                const selector = "#loader_svg, .loading-screen-wrapper, mat-progress-bar, .dx-loadpanel";
+                return entries.filter(entry =>
+                    Array.from(entry.doc.querySelectorAll(selector)).some(isVisible)
+                ).map(entry => entry.url);
             }}
 
-            function findUsableReportContent() {{
-                const candidates = [];
-                const loaders = visibleLoaderUrls();
-                for (const entry of getDocuments()) {{
-                    const routeMatches = /\/home\/mis-report\/module\//i.test(entry.url);
-                    const labelCandidates = Array.from(entry.doc.querySelectorAll('.label.fw-bold, .label, button, [role="button"]'))
-                        .filter(element => (element.textContent || "").replace(/\s+/g, " ").trim() === "MIS Reports");
-                    const usableLabel = labelCandidates.some(element => isVisible(element) &&
-                        (element.matches('button, [role="button"]') ||
-                         element.querySelector('button, [role="button"], a') !== null ||
-                         element.closest('button, [role="button"], a') !== null));
-                    const reportControls = Array.from(entry.doc.querySelectorAll(
-                        '.tree-view, input[formcontrolname="searchInput"], input[placeholder="Search"], mat-radio-button'
-                    )).some(isVisible);
-                    const candidate = {{
-                        url: entry.url,
-                        routeMatches,
-                        labelCount: labelCandidates.length,
-                        usableLabel,
-                        reportControls,
-                        documentReady: entry.doc.readyState === "complete",
-                        hasVisibleLoader: loaders.includes(entry.url)
-                    }};
-                    candidates.push(candidate);
-
-                    // The route alone is not a readiness signal; wait for a rendered,
-                    // interactive report control or visible report-list controls.
-                    if (routeMatches && !candidate.hasVisibleLoader &&
-                        (usableLabel || reportControls)) {{
-                        logs.push("MIS report interface ready: " + JSON.stringify(candidate));
-                        return {{ ready: true, candidates }};
-                    }}
-                }}
-                return {{ ready: false, candidates }};
+            function findTypeControl(doc, typeName) {{
+                const target = normalize(typeName);
+                const controls = Array.from(doc.querySelectorAll(
+                    'mat-radio-button, [role="radio"], input[type="radio"], label, button'
+                ));
+                return controls.find(element => {{
+                    if (!isVisible(element)) return false;
+                    const text = normalize(element.textContent || element.getAttribute("aria-label") || element.value);
+                    return text === target || text.includes(target);
+                }}) || null;
             }}
 
-            logs.push("Waiting for MIS module route and usable report content...");
+            function inspect() {{
+                const entries = getDocuments();
+                const routeEntry = entries.find(entry => routePattern.test(entry.url));
+                const loaders = visibleLoaderUrls(entries);
+                const reportFrame = entries.find(entry => entry.frame &&
+                    typeNames.every(name => findTypeControl(entry.doc, name)));
+                const reportEntry = reportFrame || entries.find(entry =>
+                    typeNames.every(name => findTypeControl(entry.doc, name)));
+                const typeControls = reportEntry
+                    ? typeNames.map(name => ({{ name, visible: !!findTypeControl(reportEntry.doc, name) }}))
+                    : typeNames.map(name => ({{ name, visible: false }}));
+                const searchInput = reportEntry && reportEntry.doc.querySelector(
+                    'input[formcontrolname="searchInput"], input[placeholder="Search"], input[aria-label*="Search" i]'
+                );
+                const reportUiReady = !!reportEntry &&
+                    typeControls.every(item => item.visible) &&
+                    isVisible(searchInput) &&
+                    !loaders.includes(reportEntry.url);
+                const candidate = {{
+                    routeUrl: routeEntry ? routeEntry.url : null,
+                    inspectedDocuments: entries.map(entry => ({{ url: entry.url, frame: entry.frame }})),
+                    reportDocumentUrl: reportEntry ? reportEntry.url : null,
+                    reportTypes: typeControls,
+                    searchVisible: !!searchInput && isVisible(searchInput),
+                    visibleLoaderUrls: loaders,
+                    routeReached: !!routeEntry,
+                    reportUiReady
+                }};
+                return {{ ready: !!routeEntry && reportUiReady, candidate }};
+            }}
+
+            logs.push("Waiting for MIS route and the embedded report selector (Standard Report / Report Manager) plus Search...");
             while (Date.now() <= deadline) {{
-                const result = findUsableReportContent();
-                if (result.ready) {{
-                    return JSON.stringify({{ status: "SUCCESS", logs }});
+                try {{
+                    const result = inspect();
+                    if (result.ready) {{
+                        logs.push("MIS report selector ready: " + JSON.stringify(result.candidate));
+                        return JSON.stringify({{ status: "SUCCESS", logs }});
+                    }}
+                }} catch (error) {{
+                    logs.push("Transient MIS readiness inspection error: " + error.message);
                 }}
-                await sleep(100);
+                await sleep(200);
             }}
 
-            const loaderUrls = visibleLoaderUrls();
-            const finalState = findUsableReportContent();
-            logs.push("Visible loader documents: " + JSON.stringify(loaderUrls));
-            logs.push("Inspected route/content candidates: " + JSON.stringify(finalState.candidates));
-            logs.push("Inspected document URLs: " + JSON.stringify(getDocuments().map(entry => entry.url)));
-            return JSON.stringify({{ status: "ERROR", msg: "MIS Reports route reached but no usable report control/content became ready before timeout", logs }});
+            let finalState;
+            try {{
+                finalState = inspect();
+            }} catch (error) {{
+                finalState = {{ candidate: {{ inspectionError: error.message }} }};
+            }}
+            logs.push("MIS readiness timeout diagnostics: " + JSON.stringify(finalState.candidate));
+            return JSON.stringify({{
+                status: "ERROR",
+                msg: "MIS route or embedded report selector was not ready: expected visible Standard Report, Report Manager, and Search controls",
+                logs
+            }});
         }})({});
         "#,
         timeout_seconds
     )
 }
+
 #[cfg(test)]
 mod mis_reports_wait_tests {
     use super::generate_mis_reports_wait_js;
