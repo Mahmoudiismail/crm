@@ -1058,7 +1058,7 @@ mod mis_reports_wait_tests {
         assert!(js.contains("routeMatches"));
         assert!(js.contains("usableLabel"));
         assert!(js.contains("reportControls"));
-        assert!(js.contains("status: \\"SUCCESS\\""));
-        assert!(js.contains("status: \\"ERROR\\""));
+        assert!(js.contains("status: \"SUCCESS\""));
+        assert!(js.contains("status: \"ERROR\""));
     }
 }
