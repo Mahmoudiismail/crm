@@ -932,17 +932,32 @@ mod step6_wait_tests {
 pub fn generate_mis_reports_wait_js(timeout_seconds: u64) -> String {
     format!(
         r#"
-        return await (async function(timeoutSeconds) {{
+        (async function(timeoutSeconds) {{
             function sleep(ms) {{ return new Promise(resolve => setTimeout(resolve, ms)); }}
             const logs = [];
             const deadline = Date.now() + timeoutSeconds * 1000;
 
+            function getDocuments() {{
+                const entries = [{{ doc: document, url: document.location.href }}];
+                for (const frame of Array.from(document.querySelectorAll('iframe'))) {{
+                    try {{
+                        if (frame.contentDocument) {{
+                            entries.push({{ doc: frame.contentDocument, url: frame.contentDocument.location.href }});
+                        }}
+                    }} catch (error) {{
+                        logs.push("Cannot inspect iframe: " + (frame.src || "unknown src") + " (" + error.message + ")");
+                    }}
+                }}
+                return entries;
+            }}
+
             function isVisible(element) {{
                 if (!element) return false;
-                const view = element.ownerDocument.defaultView;
+                const doc = element.ownerDocument;
+                const view = doc && doc.defaultView;
                 if (!view) return false;
 
-                for (let current = element; current && current.nodeType === Node.ELEMENT_NODE; current = current.parentElement) {{
+                for (let current = element; current && current.nodeType === 1; current = current.parentElement) {{
                     const style = view.getComputedStyle(current);
                     if (style.display === 'none' ||
                         style.visibility === 'hidden' ||
@@ -952,55 +967,95 @@ pub fn generate_mis_reports_wait_js(timeout_seconds: u64) -> String {
                     }}
                 }}
 
-                const rects = element.getClientRects();
-                for (const rect of rects) {{
-                    if (rect.width > 0 && rect.height > 0) return true;
-                }}
-                return false;
+                return Array.from(element.getClientRects()).some(rect => rect.width > 0 && rect.height > 0);
             }}
 
-            function hasVisibleLoader() {{
+            function visibleLoaderDocuments() {{
                 const selector = '#loader_svg, mat-progress-bar, .dx-loadpanel';
-                return Array.from(document.querySelectorAll(selector)).some(isVisible);
+                return getDocuments()
+                    .filter(entry => Array.from(entry.doc.querySelectorAll(selector)).some(isVisible))
+                    .map(entry => entry.url);
+            }}
+
+            function findMisReports() {{
+                const matches = [];
+                for (const entry of getDocuments()) {{
+                    for (const element of Array.from(entry.doc.querySelectorAll('.label.fw-bold'))) {{
+                        const text = (element.textContent || "").replace(/\s+/g, " ").trim();
+                        if (text === "MIS Reports" && isVisible(element)) {{
+                            matches.push({{ url: entry.url, element }});
+                        }}
+                    }}
+                }}
+                return matches;
             }}
 
             logs.push("Waiting for SPA loaders to disappear...");
-            while (Date.now() <= deadline && hasVisibleLoader()) {{
+            while (Date.now() <= deadline && visibleLoaderDocuments().length > 0) {{
                 await sleep(100);
             }}
-            if (hasVisibleLoader()) {{
+            const loaders = visibleLoaderDocuments();
+            if (loaders.length > 0) {{
+                logs.push("Visible loader documents: " + JSON.stringify(loaders));
                 return JSON.stringify({{ status: "ERROR", msg: "Timeout waiting for loader to disappear", logs }});
             }}
 
-            logs.push("Waiting for MIS Reports label to be visible...");
+            logs.push("Waiting for visible MIS Reports label in main document or accessible iframes...");
             while (Date.now() <= deadline) {{
-                const candidates = document.querySelectorAll('.label.fw-bold');
-                for (const element of candidates) {{
-                    if ((element.textContent || "").replace(/\s+/g, " ").trim() === "MIS Reports" &&
-                        isVisible(element)) {{
-                        logs.push("MIS Reports label is present and visible.");
-                        return JSON.stringify({{ status: "SUCCESS", logs }});
-                    }}
+                const matches = findMisReports();
+                if (matches.length > 0) {{
+                    logs.push("MIS Reports label is visible in: " + matches.map(match => match.url).join(", "));
+                    return JSON.stringify({{ status: "SUCCESS", logs }});
                 }}
                 await sleep(100);
             }}
 
-            const diagnostics = Array.from(document.querySelectorAll('.label.fw-bold'))
-                .filter(element => (element.textContent || "").includes("MIS Reports"))
-                .map(element => {{
-                    const style = element.ownerDocument.defaultView.getComputedStyle(element);
-                    return {{
-                        text: (element.textContent || "").trim(),
-                        display: style.display,
-                        visibility: style.visibility,
-                        opacity: style.opacity,
-                        rectCount: element.getClientRects().length
-                    }};
-                }});
-            logs.push("Matching label diagnostics: " + JSON.stringify(diagnostics));
-            return JSON.stringify({{ status: "ERROR", msg: "MIS Reports button not found or not visible", logs }});
-        }})({}); 
+            const documents = getDocuments().map(entry => {{
+                const labels = Array.from(entry.doc.querySelectorAll('.label.fw-bold'))
+                    .map(element => (element.textContent || "").replace(/\s+/g, " ").trim())
+                    .filter(text => text.length > 0)
+                    .slice(0, 30);
+                const matchingLabels = Array.from(entry.doc.querySelectorAll('.label.fw-bold'))
+                    .filter(element => (element.textContent || "").includes("MIS Reports"))
+                    .map(element => {{
+                        const style = element.ownerDocument.defaultView.getComputedStyle(element);
+                        return {{
+                            text: (element.textContent || "").trim(),
+                            display: style.display,
+                            visibility: style.visibility,
+                            opacity: style.opacity,
+                            rectCount: element.getClientRects().length
+                        }};
+                    }});
+                return {{ url: entry.url, readyState: entry.doc.readyState, labels, matchingLabels }};
+            }});
+            logs.push("Inspected documents: " + JSON.stringify(documents));
+            return JSON.stringify({{ status: "ERROR", msg: "MIS Reports label not found or not visible before timeout", logs }});
+        }})({});
         "#,
         timeout_seconds
     )
+}
+
+#[cfg(test)]
+mod mis_reports_wait_tests {
+    use super::generate_mis_reports_wait_js;
+
+    #[test]
+    fn wait_script_returns_an_async_expression_without_top_level_return() {
+        let js = generate_mis_reports_wait_js(30);
+        assert!(js.trim_start().starts_with("(async function(timeoutSeconds)"));
+        assert!(!js.trim_start().starts_with("return await"));
+        assert!(js.contains("})(30);"));
+    }
+
+    #[test]
+    fn wait_script_checks_accessible_iframes_and_reports_diagnostics() {
+        let js = generate_mis_reports_wait_js(30);
+        assert!(js.contains("frame.contentDocument"));
+        assert!(js.contains("Waiting for visible MIS Reports label in main document or accessible iframes"));
+        assert!(js.contains("Inspected documents: "));
+        assert!(js.contains("status: \"SUCCESS\""));
+        assert!(js.contains("status: \"ERROR\""));
+    }
 }
