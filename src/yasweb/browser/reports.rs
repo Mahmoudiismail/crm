@@ -941,7 +941,7 @@ pub fn generate_mis_reports_wait_js(timeout_seconds: u64) -> String {
                 const entries = [{{ doc: document, url: document.location.href }}];
                 for (const frame of Array.from(document.querySelectorAll('iframe'))) {{
                     try {{
-                        const frameDocument = frame.contentWindow && frame.contentWindow.document;
+                        const frameDocument = frame.contentDocument || (frame.contentWindow && frame.contentWindow.document);
                         if (frameDocument) {{
                             entries.push({{ doc: frameDocument, url: frameDocument.location.href }});
                         }}
