@@ -21,7 +21,9 @@ fn test_generate_step6_js_large_timeout() {
 fn test_generate_step6_js_zero_timeout() {
     let js = generate_step6_js(0);
     assert!(js.contains("})(0);"));
-    assert!(js.trim_start().starts_with("(async function(timeoutMinutes)"));
+    assert!(js
+        .trim_start()
+        .starts_with("(async function(timeoutMinutes)"));
 }
 
 #[test]
