@@ -33,7 +33,10 @@ pub fn get_or_create_tab(browser: &Arc<Browser>) -> Result<Arc<Tab>> {
         match browser.new_tab() {
             Ok(tab) => return Ok(tab),
             Err(err) => {
-                warn!("Failed to open isolated browser tab (attempt {}/3): {:#}", attempt, err);
+                warn!(
+                    "Failed to open isolated browser tab (attempt {}/3): {:#}",
+                    attempt, err
+                );
                 last_error = Some(err);
                 if attempt < 3 {
                     std::thread::sleep(Duration::from_millis(250 * attempt));
