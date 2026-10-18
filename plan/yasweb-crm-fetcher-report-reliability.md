@@ -10,7 +10,7 @@ Address the report failures evidenced by the supplied Runner and Yasweb logs. Ex
 2. Verify recursive inclusive date splitting by comparing the complete ordered date sequence against the original range, including odd/even spans, leap-day boundaries, and a multi-month range.
 3. Replace date-ranged report suppression based on the presence of any recent CSV with a completion marker for the exact requested range. The marker lists files from the successful run and is invalid if any listed file is missing. A failed fetch/download pipeline cannot write a completion marker.
 4. Add Runner preflight validation for directly configured ISO `--start-date`/`--end-date` pairs so inverted ranges fail before launching the child process; preserve rejection rather than silently swapping dates. The logs show `2026-10-18` to `2026-10-17`, but do not prove the user's intended range.
-5. Preserve rejection of inverted date ranges in CRM Fetcher. The logs do not include the task's original date expressions, so the source of the 2026-10-18 to 2026-10-17 range cannot be safely fixed from logs alone; do not silently swap the dates.
+5. Preserve CRM Fetcher's rejection of inverted date ranges; do not silently swap dates or infer an intended range.
 6. Update `md/FETCHER.md`, `md/CONFIG.md`, `md/YASWEB_DEV.md`, and `md/RUNNER.md` to reflect actual behavior.
 
 ## Validation required
