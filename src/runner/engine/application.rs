@@ -9,6 +9,28 @@ use crate::runner::engine::validation::{resolve_executable, resolve_relative_to_
 
 const MANIFEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
+/// Reject an inverted ISO date range passed directly to an external app.
+/// Other date formats are left to the target app because their semantics may differ.
+fn validate_explicit_date_range(args: &HashMap<String, String>) -> Result<()> {
+    let (Some(start), Some(end)) = (args.get("--start-date"), args.get("--end-date")) else {
+        return Ok(());
+    };
+    let (Ok(start), Ok(end)) = (
+        chrono::NaiveDate::parse_from_str(start.trim(), "%Y-%m-%d"),
+        chrono::NaiveDate::parse_from_str(end.trim(), "%Y-%m-%d"),
+    ) else {
+        return Ok(());
+    };
+    if start > end {
+        anyhow::bail!(
+            "Invalid date range before launching external app: --start-date ({}) is after --end-date ({})",
+            start,
+            end
+        );
+    }
+    Ok(())
+}
+
 /// Discover conventional start/end date argument names from an app's manifest.
 /// Only date-like arguments with an unambiguous start/from or end/to name are used.
 fn date_args_from_manifest(manifest: &serde_json::Value) -> (Option<String>, Option<String>) {
@@ -169,6 +191,8 @@ pub async fn run_external_app(
         );
     }
 
+    validate_explicit_date_range(&effective_args)?;
+
     let mut sorted_keys: Vec<&String> = effective_args.keys().collect();
     sorted_keys.sort_by(|a, b| {
         if a.as_str() == "-c" {
@@ -223,6 +247,32 @@ pub async fn run_external_app(
 mod tests {
     use super::{date_args_from_manifest, insert_period_args};
     use std::collections::HashMap;
+
+    #[test]
+    fn rejects_inverted_explicit_iso_date_args_before_launch() {
+        let args = HashMap::from([
+            ("--start-date".to_string(), "2026-10-18".to_string()),
+            ("--end-date".to_string(), "2026-10-17".to_string()),
+        ]);
+        let error = super::validate_explicit_date_range(&args).unwrap_err();
+        assert!(error.to_string().contains("--start-date (2026-10-18)"));
+        assert!(error.to_string().contains("--end-date (2026-10-17)"));
+    }
+
+    #[test]
+    fn accepts_valid_or_non_iso_explicit_date_args() {
+        let valid = HashMap::from([
+            ("--start-date".to_string(), "2026-10-17".to_string()),
+            ("--end-date".to_string(), "2026-10-18".to_string()),
+        ]);
+        assert!(super::validate_explicit_date_range(&valid).is_ok());
+
+        let non_iso = HashMap::from([
+            ("--start-date".to_string(), "yesterday".to_string()),
+            ("--end-date".to_string(), "today".to_string()),
+        ]);
+        assert!(super::validate_explicit_date_range(&non_iso).is_ok());
+    }
 
     #[test]
     fn discovers_standard_and_custom_date_var_names() {
