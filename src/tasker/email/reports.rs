@@ -132,10 +132,9 @@ pub fn generate_leads_report(
                 .unwrap_or("")
                 .trim()
                 .to_string();
-            if seen_leads.contains(&lead_id) {
+            if !seen_leads.insert(lead_id.clone()) {
                 continue;
             }
-            seen_leads.insert(lead_id.clone());
 
             let branch = branch_idx
                 .and_then(|idx| record.get(idx))
