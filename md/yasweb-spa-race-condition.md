@@ -32,3 +32,8 @@ The latest failure HTML contained the `MIS Reports` label, but the runtime still
 ## Follow-up: MIS transition readiness correction (2026-10-17)
 
 The latest production run reached the MIS module route, but the wait still timed out because the matching label reported `display:block`, `visibility:visible`, and `opacity:1` while having no client rectangles. A label's text and computed styles alone are not a reliable readiness signal. The wait now polls the main document and accessible iframes until a rendered, interactive `MIS Reports` control or visible report-list controls exist on the expected MIS module route. It retains the 30-second deadline and records inspected document URLs, route matches, candidate counts, usable-control state, report-control state, and visible loader documents on timeout.
+
+
+## Follow-up: async evaluator return contract (2026-10-18)
+
+The MIS readiness script uses a top-level `return await` so its result is the final structured JSON string, but Chrome's `Runtime.evaluate` expects an expression. The shared automation evaluator now wraps only scripts beginning with `return await` in an async function expression before evaluation with Promise awaiting enabled. Other existing IIFE expressions are passed through unchanged. Focused tests protect both paths. This prevents the evaluator from receiving an undefined result before the browser-side readiness loop completes.

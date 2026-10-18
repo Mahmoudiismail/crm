@@ -143,6 +143,14 @@ async fn execute_step(
             let mut st = status.lock().await;
             st.waiting_for_app
                 .insert(task_id.to_string(), app_id.clone());
+            if st.running_task_ids.iter().any(|id| id == task_id) {
+                st.running_task_ids.retain(|id| id != task_id);
+                st.running_tasks_count = st.running_tasks_count.saturating_sub(1);
+            }
+            if !st.queued_task_ids.iter().any(|id| id == task_id) {
+                st.queued_task_ids.push(task_id.to_string());
+            }
+            st.queued_tasks_count = st.queued_tasks_count.max(st.queued_task_ids.len());
         }
 
         logger
@@ -167,6 +175,12 @@ async fn execute_step(
         {
             let mut st = status.lock().await;
             st.waiting_for_app.remove(task_id);
+            st.queued_task_ids.retain(|id| id != task_id);
+            st.queued_tasks_count = st.queued_tasks_count.saturating_sub(1);
+            if !st.running_task_ids.iter().any(|id| id == task_id) {
+                st.running_task_ids.push(task_id.to_string());
+                st.running_tasks_count += 1;
+            }
         }
 
         acquired_permits.push(permit);

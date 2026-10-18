@@ -155,7 +155,7 @@ The `crm_open_sohail` task automates the generation and delivery of Branch & Mon
 3. Automatically maps and iterates over Slicer Items for "Branch" and "Month" slicers.
 4. Extracts tabular data dynamically from `PivotTable1` in the `TKT - Dashboard` worksheet.
 5. Loads data from `team_mapping_file` (a CSV) to associate team names with owners and target email addresses, mapping these to an `OUL` HTML hyperlink (`<a href="mailto:...">@Owner</a>`) or falling back to plain text mention or default string.
-6. Aggregates data and dispatches an Outlook HTML Email populated with nested summary tables mimicking the required visual identity (Blue headers, Red "Grand Total" row).
+6. Aggregates data and dispatches an Outlook HTML Email populated with nested summary tables mimicking the required visual identity (Blue headers, Red "Grand Total" row). The ReplyAll email also appends `miismail@fakeeh.care` to CC unless that address is already present, preserving existing CC recipients.
 
 ### Example Configuration
 ```json
