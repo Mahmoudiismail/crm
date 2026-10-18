@@ -70,6 +70,8 @@ Behavior:
 3. Concurrently retry each half (using `tokio::join!`), recursively splitting again when the same signed-URL error occurs.
 4. Stop splitting at a single-day range; if that still fails, return the API error with single-day context.
 
+Each range uses inclusive `from_date` and `to_date` boundaries. Splitting assigns the midpoint to the left range and starts the right range on the following calendar day. Recursive coverage tests verify the original interval is covered exactly once, with no gaps or overlapping days, including odd/even spans, leap-day boundaries, and a multi-month range.
+
 Operational impact:
 
 - Large ticket or lead exports can still be fetched when the backend refuses to sign one oversized CSV.
@@ -77,6 +79,8 @@ Operational impact:
 - Call logs are still pre-split monthly, and any failing monthly batch can be split further in parallel.
 - A split report returns an array of successful API payloads instead of a single payload.
 - Non-signed-URL failures are not retried by this splitter.
+- Recent-download suppression for date-ranged reports requires a completion marker for the same date range and all files recorded by that marker to still exist; a lone recent chunk is not proof of completion. Users remain a single direct Base64 payload and retain the recent-file check.
+- A completion marker is written only after the fetch and download pipeline succeeds. A failed or partial run cannot create a marker that suppresses the next attempt.
 
 ## Concurrency and failure handling
 
@@ -118,6 +122,7 @@ Unit tests validate:
 - month-end logic,
 - recursive date-range halving,
 - URL extraction from split report arrays.
+- Exact inclusive date coverage across recursive range splits (no missing or repeated dates).
 
 ## Performance Optimization
 

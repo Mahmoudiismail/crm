@@ -65,6 +65,10 @@ Date expressions are evaluated sequentially:
 2. End Date is then resolved using the resolved Start Date as its contextual base date.
 3. For relative weekday expressions (e.g. `next sat` for both Start and End), date resolution evaluates both to the exact same upcoming occurrence rather than advancing the End Date to the subsequent week.
 
+## Explicit CLI Date-Range Validation
+
+Before launching an external application, Runner validates a directly configured ISO date pair when both `--start-date` and `--end-date` are present. If the start date is later than the end date, Runner reports the invalid range and does not launch the child process. It does not silently swap dates. Non-ISO values and other argument names remain the target application's responsibility.
+
 ## Live Execution Preview
 
 Execution schedules determine when an app runs independently of the report's Start Date and End Date. Preview generation evaluates future schedule times against a bounded five-year horizon from the last generated period, even when that period's explicit end date is in the past; the period dates remain the report range passed to the app.

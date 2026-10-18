@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use chrono::{Datelike, Duration as ChronoDuration, NaiveDate};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashSet;
 use std::fmt::Write;
 use std::path::Path;
 use std::sync::Arc;
@@ -287,6 +288,7 @@ pub async fn fetch_reports(
     });
 
     let defs = report_defs();
+    let preexisting_report_files = snapshot_report_files(download_dir).await;
 
     let should_fetch = |key: &str| -> bool { report_type.iter().any(|r| r == "all" || r == key) };
 
@@ -351,14 +353,28 @@ pub async fn fetch_reports(
             _ => "",
         };
 
-        if !prefix.is_empty()
-            && has_recent_download(download_dir, prefix, recent_download_window_seconds).await
-        {
-            info!(
-                "Skipping fetch for '{}': A recent file (<{}s old) already exists in Downloads",
-                def.key, recent_download_window_seconds
-            );
-            continue;
+        if !prefix.is_empty() && recent_download_window_seconds > 0 && download_csv {
+            let recent_complete = if def.key == "users" {
+                has_recent_download(download_dir, prefix, recent_download_window_seconds).await
+            } else {
+                let marker_from = if def.key == "calls" && from_date.is_empty() {
+                    calls_from_date.as_str()
+                } else {
+                    from_date.as_str()
+                };
+                has_recent_completion_marker(
+                    download_dir,
+                    def.key,
+                    marker_from,
+                    &to_date,
+                    recent_download_window_seconds,
+                )
+                .await
+            };
+            if recent_complete {
+                info!("Skipping fetch for '{}': a complete recent report for the same date range exists", def.key);
+                continue;
+            }
         }
 
         trace!("Preparing to fetch report: {}", def.key);
@@ -545,6 +561,49 @@ pub async fn fetch_reports(
         .await;
 
     let task_results = finish_fetch_and_downloads(task_results, download_processor).await?;
+
+    // A completion marker is written only after every requested fetch and download
+    // has succeeded. A partial run therefore cannot suppress a later retry.
+    if download_csv && recent_download_window_seconds > 0 {
+        for report_key in ["tickets", "calls", "leads"] {
+            if !should_fetch(report_key) {
+                continue;
+            }
+            let succeeded = task_results
+                .iter()
+                .any(|(key, value)| key == report_key && value.get("error").is_none());
+            if !succeeded {
+                continue;
+            }
+            let prefix = match report_key {
+                "tickets" => "ticket_report_",
+                "calls" => "call_logs_",
+                "leads" => "lead_report_",
+                _ => unreachable!(),
+            };
+            let current_files = snapshot_report_files(download_dir).await;
+            let created_files: Vec<String> = current_files
+                .difference(&preexisting_report_files)
+                .filter(|name| name.starts_with(prefix) && name.ends_with(".csv"))
+                .cloned()
+                .collect();
+            if !created_files.is_empty() {
+                let marker_from = if report_key == "calls" && from_date.is_empty() {
+                    calls_from_date.as_str()
+                } else {
+                    from_date.as_str()
+                };
+                write_completion_marker(
+                    download_dir,
+                    report_key,
+                    marker_from,
+                    &to_date,
+                    &created_files,
+                )
+                .await?;
+            }
+        }
+    }
 
     if let Some(days) = retention_days {
         if days > 0 {
@@ -1412,6 +1471,113 @@ async fn cleanup_old_reports(download_dir: &Path, retention_days: u64) {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
+struct ReportCompletionMarker {
+    files: Vec<String>,
+}
+
+fn completion_marker_path(
+    download_dir: &Path,
+    report_key: &str,
+    from: &str,
+    to: &str,
+) -> std::path::PathBuf {
+    let safe = |value: &str| {
+        value
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+            .collect::<String>()
+    };
+    download_dir.join(format!(
+        ".crm_complete_{}_{}_{}.json",
+        safe(report_key),
+        safe(from),
+        safe(to)
+    ))
+}
+
+async fn has_recent_completion_marker(
+    download_dir: &Path,
+    report_key: &str,
+    from: &str,
+    to: &str,
+    window_seconds: u64,
+) -> bool {
+    let marker_path = completion_marker_path(download_dir, report_key, from, to);
+    let Ok(metadata) = tokio::fs::metadata(&marker_path).await else {
+        return false;
+    };
+    let threshold = SystemTime::now() - std::time::Duration::from_secs(window_seconds);
+    if metadata
+        .modified()
+        .map_or(true, |modified| modified < threshold)
+    {
+        return false;
+    }
+    let Ok(contents) = tokio::fs::read(&marker_path).await else {
+        return false;
+    };
+    let Ok(marker) = serde_json::from_slice::<ReportCompletionMarker>(&contents) else {
+        return false;
+    };
+    if marker.files.is_empty() {
+        return false;
+    }
+    marker
+        .files
+        .iter()
+        .all(|filename| download_dir.join(filename).is_file())
+}
+
+async fn write_completion_marker(
+    download_dir: &Path,
+    report_key: &str,
+    from: &str,
+    to: &str,
+    files: &[String],
+) -> Result<()> {
+    let marker_path = completion_marker_path(download_dir, report_key, from, to);
+    let contents = serde_json::to_vec(&ReportCompletionMarker {
+        files: files.to_vec(),
+    })?;
+    tokio::fs::write(&marker_path, contents)
+        .await
+        .with_context(|| {
+            format!(
+                "Failed to write report completion marker for {}",
+                report_key
+            )
+        })?;
+    Ok(())
+}
+
+async fn snapshot_report_files(download_dir: &Path) -> HashSet<String> {
+    let mut files = HashSet::new();
+    let Ok(mut entries) = fs::read_dir(download_dir).await else {
+        return files;
+    };
+    while let Ok(Some(entry)) = entries.next_entry().await {
+        if !entry
+            .file_type()
+            .await
+            .map(|kind| kind.is_file())
+            .unwrap_or(false)
+        {
+            continue;
+        }
+        if let Some(name) = entry.file_name().to_str() {
+            if ["ticket_report_", "call_logs_", "lead_report_", "users_"]
+                .iter()
+                .any(|prefix| name.starts_with(prefix))
+                && name.ends_with(".csv")
+            {
+                files.insert(name.to_string());
+            }
+        }
+    }
+    files
+}
+
 async fn has_recent_download(download_dir: &Path, prefix: &str, window_seconds: u64) -> bool {
     if window_seconds == 0 {
         return false;
@@ -1443,6 +1609,33 @@ async fn has_recent_download(download_dir: &Path, prefix: &str, window_seconds: 
 mod tests {
     use super::*;
     use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn test_completion_marker_requires_all_report_files_to_exist() {
+        let dir = tempdir().unwrap();
+        let first = "ticket_report_part_a.csv".to_string();
+        let second = "ticket_report_part_b.csv".to_string();
+        std::fs::write(dir.path().join(&first), "a").unwrap();
+        std::fs::write(dir.path().join(&second), "b").unwrap();
+        write_completion_marker(
+            dir.path(),
+            "tickets",
+            "2026-01-01",
+            "2026-10-18",
+            &[first.clone(), second.clone()],
+        )
+        .await
+        .unwrap();
+        assert!(
+            has_recent_completion_marker(dir.path(), "tickets", "2026-01-01", "2026-10-18", 60)
+                .await
+        );
+        std::fs::remove_file(dir.path().join(second)).unwrap();
+        assert!(
+            !has_recent_completion_marker(dir.path(), "tickets", "2026-01-01", "2026-10-18", 60)
+                .await
+        );
+    }
 
     #[tokio::test]
     async fn test_has_recent_download() {
@@ -1592,6 +1785,52 @@ mod tests {
     fn test_split_range_in_half_single_day() {
         let split = split_range_in_half("2026-01-01", "2026-01-01").unwrap();
         assert!(split.is_none());
+    }
+
+    #[test]
+    fn test_recursive_range_splitting_preserves_exact_inclusive_coverage() {
+        use chrono::{Duration, NaiveDate};
+        fn collect_ranges(from: &str, to: &str, out: &mut Vec<(String, String)>) {
+            match split_range_in_half(from, to).unwrap() {
+                Some((left, right)) => {
+                    collect_ranges(&left.0, &left.1, out);
+                    collect_ranges(&right.0, &right.1, out);
+                }
+                None => out.push((from.to_string(), to.to_string())),
+            }
+        }
+        for (from, to) in [
+            ("2026-01-01", "2026-01-04"),
+            ("2026-01-01", "2026-01-05"),
+            ("2024-02-26", "2024-03-02"),
+            ("2026-08-08", "2026-10-18"),
+        ] {
+            let start = NaiveDate::parse_from_str(from, "%Y-%m-%d").unwrap();
+            let end = NaiveDate::parse_from_str(to, "%Y-%m-%d").unwrap();
+            let mut ranges = Vec::new();
+            collect_ranges(from, to, &mut ranges);
+            let mut actual_dates = Vec::new();
+            for (range_start, range_end) in &ranges {
+                let range_start = NaiveDate::parse_from_str(range_start, "%Y-%m-%d").unwrap();
+                let range_end = NaiveDate::parse_from_str(range_end, "%Y-%m-%d").unwrap();
+                assert!(range_start <= range_end, "split produced an inverted range");
+                let mut date = range_start;
+                while date <= range_end {
+                    actual_dates.push(date);
+                    date += Duration::days(1);
+                }
+            }
+            let mut expected_dates = Vec::new();
+            let mut date = start;
+            while date <= end {
+                expected_dates.push(date);
+                date += Duration::days(1);
+            }
+            assert_eq!(
+                actual_dates, expected_dates,
+                "coverage mismatch for {from}..{to}"
+            );
+        }
     }
 
     #[test]
