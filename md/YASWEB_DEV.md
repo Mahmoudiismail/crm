@@ -33,3 +33,8 @@ them for usernames, patient/customer data, and other sensitive information.
 A failed menu lookup, MIS click, MIS Reports transition, report-type selection,
 report search, filter application, or download wait must return an error rather
 than being treated as a successful run with an empty filter list.
+
+
+## Concurrent report tabs
+
+Each report execution uses its own Chrome tab. Tab creation is serialized and retried up to three times when Chrome fails to deliver the target-created event. This prevents concurrent report jobs from navigating or modifying the same first tab. A live Yasweb run is still required to confirm behavior against the deployed Angular application.
