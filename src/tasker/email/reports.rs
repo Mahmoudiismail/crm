@@ -69,9 +69,11 @@ pub fn generate_leads_report(
         meta_b.cmp(&meta_a)
     });
 
-    let mut all_records: Vec<StringRecord> = Vec::new();
     let mut headers = None;
     let mut seen_leads = HashSet::new();
+    let mut written_records = 0usize;
+    let mut workbook = Workbook::new();
+    let worksheet = workbook.add_worksheet();
     let mut lead_id_idx = None;
     let mut branch_idx = None;
     let mut status_idx = None;
@@ -151,12 +153,16 @@ pub fn generate_leads_report(
             let status_matches = status == "new" || status == "follow-up";
 
             if !is_excluded_branch && status_matches {
-                all_records.push(record);
+                let row_idx = (written_records + 1) as u32;
+                for (col_idx, field) in record.iter().enumerate() {
+                    worksheet.write_string(row_idx, col_idx as u16, field)?;
+                }
+                written_records += 1;
             }
         }
     }
 
-    if all_records.is_empty() {
+    if written_records == 0 {
         info!("No valid lead records found after processing files.");
         return Ok(None);
     }
@@ -167,18 +173,9 @@ pub fn generate_leads_report(
         .map(|d| d.as_nanos())
         .unwrap_or(0); // Fallback to 0 if time went backwards
     let xlsx_path = tmp_dir.join(format!("Call_Center_Leads_{}.xlsx", unique_id));
-    let mut workbook = Workbook::new();
-    let worksheet = workbook.add_worksheet();
-
     if let Some(h) = headers {
         for (i, name) in h.iter().enumerate() {
             worksheet.write_string(0, i as u16, name)?;
-        }
-    }
-
-    for (row_idx, record) in all_records.iter().enumerate() {
-        for (col_idx, field) in record.iter().enumerate() {
-            worksheet.write_string((row_idx + 1) as u32, col_idx as u16, field)?;
         }
     }
 
@@ -186,7 +183,7 @@ pub fn generate_leads_report(
 
     info!(
         "Successfully generated leads report with {} records at: {}",
-        all_records.len(),
+        written_records,
         xlsx_path.display()
     );
     Ok(Some(xlsx_path))
@@ -257,6 +254,16 @@ mod tests {
         assert!(out_path.exists(), "The leads output file must exist");
         let out_bytes = std::fs::read(&out_path).unwrap();
         assert!(out_bytes.len() > 100);
+
+        let mut workbook = calamine::open_workbook_auto(&out_path).unwrap();
+        let range = workbook.worksheet_range_at(0).unwrap().unwrap();
+        let lead_ids = range
+            .rows()
+            .skip(1)
+            .map(|row| row[0].to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(lead_ids, vec!["1", "2"]);
+
         let _ = std::fs::remove_file(out_path);
     }
 }
