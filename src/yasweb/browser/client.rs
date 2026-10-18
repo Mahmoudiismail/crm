@@ -1,10 +1,14 @@
 use anyhow::{Context, Result};
 use headless_chrome::{protocol::cdp::types::Event, Browser, Tab};
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
-use tracing::info;
+use tracing::{info, warn};
 
-/// Retrieves the first available browser tab or opens a new one when no tab exists.
+// `Browser::new_tab` waits for a CDP target-created event. Serialize calls so
+// concurrent report jobs cannot race while opening tabs.
+static NEW_TAB_LOCK: Mutex<()> = Mutex::new(());
+
+/// Opens an isolated browser tab for one report execution, retrying transient CDP failures.
 ///
 /// # Examples
 ///
@@ -20,19 +24,27 @@ use tracing::info;
 ///
 /// [`Browser`]: https://docs.rs/chromiumoxide/latest/chromiumoxide/browser/struct.Browser.html
 pub fn get_or_create_tab(browser: &Arc<Browser>) -> Result<Arc<Tab>> {
-    let mut found = None;
-    for _ in 0..10 {
-        let tabs = browser.get_tabs().lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(first) = tabs.first() {
-            found = Some(first.clone());
-            break;
+    let _guard = NEW_TAB_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut last_error = None;
+
+    // Each report needs its own tab; sharing the first tab lets concurrent reports
+    // navigate or manipulate the same page.
+    for attempt in 1..=3 {
+        match browser.new_tab() {
+            Ok(tab) => return Ok(tab),
+            Err(err) => {
+                warn!("Failed to open isolated browser tab (attempt {}/3): {:#}", attempt, err);
+                last_error = Some(err);
+                if attempt < 3 {
+                    std::thread::sleep(Duration::from_millis(250 * attempt));
+                }
+            }
         }
-        std::thread::sleep(Duration::from_millis(100));
     }
 
-    match found {
-        Some(t) => Ok(t),
-        None => browser.new_tab().context("Failed to open new tab"),
+    match last_error {
+        Some(err) => Err(err).context("Failed to open a new isolated browser tab after 3 attempts"),
+        None => Err(anyhow::anyhow!("Tab creation did not run")),
     }
 }
 
