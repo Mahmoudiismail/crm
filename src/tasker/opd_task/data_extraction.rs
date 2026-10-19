@@ -200,8 +200,6 @@ mod tests {
         for (col, header) in headers.iter().enumerate() {
             worksheet.write_string(4, col as u16, *header).unwrap();
         }
-        let rows: [(u32, u16, &str); 0] = [];
-        let _ = rows;
         for (row, values) in [
             (5, [10.0, 7.0, 5.0, 0.0, 0.0, 0.0]),
             (6, [20.0, 13.0, 12.0, 0.0, 0.0, 0.0]),
