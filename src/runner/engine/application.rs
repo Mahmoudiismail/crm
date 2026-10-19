@@ -99,24 +99,38 @@ async fn discover_date_args(logger: &TaskLogger, app: &RegisteredApp) -> (Option
             match serde_json::from_slice::<serde_json::Value>(&output.stdout) {
                 Ok(manifest) => date_args_from_manifest(&manifest),
                 Err(error) => {
-                    logger.log(&format!("Could not parse manifest for app '{}': {}", app.name, error)).await;
+                    logger
+                        .log(&format!(
+                            "Could not parse manifest for app '{}': {}",
+                            app.name, error
+                        ))
+                        .await;
                     (None, None)
                 }
             }
         }
         Ok(Ok(output)) => {
-            logger.log(&format!(
-                "Manifest discovery for app '{}' exited with status {}",
-                app.name, output.status
-            )).await;
+            logger
+                .log(&format!(
+                    "Manifest discovery for app '{}' exited with status {}",
+                    app.name, output.status
+                ))
+                .await;
             (None, None)
         }
         Ok(Err(error)) => {
-            logger.log(&format!("Could not read manifest for app '{}': {}", app.name, error)).await;
+            logger
+                .log(&format!(
+                    "Could not read manifest for app '{}': {}",
+                    app.name, error
+                ))
+                .await;
             (None, None)
         }
         Err(_) => {
-            logger.log(&format!("Manifest discovery timed out for app '{}'", app.name)).await;
+            logger
+                .log(&format!("Manifest discovery timed out for app '{}'", app.name))
+                .await;
             (None, None)
         }
     }
