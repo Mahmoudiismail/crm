@@ -258,6 +258,11 @@ async fn main() -> Result<()> {
         .try_lock_exclusive()
         .with_context(|| "Another YASWEB run is already active; wait for it to finish before starting another run")?;
 
+    let legacy_concurrency_setting = std::fs::read_to_string(&config_path)
+        .ok()
+        .and_then(|content| serde_json::from_str::<serde_json::Value>(&content).ok())
+        .is_some_and(|value| value.get("concurrency").is_some());
+
     let mut config: YaswebConfig =
         crm_tool::utils::load_or_create_config(&config_path, &YaswebConfig::default())?;
 
@@ -271,7 +276,7 @@ async fn main() -> Result<()> {
         parse_log_level(&config.log_file_level)?,
     )?;
 
-    let config_updated = config.finalize_runtime_fields();
+    let config_updated = config.finalize_runtime_fields() || legacy_concurrency_setting;
 
     let active_report_names = options.name;
     let active_report_type_global = options.r#type.unwrap_or_default();
