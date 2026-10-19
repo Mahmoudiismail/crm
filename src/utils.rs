@@ -381,8 +381,6 @@ pub(crate) fn resolve_date_var(val: &str, base_date: Option<&str>) -> Result<chr
 
 fn parse_flexible_date_impl(val: &str, base_date: Option<&str>) -> Option<chrono::NaiveDate> {
     use chrono::NaiveDate;
-    use tracing::warn;
-
     let val = val.trim();
     if val.is_empty() {
         return None;
@@ -394,7 +392,6 @@ fn parse_flexible_date_impl(val: &str, base_date: Option<&str>) -> Option<chrono
 
     // Check if it was meant to be a variable but failed validation
     if val.chars().all(|c| c.is_alphabetic()) && val.to_lowercase() != "may" {
-        warn!("Unsupported alphabetic string passed as date: {}", val);
         return None;
     }
 
