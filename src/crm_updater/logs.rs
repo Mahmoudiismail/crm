@@ -45,7 +45,7 @@ pub fn process_and_send_logs(config: &UpdaterConfig) -> Result<()> {
     let mut zip_archives = Vec::new();
     let mut current_part = 1;
     let mut current_zip_path = tempfile::Builder::new()
-        .prefix(&format!("logs_part{}_ ", current_part).replace(" ", ""))
+        .prefix(&format!("logs_part{}_", current_part))
         .suffix(".zip")
         .tempfile()?;
     let mut current_zip = ZipWriter::new(current_zip_path.as_file().try_clone()?);
@@ -63,7 +63,7 @@ pub fn process_and_send_logs(config: &UpdaterConfig) -> Result<()> {
 
             current_part += 1;
             current_zip_path = tempfile::Builder::new()
-                .prefix(&format!("logs_part{}_ ", current_part).replace(" ", ""))
+                .prefix(&format!("logs_part{}_", current_part))
                 .suffix(".zip")
                 .tempfile()?;
             current_zip = ZipWriter::new(current_zip_path.as_file().try_clone()?);
@@ -138,7 +138,7 @@ fn collect_files(exe_dir: &Path, logs_dir: &Path) -> Vec<CollectedFile> {
 
         for entry in walkdir::WalkDir::new(logs_dir)
             .into_iter()
-            .filter_map(Result::ok)
+            .filter_map(|entry| entry.ok())
         {
             let path = entry.path();
             if !path.is_file() || !has_extension(path, &["log"]) {
@@ -162,7 +162,7 @@ fn collect_files(exe_dir: &Path, logs_dir: &Path) -> Vec<CollectedFile> {
     if diagnostics_dir.is_dir() {
         for entry in walkdir::WalkDir::new(&diagnostics_dir)
             .into_iter()
-            .filter_map(Result::ok)
+            .filter_map(|entry| entry.ok())
         {
             let path = entry.path();
             if !path.is_file() || !has_extension(path, &["html", "json"]) {
@@ -201,7 +201,7 @@ fn add_file(
 fn has_extension(path: &Path, extensions: &[&str]) -> bool {
     path.extension()
         .and_then(|extension| extension.to_str())
-        .is_some_and(|extension| extensions.iter().any(|expected| extension.eq_ignore_ascii_case(expected)))
+        .map_or(false, |extension| extensions.iter().any(|expected| extension.eq_ignore_ascii_case(expected)))
 }
 
 fn send_logs_email(recipient: &str, attachments: &[PathBuf]) -> Result<()> {
