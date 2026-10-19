@@ -174,7 +174,8 @@ pub fn generate_html_report(
         sections_html.push_str("</table><br/>");
     }
 
-    let indent_width = crate::tasker::email::html::indentation_width(config.dashboard_config.indentation_spaces);
+    let indent_width =
+        crate::tasker::email::html::indentation_width(config.dashboard_config.indentation_spaces);
     let default_template = format!(
         r#"<html>
 <body style="font-family: Calibri, Arial, sans-serif;">

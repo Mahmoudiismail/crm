@@ -514,9 +514,12 @@ where
             (subject, body)
         };
 
-        let indentation_width = crate::tasker::email::html::indentation_width(config.indentation_spaces);
+        let indentation_width =
+            crate::tasker::email::html::indentation_width(config.indentation_spaces);
         let indentation_css = format!("margin-left:{}px;", indentation_width);
-        let body = body.replace("margin-left:20px;", &indentation_css).replace("margin-left: 20px;", &indentation_css);
+        let body = body
+            .replace("margin-left:20px;", &indentation_css)
+            .replace("margin-left: 20px;", &indentation_css);
 
         let tmp_dir = std::env::temp_dir();
         let safe_name = bucket_name.replace(|c: char| !c.is_ascii_alphanumeric(), "_");

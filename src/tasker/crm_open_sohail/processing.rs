@@ -234,9 +234,7 @@ fn enrich_dataset(
                 Some(info) => {
                     if info.is_shared || is_main_branch {
                         match (&info.owner_name, &info.owner_email) {
-                            (o, e) if !o.is_empty() && !e.is_empty() => {
-                                outlook_mention_html(o, e)
-                            }
+                            (o, e) if !o.is_empty() && !e.is_empty() => outlook_mention_html(o, e),
                             (o, _) if !o.is_empty() => o.to_string(),
                             _ => fallback_oul_text.to_string(),
                         }
@@ -297,7 +295,6 @@ pub fn process_extracted_data(
 
     Ok(final_datasets)
 }
-
 
 #[cfg(test)]
 mod mention_tests {

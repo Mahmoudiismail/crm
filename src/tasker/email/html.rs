@@ -299,7 +299,6 @@ mod tests {
     }
 }
 
-
 /// Convert the configured indentation level to the legacy pixel width.
 pub fn indentation_width(spaces: Option<u32>) -> u32 {
     spaces.unwrap_or(4).saturating_mul(5)

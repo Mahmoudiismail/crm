@@ -415,10 +415,12 @@ finally {
         info!("Sending dashboard via email to: {}", email_to);
 
         info!("Email generation started");
-        let indentation_width = crate::tasker::email::html::indentation_width(config.indentation_spaces);
-        let html_body = format!(r#"<html><body style="font-family: Arial, sans-serif;">Dear Aya,<br/><div style="margin-left:{indentation_width}px;">Please find the CRM Ticket dashboard attached.</div></body></html>"#);
+        let indentation_width =
+            crate::tasker::email::html::indentation_width(config.indentation_spaces);
+        let html_body = format!(
+            r#"<html><body style="font-family: Arial, sans-serif;">Dear Aya,<br/><div style="margin-left:{indentation_width}px;">Please find the CRM Ticket dashboard attached.</div></body></html>"#
+        );
         info!("Email generation completed");
-
 
         if config.save_email_as_html.unwrap_or(false) {
             let payloads_dir = std::env::current_dir()
@@ -436,8 +438,13 @@ finally {
         }
 
         if let Err(e) = crate::tasker::email::outlook::send_email(
-            email_to, email_cc, "CRM Tickets Dashboard", &html_body,
-            Some(&dashboard_path_str), None, "Send()",
+            email_to,
+            email_cc,
+            "CRM Tickets Dashboard",
+            &html_body,
+            Some(&dashboard_path_str),
+            None,
+            "Send()",
         ) {
             error!("Failed to send dashboard email: {}", e);
             return Err(e);

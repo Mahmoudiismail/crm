@@ -121,7 +121,10 @@ fn send_logs_email(recipient: &str, attachments: &[PathBuf]) -> Result<()> {
         .iter()
         .map(|path| path.to_string_lossy().into_owned())
         .collect::<Vec<_>>();
-    let attachment_refs = attachment_paths.iter().map(String::as_str).collect::<Vec<_>>();
+    let attachment_refs = attachment_paths
+        .iter()
+        .map(String::as_str)
+        .collect::<Vec<_>>();
     let html_body = "<html><body>Please find the logs attached.</body></html>";
 
     crate::tasker::email::outlook::send_email_with_attachments(
