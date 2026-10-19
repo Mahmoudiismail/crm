@@ -38,7 +38,7 @@ The system is a collection of Rust binaries designed to:
 - `crm`: Fetches logs and API payloads via CLI arguments.
 - `runner`: Exposes the HTTP dashboard and pipeline engine.
 - `tasker`: Parses CSV structures, manipulates DOM arrays, communicates to Excel COM systems, and issues Emails dynamically.
-- `yasweb`: Performs concurrent Headless Chrome report operations with a global operation limit configured by `yasweb_config.json` (`concurrency`, default 6); Runner supplies each invocation's date range.
+- `yasweb`: Performs concurrent Headless Chrome report operations with a global operation limit configured by `yasweb_config.json` (`concurrency`, default 6; `0` means unlimited); Runner supplies each invocation's date range.
 
 ## Common paths
 - `tasker_config.json` for tasker rules logic.
