@@ -415,9 +415,9 @@ async fn main() -> Result<()> {
                     let report_conf_opt = config.reports.get(&active_report_name);
 
                     // Map the global --start-date and --end-date values into the respective internal report filters
-                    // This is done both for monthly chunking AND standard executions, provided the report has the keys configured.
+                    // Map the requested dates into the report's configured filter formats.
                     let s_dt = {
-                        // If not monthly, re-format the input start_date_str if applicable
+                        // Re-format the input start date for this report.
                         if let (Some(st_str), Some(report_conf)) = (&start_date_str, report_conf_opt) {
                             if let Some(sk) = &report_conf.start_date_key {
                                 if let Some(parsed) = crm_tool::utils::parse_flexible_date(st_str) {
@@ -435,7 +435,7 @@ async fn main() -> Result<()> {
                     };
 
                     let e_dt = {
-                        // If not monthly, re-format the input end_date_str if applicable
+                        // Re-format the input end date for this report.
                         if let (Some(ed_str), Some(report_conf)) = (&end_date_str, report_conf_opt) {
                             if let Some(ek) = &report_conf.end_date_key {
                                 if let Some(parsed) = crm_tool::utils::parse_flexible_date(ed_str) {
@@ -652,9 +652,9 @@ async fn main() -> Result<()> {
         });
     }
 
-    let results = futures_util::future::join_all(report_futures).await;
-    for res in results {
-        match res {
+    // Do not overlap separate report automations inside one YASWEB process.
+    for report_future in report_futures {
+        match report_future.await {
             Ok(()) => {}
             Err(e) => {
                 error!("YASWEB REPORT FAILED: {:#}", e);
