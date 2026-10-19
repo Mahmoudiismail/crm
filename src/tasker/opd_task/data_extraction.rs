@@ -189,6 +189,51 @@ mod tests {
     }
 
     #[test]
+    fn slot_summary_uses_slots_booked_and_shared_filters() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("opd.xlsx");
+        let mut workbook = rust_xlsxwriter::Workbook::new();
+        let worksheet = workbook.add_worksheet();
+        worksheet.set_name("MIS_Report").unwrap();
+
+        let headers = ["Total Slot", "Slots Booked", "Total Patient Seen", "Speciality", "Emp Name", "Dept"];
+        for (col, header) in headers.iter().enumerate() {
+            worksheet.write_string(4, col as u16, *header).unwrap();
+        }
+        let rows: [(u32, u16, &str); 0] = [];
+        let _ = rows;
+        for (row, values) in [
+            (5, [10.0, 7.0, 5.0, 0.0, 0.0, 0.0]),
+            (6, [20.0, 13.0, 12.0, 0.0, 0.0, 0.0]),
+            (7, [100.0, 90.0, 99.0, 0.0, 0.0, 0.0]),
+        ] {
+            worksheet.write_number(row, 0, values[0]).unwrap();
+            worksheet.write_number(row, 1, values[1]).unwrap();
+            worksheet.write_number(row, 2, values[2]).unwrap();
+        }
+        worksheet.write_string(5, 3, "General").unwrap();
+        worksheet.write_string(5, 4, "A").unwrap();
+        worksheet.write_string(5, 5, "Dept").unwrap();
+        worksheet.write_string(6, 3, "Cardiology").unwrap();
+        worksheet.write_string(6, 4, "B").unwrap();
+        worksheet.write_string(6, 5, "Dept").unwrap();
+        worksheet.write_string(7, 3, "Exe Clinic").unwrap();
+        worksheet.write_string(7, 4, "C").unwrap();
+        worksheet.write_string(7, 5, "Dept").unwrap();
+        workbook.save(&path).unwrap();
+
+        let filters = OpdFilters {
+            exclude_specialities: &[],
+            exclude_emp_names: &[],
+            exclude_depts: &[],
+            exclude_speciality_prefixes: &["Exe".to_string()],
+        };
+        let totals = extract_slot_totals(&path, &filters).unwrap();
+        assert_eq!(totals.slots_booked, 20);
+        assert_eq!(totals.total_slots, 30);
+    }
+
+    #[test]
     fn test_opd_filters_share_config_values() {
         let config = OpdAnalysisConfig {
             download_path: String::new(),
