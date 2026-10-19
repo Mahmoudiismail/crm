@@ -170,6 +170,7 @@ pub struct OpdAnalysisConfig {
 pub struct SatFiguresConfig {
     pub download_path: String,
     pub output_file: String,
+    #[serde(default = "default_sat_figures_email_to")]
     pub email_to: String,
     #[serde(default)]
     pub email_cc: String,
@@ -177,8 +178,12 @@ pub struct SatFiguresConfig {
     pub email_subject: String,
 }
 
+fn default_sat_figures_email_to() -> String {
+    "dd@merrywillow.mailk.us".to_string()
+}
+
 fn default_sat_figures_subject() -> String {
-    "Sat Figures".to_string()
+    "201009977888-1576573266@g.us".to_string()
 }
 
 /// Replaces the users.xlsm Power Query export with a native CSV task.
