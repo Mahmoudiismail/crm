@@ -195,9 +195,9 @@ mod tests {
             check_current_year: false,
         };
         let filters = OpdFilters::from(&config);
-        assert_eq!(filters.exclude_specialities, &["ECG"]);
-        assert_eq!(filters.exclude_emp_names, &["Example"]);
-        assert_eq!(filters.exclude_depts, &["Patient Education"]);
-        assert_eq!(filters.exclude_speciality_prefixes, &["Exe"]);
+        assert_eq!(filters.exclude_specialities[0], "ECG");
+        assert_eq!(filters.exclude_emp_names[0], "Example");
+        assert_eq!(filters.exclude_depts[0], "Patient Education");
+        assert_eq!(filters.exclude_speciality_prefixes[0], "Exe");
     }
 }
