@@ -148,9 +148,16 @@ pub(crate) async fn handle_update_task(
                     "Task configuration read-back completed"
                 );
             }
-            None => error!(task_id = %task_id, "Task configuration missing after successful update"),
+            None => error!(
+                task_id = %task_id,
+                "Task configuration missing after successful update"
+            ),
         },
-        Err(error) => error!(task_id = %task_id, error = %error, "Failed to read back task configuration after update"),
+        Err(error) => error!(
+            task_id = %task_id,
+            error = %error,
+            "Failed to read back task configuration after update"
+        ),
     }
 
     Ok((
