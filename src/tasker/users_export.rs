@@ -4,6 +4,7 @@ use calamine::Reader;
 use csv::{ReaderBuilder, WriterBuilder};
 use std::collections::HashMap;
 use std::fs;
+use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 use tracing::{info, warn};
@@ -59,7 +60,7 @@ fn load_department_mapping(path: &Path) -> Result<HashMap<String, String>> {
     Ok(mapping)
 }
 
-fn recent_user_csvs(download_dir: &Path, minutes_ago: u64) -> Result<Vec<PathBuf>> {
+fn recent_latest_user_csvs(download_dir: &Path, minutes_ago: u64) -> Result<Vec<PathBuf>> {
     let cutoff = SystemTime::now() - Duration::from_secs(minutes_ago.saturating_mul(60));
     let entries = fs::read_dir(download_dir)
         .with_context(|| format!("Failed to read users download folder {:?}", download_dir))?;
@@ -73,71 +74,115 @@ fn recent_user_csvs(download_dir: &Path, minutes_ago: u64) -> Result<Vec<PathBuf
         let path = entry.path();
         let name = path.file_name().and_then(|v| v.to_str()).unwrap_or_default();
         if !name.to_ascii_lowercase().starts_with("users_")
-            || !path.extension().and_then(|v| v.to_str()).is_some_and(|ext| ext.eq_ignore_ascii_case("csv"))
+            || !path
+                .extension()
+                .and_then(|v| v.to_str())
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("csv"))
         {
             continue;
         }
 
         let metadata = entry.metadata()?;
         let created = metadata.created().or_else(|_| metadata.modified());
-        match created {
-            Ok(timestamp) if timestamp >= cutoff => files.push((timestamp, path)),
-            Ok(_) => {}
-            Err(err) => warn!("Could not determine creation time for {:?}: {}", path, err),
+        let modified = metadata.modified();
+        match (created, modified) {
+            (Ok(created), Ok(modified)) if created >= cutoff => {
+                files.push((modified, path));
+            }
+            (Ok(_), Ok(_)) => {}
+            (Err(err), _) | (_, Err(err)) => {
+                warn!("Could not determine timestamps for {:?}: {}", path, err)
+            }
         }
     }
 
-    files.sort_by_key(|(created, _)| *created);
-    Ok(files.into_iter().map(|(_, path)| path).collect())
+    let Some(latest_modified) = files.iter().map(|(modified, _)| *modified).max() else {
+        return Ok(Vec::new());
+    };
+    Ok(files
+        .into_iter()
+        .filter(|(modified, _)| *modified == latest_modified)
+        .map(|(_, path)| path)
+        .collect())
+}
+
+// Power Query imports the combined CSV binaries using code page 1252.
+fn decode_windows_1252(bytes: &[u8]) -> String {
+    const CP1252: [char; 32] = [
+        '\u{20AC}', '\u{0081}', '\u{201A}', '\u{0192}', '\u{201E}', '\u{2026}', '\u{2020}', '\u{2021}',
+        '\u{02C6}', '\u{2030}', '\u{0160}', '\u{2039}', '\u{0152}', '\u{008D}', '\u{017D}', '\u{008F}',
+        '\u{0090}', '\u{2018}', '\u{2019}', '\u{201C}', '\u{201D}', '\u{2022}', '\u{2013}', '\u{2014}',
+        '\u{02DC}', '\u{2122}', '\u{0161}', '\u{203A}', '\u{0153}', '\u{009D}', '\u{017E}', '\u{0178}',
+    ];
+    let mut decoded = String::with_capacity(bytes.len());
+    for &byte in bytes {
+        match byte {
+            0x80..=0x9F => decoded.push(CP1252[(byte - 0x80) as usize]),
+            _ => decoded.push(char::from(byte)),
+        }
+    }
+    decoded
 }
 
 pub fn run(config: &UsersExportConfig) -> Result<()> {
     let download_dir = resolve(&config.download_path);
     let mapping_path = resolve(&config.mapping_workbook);
     let output_path = resolve(&config.output_file);
-    let files = recent_user_csvs(&download_dir, config.minutes_ago)?;
+    let files = recent_latest_user_csvs(&download_dir, config.minutes_ago)?;
 
     if files.is_empty() {
         anyhow::bail!(
-            "No users_*.csv files were created within the last {} minute(s) in {:?}",
+            "No users_*.csv files created within the last {} minute(s) in {:?}",
             config.minutes_ago,
             download_dir
         );
     }
 
     let mapping = load_department_mapping(&mapping_path)?;
-    let output_headers = csv::StringRecord::from(OUTPUT_HEADERS.to_vec());
-    let mut output_rows: Vec<csv::StringRecord> = Vec::new();
-
+    let mut combined_bytes = Vec::new();
     for path in &files {
-        let mut reader = ReaderBuilder::new()
-            .from_path(path)
-            .with_context(|| format!("Failed to read users CSV {:?}", path))?;
-        let headers = reader.headers()?.clone();
-        let team_idx = find_column(&headers, "UserDepartmentName / Team Name")
-            .context("Required users CSV column 'UserDepartmentName / Team Name' is missing")?;
-        let username_idx = find_column(&headers, "cognito_username (Filled by THB)")
-            .context("Required users CSV column 'cognito_username (Filled by THB)' is missing")?;
-        let branches_idx = find_column(&headers, "Branches")
-            .context("Required users CSV column 'Branches' is missing")?;
-        let teams_idx = find_column(&headers, "Teams")
-            .context("Required users CSV column 'Teams' is missing")?;
+        combined_bytes.extend_from_slice(
+            &fs::read(path).with_context(|| format!("Failed to read users CSV {:?}", path))?,
+        );
+    }
+    let combined_csv = decode_windows_1252(&combined_bytes);
+    let mut reader = ReaderBuilder::new().from_reader(Cursor::new(combined_csv.as_bytes()));
+    let headers = reader.headers()?.clone();
+    let first_name_idx =
+        find_column(&headers, "First Name").context("Required users CSV column 'First Name' is missing")?;
+    let last_name_idx =
+        find_column(&headers, "Last Name").context("Required users CSV column 'Last Name' is missing")?;
+    let branches_idx =
+        find_column(&headers, "Branches").context("Required users CSV column 'Branches' is missing")?;
+    let teams_idx =
+        find_column(&headers, "Teams").context("Required users CSV column 'Teams' is missing")?;
 
-        for record in reader.records() {
-            let record = record.with_context(|| format!("Malformed record in {:?}", path))?;
-            let username = record.get(username_idx).unwrap_or_default();
-            let department = mapping
-                .get(&normalized_header(username))
-                .cloned()
-                .unwrap_or_default();
-            output_rows.push(csv::StringRecord::from(vec![
-                record.get(team_idx).unwrap_or_default().to_string(),
-                username.to_string(),
-                record.get(branches_idx).unwrap_or_default().to_string(),
-                record.get(teams_idx).unwrap_or_default().to_string(),
-                department,
-            ]));
-        }
+    let mut output_rows = Vec::new();
+    for record in reader.records() {
+        let record = record.context("Malformed record in combined users CSV data")?;
+        let username = format!(
+            "{} {}",
+            record.get(first_name_idx).unwrap_or_default(),
+            record.get(last_name_idx).unwrap_or_default()
+        );
+        let mapped_department = mapping
+            .get(&normalized_header(&username))
+            .cloned()
+            .unwrap_or_default();
+        let teams = record.get(teams_idx).unwrap_or_default().to_string();
+        let final_department = if mapped_department.is_empty() {
+            teams.clone()
+        } else {
+            mapped_department.clone()
+        };
+
+        output_rows.push(csv::StringRecord::from(vec![
+            final_department,
+            username,
+            record.get(branches_idx).unwrap_or_default().to_string(),
+            teams,
+            mapped_department,
+        ]));
     }
 
     if let Some(parent) = output_path.parent().filter(|p| !p.as_os_str().is_empty()) {
@@ -147,7 +192,7 @@ pub fn run(config: &UsersExportConfig) -> Result<()> {
     let mut writer = WriterBuilder::new()
         .from_path(&output_path)
         .with_context(|| format!("Failed to create users CSV {:?}", output_path))?;
-    writer.write_record(&output_headers)?;
+    writer.write_record(OUTPUT_HEADERS)?;
     for record in &output_rows {
         writer.write_record(record)?;
     }
@@ -177,6 +222,11 @@ mod tests {
     #[test]
     fn mapping_keys_ignore_case_and_extra_whitespace() {
         assert_eq!(normalized_header("  Mahmoud  Ibrahim\nIsmail "), "mahmoud ibrahim ismail");
+    }
+
+    #[test]
+    fn windows_1252_decodes_non_ascii_bytes() {
+        assert_eq!(decode_windows_1252(&[b'A', 0x80, b'B']), "A€B");
     }
 
     #[test]
