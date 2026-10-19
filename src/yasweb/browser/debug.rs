@@ -98,27 +98,72 @@ pub fn save_failure_diagnostics(tab: &Arc<headless_chrome::Tab>, step_name: &str
                 }
                 return clone.outerHTML;
             };
-            const frames = Array.from(document.querySelectorAll("iframe")).map((frame, index) => ({
-                index,
-                src: safeUrl(frame.getAttribute("src") || ""),
-                title: frame.title || "",
-                loaded: !!frame.contentDocument,
-                accessible: (() => { try { return !!frame.contentWindow.document.documentElement; } catch (_) { return false; } })()
-            }));
-            let iframeHtml = "";
-            try {
-                const frame = document.querySelector("iframe");
-                iframeHtml = frame && frame.contentWindow ? redactDocument(frame.contentWindow.document) : "";
-            } catch (e) { iframeHtml = "IFRAME_DIAGNOSTIC_ERROR: " + e.message; }
+            const frameSnapshots = Array.from(document.querySelectorAll("iframe")).map((frame, index) => {
+                const metadata = {
+                    index,
+                    src: safeUrl(frame.getAttribute("src") || ""),
+                    title: frame.title || "",
+                    loaded: !!frame.contentDocument,
+                    accessible: false
+                };
+                try {
+                    const frameDoc = frame.contentWindow && frame.contentWindow.document;
+                    metadata.accessible = !!(frameDoc && frameDoc.documentElement);
+                    return { ...metadata, html: metadata.accessible ? redactDocument(frameDoc) : "" };
+                } catch (e) {
+                    return { ...metadata, error: String(e && e.message || e), html: "" };
+                }
+            });
+            const selectorDiagnostics = {};
+            for (const selector of [
+                "#menuPinnedBtn", "#pinButton", ".menuModules", ".misManagement",
+                "input[formcontrolname='searchInput']", "input[placeholder='Search']",
+                ".tree-view", "#loader_svg", ".loading-screen-wrapper",
+                "mat-progress-bar", ".dx-loadpanel"
+            ]) {
+                selectorDiagnostics[selector] = Array.from(document.querySelectorAll(selector)).slice(0, 100).map(el => {
+                    const style = el.ownerDocument.defaultView.getComputedStyle(el);
+                    return {
+                        tag: el.tagName,
+                        id: el.id || "",
+                        className: typeof el.className === "string" ? el.className : "",
+                        text: String(el.innerText || el.textContent || "").trim().slice(0, 500),
+                        visible: style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity || 1) > 0,
+                        disabled: !!el.disabled
+                    };
+                });
+            }
+            const active = document.activeElement;
+            const firstFrame = frameSnapshots.length ? frameSnapshots[0] : null;
+            const navigation = performance.getEntriesByType("navigation")[0];
             return JSON.stringify({
+                capturedAt: new Date().toISOString(),
                 url: safeUrl(location.href),
                 title: document.title,
                 readyState: document.readyState,
                 visibilityState: document.visibilityState,
+                hasFocus: document.hasFocus(),
+                online: navigator.onLine,
                 documentHtmlLength: document.documentElement ? document.documentElement.outerHTML.length : 0,
-                frames,
+                activeElement: active ? {
+                    tag: active.tagName,
+                    id: active.id || "",
+                    name: active.getAttribute("name") || "",
+                    type: active.getAttribute("type") || "",
+                    className: typeof active.className === "string" ? active.className : ""
+                } : null,
+                selectorDiagnostics,
+                frames: frameSnapshots.map(({ html, ...metadata }) => metadata),
+                frameSnapshots,
                 mainHtml: redactDocument(document),
-                iframeHtml
+                iframeHtml: firstFrame ? (firstFrame.html || firstFrame.error || "") : "",
+                navigationTiming: navigation ? {
+                    durationMs: navigation.duration,
+                    domInteractiveMs: navigation.domInteractive,
+                    domContentLoadedMs: navigation.domContentLoadedEventEnd,
+                    loadEventMs: navigation.loadEventEnd
+                } : null,
+                resourceCount: performance.getEntriesByType("resource").length
             });
         })()
     "#;
