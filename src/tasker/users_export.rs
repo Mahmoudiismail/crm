@@ -62,16 +62,16 @@ fn load_department_mapping(path: &Path) -> Result<HashMap<String, String>> {
 
 fn recent_latest_user_csvs(download_dir: &Path, minutes_ago: u64) -> Result<Vec<PathBuf>> {
     let cutoff = SystemTime::now() - Duration::from_secs(minutes_ago.saturating_mul(60));
-    let entries = fs::read_dir(download_dir)
-        .with_context(|| format!("Failed to read users download folder {:?}", download_dir))?;
     let mut files = Vec::new();
 
-    for entry in entries {
-        let entry = entry?;
-        if !entry.file_type()?.is_file() {
+    for entry in walkdir::WalkDir::new(download_dir)
+        .into_iter()
+        .filter_map(|entry| entry.ok())
+    {
+        if !entry.file_type().is_file() {
             continue;
         }
-        let path = entry.path();
+        let path = entry.path().to_path_buf();
         let name = path.file_name().and_then(|v| v.to_str()).unwrap_or_default();
         if !name.to_ascii_lowercase().starts_with("users_")
             || !path
@@ -82,7 +82,7 @@ fn recent_latest_user_csvs(download_dir: &Path, minutes_ago: u64) -> Result<Vec<
             continue;
         }
 
-        let metadata = entry.metadata()?;
+        let metadata = entry.metadata().with_context(|| format!("Failed to read metadata for {:?}", path))?;
         let created = metadata.created().or_else(|_| metadata.modified());
         let modified = metadata.modified();
         match (created, modified) {
