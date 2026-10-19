@@ -248,15 +248,19 @@ async fn main() -> Result<()> {
     // Prevent overlapping YASWEB processes from racing on the same menu, browser profile,
     // temporary downloads, and output filenames. The OS releases this lock if the process exits.
     let lock_path = config_path.with_extension("lock");
-    let instance_lock = OpenOptions::new()
-        .create(true)
-        .read(true)
-        .write(true)
-        .open(&lock_path)
-        .with_context(|| format!("Failed to open YASWEB instance lock {:?}", lock_path))?;
-    instance_lock
-        .try_lock_exclusive()
-        .with_context(|| "Another YASWEB run is already active; wait for it to finish before starting another run")?;
+    let instance_lock = tokio::task::spawn_blocking(move || -> Result<std::fs::File> {
+        let file = OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .open(&lock_path)
+            .with_context(|| format!("Failed to open YASWEB instance lock {:?}", lock_path))?;
+        file.lock_exclusive()
+            .with_context(|| "Failed to acquire the YASWEB instance lock")?;
+        Ok(file)
+    })
+    .await
+    .context("Failed to join YASWEB instance-lock task")??;
 
     let legacy_concurrency_setting = std::fs::read_to_string(&config_path)
         .ok()
