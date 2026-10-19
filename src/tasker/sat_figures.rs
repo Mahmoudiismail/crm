@@ -235,6 +235,6 @@ mod tests {
 
     #[test]
     fn email_script_formats_percentage_as_percent() {
-        assert!(get_email_script().contains('$number.ToString("P2"'));
+        assert!(get_email_script().contains("$number.ToString(\"P2\""));
     }
 }
