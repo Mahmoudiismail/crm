@@ -142,18 +142,7 @@ fn validate_step(
 }
 
 pub fn resolve_relative_to_exe_dir(path: &str) -> PathBuf {
-    let p = PathBuf::from(path);
-    if p.is_absolute() {
-        return p;
-    }
-
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(exe_dir) = exe.parent() {
-            return exe_dir.join(p);
-        }
-    }
-
-    p
+    crate::utils::resolve_relative_to_exe_dir(path)
 }
 
 fn default_crm_binary_name() -> &'static str {
