@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use crm_tool::manifest::{AppArg, AppManifest, ArgType};
 use crm_tool::tasker::config::{TaskConfig, TaskerConfig};
-use crm_tool::tasker::{csv_task, dashboard_updater, opd_task};
+use crm_tool::tasker::{csv_task, dashboard_updater, opd_task, sat_figures, users_export};
 use crm_tool::utils::{
     executable_dir, intercept_manifest, parse_log_level, setup_logging_with_levels, InterceptResult,
 };
@@ -221,6 +221,26 @@ pub fn run_app(options: TaskerCliOptions) -> Result<()> {
                 }
                 tracing::trace!("OpdAnalysis for task #{} finished.", task_idx);
             }
+            TaskConfig::SatFigures(figures_config) => {
+                tracing::trace!("Executing SatFigures for task #{}.", task_idx);
+                let opd_config = config.tasks.iter().find_map(|candidate| match candidate {
+                    TaskConfig::OpdAnalysis(opd_config) => Some(opd_config),
+                    _ => None,
+                }).context("Sat Figures requires an opd_analysis task configuration to reuse its filters")?;
+                if let Err(e) = sat_figures::run(figures_config, opd_config) {
+                    error!("Error running SatFigures task #{}: {:#}", task_idx, e);
+                    anyhow::bail!("SatFigures task {} failed: {:#}", task_idx, e);
+                }
+                tracing::trace!("SatFigures for task #{} finished.", task_idx);
+            }
+            TaskConfig::UsersExport(users_config) => {
+                tracing::trace!("Executing UsersExport for task #{}.", task_idx);
+                if let Err(e) = users_export::run(users_config) {
+                    error!("Error running UsersExport task #{}: {:#}", task_idx, e);
+                    anyhow::bail!("UsersExport task {} failed: {:#}", task_idx, e);
+                }
+                tracing::trace!("UsersExport for task #{} finished.", task_idx);
+            }
         }
     }
 
@@ -242,6 +262,8 @@ fn get_manifest() -> AppManifest {
                 "3".to_string(),
                 "4".to_string(),
                 "5".to_string(),
+                "6".to_string(),
+                "7".to_string(),
             ]),
             AppArg::new("--only-call-center", ArgType::Boolean).depends_on(
                 std::collections::HashMap::from([("--task".to_string(), vec!["1".to_string()])]),
