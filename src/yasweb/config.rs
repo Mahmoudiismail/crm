@@ -151,3 +151,25 @@ impl std::fmt::Debug for YaswebConfig {
             .finish()
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legacy_concurrency_setting_is_ignored_and_not_serialized() {
+        let config: YaswebConfig = serde_json::from_str(
+            r#"{
+                "url": "https://example.test/",
+                "username": "test",
+                "concurrency": 6,
+                "reports": {}
+            }"#,
+        )
+        .unwrap();
+
+        let serialized = serde_json::to_value(config).unwrap();
+        assert!(serialized.get("concurrency").is_none());
+    }
+}
