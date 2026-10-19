@@ -1,5 +1,4 @@
 use anyhow::Result;
-use csv::StringRecord;
 use rust_xlsxwriter::Workbook;
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -253,6 +252,8 @@ mod tests {
         assert!(out_path.exists(), "The leads output file must exist");
         let out_bytes = std::fs::read(&out_path).unwrap();
         assert!(out_bytes.len() > 100);
+
+        use calamine::Reader;
 
         let mut workbook = calamine::open_workbook_auto(&out_path).unwrap();
         let range = workbook.worksheet_range_at(0).unwrap().unwrap();
