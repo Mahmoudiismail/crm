@@ -275,13 +275,12 @@ pub async fn run_task_inner(
     let start_time = Utc::now();
     let scheduled_time = task.next_run_at.clone();
 
-    info!(
-        task_id = %task.id,
-        task_name = %task.name,
-        scheduled_time = %scheduled_time,
-        actual_start_time = %start_time.to_rfc3339(),
-        "Task Execution Started"
-    );
+    // Per-task lifecycle details belong in the task-specific log, not runner.log.
+    logger.log(&format!(
+        "Task execution started; scheduled_time={}, actual_start_time={}",
+        scheduled_time,
+        start_time.to_rfc3339()
+    )).await;
 
     let effective_shell_timeout = if task.timeout_seconds > 0 {
         task.timeout_seconds
@@ -339,14 +338,7 @@ pub async fn run_task_inner(
                         let err_msg = format!("post-run error: {}", e);
 
                         let next_run = task.next_run_at.clone();
-                        error!(
-                            task_id = %task_id,
-                            error_type = "PostRunError",
-                            error_message = %err_msg,
-                            schedules = ?task.schedules,
-                            next_run = %next_run,
-                            "Task Execution Failed in Post Run Pipeline"
-                        );
+                        logger.log(&format!("Post-run pipeline failed: {}", err_msg)).await;
                     }
                 }
             }
@@ -359,14 +351,7 @@ pub async fn run_task_inner(
             let err_msg = format!("{}", e);
 
             let next_run = task.next_run_at.clone();
-            error!(
-                task_id = %task_id,
-                error_type = "ExecutionError",
-                error_message = %err_msg,
-                schedules = ?task.schedules,
-                next_run = %next_run,
-                "Task Execution Failed"
-            );
+            // The full failure details are retained in this task's separate log.
         }
     }
 
@@ -376,12 +361,11 @@ pub async fn run_task_inner(
         .num_milliseconds();
     let status_str = task.last_status.clone();
 
-    info!(
-        task_id = %task.id,
-        duration_ms = %duration,
-        status = %status_str,
-        "Task Execution Ended"
-    );
+    logger.log(&format!(
+        "Task execution ended; duration_ms={}, status={}",
+        duration,
+        status_str
+    )).await;
 
     let mut st = status.lock().await;
     st.last_run_at = Utc::now().to_rfc3339();
