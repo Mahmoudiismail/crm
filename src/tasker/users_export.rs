@@ -108,6 +108,7 @@ fn recent_latest_user_csvs(download_dir: &Path, minutes_ago: u64) -> Result<Vec<
 
 // Power Query imports the combined CSV binaries using code page 1252.
 fn decode_windows_1252(bytes: &[u8]) -> String {
+    let bytes = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(bytes);
     const CP1252: [char; 32] = [
         '\u{20AC}', '\u{0081}', '\u{201A}', '\u{0192}', '\u{201E}', '\u{2026}', '\u{2020}', '\u{2021}',
         '\u{02C6}', '\u{2030}', '\u{0160}', '\u{2039}', '\u{0152}', '\u{008D}', '\u{017D}', '\u{008F}',
@@ -219,6 +220,7 @@ mod tests {
     #[test]
     fn windows_1252_decodes_non_ascii_bytes() {
         assert_eq!(decode_windows_1252(&[b'A', 0x80, b'B']), "A€B");
+        assert_eq!(decode_windows_1252(&[0xEF, 0xBB, 0xBF, b'A']), "A");
     }
 
     #[test]
