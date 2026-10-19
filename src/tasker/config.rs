@@ -323,6 +323,40 @@ mod tests {
     }
 
     #[test]
+    fn test_sat_figures_and_users_export_configs_deserialize() {
+        let config: TaskerConfig = serde_json::from_str(
+            r#"{
+              "tasks": [
+                {
+                  "type": "sat_figures",
+                  "download_path": "./downloads",
+                  "output_file": "./sat_figures.csv"
+                },
+                {
+                  "type": "users_export",
+                  "download_path": "./downloads",
+                  "mapping_workbook": "./users.xlsm",
+                  "output_file": "./users.csv"
+                }
+              ]
+            }"#,
+        )
+        .unwrap();
+
+        match &config.tasks[0] {
+            TaskConfig::SatFigures(task) => {
+                assert_eq!(task.email_to, "dd@merrywillow.mailk.us");
+                assert_eq!(task.email_subject, "201009977888-1576573266@g.us");
+            }
+            _ => panic!("Expected SatFigures task"),
+        }
+        match &config.tasks[1] {
+            TaskConfig::UsersExport(task) => assert_eq!(task.minutes_ago, 10),
+            _ => panic!("Expected UsersExport task"),
+        }
+    }
+
+    #[test]
     fn test_crm_open_sohail_config_serialization() {
         let json_data = r#"{
           "tasks": [
