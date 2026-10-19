@@ -333,10 +333,7 @@ pub async fn run_task_inner(
                     Err(e) => {
                         task.last_status = format!("post-run error: {}", e);
 
-                        let task_id = &task.id;
                         let err_msg = format!("post-run error: {}", e);
-
-                        let next_run = task.next_run_at.clone();
                         logger.log(&format!("Post-run pipeline failed: {}", err_msg)).await;
                     }
                 }
@@ -346,10 +343,6 @@ pub async fn run_task_inner(
             logger.log(&format!("Task failed with error: {}", e)).await;
             task.last_status = format!("error: {}", e);
 
-            let task_id = &task.id;
-            let err_msg = format!("{}", e);
-
-            let next_run = task.next_run_at.clone();
             // The full failure details are retained in this task's separate log.
         }
     }
