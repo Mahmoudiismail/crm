@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use std::collections::HashMap;
-use tracing::{trace, warn};
+use tracing::warn;
 
 use crate::runner::config::RegisteredApp;
 use crate::runner::engine::logging::TaskLogger;
