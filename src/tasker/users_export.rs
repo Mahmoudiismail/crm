@@ -72,7 +72,10 @@ fn recent_latest_user_csvs(download_dir: &Path, minutes_ago: u64) -> Result<Vec<
             continue;
         }
         let path = entry.path().to_path_buf();
-        let name = path.file_name().and_then(|v| v.to_str()).unwrap_or_default();
+        let name = path
+            .file_name()
+            .and_then(|v| v.to_str())
+            .unwrap_or_default();
         if !name.to_ascii_lowercase().starts_with("users_")
             || !path
                 .extension()
@@ -82,7 +85,9 @@ fn recent_latest_user_csvs(download_dir: &Path, minutes_ago: u64) -> Result<Vec<
             continue;
         }
 
-        let metadata = entry.metadata().with_context(|| format!("Failed to read metadata for {:?}", path))?;
+        let metadata = entry
+            .metadata()
+            .with_context(|| format!("Failed to read metadata for {:?}", path))?;
         let created = metadata.created().or_else(|_| metadata.modified());
         let modified = metadata.modified();
         match (created, modified) {
@@ -110,10 +115,11 @@ fn recent_latest_user_csvs(download_dir: &Path, minutes_ago: u64) -> Result<Vec<
 fn decode_windows_1252(bytes: &[u8]) -> String {
     let bytes = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(bytes);
     const CP1252: [char; 32] = [
-        '\u{20AC}', '\u{0081}', '\u{201A}', '\u{0192}', '\u{201E}', '\u{2026}', '\u{2020}', '\u{2021}',
-        '\u{02C6}', '\u{2030}', '\u{0160}', '\u{2039}', '\u{0152}', '\u{008D}', '\u{017D}', '\u{008F}',
-        '\u{0090}', '\u{2018}', '\u{2019}', '\u{201C}', '\u{201D}', '\u{2022}', '\u{2013}', '\u{2014}',
-        '\u{02DC}', '\u{2122}', '\u{0161}', '\u{203A}', '\u{0153}', '\u{009D}', '\u{017E}', '\u{0178}',
+        '\u{20AC}', '\u{0081}', '\u{201A}', '\u{0192}', '\u{201E}', '\u{2026}', '\u{2020}',
+        '\u{2021}', '\u{02C6}', '\u{2030}', '\u{0160}', '\u{2039}', '\u{0152}', '\u{008D}',
+        '\u{017D}', '\u{008F}', '\u{0090}', '\u{2018}', '\u{2019}', '\u{201C}', '\u{201D}',
+        '\u{2022}', '\u{2013}', '\u{2014}', '\u{02DC}', '\u{2122}', '\u{0161}', '\u{203A}',
+        '\u{0153}', '\u{009D}', '\u{017E}', '\u{0178}',
     ];
     let mut decoded = String::with_capacity(bytes.len());
     for &byte in bytes {
@@ -149,12 +155,12 @@ pub fn run(config: &UsersExportConfig) -> Result<()> {
     let combined_csv = decode_windows_1252(&combined_bytes);
     let mut reader = ReaderBuilder::new().from_reader(Cursor::new(combined_csv.as_bytes()));
     let headers = reader.headers()?.clone();
-    let first_name_idx =
-        find_column(&headers, "First Name").context("Required users CSV column 'First Name' is missing")?;
-    let last_name_idx =
-        find_column(&headers, "Last Name").context("Required users CSV column 'Last Name' is missing")?;
-    let branches_idx =
-        find_column(&headers, "Branches").context("Required users CSV column 'Branches' is missing")?;
+    let first_name_idx = find_column(&headers, "First Name")
+        .context("Required users CSV column 'First Name' is missing")?;
+    let last_name_idx = find_column(&headers, "Last Name")
+        .context("Required users CSV column 'Last Name' is missing")?;
+    let branches_idx = find_column(&headers, "Branches")
+        .context("Required users CSV column 'Branches' is missing")?;
     let teams_idx =
         find_column(&headers, "Teams").context("Required users CSV column 'Teams' is missing")?;
 
@@ -226,6 +232,9 @@ mod tests {
     #[test]
     fn output_headers_match_the_users_workbook_query() {
         assert_eq!(OUTPUT_HEADERS.len(), 5);
-        assert_eq!(OUTPUT_HEADERS[4], "NewColumn.UserDepartmentName / Team Name");
+        assert_eq!(
+            OUTPUT_HEADERS[4],
+            "NewColumn.UserDepartmentName / Team Name"
+        );
     }
 }

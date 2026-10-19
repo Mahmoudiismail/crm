@@ -120,7 +120,10 @@ fn collect_files(exe_dir: &Path, logs_dir: &Path) -> Vec<CollectedFile> {
                     &mut files,
                     &mut seen,
                     path.clone(),
-                    path.file_name().unwrap_or_default().to_string_lossy().into_owned(),
+                    path.file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .into_owned(),
                     true,
                 );
             }
@@ -151,7 +154,13 @@ fn collect_files(exe_dir: &Path, logs_dir: &Path) -> Vec<CollectedFile> {
                 prefix,
                 relative.to_string_lossy().replace('\\', "/")
             );
-            add_file(&mut files, &mut seen, path.to_path_buf(), archive_name, true);
+            add_file(
+                &mut files,
+                &mut seen,
+                path.to_path_buf(),
+                archive_name,
+                true,
+            );
         }
     } else {
         warn!("Configured logs directory {:?} does not exist.", logs_dir);
@@ -174,7 +183,13 @@ fn collect_files(exe_dir: &Path, logs_dir: &Path) -> Vec<CollectedFile> {
                 "debug_html/{}",
                 relative.to_string_lossy().replace('\\', "/")
             );
-            add_file(&mut files, &mut seen, path.to_path_buf(), archive_name, false);
+            add_file(
+                &mut files,
+                &mut seen,
+                path.to_path_buf(),
+                archive_name,
+                false,
+            );
         }
     }
 
@@ -256,7 +271,10 @@ mod tests {
         fs::write(diagnostics_dir.join("ignore.txt"), "not diagnostic").unwrap();
 
         let files = collect_files(exe_dir, &logs_dir);
-        let names: HashSet<_> = files.iter().map(|file| file.archive_name.as_str()).collect();
+        let names: HashSet<_> = files
+            .iter()
+            .map(|file| file.archive_name.as_str())
+            .collect();
 
         assert!(names.contains("wcxx.log"));
         assert!(names.contains("same.log"));

@@ -1007,8 +1007,8 @@ async fn fetch_with_signed_url_split(
 
     // Run at most three initial ranges concurrently. Keep attempting every range,
     // then report all failed ranges together rather than returning partial results.
-    let range_results = futures_util::stream::iter(ranges.into_iter().map(
-        |(range_from, range_to)| {
+    let range_results =
+        futures_util::stream::iter(ranges.into_iter().map(|(range_from, range_to)| {
             let client = client.clone();
             let token = token.to_string();
             let endpoint = endpoint.to_string();
@@ -1049,11 +1049,10 @@ async fn fetch_with_signed_url_split(
                 .await;
                 (range_from, range_to, result)
             }
-        },
-    ))
-    .buffer_unordered(3)
-    .collect::<Vec<_>>()
-    .await;
+        }))
+        .buffer_unordered(3)
+        .collect::<Vec<_>>()
+        .await;
 
     for (range_from, range_to, result) in range_results {
         match result {
@@ -1844,12 +1843,7 @@ mod tests {
     #[test]
     fn test_split_in_month_batches_preserves_partial_month_boundaries() {
         let batches = split_in_month_batches("2026-08-08", "2026-10-18", 3).unwrap();
-        assert_eq!(
-            batches,
-            vec![
-                ("2026-08-08".into(), "2026-10-18".into()),
-            ]
-        );
+        assert_eq!(batches, vec![("2026-08-08".into(), "2026-10-18".into()),]);
     }
 
     #[test]

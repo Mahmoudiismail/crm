@@ -342,8 +342,8 @@ async fn main() -> Result<()> {
 
     let mut report_futures = Vec::new();
     // A zero limit means unlimited operations; positive values share one semaphore across reports.
-    let operation_limit = (config.concurrency > 0)
-        .then(|| Arc::new(tokio::sync::Semaphore::new(config.concurrency)));
+    let operation_limit =
+        (config.concurrency > 0).then(|| Arc::new(tokio::sync::Semaphore::new(config.concurrency)));
     if config.concurrency == 0 {
         info!("YASWEB operation concurrency limit: unlimited");
     } else {

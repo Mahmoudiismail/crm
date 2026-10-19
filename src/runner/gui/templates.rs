@@ -108,7 +108,10 @@ pub(crate) fn render_dashboard(
 
     layout(
         "Dashboard",
-        &format!("{}{}{}{}{}", toast_html, header, stats_grid, card_html, refresh_script),
+        &format!(
+            "{}{}{}{}{}",
+            toast_html, header, stats_grid, card_html, refresh_script
+        ),
     )
 }
 

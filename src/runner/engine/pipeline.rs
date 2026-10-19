@@ -360,8 +360,7 @@ pub async fn run_task_inner(
     logger
         .log(&format!(
             "Task execution ended; duration_ms={}, status={}",
-            duration,
-            status_str
+            duration, status_str
         ))
         .await;
 

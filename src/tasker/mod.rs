@@ -6,7 +6,7 @@ pub mod department_split;
 pub mod email;
 pub mod opd_task;
 pub mod sat_figures;
-pub mod users_export;
 pub mod script_manager;
+pub mod users_export;
 
 pub mod utils;

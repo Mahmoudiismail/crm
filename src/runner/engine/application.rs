@@ -85,7 +85,10 @@ fn insert_period_args(
     }
 }
 
-async fn discover_date_args(logger: &TaskLogger, app: &RegisteredApp) -> (Option<String>, Option<String>) {
+async fn discover_date_args(
+    logger: &TaskLogger,
+    app: &RegisteredApp,
+) -> (Option<String>, Option<String>) {
     let executable = resolve_executable(&app.executable_path);
     let mut command = tokio::process::Command::new(executable);
     command
@@ -129,7 +132,10 @@ async fn discover_date_args(logger: &TaskLogger, app: &RegisteredApp) -> (Option
         }
         Err(_) => {
             logger
-                .log(&format!("Manifest discovery timed out for app '{}'", app.name))
+                .log(&format!(
+                    "Manifest discovery timed out for app '{}'",
+                    app.name
+                ))
                 .await;
             (None, None)
         }

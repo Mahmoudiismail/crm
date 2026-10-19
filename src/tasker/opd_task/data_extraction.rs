@@ -145,11 +145,13 @@ pub fn extract_slot_totals(path: &Path, filters: &OpdFilters<'_>) -> Result<Slot
     if rows.is_empty() {
         anyhow::bail!("No rows remained after applying OPD filters in {:?}", path);
     }
-    Ok(rows.into_iter().fold(SlotTotals::default(), |mut totals, row| {
-        totals.slots_booked += row.slots_booked;
-        totals.total_slots += row.total_slot;
-        totals
-    }))
+    Ok(rows
+        .into_iter()
+        .fold(SlotTotals::default(), |mut totals, row| {
+            totals.slots_booked += row.slots_booked;
+            totals.total_slots += row.total_slot;
+            totals
+        }))
 }
 
 pub fn extract_new_data(
@@ -196,7 +198,14 @@ mod tests {
         let worksheet = workbook.add_worksheet();
         worksheet.set_name("MIS_Report").unwrap();
 
-        let headers = ["Total Slot", "Slots Booked", "Total Patient Seen", "Speciality", "Emp Name", "Dept"];
+        let headers = [
+            "Total Slot",
+            "Slots Booked",
+            "Total Patient Seen",
+            "Speciality",
+            "Emp Name",
+            "Dept",
+        ];
         for (col, header) in headers.iter().enumerate() {
             worksheet.write_string(4, col as u16, *header).unwrap();
         }

@@ -11,8 +11,14 @@ fn resolve(path: &str) -> PathBuf {
 }
 
 fn is_source_report(path: &std::path::Path) -> bool {
-    let name = path.file_name().and_then(|v| v.to_str()).unwrap_or_default();
-    let extension = path.extension().and_then(|v| v.to_str()).unwrap_or_default();
+    let name = path
+        .file_name()
+        .and_then(|v| v.to_str())
+        .unwrap_or_default();
+    let extension = path
+        .extension()
+        .and_then(|v| v.to_str())
+        .unwrap_or_default();
     name.to_ascii_lowercase()
         .starts_with("opd- average patients seen no of schedule_")
         && !name.starts_with("~$")
@@ -35,10 +41,17 @@ fn latest_source_report(download_dir: &std::path::Path) -> Result<PathBuf> {
         if !is_source_report(&path) {
             continue;
         }
-        let metadata = entry.metadata().with_context(|| format!("Failed to read metadata for {:?}", path))?;
-        let created = metadata.created().or_else(|_| metadata.modified())
+        let metadata = entry
+            .metadata()
+            .with_context(|| format!("Failed to read metadata for {:?}", path))?;
+        let created = metadata
+            .created()
+            .or_else(|_| metadata.modified())
             .with_context(|| format!("Could not determine creation time for {:?}", path))?;
-        if latest.as_ref().map_or(true, |(timestamp, _)| created > *timestamp) {
+        if latest
+            .as_ref()
+            .map_or(true, |(timestamp, _)| created > *timestamp)
+        {
             latest = Some((created, path));
         }
     }
@@ -154,7 +167,10 @@ try {
 pub fn run(config: &SatFiguresConfig, opd_config: &OpdAnalysisConfig) -> Result<()> {
     let download_dir = resolve(&config.download_path);
     if !download_dir.is_dir() {
-        anyhow::bail!("Sat Figures download directory does not exist: {:?}", download_dir);
+        anyhow::bail!(
+            "Sat Figures download directory does not exist: {:?}",
+            download_dir
+        );
     }
 
     // Match the workbook query: select the newest-created file with the exact report prefix.
@@ -164,15 +180,18 @@ pub fn run(config: &SatFiguresConfig, opd_config: &OpdAnalysisConfig) -> Result<
         .with_context(|| format!("Failed to calculate Sat Figures from {:?}", latest))?;
 
     if totals.total_slots == 0 {
-        anyhow::bail!("Sat Figures total slot count is zero; cannot calculate occupancy percentage");
+        anyhow::bail!(
+            "Sat Figures total slot count is zero; cannot calculate occupancy percentage"
+        );
     }
 
     let vacant_slots = totals.total_slots - totals.slots_booked;
     let percentage = totals.slots_booked as f64 / totals.total_slots as f64;
     let output_path = resolve(&config.output_file);
     if let Some(parent) = output_path.parent().filter(|p| !p.as_os_str().is_empty()) {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("Failed to create Sat Figures output directory {:?}", parent))?;
+        fs::create_dir_all(parent).with_context(|| {
+            format!("Failed to create Sat Figures output directory {:?}", parent)
+        })?;
     }
 
     let mut writer = WriterBuilder::new()
@@ -218,11 +237,19 @@ mod tests {
 
     #[test]
     fn source_report_filter_matches_only_expected_prefix_and_extensions() {
-        assert!(is_source_report(std::path::Path::new("OPD- Average Patients seen No of Schedule_01.xlsx")));
-        assert!(is_source_report(std::path::Path::new("opd- average patients seen no of schedule_02.xlsm")));
-        assert!(!is_source_report(std::path::Path::new("~$OPD- Average Patients seen No of Schedule_01.xlsx")));
+        assert!(is_source_report(std::path::Path::new(
+            "OPD- Average Patients seen No of Schedule_01.xlsx"
+        )));
+        assert!(is_source_report(std::path::Path::new(
+            "opd- average patients seen no of schedule_02.xlsm"
+        )));
+        assert!(!is_source_report(std::path::Path::new(
+            "~$OPD- Average Patients seen No of Schedule_01.xlsx"
+        )));
         assert!(!is_source_report(std::path::Path::new("Other report.xlsx")));
-        assert!(!is_source_report(std::path::Path::new("OPD- Average Patients seen No of Schedule_01.csv")));
+        assert!(!is_source_report(std::path::Path::new(
+            "OPD- Average Patients seen No of Schedule_01.csv"
+        )));
     }
 
     #[test]

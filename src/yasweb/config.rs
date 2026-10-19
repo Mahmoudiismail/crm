@@ -161,7 +161,6 @@ impl std::fmt::Debug for YaswebConfig {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -171,14 +170,18 @@ mod tests {
         assert_eq!(YaswebConfig::default().concurrency, 6);
         let config: YaswebConfig = serde_json::from_str(
             r#"{"url":"https://example.test/","username":"test","concurrency":4,"reports":{}}"#,
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(config.concurrency, 4);
         assert_eq!(serde_json::to_value(config).unwrap()["concurrency"], 4);
     }
 
     #[test]
     fn zero_concurrency_means_unlimited_and_is_valid() {
-        let config = YaswebConfig { concurrency: 0, ..YaswebConfig::default() };
+        let config = YaswebConfig {
+            concurrency: 0,
+            ..YaswebConfig::default()
+        };
         assert!(config.validate().is_ok());
     }
 }
