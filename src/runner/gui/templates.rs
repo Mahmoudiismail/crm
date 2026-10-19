@@ -66,8 +66,8 @@ pub(crate) fn render_dashboard(
     );
 
     let card_html = card("Configured Tasks", &table_html, None);
-    let status_json = serde_json::to_string(status).unwrap_or_else(|_| "{}".to_string());
-    status_json = status_json
+    let status_json = serde_json::to_string(status)
+        .unwrap_or_else(|_| "{}".to_string())
         .replace('<', "\\u003c")
         .replace('>', "\\u003e")
         .replace('&', "\\u0026");
