@@ -265,7 +265,6 @@ pub fn load_or_create_config<T: DeserializeOwned + Serialize>(
 /// - `base_date`: An optional reference date (useful for relative calculations like `eomonth`).
 pub(crate) fn resolve_date_var(val: &str, base_date: Option<&str>) -> Result<chrono::NaiveDate> {
     use chrono::{Datelike, Local, NaiveDate};
-    use tracing::{debug, error, info, trace};
 
     let base_dt = if let Some(bd) = base_date {
         parse_flexible_date_impl(bd, None)
@@ -277,76 +276,43 @@ pub(crate) fn resolve_date_var(val: &str, base_date: Option<&str>) -> Result<chr
     let val_lower = val.trim().to_lowercase();
     match val_lower.as_str() {
         "today" => {
-            info!("Variable detected: {}", val);
             let res = Local::now().date_naive();
-            debug!("Resolved value: {} (Original: {})", res, val);
-            trace!("Variable resolution path: today");
             Ok(res)
         }
         "yesterday" => {
-            info!("Variable detected: {}", val);
             let res =
                 Local::now().date_naive() - chrono::TimeDelta::try_days(1).context("valid days")?;
-            debug!("Resolved value: {} (Original: {})", res, val);
-            trace!("Variable resolution path: yesterday");
             Ok(res)
         }
         "tomorrow" => {
-            info!("Variable detected: {}", val);
             let res =
                 Local::now().date_naive() + chrono::TimeDelta::try_days(1).context("valid days")?;
-            debug!("Resolved value: {} (Original: {})", res, val);
-            trace!("Variable resolution path: tomorrow");
             Ok(res)
         }
         "this_month" | "beginning_of_month" => {
-            info!("Variable detected: {}", val);
             let res = NaiveDate::from_ymd_opt(dt.year(), dt.month(), 1)
                 .context("valid first day of month")?;
-
-            trace!(
-                "Variable resolution path: beginning_of_month. Base: {}, Result: {}",
-                dt,
-                res
-            );
-            debug!("Resolved value: {} (Original: {})", res, val);
             Ok(res)
         }
         "beginning_of_prev_month" | "beginning_of_previous_month" | "prev_month" => {
-            info!("Variable detected: {}", val);
             let prev = if dt.month() == 1 {
                 NaiveDate::from_ymd_opt(dt.year() - 1, 12, 1).context("valid prev year month")?
             } else {
                 NaiveDate::from_ymd_opt(dt.year(), dt.month() - 1, 1).context("valid prev month")?
             };
-            trace!(
-                "Variable resolution path: beginning_of_prev_month. Base: {}, Result: {}",
-                dt,
-                prev
-            );
-            debug!("Resolved value: {} (Original: {})", prev, val);
             Ok(prev)
         }
         "eomonth" => {
-            info!("Variable detected: {}", val);
             let next_month = if dt.month() == 12 {
                 NaiveDate::from_ymd_opt(dt.year() + 1, 1, 1).context("valid next year")?
             } else {
                 NaiveDate::from_ymd_opt(dt.year(), dt.month() + 1, 1).context("valid next month")?
             };
             let res = next_month.pred_opt().context("valid preceding day")?;
-
-            trace!(
-                "Variable resolution path: eomonth. Base: {}, Result: {}",
-                dt,
-                res
-            );
-            debug!("Resolved value: {} (Original: {})", res, val);
             Ok(res)
         }
 
         v if v.starts_with("next ") => {
-            info!("Variable detected: {}", val);
             let parse_weekday = |s: &str| -> Option<chrono::Weekday> {
                 match s.trim().to_lowercase().as_str() {
                     "next mon" | "next monday" => Some(chrono::Weekday::Mon),
@@ -377,10 +343,6 @@ pub(crate) fn resolve_date_var(val: &str, base_date: Option<&str>) -> Result<chr
                         let res = now_dt
                             + chrono::TimeDelta::try_days(days_to_add as i64)
                                 .context("valid days")?;
-                        debug!(
-                            "Resolved value (same variable base match): {} (Original: {})",
-                            res, val
-                        );
                         return Ok(res);
                     }
                 }
@@ -406,17 +368,10 @@ pub(crate) fn resolve_date_var(val: &str, base_date: Option<&str>) -> Result<chr
             }
 
             let res = dt + chrono::TimeDelta::try_days(days_to_add as i64).context("valid days")?;
-            trace!(
-                "Variable resolution path: next_weekday. Base: {}, Result: {}",
-                dt,
-                res
-            );
-            debug!("Resolved value: {} (Original: {})", res, val);
             Ok(res)
         }
         _ => {
             if val_lower.chars().all(|c| c.is_alphabetic()) && val_lower != "may" {
-                error!("Invalid variable: {} | Resolution failure", val);
                 anyhow::bail!("Invalid date variable: {}", val);
             }
             anyhow::bail!("Not a date variable")
