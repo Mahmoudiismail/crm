@@ -52,7 +52,6 @@ fn get_email_script() -> &'static str {
     r#"
 param(
     [string]$CsvPath,
-    [string]$OutlookHelperPath,
     [string]$EmailTo,
     [string]$EmailCc,
     [string]$EmailSubject
@@ -67,6 +66,9 @@ $valueFont = $null
 $brush = $null
 $headerBrush = $null
 $borderPen = $null
+$outlook = $null
+$mail = $null
+$attachment = $null
 try {
     Add-Type -AssemblyName System.Drawing
     $row = @(Import-Csv -LiteralPath $CsvPath)
@@ -115,20 +117,19 @@ try {
     $imagePath = Join-Path $env:TEMP ("sat_figures_" + [guid]::NewGuid().ToString("N") + ".png")
     $bitmap.Save($imagePath, [System.Drawing.Imaging.ImageFormat]::Png)
 
-    $html = @"
-<html><body style="font-family:Segoe UI,Arial,sans-serif;color:#232d37">
-<p>Please find the Sat Figures report attached.</p>
-<table cellpadding="8" cellspacing="0" style="border-collapse:collapse">
-<tr style="background:#2e5c87;color:white"><th>Slots Booked</th><th>Total Slots</th><th>Vacant Slots</th><th>%</th></tr>
-<tr><td>$($row[0].'Slots Booked')</td><td>$($row[0].'Total Slots')</td><td>$($row[0].'Vacant Slots')</td><td>$value</td></tr>
-</table></body></html>
-"@
-    $bodyPath = Join-Path $env:TEMP ("sat_figures_body_" + [guid]::NewGuid().ToString("N") + ".html")
-    [System.IO.File]::WriteAllText($bodyPath, $html, [System.Text.Encoding]::UTF8)
-
-    . $OutlookHelperPath
-    Send-OutlookMail -Mode "New" -To $EmailTo -Cc $EmailCc -Subject $EmailSubject -HtmlBodyPath $bodyPath -AttachmentPaths @($imagePath) -DisplayOrSend "Send()"
-    Write-Output "TRACE: Sat Figures email sent successfully."
+    $outlook = New-Object -ComObject Outlook.Application
+    $mail = $outlook.CreateItem(0)
+    $mail.To = $EmailTo
+    if ($EmailCc) { $mail.CC = $EmailCc }
+    $mail.Subject = $EmailSubject
+    $attachment = $mail.Attachments.Add($imagePath)
+    $attachment.PropertyAccessor.SetProperty(
+        "http://schemas.microsoft.com/mapi/proptag/0x3712001F",
+        "SatFiguresImage"
+    )
+    $mail.HTMLBody = "<html><body><img src='cid:SatFiguresImage' alt='Sat Figures report' /></body></html>"
+    $mail.Send()
+    Write-Output "TRACE: Sat Figures inline image email sent successfully."
 } catch {
     Write-Error "Sat Figures email generation failed: $_"
     exit 1
@@ -141,6 +142,11 @@ try {
     if ($headerBrush) { $headerBrush.Dispose() }
     if ($whiteBrush) { $whiteBrush.Dispose() }
     if ($borderPen) { $borderPen.Dispose() }
+    if ($attachment) { try { [System.Runtime.Interopservices.Marshal]::ReleaseComObject($attachment) | Out-Null } catch {} }
+    if ($mail) { try { [System.Runtime.Interopservices.Marshal]::ReleaseComObject($mail) | Out-Null } catch {} }
+    if ($outlook) {
+        try { [System.Runtime.Interopservices.Marshal]::ReleaseComObject($outlook) | Out-Null } catch {}
+    }
     if ($imagePath -and (Test-Path -LiteralPath $imagePath)) { Remove-Item -LiteralPath $imagePath -Force -ErrorAction SilentlyContinue }
     if ($bodyPath -and (Test-Path -LiteralPath $bodyPath)) { Remove-Item -LiteralPath $bodyPath -Force -ErrorAction SilentlyContinue }
 }
@@ -183,8 +189,6 @@ pub fn run(config: &SatFiguresConfig, opd_config: &OpdAnalysisConfig) -> Result<
     ])?;
     writer.flush()?;
 
-    let helper_path = crate::tasker::email::outlook::get_outlook_helper_path()?;
-    let helper_path = helper_path.to_string_lossy().into_owned();
     let csv_path = output_path.to_string_lossy().into_owned();
     let manager = crate::tasker::script_manager::ScriptManager::new();
     manager.run_script_with_args(
@@ -193,7 +197,6 @@ pub fn run(config: &SatFiguresConfig, opd_config: &OpdAnalysisConfig) -> Result<
         get_email_script(),
         &[
             ("-CsvPath", &csv_path),
-            ("-OutlookHelperPath", &helper_path),
             ("-EmailTo", &config.email_to),
             ("-EmailCc", &config.email_cc),
             ("-EmailSubject", &config.email_subject),
@@ -227,10 +230,11 @@ mod tests {
     #[test]
     fn email_script_uses_configured_recipients_and_cleans_up_temporary_files() {
         let script = get_email_script();
-        assert!(script.contains("-To $EmailTo -Cc $EmailCc -Subject $EmailSubject"));
+        assert!(script.contains("$mail.To = $EmailTo"));
+        assert!(script.contains("cid:SatFiguresImage"));
+        assert!(script.contains("$mail.Send()"));
         assert!(script.contains("sat_figures_"));
         assert!(script.contains("Remove-Item -LiteralPath $imagePath"));
-        assert!(script.contains("Remove-Item -LiteralPath $bodyPath"));
     }
 
     #[test]
