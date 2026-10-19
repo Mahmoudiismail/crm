@@ -105,7 +105,54 @@ pub(crate) async fn handle_update_task(
         &cfg.working_hours_profiles,
     )?;
 
+    let expected = (
+        task.name.clone(),
+        task.enabled,
+        task.timeout_seconds,
+        task.schedules.len(),
+        task.steps.len(),
+        task.post_run_steps.len(),
+    );
+    let mut submitted_fields: Vec<&str> = values.keys().map(String::as_str).collect();
+    submitted_fields.sort_unstable();
+    info!(
+        task_id = %task_id,
+        submitted_fields = ?submitted_fields,
+        expected_enabled = expected.1,
+        expected_timeout_seconds = expected.2,
+        expected_schedule_count = expected.3,
+        expected_step_count = expected.4,
+        expected_post_run_step_count = expected.5,
+        "Task update validated; saving configuration"
+    );
+
     update_task(&handle.runner_config_path, task_id, task).await?;
+
+    match RunnerConfig::load(&handle.runner_config_path) {
+        Ok(saved_cfg) => match saved_cfg.tasks.iter().find(|saved| saved.id == task_id) {
+            Some(saved) => {
+                let matches = saved.name == expected.0
+                    && saved.enabled == expected.1
+                    && saved.timeout_seconds == expected.2
+                    && saved.schedules.len() == expected.3
+                    && saved.steps.len() == expected.4
+                    && saved.post_run_steps.len() == expected.5;
+                info!(
+                    task_id = %task_id,
+                    readback_matches_summary = matches,
+                    readback_enabled = saved.enabled,
+                    readback_timeout_seconds = saved.timeout_seconds,
+                    readback_schedule_count = saved.schedules.len(),
+                    readback_step_count = saved.steps.len(),
+                    readback_post_run_step_count = saved.post_run_steps.len(),
+                    "Task configuration read-back completed"
+                );
+            }
+            None => error!(task_id = %task_id, "Task configuration missing after successful update"),
+        },
+        Err(error) => error!(task_id = %task_id, error = %error, "Failed to read back task configuration after update"),
+    }
+
     Ok((
         200,
         "text/html; charset=utf-8",
