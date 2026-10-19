@@ -31,7 +31,7 @@ impl TaskLogger {
             let _ = f.write_all(line.as_bytes()).await;
             let _ = f.flush().await;
         }
-        debug!("[Task:{}] {}", task_id, message);
+        // Task details are written only to the task-specific log file.
     }
 
     pub async fn log_bytes(&self, prefix: &str, bytes: &[u8]) {
