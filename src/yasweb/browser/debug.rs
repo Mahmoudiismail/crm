@@ -26,34 +26,46 @@ pub fn save_html_state(
 
     match tab.evaluate(get_html_js, true) {
         Ok(res) => {
-            if let Some(v) = res.value {
-                if let Some(html) = v.as_str() {
-                    if let Ok(mut exe_dir) = crate::utils::executable_dir() {
-                        exe_dir.push("debug_html");
-                        let _ = std::fs::create_dir_all(&exe_dir);
+            let Some(value) = res.value else {
+                error!("HTML extraction at '{}' returned no value", step_name);
+                return;
+            };
+            let Some(html) = value.as_str() else {
+                error!("HTML extraction at '{}' returned a non-string value", step_name);
+                return;
+            };
 
-                        let captured_at = SystemTime::now()
-                            .duration_since(UNIX_EPOCH)
-                            .map(|duration| duration.as_micros())
-                            .unwrap_or_default();
-                        let safe_name =
-                            active_report_name.replace(|c: char| !c.is_alphanumeric(), "_");
-                        let safe_step = step_name
-                            .replace(|c: char| !c.is_alphanumeric(), "_")
-                            .to_lowercase();
-                        let file_name = format!(
-                            "step_{:02}_{}_{}_{}.html",
-                            step_num, captured_at, safe_step, safe_name
-                        );
-
-                        exe_dir.push(&file_name);
-                        if std::fs::write(&exe_dir, html).is_ok() {
-                            info!("Saved HTML state for '{}' to {:?}", step_name, exe_dir);
-                        } else {
-                            error!("Failed to write HTML state for '{}' to disk", step_name);
-                        }
-                    }
+            let mut exe_dir = match crate::utils::executable_dir() {
+                Ok(dir) => dir,
+                Err(e) => {
+                    error!("Cannot resolve executable directory for HTML snapshot '{}': {e}", step_name);
+                    return;
                 }
+            };
+            exe_dir.push("debug_html");
+            if let Err(e) = std::fs::create_dir_all(&exe_dir) {
+                error!("Cannot create HTML snapshot directory {:?}: {e}", exe_dir);
+                return;
+            }
+
+            let captured_at = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|duration| duration.as_micros())
+                .unwrap_or_default();
+            let safe_name =
+                active_report_name.replace(|c: char| !c.is_alphanumeric(), "_");
+            let safe_step = step_name
+                .replace(|c: char| !c.is_alphanumeric(), "_")
+                .to_lowercase();
+            let file_name = format!(
+                "step_{:02}_{}_{}_{}.html",
+                step_num, captured_at, safe_step, safe_name
+            );
+
+            exe_dir.push(&file_name);
+            match std::fs::write(&exe_dir, html) {
+                Ok(()) => info!("Saved HTML state for '{}' to {:?}", step_name, exe_dir),
+                Err(e) => error!("Failed to write HTML state for '{}' to {:?}: {e}", step_name, exe_dir),
             }
         }
         Err(e) => {
