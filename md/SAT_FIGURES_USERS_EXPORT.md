@@ -7,7 +7,7 @@ Add the following entries to the `tasks` array in the existing `tasker_config.js
 ```json
 {
   "type": "sat_figures",
-  "download_path": "../crm_windows/Downloads",
+  "download_path": "../yasweb_windows/downloads/Sat figures",
   "output_file": "./sat_figures.csv",
   "email_to": "dd@merrywillow.mailk.us",
   "email_cc": "",
@@ -16,8 +16,8 @@ Add the following entries to the `tasks` array in the existing `tasker_config.js
 {
   "type": "users_export",
   "download_path": "../crm_windows/Downloads",
-  "mapping_workbook": "./users.xlsm",
-  "output_file": "./users.csv",
+  "mapping_workbook": "../../users.xlsm",
+  "output_file": "./task1/users.csv",
   "minutes_ago": 10
 }
 ```
