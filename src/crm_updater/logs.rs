@@ -201,7 +201,11 @@ fn add_file(
 fn has_extension(path: &Path, extensions: &[&str]) -> bool {
     path.extension()
         .and_then(|extension| extension.to_str())
-        .map_or(false, |extension| extensions.iter().any(|expected| extension.eq_ignore_ascii_case(expected)))
+        .is_some_and(|extension| {
+            extensions
+                .iter()
+                .any(|expected| extension.eq_ignore_ascii_case(expected))
+        })
 }
 
 fn send_logs_email(recipient: &str, attachments: &[PathBuf]) -> Result<()> {
