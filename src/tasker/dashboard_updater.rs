@@ -430,13 +430,7 @@ finally {
         info!("Sending dashboard via email to: {}", email_to);
 
         info!("Email generation started");
-        let indent_spaces = config.indentation_spaces.unwrap_or(4);
-        let indent_width = indent_spaces * 5;
-
-        let html_body = format!(
-            r#"<html><body style='font-family: Arial, sans-serif;'>Dear Aya,<br/><table border='0'><tr><td width='{}'></td><td>Please find the CRM Ticket dashboard attached.</td></tr></table></body></html>"#,
-            indent_width
-        );
+        let html_body = r#"<html><body style="font-family: Arial, sans-serif;">Dear Aya,<br/><div style="margin-left:20px;">Please find the CRM Ticket dashboard attached.</div></body></html>"#.to_string();
         info!("Email generation completed");
 
         let ps_email_script = r#"
