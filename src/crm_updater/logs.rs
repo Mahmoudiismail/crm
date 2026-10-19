@@ -158,13 +158,11 @@ try {
         .collect::<Vec<_>>()
         .join(",");
 
-    let script_manager = crate::tasker::script_manager::ScriptManager::new();
-    let script_path =
-        script_manager.get_or_create_script("CrmUpdater", "send_logs.ps1", template)?;
-
-    script_manager
-        .execute_script_with_args(
-            &script_path,
+    crate::tasker::script_manager::ScriptManager::new()
+        .run_script_with_args(
+            "CrmUpdater",
+            "send_logs.ps1",
+            template,
             &[("-Recipient", recipient), ("-AttachmentsCsv", &att_csv)],
         )
         .context("Failed to run PowerShell script for sending logs email")?;
