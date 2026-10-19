@@ -396,8 +396,9 @@ async fn main() -> Result<()> {
             let active_report_name_clone = active_report_name.clone();
             let cli_download_path_clone = cli_download_path.clone();
 
-            // Runner supplies the requested date range. Limit browser operations globally across reports.
-            for (i, (start_dt, end_dt)) in date_ranges.iter().enumerate() {
+            // Runner supplies the requested date range. YASWEB runs one browser operation per invocation.
+            let i = 0;
+            let (start_dt, end_dt) = (&date_ranges[0].0, &date_ranges[0].1);
                 let mut tasks = Vec::new();
                     let config_task = config.clone();
                     let active_report_name_task = active_report_name.clone();
@@ -646,8 +647,6 @@ async fn main() -> Result<()> {
                         }
                     }
                 }
-            }
-            }
             Ok::<(), anyhow::Error>(())
         });
     }
