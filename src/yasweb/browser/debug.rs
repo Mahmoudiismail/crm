@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{error, info};
 
 pub fn save_html_state(
@@ -31,13 +32,19 @@ pub fn save_html_state(
                         exe_dir.push("debug_html");
                         let _ = std::fs::create_dir_all(&exe_dir);
 
+                        let captured_at = SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .map(|duration| duration.as_micros())
+                            .unwrap_or_default();
                         let safe_name =
                             active_report_name.replace(|c: char| !c.is_alphanumeric(), "_");
                         let safe_step = step_name
                             .replace(|c: char| !c.is_alphanumeric(), "_")
                             .to_lowercase();
-                        let file_name =
-                            format!("step_{:02}_{}_{}.html", step_num, safe_step, safe_name);
+                        let file_name = format!(
+                            "step_{:02}_{}_{}_{}.html",
+                            step_num, captured_at, safe_step, safe_name
+                        );
 
                         exe_dir.push(&file_name);
                         if std::fs::write(&exe_dir, html).is_ok() {
