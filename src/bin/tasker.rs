@@ -132,7 +132,7 @@ pub fn run_app(options: TaskerCliOptions) -> Result<()> {
       "download_path": "../crm_windows/Downloads",
       "cus_input": "./task5/cus_input.csv",
       "cus_file": "./cus_output.csv",
-      "exclude_specialities": ["ECG", "Laser Hair Removal"],
+      "exclude_specialities": ["ECG", "Laser Hair Removal", "24 hrs Virtual Consultation"],
       "exclude_emp_names": ["Echo Doctor 2", "Neurophysiology", "Obgyn Imaging Routine", "Pre Marital Screening Doctor"],
       "exclude_depts": ["Khadija Attar Center for Special Needs", "Patient Education"],
       "exclude_speciality_prefixes": ["Exe"],
