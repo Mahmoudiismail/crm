@@ -117,55 +117,22 @@ pub fn process_and_send_logs(config: &UpdaterConfig) -> Result<()> {
 fn send_logs_email(recipient: &str, attachments: &[PathBuf]) -> Result<()> {
     info!("Preparing to send logs email to {}", recipient);
 
-    let template = r#"
-param(
-    [string]$Recipient,
-    [string]$AttachmentsCsv
-)
-
-try {
-    $ErrorActionPreference = "Stop"
-    $Outlook = New-Object -ComObject Outlook.Application
-    $Mail = $Outlook.CreateItem(0)
-    $Mail.To = $Recipient
-    $Mail.Subject = "logs"
-    $Mail.Body = "Please find the logs attached."
-
-    if ($AttachmentsCsv) {
-        $paths = $AttachmentsCsv -split ","
-        foreach ($p in $paths) {
-            $trimmed = $p.Trim()
-            if ($trimmed -and (Test-Path $trimmed)) {
-                try {
-                    $Mail.Attachments.Add($trimmed)
-                } catch {
-                    Write-Error "Failed to attach $trimmed: $_"
-                }
-            }
-        }
-    }
-
-    $Mail.Send()
-} catch {
-    Write-Error "Failed to send logs email: $_"
-    exit 1
-}
-"#;
-
-    let att_csv = attachments
+    let attachment_paths = attachments
         .iter()
-        .map(|p| p.to_string_lossy().to_string())
-        .collect::<Vec<_>>()
-        .join(",");
+        .map(|path| path.to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    let attachment_refs = attachment_paths.iter().map(String::as_str).collect::<Vec<_>>();
+    let html_body = "<html><body>Please find the logs attached.</body></html>";
 
-    crate::tasker::script_manager::ScriptManager::new()
-        .run_script_with_args(
-            "CrmUpdater",
-            "send_logs.ps1",
-            template,
-            &[("-Recipient", recipient), ("-AttachmentsCsv", &att_csv)],
-        )
-        .context("Failed to run PowerShell script for sending logs email")?;
+    crate::tasker::email::outlook::send_email_with_attachments(
+        recipient,
+        "",
+        "logs",
+        html_body,
+        &attachment_refs,
+        "Send()",
+    )
+    .context("Failed to send logs email through Outlook")?;
 
     info!("Logs email sent successfully.");
     Ok(())
@@ -176,10 +143,10 @@ mod tests {
     // use super::*;
 
     #[test]
-    fn test_send_logs_parameter_contract() {
+    fn test_logs_email_uses_shared_outlook_sender() {
         let src = include_str!("logs.rs");
-        assert!(src.contains("[string]$Recipient"));
-        assert!(src.contains("[string]$AttachmentsCsv"));
-        assert!(src.contains("send_logs.ps1"));
+        assert!(src.contains("send_email_with_attachments"));
+        assert!(src.contains("Please find the logs attached."));
+        assert!(src.contains("\"logs\""));
     }
 }
