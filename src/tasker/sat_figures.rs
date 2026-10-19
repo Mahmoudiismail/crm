@@ -2,7 +2,7 @@ use crate::tasker::config::{OpdAnalysisConfig, SatFiguresConfig};
 use anyhow::{Context, Result};
 use csv::WriterBuilder;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tracing::info;
 
 fn resolve(path: &str) -> PathBuf {
@@ -37,30 +37,30 @@ try {
     $widths = @(240, 240, 240, 240)
     $width = ($widths | Measure-Object -Sum).Sum
     $height = 118
-    $bitmap = New-Object System.Drawing.Bitmap($width, $height)
+    $bitmap = [System.Drawing.Bitmap]::new($width, $height)
     $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
     $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
     $graphics.Clear([System.Drawing.Color]::White)
-    $headerFont = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
-    $valueFont = New-Object System.Drawing.Font("Segoe UI", 18, [System.Drawing.FontStyle]::Regular)
-    $brush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(35, 45, 55))
-    $headerBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(46, 92, 135))
-    $whiteBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
-    $borderPen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(190, 200, 210), 1)
+    $headerFont = [System.Drawing.Font]::new("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
+    $valueFont = [System.Drawing.Font]::new("Segoe UI", 18, [System.Drawing.FontStyle]::Regular)
+    $brush = [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(35, 45, 55))
+    $headerBrush = [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(46, 92, 135))
+    $whiteBrush = [System.Drawing.SolidBrush]::new([System.Drawing.Color]::White)
+    $borderPen = [System.Drawing.Pen]::new([System.Drawing.Color]::FromArgb(190, 200, 210), 1)
 
     $x = 0
     for ($i = 0; $i -lt $columns.Count; $i++) {
         $cellWidth = $widths[$i]
         $graphics.FillRectangle($headerBrush, $x, 0, $cellWidth, 48)
         $graphics.DrawRectangle($borderPen, $x, 0, $cellWidth, $height - 1)
-        $headerRect = New-Object System.Drawing.RectangleF($x + 6, 0, $cellWidth - 12, 48)
-        $valueRect = New-Object System.Drawing.RectangleF($x + 6, 49, $cellWidth - 12, 68)
-        $format = New-Object System.Drawing.StringFormat
+        $headerRect = [System.Drawing.RectangleF]::new($x + 6, 0, $cellWidth - 12, 48)
+        $valueRect = [System.Drawing.RectangleF]::new($x + 6, 49, $cellWidth - 12, 68)
+        $format = [System.Drawing.StringFormat]::new()
         $format.Alignment = [System.Drawing.StringAlignment]::Center
         $format.LineAlignment = [System.Drawing.StringAlignment]::Center
         $graphics.DrawString($columns[$i], $headerFont, $whiteBrush, $headerRect, $format)
 
-        $value = [string]$row[0].PSObject.Properties[$columns[$i]].Value
+        $value = [string]$row[0].PSObject.Properties.Item($columns[$i]).Value
         if ($columns[$i] -eq "%") {
             $number = 0.0
             if (-not [double]::TryParse($value, [Globalization.NumberStyles]::Any, [Globalization.CultureInfo]::InvariantCulture, [ref]$number)) {
