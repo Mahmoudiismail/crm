@@ -19,6 +19,21 @@ pub fn executable_dir() -> Result<PathBuf> {
     Ok(parent.to_path_buf())
 }
 
+/// Resolve relative paths against the running executable's directory.
+/// Absolute paths are returned unchanged; if the executable directory cannot
+/// be determined, the original relative path is preserved.
+pub fn resolve_relative_to_exe_dir(path: &str) -> PathBuf {
+    let path = PathBuf::from(path);
+    if path.is_absolute() {
+        return path;
+    }
+
+    match executable_dir() {
+        Ok(exe_dir) => exe_dir.join(path),
+        Err(_) => path,
+    }
+}
+
 /// Initializes the global tracing subscriber with independent levels for stdout and file.
 ///
 /// The file logger rolls dynamically and defaults to being placed in the executable directory.
