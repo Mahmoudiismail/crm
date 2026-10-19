@@ -5,7 +5,7 @@ use crm_tool::manifest::{AppArg, AppManifest, ArgType};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::fs::{File, OpenOptions};
+use std::fs::OpenOptions;
 use fs2::FileExt;
 
 use clap::Parser;
