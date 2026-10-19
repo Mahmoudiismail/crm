@@ -35,6 +35,7 @@ pub struct SlotTotals {
 #[derive(Debug, Clone, Copy)]
 struct FilteredRow {
     total_slot: i64,
+    slots_booked: i64,
     patient_seen: i64,
 }
 
@@ -47,7 +48,11 @@ fn numeric_cell(value: Option<&Data>) -> i64 {
     }
 }
 
-fn filtered_rows_from_workbook(path: &Path, filters: &OpdFilters<'_>) -> Result<Vec<FilteredRow>> {
+fn filtered_rows_from_workbook(
+    path: &Path,
+    filters: &OpdFilters<'_>,
+    require_slots_booked: bool,
+) -> Result<Vec<FilteredRow>> {
     let mut workbook = calamine::open_workbook_auto(path)
         .with_context(|| format!("Failed to open OPD workbook {:?}", path))?;
     let range = workbook
@@ -68,7 +73,11 @@ fn filtered_rows_from_workbook(path: &Path, filters: &OpdFilters<'_>) -> Result<
     let special_idx = headers.iter().position(|h| h == "Speciality");
     let emp_name_idx = headers.iter().position(|h| h == "Emp Name");
     let dept_idx = headers.iter().position(|h| h == "Dept");
+    let slots_booked_idx = headers.iter().position(|h| h == "Slots Booked");
     let patient_seen_idx = headers.iter().position(|h| h == "Total Patient Seen");
+    if require_slots_booked && slots_booked_idx.is_none() {
+        anyhow::bail!("Required column 'Slots Booked' is missing in {:?}", path);
+    }
 
     let mut rows = Vec::new();
     for row in range.rows().skip(5) {
@@ -123,6 +132,7 @@ fn filtered_rows_from_workbook(path: &Path, filters: &OpdFilters<'_>) -> Result<
 
         rows.push(FilteredRow {
             total_slot,
+            slots_booked: numeric_cell(slots_booked_idx.and_then(|idx| row.get(idx))),
             patient_seen: numeric_cell(patient_seen_idx.and_then(|idx| row.get(idx))),
         });
     }
@@ -131,12 +141,12 @@ fn filtered_rows_from_workbook(path: &Path, filters: &OpdFilters<'_>) -> Result<
 
 /// Aggregate slot totals for a single OPD source workbook using the same filters as OPD Analysis.
 pub fn extract_slot_totals(path: &Path, filters: &OpdFilters<'_>) -> Result<SlotTotals> {
-    let rows = filtered_rows_from_workbook(path, filters)?;
+    let rows = filtered_rows_from_workbook(path, filters, true)?;
     if rows.is_empty() {
         anyhow::bail!("No rows remained after applying OPD filters in {:?}", path);
     }
     Ok(rows.into_iter().fold(SlotTotals::default(), |mut totals, row| {
-        totals.slots_booked += row.patient_seen;
+        totals.slots_booked += row.slots_booked;
         totals.total_slots += row.total_slot;
         totals
     }))
@@ -150,7 +160,7 @@ pub fn extract_new_data(
     let filters = OpdFilters::from(config);
 
     for fi in new_files {
-        let total_seen = match filtered_rows_from_workbook(&fi.path, &filters) {
+        let total_seen = match filtered_rows_from_workbook(&fi.path, &filters, false) {
             Ok(rows) => rows.into_iter().map(|row| row.patient_seen).sum(),
             Err(e) => {
                 warn!("Failed to process OPD workbook {:?}: {:#}", fi.path, e);
