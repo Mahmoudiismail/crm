@@ -648,6 +648,7 @@ async fn main() -> Result<()> {
                     }
                 }
             }
+            }
             Ok::<(), anyhow::Error>(())
         });
     }
