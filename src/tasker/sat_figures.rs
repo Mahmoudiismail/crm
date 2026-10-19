@@ -3,10 +3,49 @@ use anyhow::{Context, Result};
 use csv::WriterBuilder;
 use std::fs;
 use std::path::PathBuf;
+use std::time::SystemTime;
 use tracing::info;
 
 fn resolve(path: &str) -> PathBuf {
     crate::tasker::csv_task::resolve_relative_to_exe_dir(path)
+}
+
+fn is_source_report(path: &std::path::Path) -> bool {
+    let name = path.file_name().and_then(|v| v.to_str()).unwrap_or_default();
+    let extension = path.extension().and_then(|v| v.to_str()).unwrap_or_default();
+    name.to_ascii_lowercase()
+        .starts_with("opd- average patients seen no of schedule_")
+        && !name.starts_with("~$")
+        && ["xlsx", "xlsm", "xlsb", "xls"]
+            .iter()
+            .any(|supported| extension.eq_ignore_ascii_case(supported))
+}
+
+fn latest_source_report(download_dir: &std::path::Path) -> Result<PathBuf> {
+    let entries = fs::read_dir(download_dir)
+        .with_context(|| format!("Failed to read Sat Figures source folder {:?}", download_dir))?;
+    let mut latest: Option<(SystemTime, PathBuf)> = None;
+
+    for entry in entries {
+        let entry = entry?;
+        if !entry.file_type()?.is_file() {
+            continue;
+        }
+        let path = entry.path();
+        if !is_source_report(&path) {
+            continue;
+        }
+        let metadata = entry.metadata()?;
+        let created = metadata.created().or_else(|_| metadata.modified())
+            .with_context(|| format!("Could not determine creation time for {:?}", path))?;
+        if latest.as_ref().map_or(true, |(timestamp, _)| created > *timestamp) {
+            latest = Some((created, path));
+        }
+    }
+
+    latest
+        .map(|(_, path)| path)
+        .context("No OPD Average Patients Seen workbook matching the Sat Figures prefix was found")
 }
 
 fn get_email_script() -> &'static str {
@@ -114,14 +153,11 @@ pub fn run(config: &SatFiguresConfig, opd_config: &OpdAnalysisConfig) -> Result<
         anyhow::bail!("Sat Figures download directory does not exist: {:?}", download_dir);
     }
 
-    // Reuse OPD's filename/date discovery and its exact row-filter rules, but process only the newest file.
-    let mut files = crate::tasker::opd_task::file_discovery::discover_new_files(&download_dir, None);
-    let latest = files
-        .pop()
-        .context("No timestamped OPD Average Patients Seen workbook was found for Sat Figures")?;
+    // Match the workbook query: select the newest-created file with the exact report prefix.
+    let latest = latest_source_report(&download_dir)?;
     let filters = crate::tasker::opd_task::data_extraction::OpdFilters::from(opd_config);
-    let totals = crate::tasker::opd_task::data_extraction::extract_slot_totals(&latest.path, &filters)
-        .with_context(|| format!("Failed to calculate Sat Figures from {:?}", latest.path))?;
+    let totals = crate::tasker::opd_task::data_extraction::extract_slot_totals(&latest, &filters)
+        .with_context(|| format!("Failed to calculate Sat Figures from {:?}", latest))?;
 
     if totals.total_slots == 0 {
         anyhow::bail!("Sat Figures total slot count is zero; cannot calculate occupancy percentage");
@@ -166,7 +202,7 @@ pub fn run(config: &SatFiguresConfig, opd_config: &OpdAnalysisConfig) -> Result<
 
     info!(
         "Sat Figures completed from {:?}: booked={}, total={}, vacant={}, percentage={:.2}%",
-        latest.path,
+        latest,
         totals.slots_booked,
         totals.total_slots,
         vacant_slots,
@@ -178,6 +214,15 @@ pub fn run(config: &SatFiguresConfig, opd_config: &OpdAnalysisConfig) -> Result<
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn source_report_filter_matches_only_expected_prefix_and_extensions() {
+        assert!(is_source_report(std::path::Path::new("OPD- Average Patients seen No of Schedule_01.xlsx")));
+        assert!(is_source_report(std::path::Path::new("opd- average patients seen no of schedule_02.xlsm")));
+        assert!(!is_source_report(std::path::Path::new("~$OPD- Average Patients seen No of Schedule_01.xlsx")));
+        assert!(!is_source_report(std::path::Path::new("Other report.xlsx")));
+        assert!(!is_source_report(std::path::Path::new("OPD- Average Patients seen No of Schedule_01.csv")));
+    }
 
     #[test]
     fn email_script_uses_configured_recipients_and_cleans_up_temporary_files() {
