@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use chrono::Local
+use chrono::Local;
 use crm_tool::manifest::{AppArg, AppManifest, ArgType};
 
 use std::collections::HashMap;
@@ -244,6 +244,19 @@ async fn main() -> Result<()> {
     let p = PathBuf::from(options.config);
     let exe_dir = executable_dir()?;
     let config_path = if p.is_absolute() { p } else { exe_dir.join(p) };
+
+    // Prevent overlapping YASWEB processes from racing on the same menu, browser profile,
+    // temporary downloads, and output filenames. The OS releases this lock if the process exits.
+    let lock_path = config_path.with_extension("lock");
+    let instance_lock = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .open(&lock_path)
+        .with_context(|| format!("Failed to open YASWEB instance lock {:?}", lock_path))?;
+    instance_lock
+        .try_lock_exclusive()
+        .with_context(|| "Another YASWEB run is already active; wait for it to finish before starting another run")?;
 
     let mut config: YaswebConfig =
         crm_tool::utils::load_or_create_config(&config_path, &YaswebConfig::default())?;
