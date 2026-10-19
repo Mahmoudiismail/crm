@@ -8,10 +8,12 @@ pub fn run_powershell_with_args(
     script_template: &str,
     args: &[(&str, &str)],
 ) -> Result<()> {
-    let script_manager = crate::tasker::script_manager::ScriptManager::new();
-    let script_path =
-        script_manager.get_or_create_script("CRM Open Sohail", logical_name, script_template)?;
-    script_manager.execute_script_with_args(&script_path, args)
+    crate::tasker::script_manager::ScriptManager::new().run_script_with_args(
+        "CRM Open Sohail",
+        logical_name,
+        script_template,
+        args,
+    )
 }
 
 pub fn run_powershell(logical_name: &str, script: &str) -> Result<()> {
