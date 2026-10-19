@@ -23,7 +23,6 @@ impl TaskLogger {
             error!("TaskLogger initialization failed: {}", e);
         }
 
-        let task_id = inner.task_id.clone();
         let now = Local::now().to_rfc3339();
         let line = format!("[{}] {}\n", now, message);
 
