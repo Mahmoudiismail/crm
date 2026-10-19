@@ -64,9 +64,6 @@ impl YaswebConfig {
         if self.url.trim().is_empty() {
             anyhow::bail!("url cannot be empty");
         }
-        if self.concurrency == 0 {
-            anyhow::bail!("concurrency must be greater than zero");
-        }
         Ok(())
     }
 }
@@ -180,8 +177,8 @@ mod tests {
     }
 
     #[test]
-    fn zero_concurrency_is_rejected() {
+    fn zero_concurrency_means_unlimited_and_is_valid() {
         let config = YaswebConfig { concurrency: 0, ..YaswebConfig::default() };
-        assert!(config.validate().is_err());
+        assert!(config.validate().is_ok());
     }
 }
