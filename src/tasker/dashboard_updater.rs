@@ -2,22 +2,6 @@ use crate::tasker::config::DashboardUpdaterConfig;
 use anyhow::Result;
 use tracing::{error, info};
 
-fn run_persistent_powershell_with_args(
-    logical_name: &str,
-    script_template: &str,
-    args: &[(&str, &str)],
-) -> Result<()> {
-    let script_manager = crate::tasker::script_manager::ScriptManager::new();
-    let script_path =
-        script_manager.get_or_create_script("Dashboard Updater", logical_name, script_template)?;
-    script_manager.execute_script_with_args(&script_path, args)
-}
-
-#[allow(dead_code)]
-fn run_persistent_powershell(logical_name: &str, script: &str) -> Result<()> {
-    run_persistent_powershell_with_args(logical_name, script, &[])
-}
-
 pub fn run(config: &DashboardUpdaterConfig) -> Result<()> {
     info!("Starting DashboardUpdater task. Config: {:?}", config);
 
@@ -410,7 +394,8 @@ finally {
 
     // Only run PowerShell if not a dry run test
     if !config.save_email_as_html.unwrap_or(false) {
-        let ps_result = run_persistent_powershell_with_args(
+        let ps_result = crate::tasker::script_manager::ScriptManager::new().run_script_with_args(
+            "Dashboard Updater",
             "dashboard_updater.ps1",
             ps_script,
             &[("-DashboardPath", &dashboard_path_str)],
