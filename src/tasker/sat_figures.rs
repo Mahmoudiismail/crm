@@ -58,7 +58,6 @@ param(
 )
 $ErrorActionPreference = "Stop"
 $imagePath = $null
-$bodyPath = $null
 $bitmap = $null
 $graphics = $null
 $headerFont = $null
@@ -148,7 +147,6 @@ try {
         try { [System.Runtime.Interopservices.Marshal]::ReleaseComObject($outlook) | Out-Null } catch {}
     }
     if ($imagePath -and (Test-Path -LiteralPath $imagePath)) { Remove-Item -LiteralPath $imagePath -Force -ErrorAction SilentlyContinue }
-    if ($bodyPath -and (Test-Path -LiteralPath $bodyPath)) { Remove-Item -LiteralPath $bodyPath -Force -ErrorAction SilentlyContinue }
 }
 "#
 }
