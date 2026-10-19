@@ -158,7 +158,7 @@ pub fn reply_all_email(sender_account: &str, subject_prefix: &str, subject: &str
 fn run_outlook_mail(request: OutlookMailRequest<'_>) -> Result<()> {
     let manager = crate::tasker::script_manager::ScriptManager::new();
     let helper_path = get_outlook_helper_path()?;
-    let script_path = manager.get_or_create_script("Email", "send_email.ps1", OUTLOOK_WRAPPER_TEMPLATE)?;
+
     // Keep potentially large email HTML out of the Windows command line.
     let html_file: Option<NamedTempFile> = request.html_body.map(|body| {
         let mut file = NamedTempFile::new().context("Failed to create temporary email body file")?;
@@ -171,15 +171,20 @@ fn run_outlook_mail(request: OutlookMailRequest<'_>) -> Result<()> {
     let attachment_path = request.attachment_path.unwrap_or("");
     let leads_path = request.leads_path.unwrap_or("");
     let send_at_seven = if request.send_at_next_seven_am { "true" } else { "false" };
-    manager.execute_script_with_args(&script_path, &[
-        ("-OutlookHelperPath", &helper_path), ("-Mode", request.mode),
-        ("-To", request.to), ("-Cc", request.cc), ("-Subject", request.subject),
-        ("-HtmlBodyPath", &html_path), ("-AttachmentPath", attachment_path),
-        ("-LeadsPath", leads_path), ("-DisplayOrSend", request.display_or_send),
-        ("-BodyMode", request.body_mode), ("-SenderAccount", request.sender_account),
-        ("-SubjectPrefix", request.subject_prefix), ("-AdditionalTo", request.additional_to),
-        ("-RemoveCc", request.remove_cc), ("-SendAtNextSevenAm", send_at_seven),
-    ])
+    manager.run_script_with_args(
+        "Email",
+        "send_email.ps1",
+        OUTLOOK_WRAPPER_TEMPLATE,
+        &[
+            ("-OutlookHelperPath", &helper_path), ("-Mode", request.mode),
+            ("-To", request.to), ("-Cc", request.cc), ("-Subject", request.subject),
+            ("-HtmlBodyPath", &html_path), ("-AttachmentPath", attachment_path),
+            ("-LeadsPath", leads_path), ("-DisplayOrSend", request.display_or_send),
+            ("-BodyMode", request.body_mode), ("-SenderAccount", request.sender_account),
+            ("-SubjectPrefix", request.subject_prefix), ("-AdditionalTo", request.additional_to),
+            ("-RemoveCc", request.remove_cc), ("-SendAtNextSevenAm", send_at_seven),
+        ],
+    )
 }
 
 #[cfg(test)]
