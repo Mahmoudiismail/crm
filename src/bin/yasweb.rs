@@ -248,7 +248,7 @@ async fn main() -> Result<()> {
     // Prevent overlapping YASWEB processes from racing on the same menu, browser profile,
     // temporary downloads, and output filenames. The OS releases this lock if the process exits.
     let lock_path = config_path.with_extension("lock");
-    let instance_lock = tokio::task::spawn_blocking(move || -> Result<std::fs::File> {
+    let _instance_lock = tokio::task::spawn_blocking(move || -> Result<std::fs::File> {
         let file = OpenOptions::new()
             .create(true)
             .read(true)
