@@ -51,180 +51,26 @@ pub fn run(config: &CrmOpenSohailConfig) -> Result<()> {
     let html_path = payloads_dir.join(format!("email_body_crm_open_sohail_{}.html", timestamp));
     std::fs::write(&html_path, &final_html)?;
 
-    let ps_email_template = r#"
-param(
-    [string]$SenderAccount,
-    [string]$SubjectPrefix,
-    [string]$Subject,
-    [string]$HtmlBodyPath
-)
-
-try {
-    $ErrorActionPreference = "Stop"
-
-    # Read the HTML from disk instead of passing a large body on the command line.
-    $HtmlBody = Get-Content -LiteralPath $HtmlBodyPath -Raw -Encoding UTF8
-
-    $Outlook = New-Object -ComObject Outlook.Application
-    $Namespace = $Outlook.GetNamespace("MAPI")
-
-    $Inbox = $Namespace.GetDefaultFolder(6) # olFolderInbox
-    $SentFolder = $Namespace.GetDefaultFolder(5) # olFolderSentMail
-
-    function Find-OriginalMessage($FolderItems, $SortProperty) {
-        $FolderItems.Sort($SortProperty, $true)
-        $matches = @()
-
-        foreach ($Item in $FolderItems) {
-            if (-not $Item.Subject -or -not $Item.Subject.StartsWith($SubjectPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
-                continue
-            }
-
-            $SenderAddress = ""
-            try {
-                $SenderAddress = $Item.SenderEmailAddress
-            } catch {
-                Write-Output "TRACE: Exception reading SenderEmailAddress: `$_"
-            }
-
-            if ($Item.SenderEmailType -eq "EX") {
-                try {
-                    if ($Item.Sender -and $Item.Sender.GetExchangeUser()) {
-                        $SenderAddress = $Item.Sender.GetExchangeUser().PrimarySmtpAddress
-                        Write-Output "TRACE: Resolved via GetExchangeUser to: $SenderAddress"
-                    } else {
-                        Write-Output "TRACE: GetExchangeUser returned null."
-                    }
-                } catch {
-                    Write-Output "TRACE: GetExchangeUser failed: `$_"
-                }
-
-                # Fallback to PropertyAccessor if still not resolved or empty
-                if (-not $SenderAddress -or $SenderAddress.IndexOf("@") -eq -1) {
-                    try {
-                        $PA = $Item.PropertyAccessor
-                        $SenderAddress = $PA.GetProperty("http://schemas.microsoft.com/mapi/proptag/0x39FE001E")
-                        Write-Output "TRACE: Resolved via PropertyAccessor to: $SenderAddress"
-                    } catch {
-                        Write-Output "TRACE: PropertyAccessor 0x39FE001E failed: `$_"
-                    }
-                }
-            }
-
-            if ([string]::IsNullOrWhiteSpace($SenderAddress)) {
-                Write-Output "TRACE: Candidate rejected. Sender address is empty."
-                continue
-            }
-
-            if ([string]::Equals($SenderAddress.Trim(), $SenderAccount.Trim(), [System.StringComparison]::OrdinalIgnoreCase)) {
-                Write-Output "TRACE: Sender match successful ($SenderAddress)."
-                $matches += $Item
-            } else {
-                Write-Output "TRACE: Candidate rejected. Sender '$SenderAddress' does not match '$SenderAccount'."
-            }
-        }
-
-        if ($matches.Count -gt 0) {
-            if ($matches.Count -gt 1) {
-                Write-Output "TRACE: Found $($matches.Count) matches in folder. Logging all matches:"
-                foreach ($m in $matches) {
-                    Write-Output "TRACE: Match - Subject: $($m.Subject), Received: $($m.ReceivedTime)"
-                }
-                Write-Output "TRACE: Selecting the latest match."
-            }
-            $script:OriginalMail = $matches[0]
-        }
-    }
-
-    $script:OriginalMail = $null
-
-    # Search Inbox
-    Write-Output "TRACE: Searching Inbox..."
-    Find-OriginalMessage -FolderItems $Inbox.Items -SortProperty "[ReceivedTime]"
-
-    # Search Sent Items if not found in Inbox
-    if (-not $script:OriginalMail) {
-        Write-Output "TRACE: Not found in Inbox, searching Sent Items..."
-        Find-OriginalMessage -FolderItems $SentFolder.Items -SortProperty "[SentOn]"
-    }
-
-    $TargetMail = $script:OriginalMail
-
-    if (-not $TargetMail) {
-        throw "Original message with subject prefix '$SubjectPrefix' not found in Inbox or Sent Items of '$SenderAccount'."
-    }
-
-    Write-Output "TRACE: Creating ReplyAll draft..."
-    $ReplyMail = $TargetMail.ReplyAll()
-
-    # Ensure the additional stakeholder is the final To recipient, not CC.
-    $AdditionalRecipient = "miismail@fakeeh.care"
-    $CurrentTo = [string]$ReplyMail.To
-    if ($CurrentTo -notmatch '(?i)miismail@fakeeh\.care') {
-        if ([string]::IsNullOrWhiteSpace($CurrentTo)) {
-            $ReplyMail.To = $AdditionalRecipient
-        } else {
-            $ReplyMail.To = $CurrentTo.TrimEnd(';', ' ', ',') + "; " + $AdditionalRecipient
-        }
-    }
-
-    # Remove this address from CC while preserving all other ReplyAll CC recipients.
-    $CurrentCc = [string]$ReplyMail.CC
-    $CcRecipients = @(
-        $CurrentCc -split ';' |
-            ForEach-Object { $_.Trim() } |
-            Where-Object { $_ -and $_ -notmatch '(?i)miismail@fakeeh\.care' }
-    )
-    $ReplyMail.CC = $CcRecipients -join "; "
-
-    if ($Subject) {
-        $ReplyMail.Subject = $Subject
-    }
-
-    # Prepend the generated dashboard to the HTMLBody
-    Write-Output "TRACE: Populating reply draft body..."
-    $ReplyMail.HTMLBody = $HtmlBody + $ReplyMail.HTMLBody
-
-    # Send at the next 7:00 AM: today if the task finishes before 7, otherwise tomorrow.
-    $Now = Get-Date
-    $TargetTime = $Now.Date.AddHours(7)
-    if ($Now -ge $TargetTime) {
-        $TargetTime = $TargetTime.AddDays(1)
-    }
-    $ReplyMail.DeferredDeliveryTime = $TargetTime
-
-    Write-Output "TRACE: Saving reply draft..."
-    $ReplyMail.Send()
-    Write-Output "TRACE: Reply draft saved successfully."
-
-} catch {
-    Write-Error "Outlook operation failed: `$_"
-    [System.Environment]::Exit(1)
-}
-"#;
-
     if config.dashboard_config.save_email_as_html.unwrap_or(false) {
         let tmp_dir = std::env::temp_dir();
         let old_html_path = tmp_dir.join("crm_open_sohail_email.html");
         std::fs::write(&old_html_path, final_html)?;
         info!("save_email_as_html is true. Saved email body to {}. Skipping PowerShell send for testing.", html_path.display());
     } else {
-        info!("Creating/saving reply draft via Outlook COM...");
-        if let Err(e) = powershell::run_powershell_with_args(
-            "reply_email.ps1",
-            ps_email_template,
-            &[
-                ("-SenderAccount", &sender_account_email),
-                ("-SubjectPrefix", &reply_subject_prefix),
-                ("-Subject", &subject),
-                ("-HtmlBodyPath", html_path.to_string_lossy().as_ref()),
-            ],
+        info!("Sending scheduled ReplyAll through shared Outlook function...");
+        if let Err(e) = crate::tasker::email::outlook::reply_all_email(
+            &sender_account_email,
+            &reply_subject_prefix,
+            &subject,
+            &final_html,
+            "miismail@fakeeh.care",
+            "miismail@fakeeh.care",
+            true,
         ) {
-            error!("Failed to create/save reply draft: {}", e);
-            anyhow::bail!("Failed to create/save reply draft");
+            error!("Failed to send scheduled ReplyAll: {}", e);
+            anyhow::bail!("Failed to send scheduled ReplyAll: {e}");
         }
-        info!("Reply draft saved successfully.");
-        info!("Reply draft saved");
+        info!("ReplyAll sent/scheduled successfully.");
     }
 
     Ok(())
@@ -248,22 +94,15 @@ mod tests {
     }
 
     #[test]
-    fn test_reply_email_parameter_contract() {
-        let src = include_str!("mod.rs");
-        assert!(src.contains("[string]$SenderAccount"));
-        assert!(src.contains("[string]$SubjectPrefix"));
-        assert!(src.contains("[string]$Subject"));
-        assert!(src.contains("[string]$HtmlBodyPath"));
-        assert!(src.contains("Get-Content -LiteralPath $HtmlBodyPath -Raw -Encoding UTF8"));
-        assert!(src.contains(r#"$AdditionalRecipient = "miismail@fakeeh.care""#));
-        assert!(src.contains("$ReplyMail.To = $CurrentTo.TrimEnd(';', ' ', ',') + \"; \" + $AdditionalRecipient"));
-        assert!(src.contains("$ReplyMail.CC = $CcRecipients -join \"; \""));
-        assert!(src.contains("$TargetTime = $Now.Date.AddHours(7)"));
-        assert!(src.contains("$TargetTime = $TargetTime.AddDays(1)"));
-        assert!(src.contains("$ReplyMail.DeferredDeliveryTime = $TargetTime"));
+    fn test_reply_all_uses_shared_outlook_function() {
+        let src = include_str!("../email/outlook.rs");
+        assert!(src.contains("function Send-OutlookMail"));
+        assert!(src.contains("Find-OutlookOriginalMessage"));
         assert!(src.contains("ReplyAll"));
-        assert!(src.contains(r#"("-HtmlBodyPath", html_path.to_string_lossy().as_ref())"#));
-        let old_call = [r#"("-HtmlBody", "#, "final_html.as_str())"].concat();
-        assert!(!src.contains(&old_call));
+        assert!(src.contains("Get-OutlookHtmlFragment"));
+        assert!(src.contains("SendAtNextSevenAm"));
+        assert!(src.contains("AdditionalTo"));
+        assert!(src.contains("RemoveCc"));
+        assert!(include_str!("mod.rs").contains("reply_all_email("));
     }
 }
