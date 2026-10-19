@@ -243,15 +243,12 @@ pub fn generate_and_email_image(cus_file_path: &Path, config: &OpdAnalysisConfig
         let script_manager = crate::tasker::script_manager::ScriptManager::new();
         let helper_path = crate::tasker::email::outlook::get_outlook_helper_path()?;
         let helper_path_str = helper_path.to_string_lossy().into_owned();
-        let script_path = script_manager.get_or_create_script(
+
+        info!("Running PowerShell for generating and emailing image...");
+        script_manager.run_script_with_args(
             "OPD Analysis",
             "opd_analysis_email.ps1",
             template,
-        )?;
-
-        info!("Running PowerShell for generating and emailing image...");
-        script_manager.execute_script_with_args(
-            &script_path,
             &[
                 ("-CsvPath", &cus_path_str),
                 ("-OutlookHelperPath", &helper_path_str),
