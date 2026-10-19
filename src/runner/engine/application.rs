@@ -221,7 +221,7 @@ pub async fn run_external_app(
         }
     }
 
-    trace!("Command to execute: {:?}", command);
+    // Do not write task command lines or arguments to runner.log.
 
     let ctx = ProcessContext {
         logger,
