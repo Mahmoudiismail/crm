@@ -64,6 +64,9 @@ impl YaswebConfig {
         if self.url.trim().is_empty() {
             anyhow::bail!("url cannot be empty");
         }
+        if self.concurrency == 0 {
+            anyhow::bail!("concurrency must be greater than zero");
+        }
         Ok(())
     }
 }
@@ -93,6 +96,9 @@ pub struct YaswebConfig {
     pub keep_open: bool,
     #[serde(default = "default_timeout_minutes")]
     pub timeout_minutes: u64,
+    /// Maximum number of browser automation operations running at once.
+    #[serde(default = "default_concurrency")]
+    pub concurrency: usize,
     #[serde(default)]
     pub reports: HashMap<String, ReportConfig>,
     #[serde(default = "default_stdout_log_level")]
@@ -105,6 +111,10 @@ pub struct YaswebConfig {
 
 fn default_timeout_minutes() -> u64 {
     60
+}
+
+fn default_concurrency() -> usize {
+    6
 }
 
 fn default_stdout_log_level() -> String {
@@ -124,6 +134,7 @@ impl Default for YaswebConfig {
             headless: false,
             keep_open: false,
             timeout_minutes: 60,
+            concurrency: 6,
             reports: HashMap::new(),
             log_stdout_level: "DEBUG".to_string(),
             log_file_level: "TRACE".to_string(),
@@ -144,6 +155,7 @@ impl std::fmt::Debug for YaswebConfig {
             .field("headless", &self.headless)
             .field("keep_open", &self.keep_open)
             .field("timeout_minutes", &self.timeout_minutes)
+            .field("concurrency", &self.concurrency)
             .field("reports", &self.reports)
             .field("log_stdout_level", &self.log_stdout_level)
             .field("log_file_level", &self.log_file_level)
@@ -158,18 +170,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn legacy_concurrency_setting_is_ignored_and_not_serialized() {
+    fn concurrency_is_configurable_and_defaults_to_six() {
+        assert_eq!(YaswebConfig::default().concurrency, 6);
         let config: YaswebConfig = serde_json::from_str(
-            r#"{
-                "url": "https://example.test/",
-                "username": "test",
-                "concurrency": 6,
-                "reports": {}
-            }"#,
-        )
-        .unwrap();
+            r#"{"url":"https://example.test/","username":"test","concurrency":4,"reports":{}}"#,
+        ).unwrap();
+        assert_eq!(config.concurrency, 4);
+        assert_eq!(serde_json::to_value(config).unwrap()["concurrency"], 4);
+    }
 
-        let serialized = serde_json::to_value(config).unwrap();
-        assert!(serialized.get("concurrency").is_none());
+    #[test]
+    fn zero_concurrency_is_rejected() {
+        let config = YaswebConfig { concurrency: 0, ..YaswebConfig::default() };
+        assert!(config.validate().is_err());
     }
 }
