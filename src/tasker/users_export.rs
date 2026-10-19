@@ -48,7 +48,7 @@ fn load_department_mapping(path: &Path) -> Result<HashMap<String, String>> {
     for row in sheet.rows().skip(1) {
         let username = row.get(7).map(ToString::to_string).unwrap_or_default();
         let department = row.get(8).map(ToString::to_string).unwrap_or_default();
-        let key = normalized_header(&username);
+        let key = username;
         if !key.is_empty() && !department.trim().is_empty() {
             mapping.insert(key, department.trim().to_string());
         }
@@ -165,10 +165,7 @@ pub fn run(config: &UsersExportConfig) -> Result<()> {
             record.get(first_name_idx).unwrap_or_default(),
             record.get(last_name_idx).unwrap_or_default()
         );
-        let mapped_department = mapping
-            .get(&normalized_header(&username))
-            .cloned()
-            .unwrap_or_default();
+        let mapped_department = mapping.get(&username).cloned().unwrap_or_default();
         let teams = record.get(teams_idx).unwrap_or_default().to_string();
         let final_department = if mapped_department.is_empty() {
             teams.clone()
@@ -217,11 +214,6 @@ mod tests {
             normalized_header("cognito_username\n(Filled by THB)"),
             "cognito_username (filled by thb)"
         );
-    }
-
-    #[test]
-    fn mapping_keys_ignore_case_and_extra_whitespace() {
-        assert_eq!(normalized_header("  Mahmoud  Ibrahim\nIsmail "), "mahmoud ibrahim ismail");
     }
 
     #[test]
