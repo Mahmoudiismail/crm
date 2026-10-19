@@ -1,0 +1,193 @@
+use crate::tasker::config::{OpdAnalysisConfig, SatFiguresConfig};
+use anyhow::{Context, Result};
+use csv::WriterBuilder;
+use std::fs;
+use std::path::{Path, PathBuf};
+use tracing::info;
+
+fn resolve(path: &str) -> PathBuf {
+    crate::tasker::csv_task::resolve_relative_to_exe_dir(path)
+}
+
+fn get_email_script() -> &'static str {
+    r#"
+param(
+    [string]$CsvPath,
+    [string]$OutlookHelperPath,
+    [string]$EmailTo,
+    [string]$EmailCc,
+    [string]$EmailSubject
+)
+$ErrorActionPreference = "Stop"
+$imagePath = $null
+$bodyPath = $null
+$bitmap = $null
+$graphics = $null
+$headerFont = $null
+$valueFont = $null
+$brush = $null
+$headerBrush = $null
+$borderPen = $null
+try {
+    Add-Type -AssemblyName System.Drawing
+    $row = @(Import-Csv -LiteralPath $CsvPath)
+    if ($row.Count -ne 1) { throw "Sat Figures CSV must contain exactly one summary row." }
+
+    $columns = @("Slots Booked", "Total Slots", "Vacant Slots", "%")
+    $widths = @(240, 240, 240, 240)
+    $width = ($widths | Measure-Object -Sum).Sum
+    $height = 118
+    $bitmap = New-Object System.Drawing.Bitmap($width, $height)
+    $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+    $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $graphics.Clear([System.Drawing.Color]::White)
+    $headerFont = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
+    $valueFont = New-Object System.Drawing.Font("Segoe UI", 18, [System.Drawing.FontStyle]::Regular)
+    $brush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(35, 45, 55))
+    $headerBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(46, 92, 135))
+    $borderPen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(190, 200, 210), 1)
+
+    $x = 0
+    for ($i = 0; $i -lt $columns.Count; $i++) {
+        $cellWidth = $widths[$i]
+        $graphics.FillRectangle($headerBrush, $x, 0, $cellWidth, 48)
+        $graphics.DrawRectangle($borderPen, $x, 0, $cellWidth, $height - 1)
+        $headerRect = New-Object System.Drawing.RectangleF($x + 6, 0, $cellWidth - 12, 48)
+        $valueRect = New-Object System.Drawing.RectangleF($x + 6, 49, $cellWidth - 12, 68)
+        $format = New-Object System.Drawing.StringFormat
+        $format.Alignment = [System.Drawing.StringAlignment]::Center
+        $format.LineAlignment = [System.Drawing.StringAlignment]::Center
+        $graphics.DrawString($columns[$i], $headerFont, [System.Drawing.Brush]$([System.Drawing.Brush]$([System.Drawing.SolidBrush]::new([System.Drawing.Color]::White))), $headerRect, $format)
+
+        $value = [string]$row[0].PSObject.Properties[$columns[$i]].Value
+        if ($columns[$i] -eq "%") {
+            $number = 0.0
+            if (-not [double]::TryParse($value, [Globalization.NumberStyles]::Any, [Globalization.CultureInfo]::InvariantCulture, [ref]$number)) {
+                throw "Invalid percentage value in Sat Figures CSV: $value"
+            }
+            $value = $number.ToString("P2", [Globalization.CultureInfo]::InvariantCulture)
+        }
+        $graphics.DrawString($value, $valueFont, $brush, $valueRect, $format)
+        $format.Dispose()
+        $x += $cellWidth
+    }
+
+    $imagePath = Join-Path $env:TEMP ("sat_figures_" + [guid]::NewGuid().ToString("N") + ".png")
+    $bitmap.Save($imagePath, [System.Drawing.Imaging.ImageFormat]::Png)
+
+    $html = @"
+<html><body style="font-family:Segoe UI,Arial,sans-serif;color:#232d37">
+<p>Please find the Sat Figures report attached.</p>
+<table cellpadding="8" cellspacing="0" style="border-collapse:collapse">
+<tr style="background:#2e5c87;color:white"><th>Slots Booked</th><th>Total Slots</th><th>Vacant Slots</th><th>%</th></tr>
+<tr><td>$($row[0].'Slots Booked')</td><td>$($row[0].'Total Slots')</td><td>$($row[0].'Vacant Slots')</td><td>$value</td></tr>
+</table></body></html>
+"@
+    $bodyPath = Join-Path $env:TEMP ("sat_figures_body_" + [guid]::NewGuid().ToString("N") + ".html")
+    [System.IO.File]::WriteAllText($bodyPath, $html, [System.Text.Encoding]::UTF8)
+
+    . $OutlookHelperPath
+    Send-OutlookMail -Mode "New" -To $EmailTo -Cc $EmailCc -Subject $EmailSubject -HtmlBodyPath $bodyPath -AttachmentPaths @($imagePath) -DisplayOrSend "Send()"
+    Write-Output "TRACE: Sat Figures email sent successfully."
+} catch {
+    Write-Error "Sat Figures email generation failed: $_"
+    exit 1
+} finally {
+    if ($graphics) { $graphics.Dispose() }
+    if ($bitmap) { $bitmap.Dispose() }
+    if ($headerFont) { $headerFont.Dispose() }
+    if ($valueFont) { $valueFont.Dispose() }
+    if ($brush) { $brush.Dispose() }
+    if ($headerBrush) { $headerBrush.Dispose() }
+    if ($borderPen) { $borderPen.Dispose() }
+    if ($imagePath -and (Test-Path -LiteralPath $imagePath)) { Remove-Item -LiteralPath $imagePath -Force -ErrorAction SilentlyContinue }
+    if ($bodyPath -and (Test-Path -LiteralPath $bodyPath)) { Remove-Item -LiteralPath $bodyPath -Force -ErrorAction SilentlyContinue }
+}
+"#
+}
+
+pub fn run(config: &SatFiguresConfig, opd_config: &OpdAnalysisConfig) -> Result<()> {
+    let download_dir = resolve(&config.download_path);
+    if !download_dir.is_dir() {
+        anyhow::bail!("Sat Figures download directory does not exist: {:?}", download_dir);
+    }
+
+    // Reuse OPD's filename/date discovery and its exact row-filter rules, but process only the newest file.
+    let mut files = crate::tasker::opd_task::file_discovery::discover_new_files(&download_dir, None);
+    let latest = files
+        .pop()
+        .context("No timestamped OPD Average Patients Seen workbook was found for Sat Figures")?;
+    let filters = crate::tasker::opd_task::data_extraction::OpdFilters::from(opd_config);
+    let totals = crate::tasker::opd_task::data_extraction::extract_slot_totals(&latest.path, &filters)
+        .with_context(|| format!("Failed to calculate Sat Figures from {:?}", latest.path))?;
+
+    if totals.total_slots == 0 {
+        anyhow::bail!("Sat Figures total slot count is zero; cannot calculate occupancy percentage");
+    }
+
+    let vacant_slots = totals.total_slots - totals.slots_booked;
+    let percentage = totals.slots_booked as f64 / totals.total_slots as f64;
+    let output_path = resolve(&config.output_file);
+    if let Some(parent) = output_path.parent().filter(|p| !p.as_os_str().is_empty()) {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("Failed to create Sat Figures output directory {:?}", parent))?;
+    }
+
+    let mut writer = WriterBuilder::new()
+        .from_path(&output_path)
+        .with_context(|| format!("Failed to create Sat Figures CSV {:?}", output_path))?;
+    writer.write_record(["Slots Booked", "Total Slots", "Vacant Slots", "%"])?;
+    writer.write_record([
+        totals.slots_booked.to_string(),
+        totals.total_slots.to_string(),
+        vacant_slots.to_string(),
+        format!("{percentage:.10}"),
+    ])?;
+    writer.flush()?;
+
+    let helper_path = crate::tasker::email::outlook::get_outlook_helper_path()?;
+    let helper_path = helper_path.to_string_lossy().into_owned();
+    let csv_path = output_path.to_string_lossy().into_owned();
+    let manager = crate::tasker::script_manager::ScriptManager::new();
+    manager.run_script_with_args(
+        "Sat Figures",
+        "sat_figures_email.ps1",
+        get_email_script(),
+        &[
+            ("-CsvPath", &csv_path),
+            ("-OutlookHelperPath", &helper_path),
+            ("-EmailTo", &config.email_to),
+            ("-EmailCc", &config.email_cc),
+            ("-EmailSubject", &config.email_subject),
+        ],
+    )?;
+
+    info!(
+        "Sat Figures completed from {:?}: booked={}, total={}, vacant={}, percentage={:.2}%",
+        latest.path,
+        totals.slots_booked,
+        totals.total_slots,
+        vacant_slots,
+        percentage * 100.0
+    );
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn email_script_uses_configured_recipients_and_cleans_up_temporary_files() {
+        let script = get_email_script();
+        assert!(script.contains("-To $EmailTo -Cc $EmailCc -Subject $EmailSubject"));
+        assert!(script.contains("sat_figures_"));
+        assert!(script.contains("Remove-Item -LiteralPath $imagePath"));
+        assert!(script.contains("Remove-Item -LiteralPath $bodyPath"));
+    }
+
+    #[test]
+    fn email_script_formats_percentage_as_percent() {
+        assert!(get_email_script().contains('$number.ToString("P2"'));
+    }
+}
