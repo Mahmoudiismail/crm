@@ -157,16 +157,25 @@ try {
     Write-Output "TRACE: Creating ReplyAll draft..."
     $ReplyMail = $TargetMail.ReplyAll()
 
-    # Append the additional stakeholder without replacing existing ReplyAll CC recipients.
-    $AdditionalCc = "miismail@fakeeh.care"
-    $CurrentCc = [string]$ReplyMail.CC
-    if ($CurrentCc -notmatch '(?i)miismail@fakeeh\.care') {
-        if ([string]::IsNullOrWhiteSpace($CurrentCc)) {
-            $ReplyMail.CC = $AdditionalCc
+    # Ensure the additional stakeholder is the final To recipient, not CC.
+    $AdditionalRecipient = "miismail@fakeeh.care"
+    $CurrentTo = [string]$ReplyMail.To
+    if ($CurrentTo -notmatch '(?i)miismail@fakeeh\.care') {
+        if ([string]::IsNullOrWhiteSpace($CurrentTo)) {
+            $ReplyMail.To = $AdditionalRecipient
         } else {
-            $ReplyMail.CC = $CurrentCc.TrimEnd(';', ' ', ',') + "; " + $AdditionalCc
+            $ReplyMail.To = $CurrentTo.TrimEnd(';', ' ', ',') + "; " + $AdditionalRecipient
         }
     }
+
+    # Remove this address from CC while preserving all other ReplyAll CC recipients.
+    $CurrentCc = [string]$ReplyMail.CC
+    $CcRecipients = @(
+        $CurrentCc -split ';' |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { $_ -and $_ -notmatch '(?i)miismail@fakeeh\.care' }
+    )
+    $ReplyMail.CC = $CcRecipients -join "; "
 
     if ($Subject) {
         $ReplyMail.Subject = $Subject
@@ -176,13 +185,13 @@ try {
     Write-Output "TRACE: Populating reply draft body..."
     $ReplyMail.HTMLBody = $HtmlBody + $ReplyMail.HTMLBody
 
-	# Define 7:00 AM for the current day
-	$TargetTime = (Get-Date).Date.AddDays(1).AddHours(7)
-
-	# Only delay if 7 AM hasn't passed yet today
-	if ((Get-Date) -lt $TargetTime) {
-		$ReplyMail.DeferredDeliveryTime = $TargetTime
-	}
+    # Send at the next 7:00 AM: today if the task finishes before 7, otherwise tomorrow.
+    $Now = Get-Date
+    $TargetTime = $Now.Date.AddHours(7)
+    if ($Now -ge $TargetTime) {
+        $TargetTime = $TargetTime.AddDays(1)
+    }
+    $ReplyMail.DeferredDeliveryTime = $TargetTime
 
     Write-Output "TRACE: Saving reply draft..."
     $ReplyMail.Send()
@@ -246,10 +255,12 @@ mod tests {
         assert!(src.contains("[string]$Subject"));
         assert!(src.contains("[string]$HtmlBodyPath"));
         assert!(src.contains("Get-Content -LiteralPath $HtmlBodyPath -Raw -Encoding UTF8"));
-        assert!(src.contains(r#"$AdditionalCc = "miismail@fakeeh.care""#));
-        assert!(src.contains(
-            r#"$ReplyMail.CC = $CurrentCc.TrimEnd(';', ' ', ',') + "; " + $AdditionalCc"#
-        ));
+        assert!(src.contains(r#"$AdditionalRecipient = "miismail@fakeeh.care""#));
+        assert!(src.contains("$ReplyMail.To = $CurrentTo.TrimEnd(';', ' ', ',') + \"; \" + $AdditionalRecipient"));
+        assert!(src.contains("$ReplyMail.CC = $CcRecipients -join \"; \""));
+        assert!(src.contains("$TargetTime = $Now.Date.AddHours(7)"));
+        assert!(src.contains("$TargetTime = $TargetTime.AddDays(1)"));
+        assert!(src.contains("$ReplyMail.DeferredDeliveryTime = $TargetTime"));
         assert!(src.contains("ReplyAll"));
         assert!(src.contains(r#"("-HtmlBodyPath", html_path.to_string_lossy().as_ref())"#));
         let old_call = [r#"("-HtmlBody", "#, "final_html.as_str())"].concat();
