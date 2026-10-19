@@ -79,7 +79,7 @@ pub fn save_html_state(
 pub fn save_failure_diagnostics(tab: &Arc<headless_chrome::Tab>, step_name: &str) {
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    let diagnostic_js = r#"
+    let diagnostic_js = r##"
         (() => {
             const safeUrl = (value) => {
                 try {
@@ -178,7 +178,7 @@ pub fn save_failure_diagnostics(tab: &Arc<headless_chrome::Tab>, step_name: &str
                 resourceCount: performance.getEntriesByType("resource").length
             });
         })()
-    "#;
+    "##;
 
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
