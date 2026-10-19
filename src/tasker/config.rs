@@ -40,6 +40,10 @@ pub enum TaskConfig {
     DepartmentSplit(DepartmentSplitConfig),
     #[serde(rename = "opd_analysis")]
     OpdAnalysis(OpdAnalysisConfig),
+    #[serde(rename = "sat_figures")]
+    SatFigures(SatFiguresConfig),
+    #[serde(rename = "users_export")]
+    UsersExport(UsersExportConfig),
 }
 
 /// Outlines email templating, routing, and distribution rules.
@@ -159,6 +163,36 @@ pub struct OpdAnalysisConfig {
 
     #[serde(default)]
     pub check_current_year: bool,
+}
+
+/// Creates the Sat Figures summary from the newest OPD workbook and emails it.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct SatFiguresConfig {
+    pub download_path: String,
+    pub output_file: String,
+    pub email_to: String,
+    #[serde(default)]
+    pub email_cc: String,
+    #[serde(default = "default_sat_figures_subject")]
+    pub email_subject: String,
+}
+
+fn default_sat_figures_subject() -> String {
+    "Sat Figures".to_string()
+}
+
+/// Replaces the users.xlsm Power Query export with a native CSV task.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct UsersExportConfig {
+    pub download_path: String,
+    pub mapping_workbook: String,
+    pub output_file: String,
+    #[serde(default = "default_users_export_minutes")]
+    pub minutes_ago: u64,
+}
+
+fn default_users_export_minutes() -> u64 {
+    10
 }
 
 fn default_special_column_name() -> String {
