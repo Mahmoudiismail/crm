@@ -1,10 +1,12 @@
 use anyhow::{Context, Result};
-use chrono::{Datelike, Local, NaiveDate};
+use chrono::Local
 use crm_tool::manifest::{AppArg, AppManifest, ArgType};
 
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::fs::{File, OpenOptions};
+use fs2::FileExt;
 
 use clap::Parser;
 use crm_tool::utils::{
@@ -26,8 +28,6 @@ pub struct YaswebCliOptions {
     config: String,
     #[arg(long)]
     filters: Option<String>,
-    #[arg(long, action = clap::ArgAction::SetTrue)]
-    monthly: bool,
     #[arg(long)]
     start_date: Option<String>,
     #[arg(long)]
@@ -127,7 +127,6 @@ fn get_manifest(config_path: Option<PathBuf>) -> AppManifest {
         AppArg::new("--config", ArgType::String),
         arg_name,
         arg_type,
-        AppArg::new("--monthly", ArgType::Boolean),
         AppArg::new("--start-date", ArgType::DateVar),
         AppArg::new("--end-date", ArgType::DateVar),
         AppArg::new("--add-time-to-file", ArgType::Boolean),
@@ -272,7 +271,6 @@ async fn main() -> Result<()> {
         }
     }
 
-    let is_monthly = options.monthly;
     let start_date_str_global = options.start_date;
     let end_date_str_global = options.end_date;
     let add_time_to_file = options.add_time_to_file;
@@ -386,117 +384,16 @@ async fn main() -> Result<()> {
                 ));
             }
 
-            // Parse date ranges
-            let mut date_ranges: Vec<(String, String)> = Vec::new();
-
-            let mut effective_monthly = is_monthly;
-            if effective_monthly {
-                let report_conf = config
-                    .reports
-                    .get(&active_report_name)
-                    .context("Report name not found in config")?;
-
-                if report_conf.start_date_key.is_none()
-                    || report_conf.end_date_key.is_none()
-                    || report_conf
-                        .start_date_key
-                        .as_ref()
-                        .is_none_or(|k| k.key.is_empty())
-                    || report_conf
-                        .end_date_key
-                        .as_ref()
-                        .is_none_or(|k| k.key.is_empty())
-                {
-                    info!("Report does not have start_date_key/end_date_key configured. Disabling monthly chunking.");
-                    effective_monthly = false;
-                }
-            }
-
-            if effective_monthly {
-                let start_date = start_date_str
-                    .clone()
-                    .context("--start-date is required when --monthly is true")?;
-                let end_date = end_date_str
-                    .clone()
-                    .context("--end-date is required when --monthly is true")?;
-
-                use crm_tool::utils::parse_flexible_date;
-                let start_dt = parse_flexible_date(&start_date).context("Invalid --start-date format")?;
-                let end_dt = parse_flexible_date(&end_date).context("Invalid --end-date format")?;
-
-                if start_dt > end_dt {
-                    return Err(anyhow::anyhow!("--start-date must be before or equal to --end-date"));
-                }
-
-                let mut current_dt = start_dt;
-
-                let report_conf_monthly = config
-                    .reports
-                    .get(&active_report_name)
-                    .context("Report name not found in config")?;
-
-                while current_dt <= end_dt {
-                    let next_month = if current_dt.month() == 12 {
-                        NaiveDate::from_ymd_opt(current_dt.year() + 1, 1, 1).context("Invalid date math")?
-                    } else {
-                        NaiveDate::from_ymd_opt(current_dt.year(), current_dt.month() + 1, 1)
-                            .context("Invalid date math")?
-                    };
-
-                    let last_day = next_month.pred_opt().context("Invalid date math")?;
-                    let chunk_end = if last_day > end_dt { end_dt } else { last_day };
-
-                    let start_format_str = if let Some(ref sk) = report_conf_monthly.start_date_key {
-                        sk.format.clone()
-                    } else if active_report_type == "Report Manager" {
-                        "%d-%b-%Y".to_string()
-                    } else {
-                        "%d-%m-%Y 00:00".to_string()
-                    };
-
-                    let end_format_str = if let Some(ref ek) = report_conf_monthly.end_date_key {
-                        ek.format.clone()
-                    } else if active_report_type == "Report Manager" {
-                        "%d-%b-%Y".to_string()
-                    } else {
-                        "%d-%m-%Y 23:59".to_string()
-                    };
-
-                    let start_dt_time = current_dt.and_hms_opt(0, 0, 0).context("Invalid start time")?;
-                    let end_dt_time = chunk_end.and_hms_opt(23, 59, 59).context("Invalid end time")?;
-
-                    date_ranges.push((
-                        start_dt_time.format(&start_format_str).to_string(),
-                        end_dt_time.format(&end_format_str).to_string(),
-                    ));
-
-                    current_dt = next_month;
-                }
-
-                info!(
-                    "Monthly execution planned for {} ranges: {:?}",
-                    date_ranges.len(),
-                    date_ranges
-                );
-            } else {
-                // Not monthly, just add a dummy single entry
-                date_ranges.push(("".to_string(), "".to_string()));
-            }
+            // Runner owns scheduling; YASWEB executes one requested date range per invocation.
+            let date_ranges: Vec<(String, String)> = vec![(String::new(), String::new())];
 
             let config_clone = config.clone();
             let active_report_name_clone = active_report_name.clone();
             let cli_download_path_clone = cli_download_path.clone();
 
-            // Launch browser once
-            let concurrency = if config.concurrency == 0 {
-                1
-            } else {
-                config.concurrency
-            };
-
-            for chunk in date_ranges.chunks(concurrency) {
+            // Process report ranges sequentially. Runner owns scheduling and parallelism.
+            for (i, (start_dt, end_dt)) in date_ranges.iter().enumerate() {
                 let mut tasks = Vec::new();
-                for (i, (start_dt, end_dt)) in chunk.iter().enumerate() {
                     let config_task = config.clone();
                     let active_report_name_task = active_report_name.clone();
                     let active_report_type_task = active_report_type.clone();
@@ -506,9 +403,7 @@ async fn main() -> Result<()> {
 
                     // Map the global --start-date and --end-date values into the respective internal report filters
                     // This is done both for monthly chunking AND standard executions, provided the report has the keys configured.
-                    let s_dt = if is_monthly && !start_dt.is_empty() {
-                        Some(start_dt.clone())
-                    } else {
+                    let s_dt = {
                         // If not monthly, re-format the input start_date_str if applicable
                         if let (Some(st_str), Some(report_conf)) = (&start_date_str, report_conf_opt) {
                             if let Some(sk) = &report_conf.start_date_key {
@@ -526,9 +421,7 @@ async fn main() -> Result<()> {
                         }
                     };
 
-                    let e_dt = if is_monthly && !end_dt.is_empty() {
-                        Some(end_dt.clone())
-                    } else {
+                    let e_dt = {
                         // If not monthly, re-format the input end_date_str if applicable
                         if let (Some(ed_str), Some(report_conf)) = (&end_date_str, report_conf_opt) {
                             if let Some(ek) = &report_conf.end_date_key {
@@ -560,15 +453,7 @@ async fn main() -> Result<()> {
                     }
 
                     // Setup download dir for this tab
-                    let date_suffix = if is_monthly && !start_dt.is_empty() {
-
-                        let parts: Vec<&str> = start_dt.split('-').collect();
-                        if parts.len() == 3 {
-                            format!("{}-{}", parts[1], parts[2])
-                        } else {
-                            start_dt.clone()
-                        }
-                    } else if let Some(st) = start_date_str.clone() {
+                    let date_suffix = if let Some(st) = start_date_str.clone() {
                         st
                     } else {
                         chrono::Local::now().format("%d-%m-%Y").to_string()
