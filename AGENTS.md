@@ -100,7 +100,7 @@ If you modify `src/tasker/csv_task.rs` or any logic related to the `csv_analysis
 
 ## Repository Memories
 
-- YASWEB concurrency is controlled by the `concurrency` field in `yasweb_config.json` (default 6) and caps active browser automation operations globally across reports; it does not chunk date ranges. Runner owns date-range scheduling.
+- YASWEB concurrency is controlled by `concurrency` in `yasweb_config.json` (default 6): `0` means unlimited browser operations, `1` allows one at a time, and `N > 1` caps simultaneous operations at `N` across reports in one YASWEB process. Reports remain concurrent when slots are available. YASWEB does not split date ranges; Runner owns date-range scheduling.
 - To ensure logging parity between application-specific logs (e.g., crm.log) and the runner's task logs, setup_logging in src/utils.rs configures the file layer with a TRACE level filter and the stdout layer with a DEBUG level filter.
 - Commit codebase refactoring and remediation changes incrementally, making individual 'one by one' Git commits for each distinct fix.
 - The crm tool's configuration logic normalizes from_date, to_date, and calls_from_date to ISO format upon loading and finalization (finalize_runtime_fields) to ensure consistent data processing regardless of the format used in config.json.
@@ -149,7 +149,7 @@ If you modify `src/tasker/csv_task.rs` or any logic related to the `csv_analysis
 - For testing tasker CSV analysis (e.g., csv_task.rs), use the local mock datasets in the TestingDownloads directory instead of downloading remote files to avoid network timeouts and rate limiting constraints.
 - The runner application uses an AppManifest JSON schema to dynamically configure external tasks. Child executables intercept the --manifest CLI flag (via crm_tool::utils::intercept_manifest) to print their schema as JSON and exit with code 0 to allow the runner to automatically generate GUI inputs and map arguments.
 - The yasweb configuration logic ensures that existing start_date_key and end_date_key settings for a report are preserved when its other properties (like report type or filters) are updated via CLI arguments.
-- In the yasweb binary, boolean-style CLI arguments like --add-time-to-file and --monthly are defined as bool types in the clap parser to ensure they behave as simple flags (true if present, false if absent).
+- In the yasweb binary, boolean-style CLI arguments like --add-time-to-file are defined as bool types in the clap parser to ensure they behave as simple flags (true if present, false if absent).
 - The project supports dynamic date variables (today, yesterday, tomorrow, eomonth) in date-related CLI arguments across yasweb and crm binaries, resolved via src/utils.rs.
 - The tasker CLI uses the --only-call-center flag to explicitly trigger Call Center emails. Exception team emails are triggered dynamically via the --send-exceptions CLI flag or the send_exceptions configuration option.
 
