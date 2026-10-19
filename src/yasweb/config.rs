@@ -64,9 +64,6 @@ impl YaswebConfig {
         if self.url.trim().is_empty() {
             anyhow::bail!("url cannot be empty");
         }
-        if self.concurrency == 0 {
-            anyhow::bail!("concurrency must be greater than 0");
-        }
         Ok(())
     }
 }
@@ -94,8 +91,6 @@ pub struct YaswebConfig {
     pub headless: bool,
     #[serde(default)]
     pub keep_open: bool,
-    #[serde(default = "default_concurrency")]
-    pub concurrency: usize,
     #[serde(default = "default_timeout_minutes")]
     pub timeout_minutes: u64,
     #[serde(default)]
@@ -120,10 +115,6 @@ fn default_file_log_level() -> String {
     "TRACE".to_string()
 }
 
-fn default_concurrency() -> usize {
-    6
-}
-
 impl Default for YaswebConfig {
     fn default() -> Self {
         Self {
@@ -132,7 +123,6 @@ impl Default for YaswebConfig {
             password: None,
             headless: false,
             keep_open: false,
-            concurrency: 6,
             timeout_minutes: 60,
             reports: HashMap::new(),
             log_stdout_level: "DEBUG".to_string(),
@@ -153,7 +143,6 @@ impl std::fmt::Debug for YaswebConfig {
             )
             .field("headless", &self.headless)
             .field("keep_open", &self.keep_open)
-            .field("concurrency", &self.concurrency)
             .field("timeout_minutes", &self.timeout_minutes)
             .field("reports", &self.reports)
             .field("log_stdout_level", &self.log_stdout_level)
