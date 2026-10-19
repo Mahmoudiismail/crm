@@ -7,6 +7,7 @@ pub fn get_opd_script_template() -> &'static str {
     r#" 
 param(
     [string]$CsvPath,
+    [string]$OutlookHelperPath,
     [string]$EmailTo,
     [string]$EmailSubject,
     [string]$SpecialCol,
@@ -187,7 +188,7 @@ try {
  
     Start-Sleep -Seconds 1
  
-    $imagePath = Join-Path $env:TEMP "Query1.jpg"
+    $imagePath = Join-Path $env:TEMP ("Query1_" + [guid]::NewGuid().ToString("N") + ".jpg")
     $chart.Export($imagePath, "JPG") | Out-Null
  
     $chartObj.Delete()
@@ -196,19 +197,18 @@ try {
         throw "Image export failed."
     }
 
-    Write-Output "TRACE: Initializing Outlook Mail Item..."
-    $outlook = New-Object -ComObject Outlook.Application
-    $mail = $outlook.CreateItem(0)
-    $mail.To = $EmailTo
-    $mail.Subject = $EmailSubject
-
-    Write-Output "TRACE: Attaching image to email..."
-    $mail.Attachments.Add($imagePath) | Out-Null
-
-    $mail.Send()
+    Write-Output "TRACE: Sending exported image through shared Outlook function..."
+    . $OutlookHelperPath
+    Send-OutlookMail -Mode "New" -To $EmailTo -Subject $EmailSubject -AttachmentPaths @($imagePath) -DisplayOrSend "Send()"
     Write-Output "TRACE: Email sent successfully."
 
+} catch {
+    Write-Error "OPD processing or email sending failed: $_"
+    exit 1
 } finally {
+    if ($imagePath -and (Test-Path -LiteralPath $imagePath)) {
+        Remove-Item -LiteralPath $imagePath -Force -ErrorAction SilentlyContinue
+    }
     if ($workbook) { $workbook.Close($false) }
     if ($excel) { $excel.Quit() }
     [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
@@ -241,6 +241,8 @@ pub fn generate_and_email_image(cus_file_path: &Path, config: &OpdAnalysisConfig
         let cus_path_str = cus_file_path.to_string_lossy().to_string();
 
         let script_manager = crate::tasker::script_manager::ScriptManager::new();
+        let helper_path = crate::tasker::email::outlook::get_outlook_helper_path()?;
+        let helper_path_str = helper_path.to_string_lossy().into_owned();
         let script_path = script_manager.get_or_create_script(
             "OPD Analysis",
             "opd_analysis_email.ps1",
@@ -252,6 +254,7 @@ pub fn generate_and_email_image(cus_file_path: &Path, config: &OpdAnalysisConfig
             &script_path,
             &[
                 ("-CsvPath", &cus_path_str),
+                ("-OutlookHelperPath", &helper_path_str),
                 ("-EmailTo", email_to),
                 ("-EmailSubject", email_subject),
                 ("-SpecialCol", &special_col),
@@ -286,7 +289,9 @@ mod tests {
         assert!(script
             .contains("$exactRange.AutoFilter($dayColIdx, $todayDat, 1, [Type]::Missing, $false)"));
         assert!(script.contains("$chart.Export($imagePath, \"JPG\")"));
-        assert!(script.contains("$mail.Attachments.Add($imagePath)"));
+        assert!(script.contains(r#"Send-OutlookMail -Mode "New""#));
+        assert!(script.contains("-AttachmentPaths @($imagePath)"));
+        assert!(script.contains("$OutlookHelperPath"));
         assert!(!script.contains("$inspector.WordEditor"));
     }
 
