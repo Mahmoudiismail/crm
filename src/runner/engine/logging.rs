@@ -3,7 +3,7 @@ use std::sync::Arc;
 use chrono::Local;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
-use tracing::{debug, error};
+use tracing::error;
 
 #[derive(Clone, Debug)]
 pub struct TaskLogger {
