@@ -100,7 +100,7 @@ If you modify `src/tasker/csv_task.rs` or any logic related to the `csv_analysis
 
 ## Repository Memories
 
-- Concurrency in yasweb is controlled exclusively via the concurrency field in yasweb_config.json (default 6) and is used to chunk date ranges for parallel task execution; it is not exposed as a CLI argument.
+- YASWEB concurrency is controlled by the `concurrency` field in `yasweb_config.json` (default 6) and caps active browser automation operations globally across reports; it does not chunk date ranges. Runner owns date-range scheduling.
 - To ensure logging parity between application-specific logs (e.g., crm.log) and the runner's task logs, setup_logging in src/utils.rs configures the file layer with a TRACE level filter and the stdout layer with a DEBUG level filter.
 - Commit codebase refactoring and remediation changes incrementally, making individual 'one by one' Git commits for each distinct fix.
 - The crm tool's configuration logic normalizes from_date, to_date, and calls_from_date to ISO format upon loading and finalization (finalize_runtime_fields) to ensure consistent data processing regardless of the format used in config.json.
