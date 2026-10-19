@@ -275,11 +275,13 @@ pub async fn run_task_inner(
     let scheduled_time = task.next_run_at.clone();
 
     // Per-task lifecycle details belong in the task-specific log, not runner.log.
-    logger.log(&format!(
-        "Task execution started; scheduled_time={}, actual_start_time={}",
-        scheduled_time,
-        start_time.to_rfc3339()
-    )).await;
+    logger
+        .log(&format!(
+            "Task execution started; scheduled_time={}, actual_start_time={}",
+            scheduled_time,
+            start_time.to_rfc3339()
+        ))
+        .await;
 
     let effective_shell_timeout = if task.timeout_seconds > 0 {
         task.timeout_seconds
@@ -334,7 +336,9 @@ pub async fn run_task_inner(
                         task.last_status = format!("post-run error: {}", e);
 
                         let err_msg = format!("post-run error: {}", e);
-                        logger.log(&format!("Post-run pipeline failed: {}", err_msg)).await;
+                        logger
+                            .log(&format!("Post-run pipeline failed: {}", err_msg))
+                            .await;
                     }
                 }
             }
@@ -353,11 +357,13 @@ pub async fn run_task_inner(
         .num_milliseconds();
     let status_str = task.last_status.clone();
 
-    logger.log(&format!(
-        "Task execution ended; duration_ms={}, status={}",
-        duration,
-        status_str
-    )).await;
+    logger
+        .log(&format!(
+            "Task execution ended; duration_ms={}, status={}",
+            duration,
+            status_str
+        ))
+        .await;
 
     let mut st = status.lock().await;
     st.last_run_at = Utc::now().to_rfc3339();
