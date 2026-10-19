@@ -341,8 +341,14 @@ async fn main() -> Result<()> {
     info!("Loaded config for URL: {}", config.url);
 
     let mut report_futures = Vec::new();
-    let operation_limit = Arc::new(tokio::sync::Semaphore::new(config.concurrency));
-    info!("YASWEB operation concurrency limit: {}", config.concurrency);
+    // A zero limit means unlimited operations; positive values share one semaphore across reports.
+    let operation_limit = (config.concurrency > 0)
+        .then(|| Arc::new(tokio::sync::Semaphore::new(config.concurrency)));
+    if config.concurrency == 0 {
+        info!("YASWEB operation concurrency limit: unlimited");
+    } else {
+        info!("YASWEB operation concurrency limit: {}", config.concurrency);
+    }
 
     for active_report_name in active_report_names {
         let active_report_type = active_report_type_global.clone();
@@ -481,9 +487,13 @@ async fn main() -> Result<()> {
 
                     let active_report_name_for_dir = active_report_name.clone();
 
-                    tracing::trace!("Waiting for browser-operation permit: report={} range={}..{}", active_report_name_task, start_dt, end_dt);
-                    let operation_permit = operation_limit.clone().acquire_owned().await
-                        .context("Failed to acquire YASWEB operation concurrency permit")?;
+                    let operation_permit = if let Some(operation_limit) = &operation_limit {
+                        tracing::trace!("Waiting for browser-operation permit: report={} range={}..{}", active_report_name_task, start_dt, end_dt);
+                        Some(operation_limit.clone().acquire_owned().await
+                            .context("Failed to acquire YASWEB operation concurrency permit")?)
+                    } else {
+                        None
+                    };
                     tracing::trace!("Spawning task for range: {} to {}", start_dt, end_dt);
                     tasks.push(tokio::task::spawn_blocking(move || -> Result<(Vec<String>, PathBuf, String)> {
                         let _operation_permit = operation_permit;
