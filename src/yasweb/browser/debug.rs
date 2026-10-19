@@ -170,7 +170,7 @@ pub fn save_failure_diagnostics(tab: &Arc<headless_chrome::Tab>, step_name: &str
 
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_secs())
+        .map(|duration| duration.as_millis())
         .unwrap_or_default();
     let safe_step = step_name
         .chars()
