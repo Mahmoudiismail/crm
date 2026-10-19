@@ -66,16 +66,14 @@ pub(crate) fn render_dashboard(
     );
 
     let card_html = card("Configured Tasks", &table_html, None);
-    let status_json = serde_json::to_string(status).unwrap_or_else(|_| "{}".to_string());
     let refresh_script = r#"<script>
 (function () {
-  const initialStatus = __INITIAL_STATUS__;
   const snapshot = (value) => JSON.stringify([
     value.running_tasks_count, value.queued_tasks_count,
     value.running_task_ids, value.queued_task_ids, value.waiting_for_app,
     value.last_task_id, value.last_run_at
   ]);
-  let previous = snapshot(initialStatus);
+  let previous = null;
   const url = new URL(window.location.href);
   if (url.searchParams.has("toast")) {
     url.searchParams.delete("toast");
@@ -88,7 +86,7 @@ pub(crate) fn render_dashboard(
       if (!response.ok) return;
       const current = await response.json();
       const next = snapshot(current);
-      if (next !== previous) {
+      if (previous !== null && next !== previous) {
         window.location.reload();
         return;
       }
@@ -100,7 +98,6 @@ pub(crate) fn render_dashboard(
   window.setInterval(refreshStatus, 5000);
 })();
 </script>"#;
-    let refresh_script = refresh_script.replace("__INITIAL_STATUS__", &status_json);
 
     layout(
         "Dashboard",
