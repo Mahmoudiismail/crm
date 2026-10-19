@@ -483,13 +483,13 @@ where
             );
 
             extracted_body = extracted_body
-                .replace(old_pattern, &new_pattern)
-                .replace(old_pattern_r, &new_pattern)
-                .replace(prev_div_pattern, &new_pattern)
-                .replace(prev_div_with_nbsps_pattern, &new_pattern);
+                .replace(old_pattern, new_pattern)
+                .replace(old_pattern_r, new_pattern)
+                .replace(prev_div_pattern, new_pattern)
+                .replace(prev_div_with_nbsps_pattern, new_pattern);
 
             let old_pattern_inline = "Kindly find below the list of open tickets in {bucket_name} for the period from {from_date_str} until {today_str}.<br/><br/>{html_table}";
-            extracted_body = extracted_body.replace(old_pattern_inline, &new_pattern);
+            extracted_body = extracted_body.replace(old_pattern_inline, new_pattern);
 
             let final_body = extracted_body
                 .replace("{receiver_name}", &receiver_name)
