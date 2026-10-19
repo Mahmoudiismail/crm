@@ -5,8 +5,6 @@ use crm_tool::manifest::{AppArg, AppManifest, ArgType};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::fs::OpenOptions;
-use fs2::FileExt;
 
 use clap::Parser;
 use crm_tool::utils::{
@@ -245,28 +243,6 @@ async fn main() -> Result<()> {
     let exe_dir = executable_dir()?;
     let config_path = if p.is_absolute() { p } else { exe_dir.join(p) };
 
-    // Prevent overlapping YASWEB processes from racing on the same menu, browser profile,
-    // temporary downloads, and output filenames. The OS releases this lock if the process exits.
-    let lock_path = config_path.with_extension("lock");
-    let _instance_lock = tokio::task::spawn_blocking(move || -> Result<std::fs::File> {
-        let file = OpenOptions::new()
-            .create(true)
-            .read(true)
-            .write(true)
-            .open(&lock_path)
-            .with_context(|| format!("Failed to open YASWEB instance lock {:?}", lock_path))?;
-        file.lock_exclusive()
-            .with_context(|| "Failed to acquire the YASWEB instance lock")?;
-        Ok(file)
-    })
-    .await
-    .context("Failed to join YASWEB instance-lock task")??;
-
-    let legacy_concurrency_setting = std::fs::read_to_string(&config_path)
-        .ok()
-        .and_then(|content| serde_json::from_str::<serde_json::Value>(&content).ok())
-        .is_some_and(|value| value.get("concurrency").is_some());
-
     let mut config: YaswebConfig =
         crm_tool::utils::load_or_create_config(&config_path, &YaswebConfig::default())?;
 
@@ -280,7 +256,7 @@ async fn main() -> Result<()> {
         parse_log_level(&config.log_file_level)?,
     )?;
 
-    let config_updated = config.finalize_runtime_fields() || legacy_concurrency_setting;
+    let config_updated = config.finalize_runtime_fields();
 
     let active_report_names = options.name;
     let active_report_type_global = options.r#type.unwrap_or_default();
@@ -365,8 +341,8 @@ async fn main() -> Result<()> {
     info!("Loaded config for URL: {}", config.url);
 
     let mut report_futures = Vec::new();
-
-    // Chunk runs into concurrent batches based on config
+    let operation_limit = Arc::new(tokio::sync::Semaphore::new(config.concurrency));
+    info!("YASWEB operation concurrency limit: {}", config.concurrency);
 
     for active_report_name in active_report_names {
         let active_report_type = active_report_type_global.clone();
@@ -377,6 +353,7 @@ async fn main() -> Result<()> {
 
         let config = config.clone();
         let config_path_clone = config_path.clone();
+        let operation_limit = operation_limit.clone();
 
         let active_report_name_clone_for_future = active_report_name.clone();
 
@@ -413,7 +390,7 @@ async fn main() -> Result<()> {
             let active_report_name_clone = active_report_name.clone();
             let cli_download_path_clone = cli_download_path.clone();
 
-            // Process report ranges sequentially. Runner owns scheduling and parallelism.
+            // Runner supplies the requested date range. Limit browser operations globally across reports.
             for (i, (start_dt, end_dt)) in date_ranges.iter().enumerate() {
                 let mut tasks = Vec::new();
                     let config_task = config.clone();
@@ -504,8 +481,12 @@ async fn main() -> Result<()> {
 
                     let active_report_name_for_dir = active_report_name.clone();
 
+                    tracing::trace!("Waiting for browser-operation permit: report={} range={}..{}", active_report_name_task, start_dt, end_dt);
+                    let operation_permit = operation_limit.clone().acquire_owned().await
+                        .context("Failed to acquire YASWEB operation concurrency permit")?;
                     tracing::trace!("Spawning task for range: {} to {}", start_dt, end_dt);
                     tasks.push(tokio::task::spawn_blocking(move || -> Result<(Vec<String>, PathBuf, String)> {
+                        let _operation_permit = operation_permit;
                         let task_started = std::time::Instant::now();
                         tracing::info!("YASWEB TASK START: index={} report='{}' date_suffix='{}'", i, active_report_name_task, date_suffix);
                         tracing::info!("Starting browser tab automation for task {}...", i);
@@ -661,14 +642,12 @@ async fn main() -> Result<()> {
         });
     }
 
-    // Do not overlap separate report automations inside one YASWEB process.
-    for report_future in report_futures {
-        match report_future.await {
-            Ok(()) => {}
-            Err(e) => {
-                error!("YASWEB REPORT FAILED: {:#}", e);
-                return Err(e);
-            }
+    // Reports may run concurrently, while the shared semaphore caps active browser operations.
+    let report_results = futures_util::future::join_all(report_futures).await;
+    for result in report_results {
+        if let Err(e) = result {
+            error!("YASWEB REPORT FAILED: {:#}", e);
+            return Err(e);
         }
     }
     info!("YASWEB PROCESS END: status=SUCCESS");
