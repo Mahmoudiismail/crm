@@ -174,21 +174,19 @@ pub fn generate_html_report(
         sections_html.push_str("</table><br/>");
     }
 
-    let indent_spaces = config.dashboard_config.indentation_spaces.unwrap_or(4);
-    let indent_width = indent_spaces * 5;
-
+    let indent_width =
+        crate::tasker::email::html::indentation_width(config.dashboard_config.indentation_spaces);
     let default_template = format!(
         r#"<html>
 <body style="font-family: Calibri, Arial, sans-serif;">
     Dear All,<br/>
-    <table border='0'><tr><td width='{indent}'></td><td>
-    Hope everyone is doing well!<br/>
-    Kindly check CRM Updated open TKTs.<br/><br/>
-    {{sections}}
-    </td></tr></table>
+    <div style="margin-left:{indent_width}px;">
+        Hope everyone is doing well!<br/>
+        Kindly check CRM Updated open TKTs.<br/><br/>
+        {{sections}}
+    </div>
 </body>
-</html>"#,
-        indent = indent_width
+</html>"#
     );
 
     let body_template = if let Some(template_file) = &config.body_template_file {

@@ -2,22 +2,6 @@ use crate::tasker::config::DashboardUpdaterConfig;
 use anyhow::Result;
 use tracing::{error, info};
 
-fn run_persistent_powershell_with_args(
-    logical_name: &str,
-    script_template: &str,
-    args: &[(&str, &str)],
-) -> Result<()> {
-    let script_manager = crate::tasker::script_manager::ScriptManager::new();
-    let script_path =
-        script_manager.get_or_create_script("Dashboard Updater", logical_name, script_template)?;
-    script_manager.execute_script_with_args(&script_path, args)
-}
-
-#[allow(dead_code)]
-fn run_persistent_powershell(logical_name: &str, script: &str) -> Result<()> {
-    run_persistent_powershell_with_args(logical_name, script, &[])
-}
-
 pub fn run(config: &DashboardUpdaterConfig) -> Result<()> {
     info!("Starting DashboardUpdater task. Config: {:?}", config);
 
@@ -410,7 +394,8 @@ finally {
 
     // Only run PowerShell if not a dry run test
     if !config.save_email_as_html.unwrap_or(false) {
-        let ps_result = run_persistent_powershell_with_args(
+        let ps_result = crate::tasker::script_manager::ScriptManager::new().run_script_with_args(
+            "Dashboard Updater",
             "dashboard_updater.ps1",
             ps_script,
             &[("-DashboardPath", &dashboard_path_str)],
@@ -430,35 +415,12 @@ finally {
         info!("Sending dashboard via email to: {}", email_to);
 
         info!("Email generation started");
-        let indent_spaces = config.indentation_spaces.unwrap_or(4);
-        let indent_width = indent_spaces * 5;
-
+        let indentation_width =
+            crate::tasker::email::html::indentation_width(config.indentation_spaces);
         let html_body = format!(
-            r#"<html><body style='font-family: Arial, sans-serif;'>Dear Aya,<br/><table border='0'><tr><td width='{}'></td><td>Please find the CRM Ticket dashboard attached.</td></tr></table></body></html>"#,
-            indent_width
+            r#"<html><body style="font-family: Arial, sans-serif;">Dear Aya,<br/><div style="margin-left:{indentation_width}px;">Please find the CRM Ticket dashboard attached.</div></body></html>"#
         );
         info!("Email generation completed");
-
-        let ps_email_script = r#"
-param(
-    [string]$EmailTo,
-    [string]$EmailCc,
-    [string]$Subject,
-    [string]$HtmlBody,
-    [string]$AttachmentPath
-)
-
-$Outlook = New-Object -ComObject Outlook.Application
-$Mail = $Outlook.CreateItem(0)
-if ($EmailTo) { $Mail.To = $EmailTo }
-if ($EmailCc) { $Mail.CC = $EmailCc }
-if ($Subject) { $Mail.Subject = $Subject }
-if ($HtmlBody) { $Mail.HTMLBody = $HtmlBody }
-if ($AttachmentPath -and (Test-Path $AttachmentPath)) {
-	$Mail.Attachments.Add($AttachmentPath)
-}
-$Mail.Send()
-"#;
 
         if config.save_email_as_html.unwrap_or(false) {
             let payloads_dir = std::env::current_dir()
@@ -475,19 +437,17 @@ $Mail.Send()
             return Ok(());
         }
 
-        if let Err(e) = run_persistent_powershell_with_args(
-            "dashboard_email.ps1",
-            ps_email_script,
-            &[
-                ("-EmailTo", email_to.as_str()),
-                ("-EmailCc", email_cc),
-                ("-Subject", "CRM Tickets Dashboard"),
-                ("-HtmlBody", html_body.as_str()),
-                ("-AttachmentPath", dashboard_path_str.as_str()),
-            ],
+        if let Err(e) = crate::tasker::email::outlook::send_email(
+            email_to,
+            email_cc,
+            "CRM Tickets Dashboard",
+            &html_body,
+            Some(&dashboard_path_str),
+            None,
+            "Send()",
         ) {
             error!("Failed to send dashboard email: {}", e);
-            // Optionally, try a fallback email or bubble up
+            return Err(e);
         } else {
             info!("Successfully sent dashboard email.");
             info!("Email sent");
@@ -680,8 +640,8 @@ mod tests {
         let html_content = std::fs::read_to_string(latest.path()).unwrap();
 
         assert!(
-            html_content.contains("<td width='20'></td>"),
-            "HTML email should contain the proper indentation table. Found: {}",
+            html_content.contains("margin-left:20px;"),
+            "HTML email should contain the configured indentation. Found: {}",
             html_content
         );
     }

@@ -298,3 +298,20 @@ mod tests {
         assert!(html.contains("Grand Total"));
     }
 }
+
+/// Convert the configured indentation level to the legacy pixel width.
+pub fn indentation_width(spaces: Option<u32>) -> u32 {
+    spaces.unwrap_or(4).saturating_mul(5)
+}
+
+#[cfg(test)]
+mod indentation_tests {
+    use super::indentation_width;
+
+    #[test]
+    fn indentation_width_preserves_default_and_custom_values() {
+        assert_eq!(indentation_width(None), 20);
+        assert_eq!(indentation_width(Some(4)), 20);
+        assert_eq!(indentation_width(Some(6)), 30);
+    }
+}

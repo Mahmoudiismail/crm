@@ -369,15 +369,10 @@ try {
 }
 "#;
 
-    let script_manager = crate::tasker::script_manager::ScriptManager::new();
-    let script_path = script_manager.get_or_create_script(
+    crate::tasker::script_manager::ScriptManager::new().run_script_with_args(
         "Department Split",
         "department_split.ps1",
         ps_script,
-    )?;
-
-    script_manager.execute_script_with_args(
-        &script_path,
         &[
             ("-DashboardPath", dashboard_path_str),
             ("-OutputDir", out_dir_str),

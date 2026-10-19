@@ -103,10 +103,7 @@ pub fn resolve_relative_to_base_dir(
 }
 
 pub fn resolve_relative_to_exe_dir(path: &str) -> std::path::PathBuf {
-    let exe_dir = std::env::current_exe()
-        .ok()
-        .and_then(|e| e.parent().map(|p| p.to_path_buf()));
-    resolve_relative_to_base_dir(path, exe_dir.as_deref())
+    crate::utils::resolve_relative_to_exe_dir(path)
 }
 
 pub fn generate_csv(params: &CsvAnalysisParams<'_>) -> Result<Option<std::path::PathBuf>> {

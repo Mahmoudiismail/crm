@@ -415,15 +415,10 @@ where
 </head>
 <body style="font-family: Arial, sans-serif;">
     Dear {receiver_name},<br/>
-    <table border="0" cellpadding="0" cellspacing="0">
-        <tr>
-            <td width="20"></td>
-            <td>
-                Kindly find below the list of open tickets in {bucket_name} for the period from {from_date_str} until {today_str}.<br/><br/>
-                {html_table}
-            </td>
-        </tr>
-    </table>
+    <div style="margin-left:20px;">
+        Kindly find below the list of open tickets in {bucket_name} for the period from {from_date_str} until {today_str}.<br/><br/>
+        {html_table}
+    </div>
 </body>
 </html>"#;
                 if let Err(e) = std::fs::write(&template_path, default_template) {
@@ -463,23 +458,18 @@ where
             }
 
             extracted_body = extracted_body
-                .replace("<table border=\"0\" cellpadding=\"0\" cellspacing=\"0\">\r\n        <tr>\r\n            <td width=\"20\"></td>\r\n            <td>\r\n                {html_table}\r\n            </td>\r\n        </tr>\r\n    </table>", "{html_table}")
-                .replace("<table border=\"0\" cellpadding=\"0\" cellspacing=\"0\">\n        <tr>\n            <td width=\"20\"></td>\n            <td>\n                {html_table}\n            </td>\n        </tr>\n    </table>", "{html_table}")
+                .replace("<table border=\"0\" cellpadding=\"0\" cellspacing=\"0\">\r\n        <tr>\r\n            <td width=\"20\"></td>\r\n            <td>\r\n                {html_table}\r\n            </td>\r\n        </tr>\r\n    </table>", "<div style=\"margin-left:20px;\">{html_table}</div>")
+                .replace("<table border=\"0\" cellpadding=\"0\" cellspacing=\"0\">\n        <tr>\n            <td width=\"20\"></td>\n            <td>\n                {html_table}\n            </td>\n        </tr>\n    </table>", "<div style=\"margin-left:20px;\">{html_table}</div>")
                 .replace("&nbsp;&nbsp;&nbsp;&nbsp;", "")
                 .replace("Dear All", "Dear {receiver_name}");
 
             let indent_spaces = config.indentation_spaces.unwrap_or(4);
-            let indent_width = indent_spaces * 5;
-
             let old_pattern = "Kindly find below the list of open tickets in {bucket_name} for the period from {from_date_str} until {today_str}.<br/><br/>\n    {html_table}";
             let old_pattern_r = "Kindly find below the list of open tickets in {bucket_name} for the period from {from_date_str} until {today_str}.<br/><br/>\r\n    {html_table}";
-            let new_pattern = format!(
-                r#"<table border='0'><tr><td width='{}'></td><td>
-        Kindly find below the list of open tickets in {{bucket_name}} for the period from {{from_date_str}} until {{today_str}}.<br/><br/>
-        {{html_table}}
-    </td></tr></table>"#,
-                indent_width
-            );
+            let new_pattern = r#"<div style="margin-left:20px;">
+        Kindly find below the list of open tickets in {bucket_name} for the period from {from_date_str} until {today_str}.<br/><br/>
+        {html_table}
+    </div>"#;
             let prev_div_pattern = r#"<div style="margin-left: 20px;">
         Kindly find below the list of open tickets in {bucket_name} for the period from {from_date_str} until {today_str}.<br/><br/>
         {html_table}
@@ -493,13 +483,13 @@ where
             );
 
             extracted_body = extracted_body
-                .replace(old_pattern, &new_pattern)
-                .replace(old_pattern_r, &new_pattern)
-                .replace(prev_div_pattern, &new_pattern)
-                .replace(prev_div_with_nbsps_pattern, &new_pattern);
+                .replace(old_pattern, new_pattern)
+                .replace(old_pattern_r, new_pattern)
+                .replace(prev_div_pattern, new_pattern)
+                .replace(prev_div_with_nbsps_pattern, new_pattern);
 
             let old_pattern_inline = "Kindly find below the list of open tickets in {bucket_name} for the period from {from_date_str} until {today_str}.<br/><br/>{html_table}";
-            extracted_body = extracted_body.replace(old_pattern_inline, &new_pattern);
+            extracted_body = extracted_body.replace(old_pattern_inline, new_pattern);
 
             let final_body = extracted_body
                 .replace("{receiver_name}", &receiver_name)
@@ -511,20 +501,25 @@ where
             let wrapped_body = format!("<html><body>{}</body></html>", final_body);
             (extracted_subject, wrapped_body)
         } else {
-            let indent_spaces = config.indentation_spaces.unwrap_or(4);
-            let indent_width = indent_spaces * 5;
             let body = format!(
                 r#"<html><body style="font-family: Arial, sans-serif;">Dear {},<br/>
-    <table border='0'><tr><td width='{}'></td><td>
+    <div style="margin-left:20px;">
         Kindly find below the list of open tickets in {} for the period from {} until {}.<br/><br/>
         {}
-    </td></tr></table>
+    </div>
 </body></html>"#,
-                receiver_name, indent_width, bucket_name, from_date_str, today_str, html_table
+                receiver_name, bucket_name, from_date_str, today_str, html_table
             );
             let subject = format!("Open TKTs - {}", bucket_name);
             (subject, body)
         };
+
+        let indentation_width =
+            crate::tasker::email::html::indentation_width(config.indentation_spaces);
+        let indentation_css = format!("margin-left:{}px;", indentation_width);
+        let body = body
+            .replace("margin-left:20px;", &indentation_css)
+            .replace("margin-left: 20px;", &indentation_css);
 
         let tmp_dir = std::env::temp_dir();
         let safe_name = bucket_name.replace(|c: char| !c.is_ascii_alphanumeric(), "_");
@@ -739,6 +734,7 @@ mod tests {
         let html_content = std::fs::read_to_string(&email_html_path).unwrap();
         assert!(!html_content.contains("<body></body>"));
         assert!(html_content.contains("Kindly find below"));
+        assert!(html_content.contains("margin-left:20px;"));
 
         let _ = std::fs::remove_file(email_html_path);
         let _ = std::fs::remove_file(temp_dir.join("Call_Center_open_tickets.csv"));

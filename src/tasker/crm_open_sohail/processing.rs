@@ -196,6 +196,15 @@ fn resolve_team_mapping(config: &CrmOpenSohailConfig) -> Result<HashMap<String, 
     Ok(team_to_info)
 }
 
+fn outlook_mention_html(owner: &str, email: &str) -> String {
+    format!(
+        "<a id=\"OWAAM{:032X}Z\" href=\"mailto:{}\">@{}</a>",
+        rand::random::<u128>(),
+        email,
+        owner
+    )
+}
+
 fn enrich_dataset(
     extracted_data: Vec<ExtractedSlicerDataset>,
     team_to_info: &HashMap<String, TeamMappingInfo>,
@@ -225,9 +234,7 @@ fn enrich_dataset(
                 Some(info) => {
                     if info.is_shared || is_main_branch {
                         match (&info.owner_name, &info.owner_email) {
-                            (o, e) if !o.is_empty() && !e.is_empty() => {
-                                format!("<a href=\"mailto:{}\">{}</a>", e, o)
-                            }
+                            (o, e) if !o.is_empty() && !e.is_empty() => outlook_mention_html(o, e),
                             (o, _) if !o.is_empty() => o.to_string(),
                             _ => fallback_oul_text.to_string(),
                         }
@@ -287,4 +294,20 @@ pub fn process_extracted_data(
     let final_datasets = enrich_dataset(extracted_data, &team_to_info, &fallback_oul_text);
 
     Ok(final_datasets)
+}
+
+#[cfg(test)]
+mod mention_tests {
+    use super::outlook_mention_html;
+
+    #[test]
+    fn oul_email_uses_outlook_mention_markup() {
+        let html = outlook_mention_html("Owner Name", "owner@example.com");
+        let pattern = regex::Regex::new(
+            r#"<a id="OWAAM[0-9A-F]{32}Z" href="mailto:owner@example\.com">@Owner Name</a>"#,
+        )
+        .unwrap();
+
+        assert!(pattern.is_match(&html), "unexpected mention HTML: {html}");
+    }
 }

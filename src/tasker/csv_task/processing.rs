@@ -129,12 +129,11 @@ pub fn process_files(
             std::mem::swap(&mut record, &mut new_record);
 
             let ticket_id_val = ticket_id_idx.and_then(|idx| record.get(idx)).unwrap_or("");
-            if seen_tickets.contains(ticket_id_val) {
+            let ticket_id_val_owned = ticket_id_val.to_string();
+            if !seen_tickets.insert(ticket_id_val_owned.clone()) {
                 total_deduped_rows += 1;
                 continue;
             }
-            let ticket_id_val_owned = ticket_id_val.to_string();
-            seen_tickets.insert(ticket_id_val_owned.clone());
 
             let branch_val = branch_idx
                 .and_then(|idx| record.get(idx))

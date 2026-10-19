@@ -300,6 +300,17 @@ impl ScriptManager {
         Ok(target_path)
     }
 
+    pub fn run_script_with_args(
+        &self,
+        task_name: &str,
+        logical_name: &str,
+        script_template: &str,
+        args: &[(&str, &str)],
+    ) -> Result<()> {
+        let script_path = self.get_or_create_script(task_name, logical_name, script_template)?;
+        self.execute_script_with_args(&script_path, args)
+    }
+
     pub fn execute_script_with_args(
         &self,
         script_path: &Path,
