@@ -1134,7 +1134,7 @@ mod working_hours_profile_ui_tests {
 
 #[cfg(test)]
 mod run_all_button_tests {
-    use super::run_all_now_button;
+    use super::*;
 
     #[test]
     fn run_all_now_uses_post_form() {
@@ -1143,5 +1143,39 @@ mod run_all_button_tests {
         assert!(html.contains("action='/run-all'"));
         assert!(html.contains("type='submit'"));
         assert!(!html.contains("<a "));
+    }
+
+    #[test]
+    fn waiting_for_app_is_displayed_even_after_task_leaves_running_ids() {
+        let task = RunnerTask {
+            id: "waiting_task".to_string(),
+            name: "Waiting task".to_string(),
+            enabled: true,
+            repetition: Repetition::Repeat,
+            frequency_seconds: 60,
+            next_run_at: String::new(),
+            schedules: Vec::new(),
+            steps: Vec::new(),
+            post_run_steps: Vec::new(),
+            last_run_at: String::new(),
+            last_status: String::new(),
+            timeout_seconds: 0,
+        };
+        let status = crate::runner::engine::RunnerStatus {
+            running_tasks_count: 0,
+            queued_tasks_count: 1,
+            running_task_ids: Vec::new(),
+            queued_task_ids: vec!["waiting_task".to_string()],
+            last_error: String::new(),
+            last_task_id: String::new(),
+            last_run_at: String::new(),
+            waiting_for_app: std::collections::HashMap::from([(
+                "waiting_task".to_string(),
+                "CRM".to_string(),
+            )]),
+        };
+
+        let html = render_task_row(&task, &status);
+        assert!(html.contains("Waiting for CRM"));
     }
 }
