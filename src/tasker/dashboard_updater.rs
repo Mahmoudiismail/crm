@@ -430,29 +430,10 @@ finally {
         info!("Sending dashboard via email to: {}", email_to);
 
         info!("Email generation started");
-        let html_body = r#"<html><body style="font-family: Arial, sans-serif;">Dear Aya,<br/><div style="margin-left:20px;">Please find the CRM Ticket dashboard attached.</div></body></html>"#.to_string();
+        let indentation_width = crate::tasker::email::html::indentation_width(config.indentation_spaces);
+        let html_body = format!(r#"<html><body style="font-family: Arial, sans-serif;">Dear Aya,<br/><div style="margin-left:{indentation_width}px;">Please find the CRM Ticket dashboard attached.</div></body></html>"#);
         info!("Email generation completed");
 
-        let ps_email_script = r#"
-param(
-    [string]$EmailTo,
-    [string]$EmailCc,
-    [string]$Subject,
-    [string]$HtmlBody,
-    [string]$AttachmentPath
-)
-
-$Outlook = New-Object -ComObject Outlook.Application
-$Mail = $Outlook.CreateItem(0)
-if ($EmailTo) { $Mail.To = $EmailTo }
-if ($EmailCc) { $Mail.CC = $EmailCc }
-if ($Subject) { $Mail.Subject = $Subject }
-if ($HtmlBody) { $Mail.HTMLBody = $HtmlBody }
-if ($AttachmentPath -and (Test-Path $AttachmentPath)) {
-	$Mail.Attachments.Add($AttachmentPath)
-}
-$Mail.Send()
-"#;
 
         if config.save_email_as_html.unwrap_or(false) {
             let payloads_dir = std::env::current_dir()
@@ -469,19 +450,12 @@ $Mail.Send()
             return Ok(());
         }
 
-        if let Err(e) = run_persistent_powershell_with_args(
-            "dashboard_email.ps1",
-            ps_email_script,
-            &[
-                ("-EmailTo", email_to.as_str()),
-                ("-EmailCc", email_cc),
-                ("-Subject", "CRM Tickets Dashboard"),
-                ("-HtmlBody", html_body.as_str()),
-                ("-AttachmentPath", dashboard_path_str.as_str()),
-            ],
+        if let Err(e) = crate::tasker::email::outlook::send_email(
+            email_to, email_cc, "CRM Tickets Dashboard", &html_body,
+            Some(&dashboard_path_str), None, "Send()",
         ) {
             error!("Failed to send dashboard email: {}", e);
-            // Optionally, try a fallback email or bubble up
+            return Err(e);
         } else {
             info!("Successfully sent dashboard email.");
             info!("Email sent");
@@ -674,8 +648,8 @@ mod tests {
         let html_content = std::fs::read_to_string(latest.path()).unwrap();
 
         assert!(
-            html_content.contains("<td width='20'></td>"),
-            "HTML email should contain the proper indentation table. Found: {}",
+            html_content.contains("margin-left:20px;"),
+            "HTML email should contain the configured indentation. Found: {}",
             html_content
         );
     }
