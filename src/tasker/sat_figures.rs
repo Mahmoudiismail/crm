@@ -22,20 +22,20 @@ fn is_source_report(path: &std::path::Path) -> bool {
 }
 
 fn latest_source_report(download_dir: &std::path::Path) -> Result<PathBuf> {
-    let entries = fs::read_dir(download_dir)
-        .with_context(|| format!("Failed to read Sat Figures source folder {:?}", download_dir))?;
     let mut latest: Option<(SystemTime, PathBuf)> = None;
 
-    for entry in entries {
-        let entry = entry?;
-        if !entry.file_type()?.is_file() {
+    for entry in walkdir::WalkDir::new(download_dir)
+        .into_iter()
+        .filter_map(|entry| entry.ok())
+    {
+        if !entry.file_type().is_file() {
             continue;
         }
-        let path = entry.path();
+        let path = entry.path().to_path_buf();
         if !is_source_report(&path) {
             continue;
         }
-        let metadata = entry.metadata()?;
+        let metadata = entry.metadata().with_context(|| format!("Failed to read metadata for {:?}", path))?;
         let created = metadata.created().or_else(|_| metadata.modified())
             .with_context(|| format!("Could not determine creation time for {:?}", path))?;
         if latest.as_ref().map_or(true, |(timestamp, _)| created > *timestamp) {
