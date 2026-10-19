@@ -2,7 +2,6 @@ use anyhow::{Context, Result};
 use chrono::Utc;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tracing::{error, info};
 
 use crate::runner::config::{ActionSpec, ExecutionMode, RunnerTask, TaskStep};
 use crate::runner::engine::application::run_external_app;
