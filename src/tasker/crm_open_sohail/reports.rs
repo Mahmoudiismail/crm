@@ -174,17 +174,19 @@ pub fn generate_html_report(
         sections_html.push_str("</table><br/>");
     }
 
-    let default_template = r#"<html>
+    let indent_width = crate::tasker::email::html::indentation_width(config.dashboard_config.indentation_spaces);
+    let default_template = format!(
+        r#"<html>
 <body style="font-family: Calibri, Arial, sans-serif;">
     Dear All,<br/>
-    <div style="margin-left:20px;">
+    <div style="margin-left:{indent_width}px;">
         Hope everyone is doing well!<br/>
         Kindly check CRM Updated open TKTs.<br/><br/>
-        {sections}
+        {{sections}}
     </div>
 </body>
 </html>"#
-        .to_string();
+    );
 
     let body_template = if let Some(template_file) = &config.body_template_file {
         let tp = crate::tasker::csv_task::resolve_relative_to_exe_dir(template_file);
