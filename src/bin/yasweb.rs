@@ -576,7 +576,6 @@ async fn main() -> Result<()> {
                         tracing::info!("YASWEB TASK END: status=SUCCESS task={} elapsed_ms={} discovered_filters={}", i, task_started.elapsed().as_millis(), res.len());
                         Ok((res, temp_dl_dir_clone, final_filename))
                     }));
-                }
 
                 let results = futures_util::future::join_all(tasks).await;
 
