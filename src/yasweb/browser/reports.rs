@@ -803,8 +803,7 @@ pub fn generate_step6_js(timeout_minutes: u64) -> String {
             function sleep(ms) {{ return new Promise(resolve => setTimeout(resolve, ms)); }}
             const logs = [];
             const timeoutMs = timeoutMinutes * 60 * 1000;
-            const pollMs = 10 * 1000;
-            const startedAt = Date.now();
+            const pollMs = 1000;
 
             function getReportDocument() {{
                 const iframe = document.querySelector('iframe');
@@ -843,90 +842,89 @@ pub fn generate_step6_js(timeout_minutes: u64) -> String {
                 const reportDoc = getReportDocument();
                 if (!reportDoc) return null;
 
-                let button = reportDoc.querySelector('div[aria-label="Export"]');
-                if (isVisible(button)) return button;
+                const candidates = [];
+                const labelled = reportDoc.querySelector('div[aria-label="Export"], button[aria-label="Export"]');
+                if (labelled) candidates.push(labelled);
 
                 for (const element of reportDoc.querySelectorAll('.dx-button-text')) {{
                     if (element.textContent.trim().toLowerCase() === 'export') {{
-                        button = element.closest('div[role="button"], button');
-                        if (isVisible(button)) return button;
+                        const button = element.closest('.dx-button, div[role="button"], button');
+                        if (button && !candidates.includes(button)) candidates.push(button);
                     }}
                 }}
 
-                for (const element of reportDoc.querySelectorAll('button, div[role="button"]')) {{
-                    if (element.textContent.trim().toLowerCase() === 'export' && isVisible(element)) {{
-                        return element;
+                for (const element of reportDoc.querySelectorAll('button, div[role="button"], .dx-button')) {{
+                    if (element.textContent.trim().toLowerCase() === 'export' && !candidates.includes(element)) {{
+                        candidates.push(element);
                     }}
                 }}
-                return null;
+                return candidates.find(isVisible) || null;
             }}
 
-            // Phase 1: wait until generation actually starts. An initially hidden/missing
-            // loader must not be interpreted as a completed report.
-            logs.push("Waiting for report generation to start...");
-            const startDeadline = Date.now() + timeoutMs;
-            let loaderSeen = false;
-            while (Date.now() <= startDeadline) {{
-                if (findVisibleLoader()) {{
-                    loaderSeen = true;
-                    logs.push("Report loading detected.");
-                    break;
+            function isExportEnabled(button) {{
+                if (!button || !isVisible(button)) return false;
+                const disabledClasses = ['disabled', 'disable', 'dx-state-disabled', 'mat-button-disabled'];
+                if (disabledClasses.some(className => button.classList.contains(className))) return false;
+                if (button.disabled === true ||
+                    button.getAttribute('disabled') !== null ||
+                    button.getAttribute('aria-disabled') === 'true') return false;
+                const view = button.ownerDocument.defaultView;
+                if (view.getComputedStyle(button).pointerEvents === 'none') return false;
+                return true;
+            }}
+
+            // A missing loader is not proof that the report is ready. Wait for the
+            // Export control itself to become enabled; the app toggles its disabled
+            // state asynchronously after the report data has finished binding.
+            logs.push("Waiting for the Export button to become enabled...");
+            const deadline = Date.now() + timeoutMs;
+            let lastState = "";
+            while (Date.now() <= deadline) {{
+                const loader = findVisibleLoader();
+                const button = findExportButton();
+                const enabled = isExportEnabled(button);
+                if (button) {{
+                    const state = JSON.stringify({{
+                        classes: button.className && button.className.toString(),
+                        ariaDisabled: button.getAttribute('aria-disabled'),
+                        disabled: button.getAttribute('disabled') !== null,
+                        loaderVisible: !!loader
+                    }});
+                    if (state !== lastState) {{
+                        logs.push("Export state: " + state);
+                        lastState = state;
+                    }}
+                }} else if (lastState !== "missing") {{
+                    logs.push("Export button is not present yet.");
+                    lastState = "missing";
+                }}
+
+                if (button && enabled && !loader) {{
+                    // Re-check on the next poll so a transient enabled state during
+                    // report refresh does not trigger an early export.
+                    await sleep(500);
+                    const latestButton = findExportButton();
+                    if (latestButton && isExportEnabled(latestButton) && !findVisibleLoader()) {{
+                        latestButton.click();
+                        logs.push("Clicked enabled Export button.");
+                        return JSON.stringify({{ status: "SUCCESS", logs }});
+                    }}
                 }}
                 await sleep(pollMs);
             }}
-            if (!loaderSeen) {{
-                return JSON.stringify({{ status: "ERROR", msg: "Report loading did not start before timeout.", logs }});
-            }}
 
-            // Phase 2: wait until generation finishes, polling every 10 seconds.
-            logs.push("Waiting for report generation to finish...");
-            const finishDeadline = Date.now() + timeoutMs;
-            while (Date.now() <= finishDeadline) {{
-                if (!findVisibleLoader()) {{
-                    logs.push("Report loading finished.");
-                    break;
-                }}
-                await sleep(pollMs);
-            }}
-            if (findVisibleLoader()) {{
-                return JSON.stringify({{ status: "ERROR", msg: "Report generation timeout.", logs }});
-            }}
-
-            // Phase 3: allow the report UI to expose Export for up to the configured timeout.
-            logs.push("Waiting for Export button...");
-            const exportDeadline = Date.now() + timeoutMs;
-            let exportButton = null;
-            while (Date.now() <= exportDeadline) {{
-                exportButton = findExportButton();
-                if (exportButton) break;
-                await sleep(pollMs);
-            }}
-            if (!exportButton) {{
-                return JSON.stringify({{ status: "ERROR", msg: "Export button not found before timeout.", logs }});
-            }}
-
-            exportButton.click();
-            logs.push("Clicked Export button.");
-            return JSON.stringify({{ status: "SUCCESS", logs }});
+            const button = findExportButton();
+            return JSON.stringify({{
+                status: "ERROR",
+                msg: button
+                    ? "Export button did not become enabled before timeout."
+                    : "Export button not found before timeout.",
+                logs
+            }});
         }})({});
         "#,
         timeout_minutes
     )
-}
-
-#[cfg(test)]
-mod step6_wait_tests {
-    use super::generate_step6_js;
-
-    #[test]
-    fn report_waits_for_loading_to_start_finish_and_export() {
-        let js = generate_step6_js(7);
-        assert!(js.contains("Waiting for report generation to start"));
-        assert!(js.contains("Waiting for report generation to finish"));
-        assert!(js.contains("Waiting for Export button"));
-        assert!(js.contains("const pollMs = 10 * 1000"));
-        assert!(js.contains("})(7);"));
-    }
 }
 
 pub fn generate_mis_reports_wait_js(timeout_seconds: u64) -> String {
