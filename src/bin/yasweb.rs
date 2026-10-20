@@ -30,6 +30,8 @@ pub struct YaswebCliOptions {
     start_date: Option<String>,
     #[arg(long)]
     end_date: Option<String>,
+    #[arg(long, hide = true, action = clap::ArgAction::SetTrue, deprecated = "Runner owns date-range scheduling")]
+    monthly: bool,
     #[arg(long, action = clap::ArgAction::SetTrue)]
     add_time_to_file: bool,
     #[arg(long)]
