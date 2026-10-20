@@ -778,6 +778,10 @@ mod tests {
         let default = serde_json::json!({
             "tasks": [
                 { "type": "csv_analysis", "minutes_ago": 15, "output_file": "./results.csv" },
+                { "type": "dashboard_updater" },
+                { "type": "crm_open_sohail" },
+                { "type": "department_split" },
+                { "type": "opd_analysis" },
                 { "type": "sat_figures", "enabled": false },
                 { "type": "users_export", "enabled": false }
             ]
