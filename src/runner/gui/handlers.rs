@@ -10,7 +10,7 @@ use chrono::{Local, Utc};
 use std::collections::HashMap;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 pub(crate) async fn handle_dashboard(
     handle: &RunnerHandle,
@@ -137,7 +137,8 @@ pub(crate) async fn handle_update_task(
                     && saved.schedules.len() == expected.3
                     && saved.steps.len() == expected.4
                     && saved.post_run_steps.len() == expected.5;
-                info!(
+                if matches {
+                    info!(
                     task_id = %task_id,
                     readback_matches_summary = matches,
                     readback_enabled = saved.enabled,
@@ -146,7 +147,19 @@ pub(crate) async fn handle_update_task(
                     readback_step_count = saved.steps.len(),
                     readback_post_run_step_count = saved.post_run_steps.len(),
                     "Task configuration read-back completed"
-                );
+                    );
+                } else {
+                    warn!(
+                    task_id = %task_id,
+                    readback_matches_summary = matches,
+                    readback_enabled = saved.enabled,
+                    readback_timeout_seconds = saved.timeout_seconds,
+                    readback_schedule_count = saved.schedules.len(),
+                    readback_step_count = saved.steps.len(),
+                    readback_post_run_step_count = saved.post_run_steps.len(),
+                    "Task configuration read-back completed"
+                    );
+                }
             }
             None => error!(
                 task_id = %task_id,
