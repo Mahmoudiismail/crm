@@ -59,6 +59,10 @@ Example:
 ## Direct Fetch logic
 `users` uses a direct `GET` request via `fetch_users_report` which does not require query parameters (such as `from_date` or `to_date`) and returns the CSV content as a Base64-encoded string instead of returning a signed URL.
 
+## Ticket Date Batching
+
+Ticket endpoint requests are initially grouped into batches of at most three calendar months. Partial first and last months retain the requested boundaries. Up to three initial batches run concurrently; failures are collected and reported together, and signed-URL failures can still trigger recursive range splitting. If configured ticket dates cannot be parsed for month batching, the fetcher falls back to one direct request using the original range. Non-ticket endpoint range behavior is unchanged.
+
 ## Signed URL Failure Range Splitting
 
 For `tickets`, `calls`, and `leads`, report fetches use `fetch_with_signed_url_split(...)`, which delegates to a concurrent recursive execution strategy (`fetch_recursive`).

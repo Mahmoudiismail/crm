@@ -3,7 +3,7 @@ use std::sync::Arc;
 use chrono::Local;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
-use tracing::{debug, error};
+use tracing::error;
 
 #[derive(Clone, Debug)]
 pub struct TaskLogger {
@@ -23,7 +23,6 @@ impl TaskLogger {
             error!("TaskLogger initialization failed: {}", e);
         }
 
-        let task_id = inner.task_id.clone();
         let now = Local::now().to_rfc3339();
         let line = format!("[{}] {}\n", now, message);
 
@@ -31,7 +30,7 @@ impl TaskLogger {
             let _ = f.write_all(line.as_bytes()).await;
             let _ = f.flush().await;
         }
-        debug!("[Task:{}] {}", task_id, message);
+        // Task details are written only to the task-specific log file.
     }
 
     pub async fn log_bytes(&self, prefix: &str, bytes: &[u8]) {

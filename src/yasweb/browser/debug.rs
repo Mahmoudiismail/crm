@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{error, info};
 
 pub fn save_html_state(
@@ -25,28 +26,54 @@ pub fn save_html_state(
 
     match tab.evaluate(get_html_js, true) {
         Ok(res) => {
-            if let Some(v) = res.value {
-                if let Some(html) = v.as_str() {
-                    if let Ok(mut exe_dir) = crate::utils::executable_dir() {
-                        exe_dir.push("debug_html");
-                        let _ = std::fs::create_dir_all(&exe_dir);
+            let Some(value) = res.value else {
+                error!("HTML extraction at '{}' returned no value", step_name);
+                return;
+            };
+            let Some(html) = value.as_str() else {
+                error!(
+                    "HTML extraction at '{}' returned a non-string value",
+                    step_name
+                );
+                return;
+            };
 
-                        let safe_name =
-                            active_report_name.replace(|c: char| !c.is_alphanumeric(), "_");
-                        let safe_step = step_name
-                            .replace(|c: char| !c.is_alphanumeric(), "_")
-                            .to_lowercase();
-                        let file_name =
-                            format!("step_{:02}_{}_{}.html", step_num, safe_step, safe_name);
-
-                        exe_dir.push(&file_name);
-                        if std::fs::write(&exe_dir, html).is_ok() {
-                            info!("Saved HTML state for '{}' to {:?}", step_name, exe_dir);
-                        } else {
-                            error!("Failed to write HTML state for '{}' to disk", step_name);
-                        }
-                    }
+            let mut exe_dir = match crate::utils::executable_dir() {
+                Ok(dir) => dir,
+                Err(e) => {
+                    error!(
+                        "Cannot resolve executable directory for HTML snapshot '{}': {e}",
+                        step_name
+                    );
+                    return;
                 }
+            };
+            exe_dir.push("debug_html");
+            if let Err(e) = std::fs::create_dir_all(&exe_dir) {
+                error!("Cannot create HTML snapshot directory {:?}: {e}", exe_dir);
+                return;
+            }
+
+            let captured_at = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|duration| duration.as_micros())
+                .unwrap_or_default();
+            let safe_name = active_report_name.replace(|c: char| !c.is_alphanumeric(), "_");
+            let safe_step = step_name
+                .replace(|c: char| !c.is_alphanumeric(), "_")
+                .to_lowercase();
+            let file_name = format!(
+                "step_{:02}_{}_{}_{}.html",
+                step_num, captured_at, safe_step, safe_name
+            );
+
+            exe_dir.push(&file_name);
+            match std::fs::write(&exe_dir, html) {
+                Ok(()) => info!("Saved HTML state for '{}' to {:?}", step_name, exe_dir),
+                Err(e) => error!(
+                    "Failed to write HTML state for '{}' to {:?}: {e}",
+                    step_name, exe_dir
+                ),
             }
         }
         Err(e) => {
@@ -60,7 +87,7 @@ pub fn save_html_state(
 pub fn save_failure_diagnostics(tab: &Arc<headless_chrome::Tab>, step_name: &str) {
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    let diagnostic_js = r#"
+    let diagnostic_js = r##"
         (() => {
             const safeUrl = (value) => {
                 try {
@@ -91,34 +118,79 @@ pub fn save_failure_diagnostics(tab: &Arc<headless_chrome::Tab>, step_name: &str
                 }
                 return clone.outerHTML;
             };
-            const frames = Array.from(document.querySelectorAll("iframe")).map((frame, index) => ({
-                index,
-                src: safeUrl(frame.getAttribute("src") || ""),
-                title: frame.title || "",
-                loaded: !!frame.contentDocument,
-                accessible: (() => { try { return !!frame.contentWindow.document.documentElement; } catch (_) { return false; } })()
-            }));
-            let iframeHtml = "";
-            try {
-                const frame = document.querySelector("iframe");
-                iframeHtml = frame && frame.contentWindow ? redactDocument(frame.contentWindow.document) : "";
-            } catch (e) { iframeHtml = "IFRAME_DIAGNOSTIC_ERROR: " + e.message; }
+            const frameSnapshots = Array.from(document.querySelectorAll("iframe")).map((frame, index) => {
+                const metadata = {
+                    index,
+                    src: safeUrl(frame.getAttribute("src") || ""),
+                    title: frame.title || "",
+                    loaded: !!frame.contentDocument,
+                    accessible: false
+                };
+                try {
+                    const frameDoc = frame.contentWindow && frame.contentWindow.document;
+                    metadata.accessible = !!(frameDoc && frameDoc.documentElement);
+                    return { ...metadata, html: metadata.accessible ? redactDocument(frameDoc) : "" };
+                } catch (e) {
+                    return { ...metadata, error: String(e && e.message || e), html: "" };
+                }
+            });
+            const selectorDiagnostics = {};
+            for (const selector of [
+                "#menuPinnedBtn", "#pinButton", ".menuModules", ".misManagement",
+                "input[formcontrolname='searchInput']", "input[placeholder='Search']",
+                ".tree-view", "#loader_svg", ".loading-screen-wrapper",
+                "mat-progress-bar", ".dx-loadpanel"
+            ]) {
+                selectorDiagnostics[selector] = Array.from(document.querySelectorAll(selector)).slice(0, 100).map(el => {
+                    const style = el.ownerDocument.defaultView.getComputedStyle(el);
+                    return {
+                        tag: el.tagName,
+                        id: el.id || "",
+                        className: typeof el.className === "string" ? el.className : "",
+                        text: String(el.innerText || el.textContent || "").trim().slice(0, 500),
+                        visible: style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity || 1) > 0,
+                        disabled: !!el.disabled
+                    };
+                });
+            }
+            const active = document.activeElement;
+            const firstFrame = frameSnapshots.length ? frameSnapshots[0] : null;
+            const navigation = performance.getEntriesByType("navigation")[0];
             return JSON.stringify({
+                capturedAt: new Date().toISOString(),
                 url: safeUrl(location.href),
                 title: document.title,
                 readyState: document.readyState,
                 visibilityState: document.visibilityState,
+                hasFocus: document.hasFocus(),
+                online: navigator.onLine,
                 documentHtmlLength: document.documentElement ? document.documentElement.outerHTML.length : 0,
-                frames,
+                activeElement: active ? {
+                    tag: active.tagName,
+                    id: active.id || "",
+                    name: active.getAttribute("name") || "",
+                    type: active.getAttribute("type") || "",
+                    className: typeof active.className === "string" ? active.className : ""
+                } : null,
+                selectorDiagnostics,
+                frames: frameSnapshots.map(({ html, ...metadata }) => metadata),
+                frameSnapshots,
                 mainHtml: redactDocument(document),
-                iframeHtml
+                iframeHtml: firstFrame ? (firstFrame.html || firstFrame.error || "") : "",
+                navigationTiming: navigation ? {
+                    durationMs: navigation.duration,
+                    domInteractiveMs: navigation.domInteractive,
+                    domContentLoadedMs: navigation.domContentLoadedEventEnd,
+                    loadEventMs: navigation.loadEventEnd
+                } : null,
+                resourceCount: performance.getEntriesByType("resource").length
             });
         })()
-    "#;
+    "##;
 
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_secs())
+        .map(|duration| duration.as_millis())
         .unwrap_or_default();
     let safe_step = step_name
         .chars()

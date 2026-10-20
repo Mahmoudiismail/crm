@@ -21,11 +21,11 @@ If found, it:
 - Gracefully exits itself to allow the PowerShell script to perform the self-update, ensuring update logging continues robustly.
 
 ### 2. Log Rotation & Sending
-The application scans the configured `runner_logs_dir` for `.log` files.
-- It compresses all `.log` files into ZIP archives using standard Deflate compression.
-- It strictly enforces a 20MB maximum file size for each ZIP chunk. If the compressed archive exceeds 20MB, it rotates to a new `.zip` file (e.g., `logs_part1.zip`, `logs_part2.zip`).
+The application collects application-level `.log` files beside the executable, task logs recursively from the configured `runner_logs_dir`, and Yasweb HTML/JSON diagnostics from the sibling `debug_html` directory.
+- It compresses the collected files into ZIP archives using standard Deflate compression, preserving directory paths so files with the same name do not overwrite each other.
+- It splits archives based on a 20MB uncompressed-input size estimate per chunk.
 - It connects to the active Outlook COM session and sends an email to the configured `log_recipient_email` with all generated ZIP chunks attached.
-- After successful processing, it safely deletes the original uncompressed log files and the temporary ZIP archives.
+- Only after successful email delivery, it deletes collected `.log` files and temporary ZIP archives. Delivered HTML/JSON diagnostics are moved under `debug_html/sent/` and excluded from later collections, preventing the same diagnostics from being emailed indefinitely while retaining them locally.
 
 ## Configuration
 

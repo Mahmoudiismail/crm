@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use chrono::{Datelike, Local, NaiveDate};
+use chrono::Local;
 use crm_tool::manifest::{AppArg, AppManifest, ArgType};
 
 use std::collections::HashMap;
@@ -26,12 +26,12 @@ pub struct YaswebCliOptions {
     config: String,
     #[arg(long)]
     filters: Option<String>,
-    #[arg(long, action = clap::ArgAction::SetTrue)]
-    monthly: bool,
     #[arg(long)]
     start_date: Option<String>,
     #[arg(long)]
     end_date: Option<String>,
+    #[arg(long, hide = true, action = clap::ArgAction::SetTrue)]
+    monthly: bool,
     #[arg(long, action = clap::ArgAction::SetTrue)]
     add_time_to_file: bool,
     #[arg(long)]
@@ -127,7 +127,6 @@ fn get_manifest(config_path: Option<PathBuf>) -> AppManifest {
         AppArg::new("--config", ArgType::String),
         arg_name,
         arg_type,
-        AppArg::new("--monthly", ArgType::Boolean),
         AppArg::new("--start-date", ArgType::DateVar),
         AppArg::new("--end-date", ArgType::DateVar),
         AppArg::new("--add-time-to-file", ArgType::Boolean),
@@ -241,6 +240,8 @@ async fn main() -> Result<()> {
     }
 
     let options = YaswebCliOptions::parse();
+    // Accepted for compatibility with stored arguments; Runner owns date-range scheduling.
+    let _legacy_monthly = options.monthly;
 
     let p = PathBuf::from(options.config);
     let exe_dir = executable_dir()?;
@@ -272,7 +273,6 @@ async fn main() -> Result<()> {
         }
     }
 
-    let is_monthly = options.monthly;
     let start_date_str_global = options.start_date;
     let end_date_str_global = options.end_date;
     let add_time_to_file = options.add_time_to_file;
@@ -345,8 +345,14 @@ async fn main() -> Result<()> {
     info!("Loaded config for URL: {}", config.url);
 
     let mut report_futures = Vec::new();
-
-    // Chunk runs into concurrent batches based on config
+    // A zero limit means unlimited operations; positive values share one semaphore across reports.
+    let operation_limit =
+        (config.concurrency > 0).then(|| Arc::new(tokio::sync::Semaphore::new(config.concurrency)));
+    if config.concurrency == 0 {
+        info!("YASWEB operation concurrency limit: unlimited");
+    } else {
+        info!("YASWEB operation concurrency limit: {}", config.concurrency);
+    }
 
     for active_report_name in active_report_names {
         let active_report_type = active_report_type_global.clone();
@@ -357,6 +363,7 @@ async fn main() -> Result<()> {
 
         let config = config.clone();
         let config_path_clone = config_path.clone();
+        let operation_limit = operation_limit.clone();
 
         let active_report_name_clone_for_future = active_report_name.clone();
 
@@ -386,117 +393,17 @@ async fn main() -> Result<()> {
                 ));
             }
 
-            // Parse date ranges
-            let mut date_ranges: Vec<(String, String)> = Vec::new();
-
-            let mut effective_monthly = is_monthly;
-            if effective_monthly {
-                let report_conf = config
-                    .reports
-                    .get(&active_report_name)
-                    .context("Report name not found in config")?;
-
-                if report_conf.start_date_key.is_none()
-                    || report_conf.end_date_key.is_none()
-                    || report_conf
-                        .start_date_key
-                        .as_ref()
-                        .is_none_or(|k| k.key.is_empty())
-                    || report_conf
-                        .end_date_key
-                        .as_ref()
-                        .is_none_or(|k| k.key.is_empty())
-                {
-                    info!("Report does not have start_date_key/end_date_key configured. Disabling monthly chunking.");
-                    effective_monthly = false;
-                }
-            }
-
-            if effective_monthly {
-                let start_date = start_date_str
-                    .clone()
-                    .context("--start-date is required when --monthly is true")?;
-                let end_date = end_date_str
-                    .clone()
-                    .context("--end-date is required when --monthly is true")?;
-
-                use crm_tool::utils::parse_flexible_date;
-                let start_dt = parse_flexible_date(&start_date).context("Invalid --start-date format")?;
-                let end_dt = parse_flexible_date(&end_date).context("Invalid --end-date format")?;
-
-                if start_dt > end_dt {
-                    return Err(anyhow::anyhow!("--start-date must be before or equal to --end-date"));
-                }
-
-                let mut current_dt = start_dt;
-
-                let report_conf_monthly = config
-                    .reports
-                    .get(&active_report_name)
-                    .context("Report name not found in config")?;
-
-                while current_dt <= end_dt {
-                    let next_month = if current_dt.month() == 12 {
-                        NaiveDate::from_ymd_opt(current_dt.year() + 1, 1, 1).context("Invalid date math")?
-                    } else {
-                        NaiveDate::from_ymd_opt(current_dt.year(), current_dt.month() + 1, 1)
-                            .context("Invalid date math")?
-                    };
-
-                    let last_day = next_month.pred_opt().context("Invalid date math")?;
-                    let chunk_end = if last_day > end_dt { end_dt } else { last_day };
-
-                    let start_format_str = if let Some(ref sk) = report_conf_monthly.start_date_key {
-                        sk.format.clone()
-                    } else if active_report_type == "Report Manager" {
-                        "%d-%b-%Y".to_string()
-                    } else {
-                        "%d-%m-%Y 00:00".to_string()
-                    };
-
-                    let end_format_str = if let Some(ref ek) = report_conf_monthly.end_date_key {
-                        ek.format.clone()
-                    } else if active_report_type == "Report Manager" {
-                        "%d-%b-%Y".to_string()
-                    } else {
-                        "%d-%m-%Y 23:59".to_string()
-                    };
-
-                    let start_dt_time = current_dt.and_hms_opt(0, 0, 0).context("Invalid start time")?;
-                    let end_dt_time = chunk_end.and_hms_opt(23, 59, 59).context("Invalid end time")?;
-
-                    date_ranges.push((
-                        start_dt_time.format(&start_format_str).to_string(),
-                        end_dt_time.format(&end_format_str).to_string(),
-                    ));
-
-                    current_dt = next_month;
-                }
-
-                info!(
-                    "Monthly execution planned for {} ranges: {:?}",
-                    date_ranges.len(),
-                    date_ranges
-                );
-            } else {
-                // Not monthly, just add a dummy single entry
-                date_ranges.push(("".to_string(), "".to_string()));
-            }
+            // Runner owns scheduling; YASWEB executes one requested date range per invocation.
+            let date_ranges: Vec<(String, String)> = vec![(String::new(), String::new())];
 
             let config_clone = config.clone();
             let active_report_name_clone = active_report_name.clone();
             let cli_download_path_clone = cli_download_path.clone();
 
-            // Launch browser once
-            let concurrency = if config.concurrency == 0 {
-                1
-            } else {
-                config.concurrency
-            };
-
-            for chunk in date_ranges.chunks(concurrency) {
+            // Runner supplies the requested date range. YASWEB runs one browser operation per invocation.
+            let i = 0;
+            let (start_dt, end_dt) = (&date_ranges[0].0, &date_ranges[0].1);
                 let mut tasks = Vec::new();
-                for (i, (start_dt, end_dt)) in chunk.iter().enumerate() {
                     let config_task = config.clone();
                     let active_report_name_task = active_report_name.clone();
                     let active_report_type_task = active_report_type.clone();
@@ -505,11 +412,9 @@ async fn main() -> Result<()> {
                     let report_conf_opt = config.reports.get(&active_report_name);
 
                     // Map the global --start-date and --end-date values into the respective internal report filters
-                    // This is done both for monthly chunking AND standard executions, provided the report has the keys configured.
-                    let s_dt = if is_monthly && !start_dt.is_empty() {
-                        Some(start_dt.clone())
-                    } else {
-                        // If not monthly, re-format the input start_date_str if applicable
+                    // Map the requested dates into the report's configured filter formats.
+                    let s_dt = {
+                        // Re-format the input start date for this report.
                         if let (Some(st_str), Some(report_conf)) = (&start_date_str, report_conf_opt) {
                             if let Some(sk) = &report_conf.start_date_key {
                                 if let Some(parsed) = crm_tool::utils::parse_flexible_date(st_str) {
@@ -526,10 +431,8 @@ async fn main() -> Result<()> {
                         }
                     };
 
-                    let e_dt = if is_monthly && !end_dt.is_empty() {
-                        Some(end_dt.clone())
-                    } else {
-                        // If not monthly, re-format the input end_date_str if applicable
+                    let e_dt = {
+                        // Re-format the input end date for this report.
                         if let (Some(ed_str), Some(report_conf)) = (&end_date_str, report_conf_opt) {
                             if let Some(ek) = &report_conf.end_date_key {
                                 if let Some(parsed) = crm_tool::utils::parse_flexible_date(ed_str) {
@@ -560,15 +463,7 @@ async fn main() -> Result<()> {
                     }
 
                     // Setup download dir for this tab
-                    let date_suffix = if is_monthly && !start_dt.is_empty() {
-
-                        let parts: Vec<&str> = start_dt.split('-').collect();
-                        if parts.len() == 3 {
-                            format!("{}-{}", parts[1], parts[2])
-                        } else {
-                            start_dt.clone()
-                        }
-                    } else if let Some(st) = start_date_str.clone() {
+                    let date_suffix = if let Some(st) = start_date_str.clone() {
                         st
                     } else {
                         chrono::Local::now().format("%d-%m-%Y").to_string()
@@ -597,8 +492,16 @@ async fn main() -> Result<()> {
 
                     let active_report_name_for_dir = active_report_name.clone();
 
+                    let operation_permit = if let Some(operation_limit) = &operation_limit {
+                        tracing::trace!("Waiting for browser-operation permit: report={} range={}..{}", active_report_name_task, start_dt, end_dt);
+                        Some(operation_limit.clone().acquire_owned().await
+                            .context("Failed to acquire YASWEB operation concurrency permit")?)
+                    } else {
+                        None
+                    };
                     tracing::trace!("Spawning task for range: {} to {}", start_dt, end_dt);
                     tasks.push(tokio::task::spawn_blocking(move || -> Result<(Vec<String>, PathBuf, String)> {
+                        let _operation_permit = operation_permit;
                         let task_started = std::time::Instant::now();
                         tracing::info!("YASWEB TASK START: index={} report='{}' date_suffix='{}'", i, active_report_name_task, date_suffix);
                         tracing::info!("Starting browser tab automation for task {}...", i);
@@ -678,7 +581,6 @@ async fn main() -> Result<()> {
                         tracing::info!("YASWEB TASK END: status=SUCCESS task={} elapsed_ms={} discovered_filters={}", i, task_started.elapsed().as_millis(), res.len());
                         Ok((res, temp_dl_dir_clone, final_filename))
                     }));
-                }
 
                 let results = futures_util::future::join_all(tasks).await;
 
@@ -749,19 +651,16 @@ async fn main() -> Result<()> {
                         }
                     }
                 }
-            }
             Ok::<(), anyhow::Error>(())
         });
     }
 
-    let results = futures_util::future::join_all(report_futures).await;
-    for res in results {
-        match res {
-            Ok(()) => {}
-            Err(e) => {
-                error!("YASWEB REPORT FAILED: {:#}", e);
-                return Err(e);
-            }
+    // Reports may run concurrently, while the shared semaphore caps active browser operations.
+    let report_results = futures_util::future::join_all(report_futures).await;
+    for result in report_results {
+        if let Err(e) = result {
+            error!("YASWEB REPORT FAILED: {:#}", e);
+            return Err(e);
         }
     }
     info!("YASWEB PROCESS END: status=SUCCESS");

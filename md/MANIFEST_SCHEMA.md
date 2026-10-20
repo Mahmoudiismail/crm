@@ -44,7 +44,7 @@ Manifests enforce lightweight validation to guarantee structural integrity:
       "name": "--report-type",
       "arg_type": "list",
       "required": true,
-      "options": ["daily", "weekly", "monthly"]
+      "options": ["daily", "weekly"]
     },
     {
       "name": "--timeout",

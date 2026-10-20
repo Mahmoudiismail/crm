@@ -32,13 +32,13 @@ The system is a collection of Rust binaries designed to:
 9. Support deep PowerShell integration via custom string parsing scripts bridging multi-type boundaries (double-parsing fallback arrays natively mapped via Rust structures).
 10. Send rich HTML outputs safely bypassing maximum file size barriers.
 11. Support dynamic variables universally mapped to Date inputs allowing recursive logic calculations cleanly across all binary ecosystems (`today`, `yesterday`, `tomorrow`, `eomonth`). Absolute date variables (`today`, `yesterday`, `tomorrow`) strictly derive from the local system date and unequivocally ignore any provided configuration `base_date`, whereas relative variables (like `eomonth`) resolve against the `base_date`.
-12. Automatically populate filter dates dynamically mapped to `start_date_key` and `end_date_key` via `yasweb_config.json` during monthly execution.
+12. Populate filter dates dynamically mapped to `start_date_key` and `end_date_key` from each Runner-scheduled YASWEB invocation.
 
 ## Executables
 - `crm`: Fetches logs and API payloads via CLI arguments.
 - `runner`: Exposes the HTTP dashboard and pipeline engine.
 - `tasker`: Parses CSV structures, manipulates DOM arrays, communicates to Excel COM systems, and issues Emails dynamically.
-- `yasweb`: Performs automated Headless Chrome iterations utilizing CDP events, concurrent isolates, and advanced wait conditions dynamically processing MIS filters.
+- `yasweb`: Performs concurrent Headless Chrome report operations with a global operation limit configured by `yasweb_config.json` (`concurrency`, default 6; `0` means unlimited); Runner supplies each invocation's date range.
 
 ## Common paths
 - `tasker_config.json` for tasker rules logic.

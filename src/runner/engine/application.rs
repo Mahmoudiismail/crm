@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use std::collections::HashMap;
-use tracing::{trace, warn};
 
 use crate::runner::config::RegisteredApp;
 use crate::runner::engine::logging::TaskLogger;
@@ -86,7 +85,10 @@ fn insert_period_args(
     }
 }
 
-async fn discover_date_args(app: &RegisteredApp) -> (Option<String>, Option<String>) {
+async fn discover_date_args(
+    logger: &TaskLogger,
+    app: &RegisteredApp,
+) -> (Option<String>, Option<String>) {
     let executable = resolve_executable(&app.executable_path);
     let mut command = tokio::process::Command::new(executable);
     command
@@ -100,24 +102,41 @@ async fn discover_date_args(app: &RegisteredApp) -> (Option<String>, Option<Stri
             match serde_json::from_slice::<serde_json::Value>(&output.stdout) {
                 Ok(manifest) => date_args_from_manifest(&manifest),
                 Err(error) => {
-                    warn!("Could not parse manifest for app '{}': {}", app.name, error);
+                    logger
+                        .log(&format!(
+                            "Could not parse manifest for app '{}': {}",
+                            app.name, error
+                        ))
+                        .await;
                     (None, None)
                 }
             }
         }
         Ok(Ok(output)) => {
-            warn!(
-                "Manifest discovery for app '{}' exited with status {}",
-                app.name, output.status
-            );
+            logger
+                .log(&format!(
+                    "Manifest discovery for app '{}' exited with status {}",
+                    app.name, output.status
+                ))
+                .await;
             (None, None)
         }
         Ok(Err(error)) => {
-            warn!("Could not read manifest for app '{}': {}", app.name, error);
+            logger
+                .log(&format!(
+                    "Could not read manifest for app '{}': {}",
+                    app.name, error
+                ))
+                .await;
             (None, None)
         }
         Err(_) => {
-            warn!("Manifest discovery timed out for app '{}'", app.name);
+            logger
+                .log(&format!(
+                    "Manifest discovery timed out for app '{}'",
+                    app.name
+                ))
+                .await;
             (None, None)
         }
     }
@@ -165,7 +184,7 @@ pub async fn run_external_app(
         let needs_manifest = spec.start_date_arg.as_deref().is_none_or(str::is_empty)
             || spec.end_date_arg.as_deref().is_none_or(str::is_empty);
         let discovered = if needs_manifest {
-            discover_date_args(app).await
+            discover_date_args(logger, app).await
         } else {
             (None, None)
         };
@@ -221,7 +240,7 @@ pub async fn run_external_app(
         }
     }
 
-    trace!("Command to execute: {:?}", command);
+    // Do not write task command lines or arguments to runner.log.
 
     let ctx = ProcessContext {
         logger,

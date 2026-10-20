@@ -6,9 +6,9 @@ use std::collections::HashSet;
 use std::fmt::Write;
 use std::path::Path;
 use std::sync::Arc;
-use std::time::SystemTime;
+use std::time::{Instant, SystemTime};
 use tokio::fs;
-use tracing::{debug, error, info, trace};
+use tracing::{debug, error, info, trace, warn};
 
 use crate::crm::config::AppConfig;
 
@@ -986,29 +986,105 @@ async fn fetch_with_signed_url_split(
     download_tx: tokio::sync::mpsc::UnboundedSender<DownloadTask>,
     context_opt: Option<Arc<FetchContext>>,
 ) -> Result<Value> {
-    let mut completed = fetch_recursive(
-        client.clone(),
-        token.to_string(),
-        endpoint.to_string(),
-        from_date.to_string(),
-        to_date.to_string(),
-        params.base_url.to_string(),
-        params.email.to_string(),
-        params.account_id.to_string(),
-        params.application_id.to_string(),
-        params.tz.to_string(),
-        params
-            .extra_params
-            .iter()
-            .map(|(k, v)| (k.to_string(), v.to_string()))
-            .collect(),
-        download_csv,
-        download_dir.map(|d| d.to_path_buf()),
-        key_prefix.to_string(),
-        download_tx,
-        context_opt.clone(),
-    )
-    .await?;
+    // Ticket exports have repeatedly failed for broad ranges. Start with at most three
+    // calendar months per request, while retaining recursive splitting as a fallback.
+    let ranges = if endpoint == "task/download-ticket-data" {
+        match split_in_month_batches(from_date, to_date, 3) {
+            Ok(ranges) => ranges,
+            Err(error) => {
+                warn!(
+                    "Could not parse ticket date range [{} to {}] for month batching: {}; trying the requested range directly",
+                    from_date, to_date, error
+                );
+                vec![(from_date.to_string(), to_date.to_string())]
+            }
+        }
+    } else {
+        vec![(from_date.to_string(), to_date.to_string())]
+    };
+    let total_ranges = ranges.len();
+
+    if total_ranges > 1 {
+        info!(
+            "{} [{} to {}] split into {} initial date ranges (maximum three calendar months per ticket request)",
+            endpoint, from_date, to_date, total_ranges
+        );
+    }
+
+    let mut completed = Vec::new();
+    let mut failures = Vec::new();
+
+    // Run at most three initial ranges concurrently. Keep attempting every range,
+    // then report all failed ranges together rather than returning partial results.
+    let range_results =
+        futures_util::stream::iter(ranges.into_iter().map(|(range_from, range_to)| {
+            let client = client.clone();
+            let token = token.to_string();
+            let endpoint = endpoint.to_string();
+            let base_url = params.base_url.to_string();
+            let email = params.email.to_string();
+            let account_id = params.account_id.to_string();
+            let application_id = params.application_id.to_string();
+            let tz = params.tz.to_string();
+            let extra_params = params
+                .extra_params
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect();
+            let download_dir = download_dir.map(|d| d.to_path_buf());
+            let key_prefix = key_prefix.to_string();
+            let download_tx = download_tx.clone();
+            let context_opt = context_opt.clone();
+
+            async move {
+                let result = fetch_recursive(
+                    client,
+                    token,
+                    endpoint,
+                    range_from.clone(),
+                    range_to.clone(),
+                    base_url,
+                    email,
+                    account_id,
+                    application_id,
+                    tz,
+                    extra_params,
+                    download_csv,
+                    download_dir,
+                    key_prefix,
+                    download_tx,
+                    context_opt,
+                )
+                .await;
+                (range_from, range_to, result)
+            }
+        }))
+        .buffer_unordered(3)
+        .collect::<Vec<_>>()
+        .await;
+
+    for (range_from, range_to, result) in range_results {
+        match result {
+            Ok(mut batch_results) => completed.append(&mut batch_results),
+            Err(err) => {
+                error!(
+                    "{} [{} to {}] failed after recursive retries: {:#}",
+                    endpoint, range_from, range_to, err
+                );
+                failures.push(format!("[{} to {}]: {:#}", range_from, range_to, err));
+            }
+        }
+    }
+
+    if !failures.is_empty() {
+        anyhow::bail!(
+            "{} failed to fetch {} of {} initial date ranges: {}",
+            endpoint,
+            failures.len(),
+            total_ranges,
+            failures.join("; ")
+        );
+    }
 
     completed.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
 
@@ -1182,6 +1258,7 @@ async fn fetch_single(
 
     info!("Fetching {} [{} to {}]...", endpoint, from_date, to_date);
 
+    let request_started = Instant::now();
     let mut current_token = token.to_string();
     let mut resp = client
         .get(&url)
@@ -1226,14 +1303,30 @@ async fn fetch_single(
         .with_context(|| format!("Failed to read response body from {}", endpoint))?;
 
     debug!(
-        "Response from {} — status: {}, headers: {}, body_bytes: {}",
+        "Response from {} [{} to {}] — status: {}, elapsed_ms: {}, headers: {}, body_bytes: {}",
         endpoint,
+        from_date,
+        to_date,
         status,
+        request_started.elapsed().as_millis(),
         headers,
         body.len()
     );
 
     if !status.is_success() {
+        // Log only a bounded UTF-8-safe preview, retaining the original body length.
+        const MAX_ERROR_BODY_LOG_BYTES: usize = 4096;
+        let preview_end = body
+            .char_indices()
+            .map(|(index, ch)| index + ch.len_utf8())
+            .take_while(|end| *end <= MAX_ERROR_BODY_LOG_BYTES)
+            .last()
+            .unwrap_or(0);
+        let body_preview = &body[..preview_end];
+        debug!(
+            "Error response preview from {} [{} to {}] (HTTP {}): body_bytes={}, preview_bytes={}, body_preview={:?}",
+            endpoint, from_date, to_date, status, body.len(), body_preview.len(), body_preview
+        );
         let err = sanitized_response_error(endpoint, status, &body);
         if is_signed_url_generation_failure(&err) {
             info!("{}", err);
@@ -1342,6 +1435,27 @@ pub fn split_monthly(from: &str, to: &str) -> Result<Vec<(String, String)>> {
         }
     }
 
+    Ok(batches)
+}
+
+/// Group calendar-month slices into batches containing at most `max_months`
+/// calendar months. The first and last batches retain the requested partial months.
+fn split_in_month_batches(
+    from: &str,
+    to: &str,
+    max_months: usize,
+) -> Result<Vec<(String, String)>> {
+    if max_months == 0 {
+        anyhow::bail!("max_months must be greater than zero");
+    }
+
+    let monthly = split_monthly(from, to)?;
+    let mut batches = Vec::new();
+    for month_group in monthly.chunks(max_months) {
+        if let (Some(first), Some(last)) = (month_group.first(), month_group.last()) {
+            batches.push((first.0.clone(), last.1.clone()));
+        }
+    }
     Ok(batches)
 }
 
@@ -1726,6 +1840,26 @@ mod tests {
         assert!(recent_users.exists());
         assert!(other_csv.exists());
         assert!(other_txt.exists());
+    }
+
+    #[test]
+    fn test_split_in_month_batches_uses_at_most_three_calendar_months() {
+        let batches = split_in_month_batches("2026-01-01", "2026-10-18", 3).unwrap();
+        assert_eq!(
+            batches,
+            vec![
+                ("2026-01-01".into(), "2026-03-31".into()),
+                ("2026-04-01".into(), "2026-06-30".into()),
+                ("2026-07-01".into(), "2026-09-30".into()),
+                ("2026-10-01".into(), "2026-10-18".into()),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_split_in_month_batches_preserves_partial_month_boundaries() {
+        let batches = split_in_month_batches("2026-08-08", "2026-10-18", 3).unwrap();
+        assert_eq!(batches, vec![("2026-08-08".into(), "2026-10-18".into()),]);
     }
 
     #[test]

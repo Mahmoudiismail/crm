@@ -66,10 +66,52 @@ pub(crate) fn render_dashboard(
     );
 
     let card_html = card("Configured Tasks", &table_html, None);
+    let status_json = serde_json::to_string(status)
+        .unwrap_or_else(|_| "{}".to_string())
+        .replace('<', "\\u003c")
+        .replace('>', "\\u003e")
+        .replace('&', "\\u0026");
+    let refresh_script = r#"<script>
+(function () {
+  const initialStatus = __INITIAL_STATUS__;
+  const snapshot = (value) => JSON.stringify([
+    value.running_tasks_count, value.queued_tasks_count,
+    value.running_task_ids, value.queued_task_ids, value.waiting_for_app,
+    value.last_task_id, value.last_run_at
+  ]);
+  let previous = snapshot(initialStatus);
+  const url = new URL(window.location.href);
+  if (url.searchParams.has("toast")) {
+    url.searchParams.delete("toast");
+    window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+  }
+  async function refreshStatus() {
+    if (document.visibilityState !== "visible") return;
+    try {
+      const response = await fetch("/status", { cache: "no-store" });
+      if (!response.ok) return;
+      const current = await response.json();
+      const next = snapshot(current);
+      if (previous !== null && next !== previous) {
+        window.location.reload();
+        return;
+      }
+      previous = next;
+    } catch (_) {
+      // A temporary status request failure should not disrupt the dashboard.
+    }
+  }
+  window.setInterval(refreshStatus, 5000);
+})();
+</script>"#;
+    let refresh_script = refresh_script.replace("__INITIAL_STATUS__", &status_json);
 
     layout(
         "Dashboard",
-        &format!("{}{}{}{}", toast_html, header, stats_grid, card_html),
+        &format!(
+            "{}{}{}{}{}",
+            toast_html, header, stats_grid, card_html, refresh_script
+        ),
     )
 }
 
@@ -128,15 +170,13 @@ pub(crate) fn render_task_row(
         status_badge(false, "Active", "Inactive")
     };
 
-    let exec_status_badge = if status.running_task_ids.contains(&task.id) {
-        if let Some(app_id) = status.waiting_for_app.get(&task.id) {
-            badge(
-                &format!("Waiting for {}", app_id),
-                "bg-blue-100 text-blue-800",
-            )
-        } else {
-            badge("Running", "bg-blue-100 text-blue-800")
-        }
+    let exec_status_badge = if let Some(app_id) = status.waiting_for_app.get(&task.id) {
+        badge(
+            &format!("Waiting for {}", app_id),
+            "bg-yellow-100 text-yellow-800",
+        )
+    } else if status.running_task_ids.contains(&task.id) {
+        badge("Running", "bg-blue-100 text-blue-800")
     } else if status.queued_task_ids.contains(&task.id) {
         badge("Waiting", "bg-yellow-100 text-yellow-800")
     } else if task.last_status.to_lowercase().contains("ok")
@@ -1101,7 +1141,7 @@ mod working_hours_profile_ui_tests {
 
 #[cfg(test)]
 mod run_all_button_tests {
-    use super::run_all_now_button;
+    use super::*;
 
     #[test]
     fn run_all_now_uses_post_form() {
@@ -1110,5 +1150,39 @@ mod run_all_button_tests {
         assert!(html.contains("action='/run-all'"));
         assert!(html.contains("type='submit'"));
         assert!(!html.contains("<a "));
+    }
+
+    #[test]
+    fn waiting_for_app_is_displayed_even_after_task_leaves_running_ids() {
+        let task = RunnerTask {
+            id: "waiting_task".to_string(),
+            name: "Waiting task".to_string(),
+            enabled: true,
+            repetition: Repetition::Repeat,
+            frequency_seconds: 60,
+            next_run_at: String::new(),
+            schedules: Vec::new(),
+            steps: Vec::new(),
+            post_run_steps: Vec::new(),
+            last_run_at: String::new(),
+            last_status: String::new(),
+            timeout_seconds: 0,
+        };
+        let status = crate::runner::engine::RunnerStatus {
+            running_tasks_count: 0,
+            queued_tasks_count: 1,
+            running_task_ids: Vec::new(),
+            queued_task_ids: vec!["waiting_task".to_string()],
+            last_error: String::new(),
+            last_task_id: String::new(),
+            last_run_at: String::new(),
+            waiting_for_app: std::collections::HashMap::from([(
+                "waiting_task".to_string(),
+                "CRM".to_string(),
+            )]),
+        };
+
+        let html = render_task_row(&task, &status);
+        assert!(html.contains("Waiting for CRM"));
     }
 }

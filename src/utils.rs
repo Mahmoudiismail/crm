@@ -181,15 +181,34 @@ pub fn merge_json(current: &mut serde_json::Value, default: &serde_json::Value) 
                         curr_map.get_mut(k).and_then(|val| val.as_array_mut()),
                         v.as_array(),
                     ) {
-                        for (i, def_item) in def_arr.iter().enumerate() {
-                            if i < curr_arr.len() {
-                                if curr_arr[i].is_object()
-                                    && curr_arr[i].as_object().unwrap().is_empty()
-                                {
-                                    curr_arr[i] = def_item.clone();
-                                    changed = true;
-                                } else {
-                                    changed |= merge_json(&mut curr_arr[i], def_item);
+                        if curr_arr.is_empty() {
+                            *curr_arr = def_arr.clone();
+                            changed = true;
+                        } else {
+                            for (i, def_item) in def_arr.iter().enumerate() {
+                                let is_disabled_opt_in =
+                                    def_item.get("enabled").and_then(serde_json::Value::as_bool)
+                                        == Some(false);
+                                if is_disabled_opt_in {
+                                    let default_type = def_item.get("type");
+                                    let already_present = default_type.is_some_and(|task_type| {
+                                        curr_arr
+                                            .iter()
+                                            .any(|task| task.get("type") == Some(task_type))
+                                    });
+                                    if !already_present {
+                                        curr_arr.push(def_item.clone());
+                                        changed = true;
+                                    }
+                                } else if i < curr_arr.len() {
+                                    if curr_arr[i].is_object()
+                                        && curr_arr[i].as_object().unwrap().is_empty()
+                                    {
+                                        curr_arr[i] = def_item.clone();
+                                        changed = true;
+                                    } else {
+                                        changed |= merge_json(&mut curr_arr[i], def_item);
+                                    }
                                 }
                             }
                         }
@@ -265,7 +284,6 @@ pub fn load_or_create_config<T: DeserializeOwned + Serialize>(
 /// - `base_date`: An optional reference date (useful for relative calculations like `eomonth`).
 pub(crate) fn resolve_date_var(val: &str, base_date: Option<&str>) -> Result<chrono::NaiveDate> {
     use chrono::{Datelike, Local, NaiveDate};
-    use tracing::{debug, error, info, trace};
 
     let base_dt = if let Some(bd) = base_date {
         parse_flexible_date_impl(bd, None)
@@ -277,76 +295,43 @@ pub(crate) fn resolve_date_var(val: &str, base_date: Option<&str>) -> Result<chr
     let val_lower = val.trim().to_lowercase();
     match val_lower.as_str() {
         "today" => {
-            info!("Variable detected: {}", val);
             let res = Local::now().date_naive();
-            debug!("Resolved value: {} (Original: {})", res, val);
-            trace!("Variable resolution path: today");
             Ok(res)
         }
         "yesterday" => {
-            info!("Variable detected: {}", val);
             let res =
                 Local::now().date_naive() - chrono::TimeDelta::try_days(1).context("valid days")?;
-            debug!("Resolved value: {} (Original: {})", res, val);
-            trace!("Variable resolution path: yesterday");
             Ok(res)
         }
         "tomorrow" => {
-            info!("Variable detected: {}", val);
             let res =
                 Local::now().date_naive() + chrono::TimeDelta::try_days(1).context("valid days")?;
-            debug!("Resolved value: {} (Original: {})", res, val);
-            trace!("Variable resolution path: tomorrow");
             Ok(res)
         }
         "this_month" | "beginning_of_month" => {
-            info!("Variable detected: {}", val);
             let res = NaiveDate::from_ymd_opt(dt.year(), dt.month(), 1)
                 .context("valid first day of month")?;
-
-            trace!(
-                "Variable resolution path: beginning_of_month. Base: {}, Result: {}",
-                dt,
-                res
-            );
-            debug!("Resolved value: {} (Original: {})", res, val);
             Ok(res)
         }
         "beginning_of_prev_month" | "beginning_of_previous_month" | "prev_month" => {
-            info!("Variable detected: {}", val);
             let prev = if dt.month() == 1 {
                 NaiveDate::from_ymd_opt(dt.year() - 1, 12, 1).context("valid prev year month")?
             } else {
                 NaiveDate::from_ymd_opt(dt.year(), dt.month() - 1, 1).context("valid prev month")?
             };
-            trace!(
-                "Variable resolution path: beginning_of_prev_month. Base: {}, Result: {}",
-                dt,
-                prev
-            );
-            debug!("Resolved value: {} (Original: {})", prev, val);
             Ok(prev)
         }
         "eomonth" => {
-            info!("Variable detected: {}", val);
             let next_month = if dt.month() == 12 {
                 NaiveDate::from_ymd_opt(dt.year() + 1, 1, 1).context("valid next year")?
             } else {
                 NaiveDate::from_ymd_opt(dt.year(), dt.month() + 1, 1).context("valid next month")?
             };
             let res = next_month.pred_opt().context("valid preceding day")?;
-
-            trace!(
-                "Variable resolution path: eomonth. Base: {}, Result: {}",
-                dt,
-                res
-            );
-            debug!("Resolved value: {} (Original: {})", res, val);
             Ok(res)
         }
 
         v if v.starts_with("next ") => {
-            info!("Variable detected: {}", val);
             let parse_weekday = |s: &str| -> Option<chrono::Weekday> {
                 match s.trim().to_lowercase().as_str() {
                     "next mon" | "next monday" => Some(chrono::Weekday::Mon),
@@ -377,10 +362,6 @@ pub(crate) fn resolve_date_var(val: &str, base_date: Option<&str>) -> Result<chr
                         let res = now_dt
                             + chrono::TimeDelta::try_days(days_to_add as i64)
                                 .context("valid days")?;
-                        debug!(
-                            "Resolved value (same variable base match): {} (Original: {})",
-                            res, val
-                        );
                         return Ok(res);
                     }
                 }
@@ -406,17 +387,10 @@ pub(crate) fn resolve_date_var(val: &str, base_date: Option<&str>) -> Result<chr
             }
 
             let res = dt + chrono::TimeDelta::try_days(days_to_add as i64).context("valid days")?;
-            trace!(
-                "Variable resolution path: next_weekday. Base: {}, Result: {}",
-                dt,
-                res
-            );
-            debug!("Resolved value: {} (Original: {})", res, val);
             Ok(res)
         }
         _ => {
             if val_lower.chars().all(|c| c.is_alphabetic()) && val_lower != "may" {
-                error!("Invalid variable: {} | Resolution failure", val);
                 anyhow::bail!("Invalid date variable: {}", val);
             }
             anyhow::bail!("Not a date variable")
@@ -426,8 +400,6 @@ pub(crate) fn resolve_date_var(val: &str, base_date: Option<&str>) -> Result<chr
 
 fn parse_flexible_date_impl(val: &str, base_date: Option<&str>) -> Option<chrono::NaiveDate> {
     use chrono::NaiveDate;
-    use tracing::warn;
-
     let val = val.trim();
     if val.is_empty() {
         return None;
@@ -439,7 +411,6 @@ fn parse_flexible_date_impl(val: &str, base_date: Option<&str>) -> Option<chrono
 
     // Check if it was meant to be a variable but failed validation
     if val.chars().all(|c| c.is_alphabetic()) && val.to_lowercase() != "may" {
-        warn!("Unsupported alphabetic string passed as date: {}", val);
         return None;
     }
 
@@ -796,6 +767,33 @@ mod tests {
         assert_eq!(curr_arr[0]["b"], 2); // default merge
         assert_eq!(curr_arr[1]["type"], "task2"); // full replace of {}
         assert_eq!(curr_arr[1]["c"], 3);
+    }
+
+    #[test]
+    fn test_merge_json_appends_new_default_tasks_without_replacing_existing_tasks() {
+        let mut current = serde_json::json!({
+            "tasks": [
+                { "type": "csv_analysis", "minutes_ago": 30 }
+            ]
+        });
+        let default = serde_json::json!({
+            "tasks": [
+                { "type": "csv_analysis", "minutes_ago": 15, "output_file": "./results.csv" },
+                { "type": "dashboard_updater" },
+                { "type": "crm_open_sohail" },
+                { "type": "department_split" },
+                { "type": "opd_analysis" },
+                { "type": "sat_figures", "enabled": false },
+                { "type": "users_export", "enabled": false }
+            ]
+        });
+
+        assert!(super::merge_json(&mut current, &default));
+        assert_eq!(current["tasks"].as_array().unwrap().len(), 3);
+        assert_eq!(current["tasks"][0]["minutes_ago"], 30);
+        assert_eq!(current["tasks"][0]["output_file"], "./results.csv");
+        assert_eq!(current["tasks"][1]["type"], "sat_figures");
+        assert_eq!(current["tasks"][2]["type"], "users_export");
     }
 
     #[test]

@@ -9,7 +9,7 @@ For a detailed guide on how to fundamentally reconstruct these components and th
 1.  **Runner (`src/bin/runner.rs`, `src/runner/*`)**: The background daemon. It runs as a system tray application on Windows, provides a local HTTP GUI, parses the overall `runner_config.json`, manages a chron-like schedule, and orchestrates task execution (launching `shell_command` or dynamically registered `external_app` processes).
 2.  **AppManifest System (`src/manifest.rs`, `md/MANIFEST_SCHEMA.md`)**: A JSON standard dictating how `crm`, `yasweb`, and `tasker` advertise their command-line arguments to the `runner` application, allowing the runner GUI to construct inputs dynamically.
 3.  **CRM Fetcher (`src/bin/crm.rs`, `src/crm/*`)**: A one-shot CLI utility handling Cognito SRP authentication, report payload requests (Tickets, Calls, Leads), and CSV downloading. Handles edge cases like ignoring empty configuration flags injected by the runner, and overriding configurations via CLI arguments such as `--custom-download-folder`.
-4.  **Yasweb Automation (`src/bin/yasweb.rs`)**: A headless Chrome automation utility used to log into an external Yasweb Angular dashboard, discover and configure filters, and extract generated data via iframe injection. It supports concurrent execution of monthly sliced reports via tab isolation and CDP file download interception.
+4.  **Yasweb Automation (`src/bin/yasweb.rs`)**: A headless Chrome automation utility used to log into an external Yasweb Angular dashboard, discover and configure filters, and extract generated data via iframe injection. Reports can execute concurrently, while a shared semaphore limits active browser operations using `yasweb_config.json` → `concurrency` (default 6; `0` means unlimited, `1` serializes operations, and values above `1` set the maximum). Runner owns date-range scheduling; YASWEB does not split ranges into monthly batches.
 5.  **Tasker (`src/bin/tasker.rs`, `src/tasker/*`)**: A backend utility dedicated to processing generated CSV datasets and transmitting HTML/Excel summary reports via Outlook COM automation or other channels. It also parses `lead_report` files and attaches filtered reports for the Call Center. CSV readers are created through shared utilities in `src/utils.rs`. The default reader is strict about row widths; callers that need to tolerate variable column lengths must opt into flexible parsing explicitly.
 
 ## Execution Flow (Runner -> Dynamic Task)
@@ -50,6 +50,9 @@ The application utilizes a `ScriptManager` utility to standardize the execution 
 - **`yasweb`**: Timeout parsing issues resolved.
 - **`runner`**: Implemented `AppLockManager` to enforce deterministic, step-level application locks.
 
-### CRM Execution & Error Propagation
+#### CRM Ticket Range Fetching
+Ticket exports are grouped into batches of at most three calendar months, with up to three initial batches executed concurrently. Failed ranges are aggregated into the returned error, while signed-URL failures retain recursive range splitting. Invalid ticket date formats fall back to one direct request for the original range. HTTP error-body diagnostics are bounded to a UTF-8-safe 4096-byte preview at DEBUG level; full response bodies are not logged.
+
+## CRM Execution & Error Propagation
 - The `crm` binary correctly propagates individual report failures (e.g. `HTTP 500`) outwards, immediately terminating the binary execution with a non-zero exit code.
 - Relative date logic and CLI resolution exclusively utilizes Local system time (`chrono::Local::now()`) to prevent date boundary shifts (due to UTC vs timezone offset collisions).

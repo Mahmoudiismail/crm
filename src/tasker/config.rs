@@ -40,6 +40,10 @@ pub enum TaskConfig {
     DepartmentSplit(DepartmentSplitConfig),
     #[serde(rename = "opd_analysis")]
     OpdAnalysis(OpdAnalysisConfig),
+    #[serde(rename = "sat_figures")]
+    SatFigures(SatFiguresConfig),
+    #[serde(rename = "users_export")]
+    UsersExport(UsersExportConfig),
 }
 
 /// Outlines email templating, routing, and distribution rules.
@@ -161,6 +165,45 @@ pub struct OpdAnalysisConfig {
     pub check_current_year: bool,
 }
 
+/// Creates the Sat Figures summary from the newest OPD workbook and emails it.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct SatFiguresConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    pub download_path: String,
+    pub output_file: String,
+    #[serde(default = "default_sat_figures_email_to")]
+    pub email_to: String,
+    #[serde(default)]
+    pub email_cc: String,
+    #[serde(default = "default_sat_figures_subject")]
+    pub email_subject: String,
+}
+
+fn default_sat_figures_email_to() -> String {
+    "dd@merrywillow.mailk.us".to_string()
+}
+
+fn default_sat_figures_subject() -> String {
+    "201009977888-1576573266@g.us".to_string()
+}
+
+/// Replaces the users.xlsm Power Query export with a native CSV task.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct UsersExportConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    pub download_path: String,
+    pub mapping_workbook: String,
+    pub output_file: String,
+    #[serde(default = "default_users_export_minutes")]
+    pub minutes_ago: u64,
+}
+
+fn default_users_export_minutes() -> u64 {
+    10
+}
+
 fn default_special_column_name() -> String {
     "Special".to_string()
 }
@@ -280,6 +323,50 @@ mod tests {
                 assert_eq!(dash.email_to.as_deref(), Some("aya@example.com"));
             }
             _ => panic!("Expected DashboardUpdater task"),
+        }
+    }
+
+    #[test]
+    fn test_sat_figures_and_users_export_configs_deserialize() {
+        let config: TaskerConfig = serde_json::from_str(
+            r#"{
+              "tasks": [
+                {
+                  "type": "sat_figures",
+                  "download_path": "./downloads",
+                  "output_file": "./sat_figures.csv"
+                },
+                {
+                  "type": "users_export",
+                  "download_path": "./downloads",
+                  "mapping_workbook": "./users.xlsm",
+                  "output_file": "./users.csv"
+                }
+              ]
+            }"#,
+        )
+        .unwrap();
+
+        match &config.tasks[0] {
+            TaskConfig::SatFigures(task) => {
+                assert!(
+                    !task.enabled,
+                    "New jobs must be disabled unless explicitly enabled"
+                );
+                assert_eq!(task.email_to, "dd@merrywillow.mailk.us");
+                assert_eq!(task.email_subject, "201009977888-1576573266@g.us");
+            }
+            _ => panic!("Expected SatFigures task"),
+        }
+        match &config.tasks[1] {
+            TaskConfig::UsersExport(task) => {
+                assert!(
+                    !task.enabled,
+                    "New jobs must be disabled unless explicitly enabled"
+                );
+                assert_eq!(task.minutes_ago, 10);
+            }
+            _ => panic!("Expected UsersExport task"),
         }
     }
 
