@@ -4,7 +4,7 @@ use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use tracing::info;
+use tracing::{info, warn};
 use zip::{write::FileOptions, CompressionMethod, ZipWriter};
 
 const MAX_ZIP_SIZE_BYTES: u64 = 20 * 1024 * 1024; // 20 MB
