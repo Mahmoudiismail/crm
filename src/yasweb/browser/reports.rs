@@ -981,9 +981,9 @@ pub fn generate_step6_js(timeout_minutes: u64) -> String {
 /// Recovers a missed MIS navigation click without disturbing a route that already changed.
 /// Returns true when the MIS module was clicked, false when the MIS route was already reached.
 fn retry_mis_navigation(tab: &Arc<Tab>) -> Result<bool> {
-    let script = r#"
+    let script = r##"
         (async function() {
-            const routePattern = /\\/home\\/mis-report\\/module\\//i;
+            const routePattern = /\/home\/mis-report\/module\//i;
             if (routePattern.test(location.href)) return JSON.stringify({ status: "SUCCESS", clicked: false });
 
             const menu = document.querySelector("#menuPinnedBtn:not(.d-none), #pinButton:not(.d-none)");
@@ -1015,7 +1015,7 @@ fn retry_mis_navigation(tab: &Arc<Tab>) -> Result<bool> {
             }
             return JSON.stringify({ status: "ERROR", msg: "MIS navigation recovery could not find a visible MIS module." });
         })()
-    "#;
+    "##;
 
     let result = tab.evaluate(script, true).context("Failed to evaluate MIS navigation recovery")?;
     let value = result.value
