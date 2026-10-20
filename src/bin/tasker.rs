@@ -192,7 +192,10 @@ pub fn run_app(options: TaskerCliOptions) -> Result<()> {
             _ => false,
         };
         if disabled_new_task {
-            info!("Skipping task #{} because it is disabled in tasker_config.json.", task_idx);
+            info!(
+                "Skipping task #{} because it is disabled in tasker_config.json.",
+                task_idx
+            );
             continue;
         }
 

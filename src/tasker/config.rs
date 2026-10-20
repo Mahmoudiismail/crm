@@ -349,7 +349,10 @@ mod tests {
 
         match &config.tasks[0] {
             TaskConfig::SatFigures(task) => {
-                assert!(!task.enabled, "New jobs must be disabled unless explicitly enabled");
+                assert!(
+                    !task.enabled,
+                    "New jobs must be disabled unless explicitly enabled"
+                );
                 assert_eq!(task.email_to, "dd@merrywillow.mailk.us");
                 assert_eq!(task.email_subject, "201009977888-1576573266@g.us");
             }
@@ -357,9 +360,12 @@ mod tests {
         }
         match &config.tasks[1] {
             TaskConfig::UsersExport(task) => {
-                assert!(!task.enabled, "New jobs must be disabled unless explicitly enabled");
+                assert!(
+                    !task.enabled,
+                    "New jobs must be disabled unless explicitly enabled"
+                );
                 assert_eq!(task.minutes_ago, 10);
-            },
+            }
             _ => panic!("Expected UsersExport task"),
         }
     }
