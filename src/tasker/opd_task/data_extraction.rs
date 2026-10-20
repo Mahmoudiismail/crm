@@ -199,6 +199,9 @@ mod tests {
         let worksheet = workbook.add_worksheet();
         worksheet.set_name("MIS_Report").unwrap();
 
+        // Keep the worksheet range anchored at row 0, as in real MIS reports.
+        worksheet.write_string(0, 0, "OPD Report").unwrap();
+
         let headers = [
             "Total Slot",
             "Slots Booked",
