@@ -50,6 +50,9 @@ The application utilizes a `ScriptManager` utility to standardize the execution 
 - **`yasweb`**: Timeout parsing issues resolved.
 - **`runner`**: Implemented `AppLockManager` to enforce deterministic, step-level application locks.
 
-### CRM Execution & Error Propagation
+#### CRM Ticket Range Fetching
+Ticket exports are grouped into batches of at most three calendar months, with up to three initial batches executed concurrently. Failed ranges are aggregated into the returned error, while signed-URL failures retain recursive range splitting. Invalid ticket date formats fall back to one direct request for the original range. HTTP error-body diagnostics are bounded to a UTF-8-safe 4096-byte preview at DEBUG level; full response bodies are not logged.
+
+## CRM Execution & Error Propagation
 - The `crm` binary correctly propagates individual report failures (e.g. `HTTP 500`) outwards, immediately terminating the binary execution with a non-zero exit code.
 - Relative date logic and CLI resolution exclusively utilizes Local system time (`chrono::Local::now()`) to prevent date boundary shifts (due to UTC vs timezone offset collisions).
