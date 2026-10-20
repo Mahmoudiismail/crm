@@ -168,6 +168,8 @@ pub struct OpdAnalysisConfig {
 /// Creates the Sat Figures summary from the newest OPD workbook and emails it.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct SatFiguresConfig {
+    #[serde(default)]
+    pub enabled: bool,
     pub download_path: String,
     pub output_file: String,
     #[serde(default = "default_sat_figures_email_to")]
@@ -189,6 +191,8 @@ fn default_sat_figures_subject() -> String {
 /// Replaces the users.xlsm Power Query export with a native CSV task.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct UsersExportConfig {
+    #[serde(default)]
+    pub enabled: bool,
     pub download_path: String,
     pub mapping_workbook: String,
     pub output_file: String,
@@ -345,13 +349,17 @@ mod tests {
 
         match &config.tasks[0] {
             TaskConfig::SatFigures(task) => {
+                assert!(!task.enabled, "New jobs must be disabled unless explicitly enabled");
                 assert_eq!(task.email_to, "dd@merrywillow.mailk.us");
                 assert_eq!(task.email_subject, "201009977888-1576573266@g.us");
             }
             _ => panic!("Expected SatFigures task"),
         }
         match &config.tasks[1] {
-            TaskConfig::UsersExport(task) => assert_eq!(task.minutes_ago, 10),
+            TaskConfig::UsersExport(task) => {
+                assert!(!task.enabled, "New jobs must be disabled unless explicitly enabled");
+                assert_eq!(task.minutes_ago, 10);
+            },
             _ => panic!("Expected UsersExport task"),
         }
     }
