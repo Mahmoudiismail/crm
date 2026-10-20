@@ -163,7 +163,7 @@ pub fn extract_new_data(
 
     for fi in new_files {
         let total_seen = match filtered_rows_from_workbook(&fi.path, &filters, false) {
-            Ok(rows) => rows.into_iter().map(|row| row.patient_seen).sum(),
+            Ok(rows) => rows.into_iter().map(|row| row.patient_seen).sum::<i64>(),
             Err(e) => {
                 warn!("Failed to process OPD workbook {:?}: {:#}", fi.path, e);
                 continue;
