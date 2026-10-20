@@ -157,14 +157,64 @@ pub fn navigate_and_run_report(
                         let mis_wait_started = Instant::now();
                         info!("YASWEB STAGE START: wait_for_mis_reports timeout_seconds=30");
                         let wait_js = generate_mis_reports_wait_js(30);
-                        if let Err(e) = javascript::evaluate_automation_step(
+                        if let Err(first_error) = javascript::evaluate_automation_step(
                             tab,
                             &wait_js,
                             "Wait for MIS Reports",
                         ) {
-                            error!("YASWEB STAGE FAILED: wait_for_mis_reports elapsed_ms={} error={:#}", mis_wait_started.elapsed().as_millis(), e);
-                            debug::save_failure_diagnostics(tab, "wait_for_mis_reports");
-                            return Err(e).context("Yasweb stage failed: wait for MIS Reports");
+                            error!(
+                                "YASWEB STAGE RETRY: wait_for_mis_reports initial attempt failed elapsed_ms={} error={:#}",
+                                mis_wait_started.elapsed().as_millis(),
+                                first_error
+                            );
+
+                            // A failed transition can leave the SPA on the previous report route.
+                            // Retry the MIS navigation once only when the MIS route was not reached.
+                            match retry_mis_navigation(tab) {
+                                Ok(true) => {
+                                    info!("MIS route was not reached; retried the MIS module click once.");
+                                    if let Err(retry_error) = javascript::evaluate_automation_step(
+                                        tab,
+                                        &wait_js,
+                                        "Wait for MIS Reports (retry)",
+                                    ) {
+                                        error!(
+                                            "YASWEB STAGE FAILED: wait_for_mis_reports after retry elapsed_ms={} error={:#}",
+                                            mis_wait_started.elapsed().as_millis(),
+                                            retry_error
+                                        );
+                                        debug::save_failure_diagnostics(tab, "wait_for_mis_reports_retry");
+                                        return Err(retry_error).context("Yasweb stage failed: wait for MIS Reports after navigation retry");
+                                    }
+                                }
+                                Ok(false) => {
+                                    // The route was reached, so this was likely a slow embedded UI.
+                                    // Retry the readiness wait without clicking navigation again.
+                                    info!("MIS route already reached; retrying readiness wait once without another navigation click.");
+                                    if let Err(retry_error) = javascript::evaluate_automation_step(
+                                        tab,
+                                        &wait_js,
+                                        "Wait for MIS Reports (readiness retry)",
+                                    ) {
+                                        error!(
+                                            "YASWEB STAGE FAILED: wait_for_mis_reports after readiness retry elapsed_ms={} error={:#}",
+                                            mis_wait_started.elapsed().as_millis(),
+                                            retry_error
+                                        );
+                                        debug::save_failure_diagnostics(tab, "wait_for_mis_reports_readiness_retry");
+                                        return Err(retry_error).context("Yasweb stage failed: wait for MIS Reports after readiness retry");
+                                    }
+                                }
+                                Err(recovery_error) => {
+                                    error!(
+                                        "Failed to recover MIS navigation after initial readiness failure: {:#}",
+                                        recovery_error
+                                    );
+                                    debug::save_failure_diagnostics(tab, "mis_navigation_recovery");
+                                    return Err(first_error)
+                                        .context("Yasweb stage failed: wait for MIS Reports; navigation recovery also failed");
+                                }
+                            }
                         }
                         info!(
                             "YASWEB STAGE END: wait_for_mis_reports status=SUCCESS elapsed_ms={}",
@@ -925,6 +975,60 @@ pub fn generate_step6_js(timeout_minutes: u64) -> String {
         "#,
         timeout_minutes
     )
+}
+
+
+/// Recovers a missed MIS navigation click without disturbing a route that already changed.
+/// Returns true when the MIS module was clicked, false when the MIS route was already reached.
+fn retry_mis_navigation(tab: &Arc<Tab>) -> Result<bool> {
+    let script = r#"
+        (async function() {
+            const routePattern = /\\/home\\/mis-report\\/module\\//i;
+            if (routePattern.test(location.href)) return JSON.stringify({ status: "SUCCESS", clicked: false });
+
+            const menu = document.querySelector("#menuPinnedBtn:not(.d-none), #pinButton:not(.d-none)");
+            const modules = document.querySelector(".menuModules");
+            if (!modules || !modules.classList.contains("show-modules")) {
+                if (!menu) return JSON.stringify({ status: "ERROR", msg: "MIS navigation recovery could not find the menu button." });
+                menu.click();
+                const menuDeadline = Date.now() + 5000;
+                while (Date.now() < menuDeadline) {
+                    const current = document.querySelector(".menuModules");
+                    if (current && current.classList.contains("show-modules")) break;
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+            }
+
+            const deadline = Date.now() + 5000;
+            while (Date.now() < deadline) {
+                const module = document.querySelector(".misManagement");
+                if (module) {
+                    const style = getComputedStyle(module);
+                    const visible = style.display !== "none" && style.visibility !== "hidden" &&
+                        Array.from(module.getClientRects()).some(rect => rect.width > 0 && rect.height > 0);
+                    if (visible) {
+                        module.click();
+                        return JSON.stringify({ status: "SUCCESS", clicked: true });
+                    }
+                }
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+            return JSON.stringify({ status: "ERROR", msg: "MIS navigation recovery could not find a visible MIS module." });
+        })()
+    "#;
+
+    let result = tab.evaluate(script, true).context("Failed to evaluate MIS navigation recovery")?;
+    let value = result.value
+        .and_then(|value| value.as_str().map(str::to_owned))
+        .ok_or_else(|| anyhow::anyhow!("MIS navigation recovery returned no result"))?;
+    let parsed: serde_json::Value = serde_json::from_str(&value)
+        .context("MIS navigation recovery returned invalid JSON")?;
+    if parsed.get("status").and_then(serde_json::Value::as_str) != Some("SUCCESS") {
+        let message = parsed.get("msg").and_then(serde_json::Value::as_str)
+            .unwrap_or("MIS navigation recovery failed");
+        anyhow::bail!("{message}");
+    }
+    Ok(parsed.get("clicked").and_then(serde_json::Value::as_bool).unwrap_or(false))
 }
 
 pub fn generate_mis_reports_wait_js(timeout_seconds: u64) -> String {
