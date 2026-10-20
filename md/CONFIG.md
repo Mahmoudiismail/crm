@@ -38,6 +38,10 @@ This file controls the GUI, global timing, and task scheduling. It has a `regist
 }
 ```
 
+## CRM Fetch Range Behavior
+
+Ticket exports are automatically split into requests covering at most three calendar months each, with up to three initial ranges processed concurrently. This behavior does not require a configuration option. If ticket date values cannot be parsed for batching, CRM attempts the original range directly; non-ticket endpoints keep their existing range behavior.
+
 ## Application Configurations
 
 Executables spawned via the runner or manually have their own configurations.
