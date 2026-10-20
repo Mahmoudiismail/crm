@@ -1,12 +1,11 @@
 # Sat Figures and Users Export Tasker Jobs
 
-These jobs replace the Excel/VBS processing paths with native Tasker processing. They are intentionally not enabled in Tasker's generated default configuration because Sat Figures sends an email when it runs.
-
-Add the following entries to the `tasks` array in the existing `tasker_config.json`. Keep the existing `opd_analysis` entry as well; Sat Figures reads its exclusion lists so both jobs use the same OPD filters.
+These jobs replace the Excel/VBS processing paths with native Tasker processing. Tasker automatically appends their default entries to an existing `tasker_config.json` during startup without overwriting existing task settings. Both entries start with `enabled: false`; this prevents Sat Figures from sending an email unexpectedly. Set `enabled` to `true` for each job you want to run. Keep the existing `opd_analysis` entry; Sat Figures reuses its exclusion lists.
 
 ```json
 {
   "type": "sat_figures",
+  "enabled": true,
   "download_path": "../yasweb_windows/downloads/Sat figures",
   "output_file": "./sat_figures.csv",
   "email_to": "dd@merrywillow.mailk.us",
@@ -15,6 +14,7 @@ Add the following entries to the `tasks` array in the existing `tasker_config.js
 },
 {
   "type": "users_export",
+  "enabled": true,
   "download_path": "../crm_windows/Downloads",
   "mapping_workbook": "../../users.xlsm",
   "output_file": "./task1/users.csv",
@@ -37,4 +37,4 @@ Add the following entries to the `tasks` array in the existing `tasker_config.js
 - Writes the five query output columns in their existing order to `users.csv`; unmatched names keep an empty mapped department in the expanded mapping column and use `Teams` for the final `UserDepartmentName / Team Name` column, matching the query.
 - Does not open Excel or execute the old `ExportSheet2ToCSV` macro.
 
-Run one task by its 1-based position in the `tasks` array using `tasker --task N`. The Sat Figures task requires an `opd_analysis` configuration in the same file so its filters are not duplicated.
+Run one enabled task by its 1-based position in the `tasks` array using `tasker --task N`. Disabled new jobs are skipped with a log entry. The Sat Figures task requires an `opd_analysis` configuration in the same file so its filters are not duplicated.
