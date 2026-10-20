@@ -540,7 +540,8 @@ mod tests {
         let mock_config_json = serde_json::json!({ "tasks": [] });
 
         let mut file = std::fs::File::create(&config_path).unwrap();
-        file.write_all(mock_config_json.to_string().as_bytes()).unwrap();
+        file.write_all(mock_config_json.to_string().as_bytes())
+            .unwrap();
         file.sync_all().unwrap();
         drop(file);
 
