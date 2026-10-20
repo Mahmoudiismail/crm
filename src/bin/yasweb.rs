@@ -240,6 +240,8 @@ async fn main() -> Result<()> {
     }
 
     let options = YaswebCliOptions::parse();
+    // Accepted for compatibility with stored arguments; Runner owns date-range scheduling.
+    let _legacy_monthly = options.monthly;
 
     let p = PathBuf::from(options.config);
     let exe_dir = executable_dir()?;
