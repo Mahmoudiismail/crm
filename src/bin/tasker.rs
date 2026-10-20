@@ -141,6 +141,23 @@ pub fn run_app(options: TaskerCliOptions) -> Result<()> {
       "special_column_name": "Special",
       "date_column_name": "KSA Time",
       "check_current_year": true
+    },
+    {
+      "type": "sat_figures",
+      "enabled": false,
+      "download_path": "../yasweb_windows/downloads/Sat figures",
+      "output_file": "./sat_figures.csv",
+      "email_to": "dd@merrywillow.mailk.us",
+      "email_cc": "",
+      "email_subject": "201009977888-1576573266@g.us"
+    },
+    {
+      "type": "users_export",
+      "enabled": false,
+      "download_path": "../crm_windows/Downloads",
+      "mapping_workbook": "../../users.xlsm",
+      "output_file": "./task1/users.csv",
+      "minutes_ago": 10
     }
   ]
 }"#;
@@ -168,6 +185,17 @@ pub fn run_app(options: TaskerCliOptions) -> Result<()> {
         let task_idx = i + 1;
 
         tracing::trace!("Processing task #{} from configuration.", task_idx);
+
+        let disabled_new_task = match task {
+            TaskConfig::SatFigures(config) => !config.enabled,
+            TaskConfig::UsersExport(config) => !config.enabled,
+            _ => false,
+        };
+        if disabled_new_task {
+            info!("Skipping task #{} because it is disabled in tasker_config.json.", task_idx);
+            continue;
+        }
+
         if let Some(filter) = task_filter {
             if task_idx != filter {
                 tracing::trace!(
