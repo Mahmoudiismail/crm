@@ -989,7 +989,16 @@ async fn fetch_with_signed_url_split(
     // Ticket exports have repeatedly failed for broad ranges. Start with at most three
     // calendar months per request, while retaining recursive splitting as a fallback.
     let ranges = if endpoint == "task/download-ticket-data" {
-        split_in_month_batches(from_date, to_date, 3)?
+        match split_in_month_batches(from_date, to_date, 3) {
+            Ok(ranges) => ranges,
+            Err(error) => {
+                warn!(
+                    "Could not parse ticket date range [{} to {}] for month batching: {}; trying the requested range directly",
+                    from_date, to_date, error
+                );
+                vec![(from_date.to_string(), to_date.to_string())]
+            }
+        }
     } else {
         vec![(from_date.to_string(), to_date.to_string())]
     };
@@ -1305,11 +1314,18 @@ async fn fetch_single(
     );
 
     if !status.is_success() {
-        // Preserve the complete error response for root-cause analysis. Successful
-        // response bodies are intentionally not logged because they contain signed URLs.
-        error!(
-            "Full error response body from {} [{} to {}] (HTTP {}): {}",
-            endpoint, from_date, to_date, status, body
+        // Log only a bounded UTF-8-safe preview, retaining the original body length.
+        const MAX_ERROR_BODY_LOG_BYTES: usize = 4096;
+        let preview_end = body
+            .char_indices()
+            .map(|(index, ch)| index + ch.len_utf8())
+            .take_while(|end| *end <= MAX_ERROR_BODY_LOG_BYTES)
+            .last()
+            .unwrap_or(0);
+        let body_preview = &body[..preview_end];
+        debug!(
+            "Error response preview from {} [{} to {}] (HTTP {}): body_bytes={}, preview_bytes={}, body_preview={:?}",
+            endpoint, from_date, to_date, status, body.len(), body_preview.len(), body_preview
         );
         let err = sanitized_response_error(endpoint, status, &body);
         if is_signed_url_generation_failure(&err) {
