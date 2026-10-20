@@ -50,7 +50,7 @@ fn latest_source_report(download_dir: &std::path::Path) -> Result<PathBuf> {
             .with_context(|| format!("Could not determine creation time for {:?}", path))?;
         if latest
             .as_ref()
-            .map_or(true, |(timestamp, _)| created > *timestamp)
+            .is_none_or(|(timestamp, _)| created > *timestamp)
         {
             latest = Some((created, path));
         }
