@@ -13,6 +13,8 @@ struct CollectedFile {
     path: PathBuf,
     archive_name: String,
     delete_after_send: bool,
+    size_at_collection: u64,
+    modified_at_collection: Option<std::time::SystemTime>,
 }
 
 pub fn process_and_send_logs(config: &UpdaterConfig) -> Result<()> {
@@ -89,6 +91,16 @@ pub fn process_and_send_logs(config: &UpdaterConfig) -> Result<()> {
     // Delete collected .log files only after successful delivery. Move delivered diagnostics
     // under debug_html/sent so they remain available locally but are not re-sent every run.
     for file in files.iter().filter(|file| file.delete_after_send) {
+        // Do not delete a log that changed while it was being archived or emailed;
+        // newer entries remain on disk for the next collection.
+        let unchanged = fs::metadata(&file.path).is_ok_and(|metadata| {
+            metadata.len() == file.size_at_collection
+                && metadata.modified().ok() == file.modified_at_collection
+        });
+        if !unchanged {
+            warn!("Keeping log {} because it changed during collection", file.archive_name);
+            continue;
+        }
         if let Err(e) = fs::remove_file(&file.path) {
             warn!("Failed to delete collected file {}: {}", file.archive_name, e);
         } else {
@@ -222,10 +234,19 @@ fn add_file(
 ) {
     let identity = path.canonicalize().unwrap_or_else(|_| path.clone());
     if seen.insert(identity) {
+        let metadata = match fs::metadata(&path) {
+            Ok(metadata) => metadata,
+            Err(error) => {
+                warn!("Skipping unreadable collection candidate {}: {}", archive_name, error);
+                return;
+            }
+        };
         files.push(CollectedFile {
             path,
             archive_name,
             delete_after_send,
+            size_at_collection: metadata.len(),
+            modified_at_collection: metadata.modified().ok(),
         });
     }
 }
