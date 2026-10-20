@@ -86,13 +86,27 @@ pub fn process_and_send_logs(config: &UpdaterConfig) -> Result<()> {
     // Keep originals if sending fails so the next run can retry.
     send_logs_email(&config.log_recipient_email, &zip_archives)?;
 
-    // Delete collected .log files only after successful delivery. Keep HTML/JSON diagnostics
-    // on disk because they are useful for investigating a later or recurring failure.
+    // Delete collected .log files only after successful delivery. Move delivered diagnostics
+    // under debug_html/sent so they remain available locally but are not re-sent every run.
     for file in files.iter().filter(|file| file.delete_after_send) {
         if let Err(e) = fs::remove_file(&file.path) {
-            warn!("Failed to delete log file {:?}: {}", file.path, e);
+            warn!("Failed to delete collected file {}: {}", file.archive_name, e);
         } else {
-            info!("Deleted log file {:?}", file.path);
+            info!("Deleted collected file {}", file.archive_name);
+        }
+    }
+    let diagnostics_dir = exe_dir.join("debug_html");
+    for file in files.iter().filter(|file| !file.delete_after_send) {
+        let relative = file.path.strip_prefix(&diagnostics_dir).unwrap_or(&file.path);
+        let sent_path = diagnostics_dir.join("sent").join(relative);
+        if let Some(parent) = sent_path.parent() {
+            if let Err(e) = fs::create_dir_all(parent) {
+                warn!("Failed to retain delivered diagnostic {}: {}", file.archive_name, e);
+                continue;
+            }
+        }
+        if let Err(e) = fs::rename(&file.path, &sent_path) {
+            warn!("Failed to mark diagnostic {} as sent: {}", file.archive_name, e);
         }
     }
 
@@ -163,7 +177,7 @@ fn collect_files(exe_dir: &Path, logs_dir: &Path) -> Vec<CollectedFile> {
             );
         }
     } else {
-        warn!("Configured logs directory {:?} does not exist.", logs_dir);
+        warn!("Configured Runner logs directory is missing; no task logs were collected.");
     }
 
     // Yasweb stores HTML snapshots and redacted failure JSON beside the executable.
@@ -174,7 +188,10 @@ fn collect_files(exe_dir: &Path, logs_dir: &Path) -> Vec<CollectedFile> {
             .filter_map(|entry| entry.ok())
         {
             let path = entry.path();
-            if !path.is_file() || !has_extension(path, &["html", "json"]) {
+            if !path.is_file()
+                || !has_extension(path, &["html", "json"])
+                || path.starts_with(diagnostics_dir.join("sent"))
+            {
                 continue;
             }
 
