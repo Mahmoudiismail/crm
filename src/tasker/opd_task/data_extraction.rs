@@ -8,6 +8,7 @@ use std::path::Path;
 use tracing::warn;
 
 /// Filters shared by OPD analysis and the Sat Figures report.
+#[derive(Debug)]
 pub struct OpdFilters<'a> {
     pub exclude_specialities: &'a [String],
     pub exclude_emp_names: &'a [String],
