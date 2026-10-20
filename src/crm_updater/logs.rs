@@ -15,7 +15,7 @@ struct CollectedFile {
     delete_after_send: bool,
 }
 
-pub fn process_and_send_logs(config: &UpdaterConfig) -> Result<()> {
+pub fn process_and_collect_logs(config: &UpdaterConfig) -> Result<()> {
     info!("Starting log processing pipeline.");
 
     let exe_dir = crate::utils::executable_dir()
