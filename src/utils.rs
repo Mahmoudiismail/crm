@@ -191,6 +191,9 @@ pub fn merge_json(current: &mut serde_json::Value, default: &serde_json::Value) 
                                 } else {
                                     changed |= merge_json(&mut curr_arr[i], def_item);
                                 }
+                            } else {
+                                curr_arr.push(def_item.clone());
+                                changed = true;
                             }
                         }
                         continue;
@@ -748,6 +751,29 @@ mod tests {
         assert_eq!(curr_arr[0]["b"], 2); // default merge
         assert_eq!(curr_arr[1]["type"], "task2"); // full replace of {}
         assert_eq!(curr_arr[1]["c"], 3);
+    }
+
+    #[test]
+    fn test_merge_json_appends_new_default_tasks_without_replacing_existing_tasks() {
+        let mut current = serde_json::json!({
+            "tasks": [
+                { "type": "csv_analysis", "minutes_ago": 30 }
+            ]
+        });
+        let default = serde_json::json!({
+            "tasks": [
+                { "type": "csv_analysis", "minutes_ago": 15, "output_file": "./results.csv" },
+                { "type": "sat_figures", "enabled": false },
+                { "type": "users_export", "enabled": false }
+            ]
+        });
+
+        assert!(super::merge_json(&mut current, &default));
+        assert_eq!(current["tasks"].as_array().unwrap().len(), 3);
+        assert_eq!(current["tasks"][0]["minutes_ago"], 30);
+        assert_eq!(current["tasks"][0]["output_file"], "./results.csv");
+        assert_eq!(current["tasks"][1]["type"], "sat_figures");
+        assert_eq!(current["tasks"][2]["type"], "users_export");
     }
 
     #[test]
