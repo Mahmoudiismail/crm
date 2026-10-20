@@ -181,19 +181,34 @@ pub fn merge_json(current: &mut serde_json::Value, default: &serde_json::Value) 
                         curr_map.get_mut(k).and_then(|val| val.as_array_mut()),
                         v.as_array(),
                     ) {
-                        for (i, def_item) in def_arr.iter().enumerate() {
-                            if i < curr_arr.len() {
-                                if curr_arr[i].is_object()
-                                    && curr_arr[i].as_object().unwrap().is_empty()
-                                {
-                                    curr_arr[i] = def_item.clone();
-                                    changed = true;
-                                } else {
-                                    changed |= merge_json(&mut curr_arr[i], def_item);
+                        if curr_arr.is_empty() {
+                            *curr_arr = def_arr.clone();
+                            changed = true;
+                        } else {
+                            for (i, def_item) in def_arr.iter().enumerate() {
+                                let is_disabled_opt_in = def_item
+                                    .get("enabled")
+                                    .and_then(serde_json::Value::as_bool)
+                                    == Some(false);
+                                if is_disabled_opt_in {
+                                    let default_type = def_item.get("type");
+                                    let already_present = default_type.is_some_and(|task_type| {
+                                        curr_arr.iter().any(|task| task.get("type") == Some(task_type))
+                                    });
+                                    if !already_present {
+                                        curr_arr.push(def_item.clone());
+                                        changed = true;
+                                    }
+                                } else if i < curr_arr.len() {
+                                    if curr_arr[i].is_object()
+                                        && curr_arr[i].as_object().unwrap().is_empty()
+                                    {
+                                        curr_arr[i] = def_item.clone();
+                                        changed = true;
+                                    } else {
+                                        changed |= merge_json(&mut curr_arr[i], def_item);
+                                    }
                                 }
-                            } else {
-                                curr_arr.push(def_item.clone());
-                                changed = true;
                             }
                         }
                         continue;
