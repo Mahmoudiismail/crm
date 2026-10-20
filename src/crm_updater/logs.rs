@@ -98,27 +98,42 @@ pub fn process_and_send_logs(config: &UpdaterConfig) -> Result<()> {
                 && metadata.modified().ok() == file.modified_at_collection
         });
         if !unchanged {
-            warn!("Keeping log {} because it changed during collection", file.archive_name);
+            warn!(
+                "Keeping log {} because it changed during collection",
+                file.archive_name
+            );
             continue;
         }
         if let Err(e) = fs::remove_file(&file.path) {
-            warn!("Failed to delete collected file {}: {}", file.archive_name, e);
+            warn!(
+                "Failed to delete collected file {}: {}",
+                file.archive_name, e
+            );
         } else {
             info!("Deleted collected file {}", file.archive_name);
         }
     }
     let diagnostics_dir = exe_dir.join("debug_html");
     for file in files.iter().filter(|file| !file.delete_after_send) {
-        let relative = file.path.strip_prefix(&diagnostics_dir).unwrap_or(&file.path);
+        let relative = file
+            .path
+            .strip_prefix(&diagnostics_dir)
+            .unwrap_or(&file.path);
         let sent_path = diagnostics_dir.join("sent").join(relative);
         if let Some(parent) = sent_path.parent() {
             if let Err(e) = fs::create_dir_all(parent) {
-                warn!("Failed to retain delivered diagnostic {}: {}", file.archive_name, e);
+                warn!(
+                    "Failed to retain delivered diagnostic {}: {}",
+                    file.archive_name, e
+                );
                 continue;
             }
         }
         if let Err(e) = fs::rename(&file.path, &sent_path) {
-            warn!("Failed to mark diagnostic {} as sent: {}", file.archive_name, e);
+            warn!(
+                "Failed to mark diagnostic {} as sent: {}",
+                file.archive_name, e
+            );
         }
     }
 
@@ -237,7 +252,10 @@ fn add_file(
         let metadata = match fs::metadata(&path) {
             Ok(metadata) => metadata,
             Err(error) => {
-                warn!("Skipping unreadable collection candidate {}: {}", archive_name, error);
+                warn!(
+                    "Skipping unreadable collection candidate {}: {}",
+                    archive_name, error
+                );
                 return;
             }
         };

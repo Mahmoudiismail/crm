@@ -186,14 +186,15 @@ pub fn merge_json(current: &mut serde_json::Value, default: &serde_json::Value) 
                             changed = true;
                         } else {
                             for (i, def_item) in def_arr.iter().enumerate() {
-                                let is_disabled_opt_in = def_item
-                                    .get("enabled")
-                                    .and_then(serde_json::Value::as_bool)
-                                    == Some(false);
+                                let is_disabled_opt_in =
+                                    def_item.get("enabled").and_then(serde_json::Value::as_bool)
+                                        == Some(false);
                                 if is_disabled_opt_in {
                                     let default_type = def_item.get("type");
                                     let already_present = default_type.is_some_and(|task_type| {
-                                        curr_arr.iter().any(|task| task.get("type") == Some(task_type))
+                                        curr_arr
+                                            .iter()
+                                            .any(|task| task.get("type") == Some(task_type))
                                     });
                                     if !already_present {
                                         curr_arr.push(def_item.clone());
