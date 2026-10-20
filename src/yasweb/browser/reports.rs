@@ -157,14 +157,70 @@ pub fn navigate_and_run_report(
                         let mis_wait_started = Instant::now();
                         info!("YASWEB STAGE START: wait_for_mis_reports timeout_seconds=30");
                         let wait_js = generate_mis_reports_wait_js(30);
-                        if let Err(e) = javascript::evaluate_automation_step(
+                        if let Err(first_error) = javascript::evaluate_automation_step(
                             tab,
                             &wait_js,
                             "Wait for MIS Reports",
                         ) {
-                            error!("YASWEB STAGE FAILED: wait_for_mis_reports elapsed_ms={} error={:#}", mis_wait_started.elapsed().as_millis(), e);
-                            debug::save_failure_diagnostics(tab, "wait_for_mis_reports");
-                            return Err(e).context("Yasweb stage failed: wait for MIS Reports");
+                            error!(
+                                "YASWEB STAGE RETRY: wait_for_mis_reports initial attempt failed elapsed_ms={} error={:#}",
+                                mis_wait_started.elapsed().as_millis(),
+                                first_error
+                            );
+
+                            // A failed transition can leave the SPA on the previous report route.
+                            // Retry the MIS navigation once only when the MIS route was not reached.
+                            match retry_mis_navigation(tab) {
+                                Ok(true) => {
+                                    info!("MIS route was not reached; retried the MIS module click once.");
+                                    if let Err(retry_error) = javascript::evaluate_automation_step(
+                                        tab,
+                                        &wait_js,
+                                        "Wait for MIS Reports (retry)",
+                                    ) {
+                                        error!(
+                                            "YASWEB STAGE FAILED: wait_for_mis_reports after retry elapsed_ms={} error={:#}",
+                                            mis_wait_started.elapsed().as_millis(),
+                                            retry_error
+                                        );
+                                        debug::save_failure_diagnostics(
+                                            tab,
+                                            "wait_for_mis_reports_retry",
+                                        );
+                                        return Err(retry_error).context("Yasweb stage failed: wait for MIS Reports after navigation retry");
+                                    }
+                                }
+                                Ok(false) => {
+                                    // The route was reached, so this was likely a slow embedded UI.
+                                    // Retry the readiness wait without clicking navigation again.
+                                    info!("MIS route already reached; retrying readiness wait once without another navigation click.");
+                                    if let Err(retry_error) = javascript::evaluate_automation_step(
+                                        tab,
+                                        &wait_js,
+                                        "Wait for MIS Reports (readiness retry)",
+                                    ) {
+                                        error!(
+                                            "YASWEB STAGE FAILED: wait_for_mis_reports after readiness retry elapsed_ms={} error={:#}",
+                                            mis_wait_started.elapsed().as_millis(),
+                                            retry_error
+                                        );
+                                        debug::save_failure_diagnostics(
+                                            tab,
+                                            "wait_for_mis_reports_readiness_retry",
+                                        );
+                                        return Err(retry_error).context("Yasweb stage failed: wait for MIS Reports after readiness retry");
+                                    }
+                                }
+                                Err(recovery_error) => {
+                                    error!(
+                                        "Failed to recover MIS navigation after initial readiness failure: {:#}",
+                                        recovery_error
+                                    );
+                                    debug::save_failure_diagnostics(tab, "mis_navigation_recovery");
+                                    return Err(first_error)
+                                        .context("Yasweb stage failed: wait for MIS Reports; navigation recovery also failed");
+                                }
+                            }
                         }
                         info!(
                             "YASWEB STAGE END: wait_for_mis_reports status=SUCCESS elapsed_ms={}",
@@ -803,8 +859,7 @@ pub fn generate_step6_js(timeout_minutes: u64) -> String {
             function sleep(ms) {{ return new Promise(resolve => setTimeout(resolve, ms)); }}
             const logs = [];
             const timeoutMs = timeoutMinutes * 60 * 1000;
-            const pollMs = 10 * 1000;
-            const startedAt = Date.now();
+            const pollMs = 1000;
 
             function getReportDocument() {{
                 const iframe = document.querySelector('iframe');
@@ -843,90 +898,150 @@ pub fn generate_step6_js(timeout_minutes: u64) -> String {
                 const reportDoc = getReportDocument();
                 if (!reportDoc) return null;
 
-                let button = reportDoc.querySelector('div[aria-label="Export"]');
-                if (isVisible(button)) return button;
+                const candidates = [];
+                const labelled = reportDoc.querySelector('div[aria-label="Export"], button[aria-label="Export"]');
+                if (labelled) candidates.push(labelled);
 
                 for (const element of reportDoc.querySelectorAll('.dx-button-text')) {{
                     if (element.textContent.trim().toLowerCase() === 'export') {{
-                        button = element.closest('div[role="button"], button');
-                        if (isVisible(button)) return button;
+                        const button = element.closest('.dx-button, div[role="button"], button');
+                        if (button && !candidates.includes(button)) candidates.push(button);
                     }}
                 }}
 
-                for (const element of reportDoc.querySelectorAll('button, div[role="button"]')) {{
-                    if (element.textContent.trim().toLowerCase() === 'export' && isVisible(element)) {{
-                        return element;
+                for (const element of reportDoc.querySelectorAll('button, div[role="button"], .dx-button')) {{
+                    if (element.textContent.trim().toLowerCase() === 'export' && !candidates.includes(element)) {{
+                        candidates.push(element);
                     }}
                 }}
-                return null;
+                return candidates.find(isVisible) || null;
             }}
 
-            // Phase 1: wait until generation actually starts. An initially hidden/missing
-            // loader must not be interpreted as a completed report.
-            logs.push("Waiting for report generation to start...");
-            const startDeadline = Date.now() + timeoutMs;
-            let loaderSeen = false;
-            while (Date.now() <= startDeadline) {{
-                if (findVisibleLoader()) {{
-                    loaderSeen = true;
-                    logs.push("Report loading detected.");
-                    break;
+            function isExportEnabled(button) {{
+                if (!button || !isVisible(button)) return false;
+                const disabledClasses = ['disabled', 'disable', 'dx-state-disabled', 'mat-button-disabled'];
+                if (disabledClasses.some(className => button.classList.contains(className))) return false;
+                if (button.disabled === true ||
+                    button.getAttribute('disabled') !== null ||
+                    button.getAttribute('aria-disabled') === 'true') return false;
+                const view = button.ownerDocument.defaultView;
+                if (view.getComputedStyle(button).pointerEvents === 'none') return false;
+                return true;
+            }}
+
+            // A missing loader is not proof that the report is ready. Wait for the
+            // Export control itself to become enabled; the app toggles its disabled
+            // state asynchronously after the report data has finished binding.
+            logs.push("Waiting for the Export button to become enabled...");
+            const deadline = Date.now() + timeoutMs;
+            let lastState = "";
+            while (Date.now() <= deadline) {{
+                const loader = findVisibleLoader();
+                const button = findExportButton();
+                const enabled = isExportEnabled(button);
+                if (button) {{
+                    const state = JSON.stringify({{
+                        classes: button.className && button.className.toString(),
+                        ariaDisabled: button.getAttribute('aria-disabled'),
+                        disabled: button.getAttribute('disabled') !== null,
+                        loaderVisible: !!loader
+                    }});
+                    if (state !== lastState) {{
+                        logs.push("Export state: " + state);
+                        lastState = state;
+                    }}
+                }} else if (lastState !== "missing") {{
+                    logs.push("Export button is not present yet.");
+                    lastState = "missing";
+                }}
+
+                if (button && enabled && !loader) {{
+                    // Re-check on the next poll so a transient enabled state during
+                    // report refresh does not trigger an early export.
+                    await sleep(500);
+                    const latestButton = findExportButton();
+                    if (latestButton && isExportEnabled(latestButton) && !findVisibleLoader()) {{
+                        latestButton.click();
+                        logs.push("Clicked enabled Export button.");
+                        return JSON.stringify({{ status: "SUCCESS", logs }});
+                    }}
                 }}
                 await sleep(pollMs);
             }}
-            if (!loaderSeen) {{
-                return JSON.stringify({{ status: "ERROR", msg: "Report loading did not start before timeout.", logs }});
-            }}
 
-            // Phase 2: wait until generation finishes, polling every 10 seconds.
-            logs.push("Waiting for report generation to finish...");
-            const finishDeadline = Date.now() + timeoutMs;
-            while (Date.now() <= finishDeadline) {{
-                if (!findVisibleLoader()) {{
-                    logs.push("Report loading finished.");
-                    break;
-                }}
-                await sleep(pollMs);
-            }}
-            if (findVisibleLoader()) {{
-                return JSON.stringify({{ status: "ERROR", msg: "Report generation timeout.", logs }});
-            }}
-
-            // Phase 3: allow the report UI to expose Export for up to the configured timeout.
-            logs.push("Waiting for Export button...");
-            const exportDeadline = Date.now() + timeoutMs;
-            let exportButton = null;
-            while (Date.now() <= exportDeadline) {{
-                exportButton = findExportButton();
-                if (exportButton) break;
-                await sleep(pollMs);
-            }}
-            if (!exportButton) {{
-                return JSON.stringify({{ status: "ERROR", msg: "Export button not found before timeout.", logs }});
-            }}
-
-            exportButton.click();
-            logs.push("Clicked Export button.");
-            return JSON.stringify({{ status: "SUCCESS", logs }});
+            const button = findExportButton();
+            return JSON.stringify({{
+                status: "ERROR",
+                msg: button
+                    ? "Export button did not become enabled before timeout."
+                    : "Export button not found before timeout.",
+                logs
+            }});
         }})({});
         "#,
         timeout_minutes
     )
 }
 
-#[cfg(test)]
-mod step6_wait_tests {
-    use super::generate_step6_js;
+/// Recovers a missed MIS navigation click without disturbing a route that already changed.
+/// Returns true when the MIS module was clicked, false when the MIS route was already reached.
+fn retry_mis_navigation(tab: &Arc<Tab>) -> Result<bool> {
+    let script = r##"
+        (async function() {
+            const routePattern = /\/home\/mis-report\/module\//i;
+            if (routePattern.test(location.href)) return JSON.stringify({ status: "SUCCESS", clicked: false });
 
-    #[test]
-    fn report_waits_for_loading_to_start_finish_and_export() {
-        let js = generate_step6_js(7);
-        assert!(js.contains("Waiting for report generation to start"));
-        assert!(js.contains("Waiting for report generation to finish"));
-        assert!(js.contains("Waiting for Export button"));
-        assert!(js.contains("const pollMs = 10 * 1000"));
-        assert!(js.contains("})(7);"));
+            const menu = document.querySelector("#menuPinnedBtn:not(.d-none), #pinButton:not(.d-none)");
+            const modules = document.querySelector(".menuModules");
+            if (!modules || !modules.classList.contains("show-modules")) {
+                if (!menu) return JSON.stringify({ status: "ERROR", msg: "MIS navigation recovery could not find the menu button." });
+                menu.click();
+                const menuDeadline = Date.now() + 5000;
+                while (Date.now() < menuDeadline) {
+                    const current = document.querySelector(".menuModules");
+                    if (current && current.classList.contains("show-modules")) break;
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+            }
+
+            const deadline = Date.now() + 5000;
+            while (Date.now() < deadline) {
+                const module = document.querySelector(".misManagement");
+                if (module) {
+                    const style = getComputedStyle(module);
+                    const visible = style.display !== "none" && style.visibility !== "hidden" &&
+                        Array.from(module.getClientRects()).some(rect => rect.width > 0 && rect.height > 0);
+                    if (visible) {
+                        module.click();
+                        return JSON.stringify({ status: "SUCCESS", clicked: true });
+                    }
+                }
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+            return JSON.stringify({ status: "ERROR", msg: "MIS navigation recovery could not find a visible MIS module." });
+        })()
+    "##;
+
+    let result = tab
+        .evaluate(script, true)
+        .context("Failed to evaluate MIS navigation recovery")?;
+    let value = result
+        .value
+        .and_then(|value| value.as_str().map(str::to_owned))
+        .ok_or_else(|| anyhow::anyhow!("MIS navigation recovery returned no result"))?;
+    let parsed: serde_json::Value =
+        serde_json::from_str(&value).context("MIS navigation recovery returned invalid JSON")?;
+    if parsed.get("status").and_then(serde_json::Value::as_str) != Some("SUCCESS") {
+        let message = parsed
+            .get("msg")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("MIS navigation recovery failed");
+        anyhow::bail!("{message}");
     }
+    Ok(parsed
+        .get("clicked")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false))
 }
 
 pub fn generate_mis_reports_wait_js(timeout_seconds: u64) -> String {
@@ -1051,6 +1166,22 @@ pub fn generate_mis_reports_wait_js(timeout_seconds: u64) -> String {
         "##,
         timeout_seconds
     )
+}
+
+#[cfg(test)]
+mod step6_wait_tests {
+    use super::generate_step6_js;
+
+    #[test]
+    fn waits_for_export_button_to_become_enabled() {
+        let js = generate_step6_js(5);
+        assert!(js.contains("Waiting for the Export button to become enabled"));
+        assert!(js.contains("'dx-state-disabled'"));
+        assert!(js.contains("getAttribute('aria-disabled') === 'true'"));
+        assert!(js.contains("button.disabled === true"));
+        assert!(js.contains("Export button did not become enabled before timeout."));
+        assert!(js.contains("})(5);"));
+    }
 }
 
 #[cfg(test)]

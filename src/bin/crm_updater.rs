@@ -14,7 +14,7 @@ struct Args {
     #[arg(long, help = "Only run the update pipeline")]
     update_only: bool,
 
-    #[arg(long, help = "Only run the log rotation and sending pipeline")]
+    #[arg(long, help = "Only collect logs into local ZIP archives")]
     logs_only: bool,
 
     #[arg(long, help = "Print the manifest and exit")]
@@ -27,7 +27,7 @@ fn main() -> Result<()> {
     if args.manifest {
         let manifest = AppManifest {
             name: "CRM Updater".to_string(),
-            description: "Updates the CRM tool and runner, and rotates logs".to_string(),
+            description: "Updates the CRM tool and runner, and collects logs locally".to_string(),
             arguments: vec![
                 AppArg::new("--update-only", ArgType::Boolean),
                 AppArg::new("--logs-only", ArgType::Boolean),
@@ -92,7 +92,7 @@ fn main() -> Result<()> {
     let run_all = !args.update_only && !args.logs_only;
 
     if run_all || args.logs_only {
-        if let Err(e) = crm_tool::crm_updater::logs::process_and_send_logs(&config) {
+        if let Err(e) = crm_tool::crm_updater::logs::process_and_collect_logs(&config) {
             tracing::error!("Logs pipeline failed: {}", e);
             return Err(e);
         }

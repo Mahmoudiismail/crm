@@ -13,11 +13,9 @@ struct CollectedFile {
     path: PathBuf,
     archive_name: String,
     delete_after_send: bool,
-    size_at_collection: u64,
-    modified_at_collection: Option<std::time::SystemTime>,
 }
 
-pub fn process_and_send_logs(config: &UpdaterConfig) -> Result<()> {
+pub fn process_and_collect_logs(config: &UpdaterConfig) -> Result<()> {
     info!("Starting log processing pipeline.");
 
     let exe_dir = crate::utils::executable_dir()
@@ -42,15 +40,15 @@ pub fn process_and_send_logs(config: &UpdaterConfig) -> Result<()> {
         log_count, diagnostic_count
     );
 
-    // Split the collected files into multiple archives using their uncompressed size as a
-    // conservative estimate. Preserve relative paths so equal file names cannot collide.
+    // Store archives beside the updater so collection is local and persistent.
+    let archive_dir = exe_dir.join("collected_logs");
+    fs::create_dir_all(&archive_dir)?;
+    let run_stamp = chrono::Local::now().format("%Y%m%d_%H%M%S").to_string();
     let mut zip_archives = Vec::new();
     let mut current_part = 1;
-    let mut current_zip_path = tempfile::Builder::new()
-        .prefix(&format!("logs_part{}_", current_part))
-        .suffix(".zip")
-        .tempfile()?;
-    let mut current_zip = ZipWriter::new(current_zip_path.as_file().try_clone()?);
+    let mut current_zip_path =
+        archive_dir.join(format!("logs_{}_part{}.zip", run_stamp, current_part));
+    let mut current_zip = ZipWriter::new(File::create(&current_zip_path)?);
     let options = FileOptions::<()>::default().compression_method(CompressionMethod::Deflated);
     let mut bytes_written_to_current_zip: u64 = 0;
 
@@ -60,15 +58,12 @@ pub fn process_and_send_logs(config: &UpdaterConfig) -> Result<()> {
             && bytes_written_to_current_zip > 0
         {
             current_zip.finish()?;
-            let (_, path) = current_zip_path.keep()?;
-            zip_archives.push(path);
+            zip_archives.push(current_zip_path.clone());
 
             current_part += 1;
-            current_zip_path = tempfile::Builder::new()
-                .prefix(&format!("logs_part{}_", current_part))
-                .suffix(".zip")
-                .tempfile()?;
-            current_zip = ZipWriter::new(current_zip_path.as_file().try_clone()?);
+            current_zip_path =
+                archive_dir.join(format!("logs_{}_part{}.zip", run_stamp, current_part));
+            current_zip = ZipWriter::new(File::create(&current_zip_path)?);
             bytes_written_to_current_zip = 0;
         }
 
@@ -81,69 +76,14 @@ pub fn process_and_send_logs(config: &UpdaterConfig) -> Result<()> {
     }
 
     current_zip.finish()?;
-    let (_, path) = current_zip_path.keep()?;
-    zip_archives.push(path);
-    info!("Created {} zip archives.", zip_archives.len());
+    zip_archives.push(current_zip_path);
+    info!(
+        "Created {} local log archive(s) in {}. Source files were left unchanged.",
+        zip_archives.len(),
+        archive_dir.display()
+    );
 
-    // Keep originals if sending fails so the next run can retry.
-    send_logs_email(&config.log_recipient_email, &zip_archives)?;
-
-    // Delete collected .log files only after successful delivery. Move delivered diagnostics
-    // under debug_html/sent so they remain available locally but are not re-sent every run.
-    for file in files.iter().filter(|file| file.delete_after_send) {
-        // Do not delete a log that changed while it was being archived or emailed;
-        // newer entries remain on disk for the next collection.
-        let unchanged = fs::metadata(&file.path).is_ok_and(|metadata| {
-            metadata.len() == file.size_at_collection
-                && metadata.modified().ok() == file.modified_at_collection
-        });
-        if !unchanged {
-            warn!(
-                "Keeping log {} because it changed during collection",
-                file.archive_name
-            );
-            continue;
-        }
-        if let Err(e) = fs::remove_file(&file.path) {
-            warn!(
-                "Failed to delete collected file {}: {}",
-                file.archive_name, e
-            );
-        } else {
-            info!("Deleted collected file {}", file.archive_name);
-        }
-    }
-    let diagnostics_dir = exe_dir.join("debug_html");
-    for file in files.iter().filter(|file| !file.delete_after_send) {
-        let relative = file
-            .path
-            .strip_prefix(&diagnostics_dir)
-            .unwrap_or(&file.path);
-        let sent_path = diagnostics_dir.join("sent").join(relative);
-        if let Some(parent) = sent_path.parent() {
-            if let Err(e) = fs::create_dir_all(parent) {
-                warn!(
-                    "Failed to retain delivered diagnostic {}: {}",
-                    file.archive_name, e
-                );
-                continue;
-            }
-        }
-        if let Err(e) = fs::rename(&file.path, &sent_path) {
-            warn!(
-                "Failed to mark diagnostic {} as sent: {}",
-                file.archive_name, e
-            );
-        }
-    }
-
-    for zip_path in &zip_archives {
-        if let Err(e) = fs::remove_file(zip_path) {
-            warn!("Failed to delete temporary zip file {:?}: {}", zip_path, e);
-        }
-    }
-
-    info!("Log processing pipeline completed successfully.");
+    info!("Local log collection completed successfully.");
     Ok(())
 }
 
@@ -249,22 +189,18 @@ fn add_file(
 ) {
     let identity = path.canonicalize().unwrap_or_else(|_| path.clone());
     if seen.insert(identity) {
-        let metadata = match fs::metadata(&path) {
-            Ok(metadata) => metadata,
-            Err(error) => {
-                warn!(
-                    "Skipping unreadable collection candidate {}: {}",
-                    archive_name, error
-                );
-                return;
-            }
-        };
+        if let Err(error) = fs::metadata(&path) {
+            tracing::warn!(
+                "Skipping unreadable collection candidate {}: {}",
+                archive_name,
+                error
+            );
+            return;
+        }
         files.push(CollectedFile {
             path,
             archive_name,
             delete_after_send,
-            size_at_collection: metadata.len(),
-            modified_at_collection: metadata.modified().ok(),
         });
     }
 }
@@ -277,33 +213,6 @@ fn has_extension(path: &Path, extensions: &[&str]) -> bool {
                 .iter()
                 .any(|expected| extension.eq_ignore_ascii_case(expected))
         })
-}
-
-fn send_logs_email(recipient: &str, attachments: &[PathBuf]) -> Result<()> {
-    info!("Preparing to send logs email to {}", recipient);
-
-    let attachment_paths = attachments
-        .iter()
-        .map(|path| path.to_string_lossy().into_owned())
-        .collect::<Vec<_>>();
-    let attachment_refs = attachment_paths
-        .iter()
-        .map(String::as_str)
-        .collect::<Vec<_>>();
-    let html_body = "<html><body>Please find the logs attached.</body></html>";
-
-    crate::tasker::email::outlook::send_email_with_attachments(
-        recipient,
-        "",
-        "logs",
-        html_body,
-        &attachment_refs,
-        "Send()",
-    )
-    .context("Failed to send logs email through Outlook")?;
-
-    info!("Logs email sent successfully.");
-    Ok(())
 }
 
 #[cfg(test)]
@@ -349,13 +258,5 @@ mod tests {
             .iter()
             .filter(|file| file.archive_name.ends_with(".log"))
             .all(|file| file.delete_after_send));
-    }
-
-    #[test]
-    fn test_logs_email_uses_shared_outlook_sender() {
-        let src = include_str!("logs.rs");
-        assert!(src.contains("send_email_with_attachments"));
-        assert!(src.contains("Please find the logs attached."));
-        assert!(src.contains("\"logs\""));
     }
 }
