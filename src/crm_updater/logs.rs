@@ -46,7 +46,8 @@ pub fn process_and_collect_logs(config: &UpdaterConfig) -> Result<()> {
     let run_stamp = chrono::Local::now().format("%Y%m%d_%H%M%S").to_string();
     let mut zip_archives = Vec::new();
     let mut current_part = 1;
-    let mut current_zip_path = archive_dir.join(format!("logs_{}_part{}.zip", run_stamp, current_part));
+    let mut current_zip_path =
+        archive_dir.join(format!("logs_{}_part{}.zip", run_stamp, current_part));
     let mut current_zip = ZipWriter::new(File::create(&current_zip_path)?);
     let options = FileOptions::<()>::default().compression_method(CompressionMethod::Deflated);
     let mut bytes_written_to_current_zip: u64 = 0;
@@ -60,7 +61,8 @@ pub fn process_and_collect_logs(config: &UpdaterConfig) -> Result<()> {
             zip_archives.push(current_zip_path.clone());
 
             current_part += 1;
-            current_zip_path = archive_dir.join(format!("logs_{}_part{}.zip", run_stamp, current_part));
+            current_zip_path =
+                archive_dir.join(format!("logs_{}_part{}.zip", run_stamp, current_part));
             current_zip = ZipWriter::new(File::create(&current_zip_path)?);
             bytes_written_to_current_zip = 0;
         }
@@ -190,7 +192,8 @@ fn add_file(
         if let Err(error) = fs::metadata(&path) {
             tracing::warn!(
                 "Skipping unreadable collection candidate {}: {}",
-                archive_name, error
+                archive_name,
+                error
             );
             return;
         }
@@ -256,5 +259,4 @@ mod tests {
             .filter(|file| file.archive_name.ends_with(".log"))
             .all(|file| file.delete_after_send));
     }
-
 }

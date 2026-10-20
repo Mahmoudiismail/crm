@@ -183,7 +183,10 @@ pub fn navigate_and_run_report(
                                             mis_wait_started.elapsed().as_millis(),
                                             retry_error
                                         );
-                                        debug::save_failure_diagnostics(tab, "wait_for_mis_reports_retry");
+                                        debug::save_failure_diagnostics(
+                                            tab,
+                                            "wait_for_mis_reports_retry",
+                                        );
                                         return Err(retry_error).context("Yasweb stage failed: wait for MIS Reports after navigation retry");
                                     }
                                 }
@@ -201,7 +204,10 @@ pub fn navigate_and_run_report(
                                             mis_wait_started.elapsed().as_millis(),
                                             retry_error
                                         );
-                                        debug::save_failure_diagnostics(tab, "wait_for_mis_reports_readiness_retry");
+                                        debug::save_failure_diagnostics(
+                                            tab,
+                                            "wait_for_mis_reports_readiness_retry",
+                                        );
                                         return Err(retry_error).context("Yasweb stage failed: wait for MIS Reports after readiness retry");
                                     }
                                 }
@@ -977,7 +983,6 @@ pub fn generate_step6_js(timeout_minutes: u64) -> String {
     )
 }
 
-
 /// Recovers a missed MIS navigation click without disturbing a route that already changed.
 /// Returns true when the MIS module was clicked, false when the MIS route was already reached.
 fn retry_mis_navigation(tab: &Arc<Tab>) -> Result<bool> {
@@ -1017,18 +1022,26 @@ fn retry_mis_navigation(tab: &Arc<Tab>) -> Result<bool> {
         })()
     "##;
 
-    let result = tab.evaluate(script, true).context("Failed to evaluate MIS navigation recovery")?;
-    let value = result.value
+    let result = tab
+        .evaluate(script, true)
+        .context("Failed to evaluate MIS navigation recovery")?;
+    let value = result
+        .value
         .and_then(|value| value.as_str().map(str::to_owned))
         .ok_or_else(|| anyhow::anyhow!("MIS navigation recovery returned no result"))?;
-    let parsed: serde_json::Value = serde_json::from_str(&value)
-        .context("MIS navigation recovery returned invalid JSON")?;
+    let parsed: serde_json::Value =
+        serde_json::from_str(&value).context("MIS navigation recovery returned invalid JSON")?;
     if parsed.get("status").and_then(serde_json::Value::as_str) != Some("SUCCESS") {
-        let message = parsed.get("msg").and_then(serde_json::Value::as_str)
+        let message = parsed
+            .get("msg")
+            .and_then(serde_json::Value::as_str)
             .unwrap_or("MIS navigation recovery failed");
         anyhow::bail!("{message}");
     }
-    Ok(parsed.get("clicked").and_then(serde_json::Value::as_bool).unwrap_or(false))
+    Ok(parsed
+        .get("clicked")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false))
 }
 
 pub fn generate_mis_reports_wait_js(timeout_seconds: u64) -> String {
