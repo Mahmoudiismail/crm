@@ -463,7 +463,7 @@ mod tests {
             "--config".to_string(),
             config_path.to_string_lossy().to_string(),
             "--task".to_string(),
-            "5".to_string(),
+            "99".to_string(),
         ];
 
         let options = TaskerCliOptions::parse_from(args);
@@ -532,33 +532,30 @@ mod tests {
     }
 
     #[test]
-    fn test_empty_tasks_panics_on_start() {
+    fn test_empty_tasks_config_is_auto_healed_before_task_filtering() {
         use std::io::Write;
 
         let tmp = tempfile::tempdir().unwrap();
         let config_path = tmp.path().join("mock_tasker_config_empty.json");
-
-        let mock_config_json = serde_json::json!({
-            "tasks": []
-        });
+        let mock_config_json = serde_json::json!({ "tasks": [] });
 
         let mut file = std::fs::File::create(&config_path).unwrap();
-        file.write_all(mock_config_json.to_string().as_bytes())
-            .unwrap();
+        file.write_all(mock_config_json.to_string().as_bytes()).unwrap();
         file.sync_all().unwrap();
         drop(file);
 
+        // Empty task arrays are populated from defaults by load_or_create_config.
+        // Use an impossible index so the test verifies the healed config without running tasks.
         let args = vec![
             "tasker".to_string(),
             "--config".to_string(),
             config_path.to_string_lossy().to_string(),
+            "--task".to_string(),
+            "99".to_string(),
         ];
-
         let options = TaskerCliOptions::parse_from(args);
-
-        // This validates the PR 1 characterization goal: empty tasks array behavior.
-        // As noted in planning, the config panic is test-only. Production run_app should handle this gracefully by exiting with Ok(()) and doing nothing.
-        let res = run_app(options);
-        assert!(res.is_ok(), "run_app should successfully process 0 tasks");
+        let err = run_app(options).unwrap_err().to_string();
+        assert!(err.contains("out of bounds"));
+        assert!(err.contains("7 task(s)"));
     }
 }
