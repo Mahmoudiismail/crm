@@ -25,7 +25,7 @@ The application collects application-level `.log` files beside the executable, t
 - It compresses the collected files into ZIP archives using standard Deflate compression, preserving directory paths so files with the same name do not overwrite each other.
 - It splits archives based on a 20MB uncompressed-input size estimate per chunk.
 - It connects to the active Outlook COM session and sends an email to the configured `log_recipient_email` with all generated ZIP chunks attached.
-- Only after successful email delivery, it deletes collected original `.log` files and temporary ZIP archives. HTML/JSON diagnostics remain on disk for future investigation.
+- Only after successful email delivery, it deletes collected `.log` files and temporary ZIP archives. Delivered HTML/JSON diagnostics are moved under `debug_html/sent/` and excluded from later collections, preventing the same diagnostics from being emailed indefinitely while retaining them locally.
 
 ## Configuration
 
