@@ -78,6 +78,8 @@ $brush = $null
 $headerBrush = $null
 $borderPen = $null
 try {
+    $stage = "Load System.Drawing"
+    Write-Output "TRACE: Sat Figures stage: $stage"
     Add-Type -AssemblyName System.Drawing
     $row = @(Import-Csv -LiteralPath $CsvPath)
     if ($row.Count -ne 1) { throw "Sat Figures CSV must contain exactly one summary row." }
@@ -86,17 +88,29 @@ try {
     $widths = @(240, 240, 240, 240)
     $width = ($widths | Measure-Object -Sum).Sum
     $height = 118
+    $stage = "Create Bitmap (${width}x${height})"
+    Write-Output "TRACE: Sat Figures stage: $stage"
     $bitmap = [System.Drawing.Bitmap]::new($width, $height)
+    $stage = "Create Graphics from Bitmap"
+    Write-Output "TRACE: Sat Figures stage: $stage"
     $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
     $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
     $graphics.Clear([System.Drawing.Color]::White)
+    $stage = "Create header Font"
+    Write-Output "TRACE: Sat Figures stage: $stage"
     $headerFont = [System.Drawing.Font]::new("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
+    $stage = "Create value Font"
+    Write-Output "TRACE: Sat Figures stage: $stage"
     $valueFont = [System.Drawing.Font]::new("Segoe UI", 18, [System.Drawing.FontStyle]::Regular)
+    $stage = "Create drawing brushes and pen"
+    Write-Output "TRACE: Sat Figures stage: $stage"
     $brush = [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(35, 45, 55))
     $headerBrush = [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(46, 92, 135))
     $whiteBrush = [System.Drawing.SolidBrush]::new([System.Drawing.Color]::White)
     $borderPen = [System.Drawing.Pen]::new([System.Drawing.Color]::FromArgb(190, 200, 210), 1)
 
+    $stage = "Draw Sat Figures cells"
+    Write-Output "TRACE: Sat Figures stage: $stage"
     $x = 0
     for ($i = 0; $i -lt $columns.Count; $i++) {
         $cellWidth = $widths[$i]
@@ -122,10 +136,13 @@ try {
         $x += $cellWidth
     }
 
+    $stage = "Save PNG to $ImagePath"
+    Write-Output "TRACE: Sat Figures stage: $stage"
     $bitmap.Save($ImagePath, [System.Drawing.Imaging.ImageFormat]::Png)
     Write-Output "TRACE: Sat Figures PNG generated at $ImagePath."
 } catch {
-    Write-Error "Sat Figures email generation failed: $_"
+    Write-Error "Sat Figures image generation failed during stage [$stage]: $_"
+    if ($_.ScriptStackTrace) { Write-Error "PowerShell stack trace: $($_.ScriptStackTrace)" }
     exit 1
 } finally {
     if ($graphics) { $graphics.Dispose() }
