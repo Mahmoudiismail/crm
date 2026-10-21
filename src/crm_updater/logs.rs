@@ -1,7 +1,7 @@
 use crate::crm_updater::config::UpdaterConfig;
 use anyhow::{Context, Result};
 use std::collections::HashSet;
-use std::fs::{self, File};
+use std::fs;
 use std::path::{Path, PathBuf};
 use tracing::{info, warn};
 
