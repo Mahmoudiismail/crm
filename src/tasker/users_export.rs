@@ -139,11 +139,14 @@ pub fn run(config: &UsersExportConfig) -> Result<()> {
 
     if files.is_empty() {
         warn!(
-            "Users export skipped: no users_*.csv files created within the last {} minute(s) in {:?}",
+            "Users export cannot continue: no users_*.csv files created within the last {} minute(s) in {:?}; stopping task execution to avoid running dependent tasks",
             config.minutes_ago,
             download_dir
         );
-        return Ok(());
+        anyhow::bail!(
+            "Users export stopped because no users_*.csv files were available within the last {} minute(s)",
+            config.minutes_ago
+        );
     }
 
     let mapping = load_department_mapping(&mapping_path)?;
