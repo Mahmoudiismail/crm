@@ -158,11 +158,19 @@ pub fn run(config: &UsersExportConfig) -> Result<()> {
                 .filter(|entry| entry.file_type().is_file())
             {
                 let path = entry.path();
-                let name = path.file_name().and_then(|v| v.to_str()).unwrap_or_default();
+                let name = path
+                    .file_name()
+                    .and_then(|v| v.to_str())
+                    .unwrap_or_default();
                 if name.to_ascii_lowercase().starts_with("users_")
-                    && path.extension().and_then(|v| v.to_str()).is_some_and(|ext| ext.eq_ignore_ascii_case("csv"))
+                    && path
+                        .extension()
+                        .and_then(|v| v.to_str())
+                        .is_some_and(|ext| ext.eq_ignore_ascii_case("csv"))
                 {
-                    let age = entry.metadata().ok()
+                    let age = entry
+                        .metadata()
+                        .ok()
                         .and_then(|metadata| metadata.modified().ok())
                         .and_then(|modified| SystemTime::now().duration_since(modified).ok())
                         .map(|duration| format!("{} minute(s) old", duration.as_secs() / 60))
