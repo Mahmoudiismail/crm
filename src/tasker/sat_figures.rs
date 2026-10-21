@@ -65,8 +65,6 @@ fn get_email_script() -> &'static str {
     r#"
 param(
     [string]$CsvPath,
-    [string]$EmailTo,
-    [string]$EmailCc,
     [string]$ImagePath
 )
 $ErrorActionPreference = "Stop"
@@ -274,13 +272,13 @@ mod tests {
     }
 
     #[test]
-    fn email_script_uses_configured_recipients_and_cleans_up_temporary_files() {
+    fn image_script_uses_output_path_and_leaves_email_sending_to_shared_helper() {
         let script = get_email_script();
-        assert!(script.contains("$mail.To = $EmailTo"));
+        assert!(script.contains("[string]$ImagePath"));
         assert!(script.contains("$bitmap.Save($ImagePath"));
-        assert!(!script.contains("cid:SatFiguresImage"));
+        assert!(!script.contains("$mail.To ="));
         assert!(!script.contains("$mail.Send()"));
-        assert!(script.contains("sat_figures_"));
+        assert!(!script.contains("cid:SatFiguresImage"));
     }
 
     #[test]
