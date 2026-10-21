@@ -197,38 +197,40 @@ async fn execute_step(
             step_result
         }
         ExecutionMode::Parallel => {
-            let mut handles = Vec::new();
+            let mut tasks = tokio::task::JoinSet::new();
             for action in &step.actions {
                 let action = action.clone();
                 let logger = logger.clone();
                 let policy = policy.clone();
 
-                handles.push(tokio::spawn(async move {
+                tasks.spawn(async move {
                     let result = execute_action(&action, &logger, &policy, timeout_seconds).await;
                     (action, result)
-                }));
+                });
             }
 
-            let mut failures = Vec::new();
-            for handle in handles {
-                let (action, result) = handle.await.context("parallel action join failed")?;
-                if let Err(e) = result {
+            while let Some(joined) = tasks.join_next().await {
+                let (action, result) = joined.context("parallel action join failed")?;
+                if let Err(error) = result {
                     let name = match action {
                         ActionSpec::ShellCommand(s) => s.command,
                         ActionSpec::ExternalApp(a) => format!("app: {}", a.app_id),
                     };
-                    failures.push(format!("{}: {}", name, e));
+
+                    // A failed action invalidates the step. Cancel unfinished sibling
+                    // actions instead of allowing dependent work to continue.
+                    tasks.abort_all();
+                    while tasks.join_next().await.is_some() {}
+
+                    return Err(anyhow::anyhow!(
+                        "parallel action failed; remaining actions were cancelled: {}: {}",
+                        name,
+                        error
+                    ));
                 }
             }
 
-            if failures.is_empty() {
-                Ok(())
-            } else {
-                Err(anyhow::anyhow!(
-                    "parallel actions failed: {}",
-                    failures.join("; ")
-                ))
-            }
+            Ok(())
         }
     };
 
