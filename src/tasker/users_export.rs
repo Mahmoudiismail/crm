@@ -138,11 +138,12 @@ pub fn run(config: &UsersExportConfig) -> Result<()> {
     let files = recent_latest_user_csvs(&download_dir, config.minutes_ago)?;
 
     if files.is_empty() {
-        anyhow::bail!(
-            "No users_*.csv files created within the last {} minute(s) in {:?}",
+        warn!(
+            "Users export skipped: no users_*.csv files created within the last {} minute(s) in {:?}",
             config.minutes_ago,
             download_dir
         );
+        return Ok(());
     }
 
     let mapping = load_department_mapping(&mapping_path)?;
