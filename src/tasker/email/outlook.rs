@@ -102,6 +102,7 @@ function Send-OutlookMail {
         $mail.Attachments.Add([System.IO.Path]::GetFullPath($attachmentPath)) | Out-Null
     }
     if ($Mode -eq "ReplyAll") {
+        $mail.Recipients.ResolveAll() | Out-Null
         $unresolvedRecipients = @()
         foreach ($recipient in $mail.Recipients) {
             if (-not $recipient.Resolved) {
