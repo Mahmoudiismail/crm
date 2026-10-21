@@ -86,11 +86,11 @@ try {
 
     $columns = @("Slots Booked", "Total Slots", "Vacant Slots", "%")
     $widths = @(240, 240, 240, 240)
-    $width = ($widths | Measure-Object -Sum).Sum
-    $height = 118
+    [int]$width = ($widths | Measure-Object -Sum).Sum
+    [int]$height = 118
     $stage = "Create Bitmap (${width}x${height})"
     Write-Output "TRACE: Sat Figures stage: $stage"
-    $bitmap = [System.Drawing.Bitmap]::new($width, $height)
+    $bitmap = [System.Drawing.Bitmap]::new([int]$width, [int]$height)
     $stage = "Create Graphics from Bitmap"
     Write-Output "TRACE: Sat Figures stage: $stage"
     $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
