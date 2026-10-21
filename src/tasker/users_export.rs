@@ -88,13 +88,18 @@ fn recent_latest_user_csvs(download_dir: &Path, minutes_ago: u64) -> Result<Vec<
         let metadata = entry
             .metadata()
             .with_context(|| format!("Failed to read metadata for {:?}", path))?;
-        let created = metadata.created().or_else(|_| metadata.modified());
+        let created = metadata.created();
         let modified = metadata.modified();
         match (created, modified) {
-            (Ok(created), Ok(modified)) if created >= cutoff => {
+            (Ok(created), Ok(modified)) if created.max(modified) >= cutoff => {
+                // Downloads may overwrite an existing file on Windows, leaving its
+                // creation time old even though the export was just refreshed.
                 files.push((modified, path));
             }
             (Ok(_), Ok(_)) => {}
+            (Err(_), Ok(modified)) if modified >= cutoff => {
+                files.push((modified, path));
+            }
             (Err(err), _) | (_, Err(err)) => {
                 warn!("Could not determine timestamps for {:?}: {}", path, err)
             }
@@ -138,10 +143,14 @@ pub fn run(config: &UsersExportConfig) -> Result<()> {
     let files = recent_latest_user_csvs(&download_dir, config.minutes_ago)?;
 
     if files.is_empty() {
-        anyhow::bail!(
-            "No users_*.csv files created within the last {} minute(s) in {:?}",
+        warn!(
+            "Users export cannot continue: no users_*.csv files created within the last {} minute(s) in {:?}; stopping task execution to avoid running dependent tasks",
             config.minutes_ago,
             download_dir
+        );
+        anyhow::bail!(
+            "Users export stopped because no users_*.csv files were available within the last {} minute(s)",
+            config.minutes_ago
         );
     }
 

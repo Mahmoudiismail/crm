@@ -21,6 +21,8 @@ pub struct TaskerCliOptions {
     pub only_call_center: bool,
     #[arg(long)]
     pub send_exceptions: bool,
+    #[arg(long, requires = "task")]
+    pub start_date: Option<String>,
     #[arg(long, hide = true)]
     pub manifest: bool,
 
@@ -36,6 +38,7 @@ pub fn run_app(options: TaskerCliOptions) -> Result<()> {
     let task_filter = options.task;
     let only_call_center = options.only_call_center;
     let send_exceptions = options.send_exceptions;
+    let start_date = options.start_date;
 
     let default_config_path = executable_dir()?.join("tasker_config.json");
     let config_path = config_path_arg.unwrap_or(default_config_path);
@@ -181,6 +184,17 @@ pub fn run_app(options: TaskerCliOptions) -> Result<()> {
         }
     }
 
+    if start_date.is_some() {
+        let filter = task_filter
+            .context("--start-date is supported only when --task selects the Sat Figures task")?;
+        if !matches!(
+            config.tasks.get(filter - 1),
+            Some(TaskConfig::SatFigures(_))
+        ) {
+            anyhow::bail!("--start-date is supported only for the Sat Figures task");
+        }
+    }
+
     for (i, task) in config.tasks.iter().enumerate() {
         let task_idx = i + 1;
 
@@ -258,7 +272,8 @@ pub fn run_app(options: TaskerCliOptions) -> Result<()> {
                     TaskConfig::OpdAnalysis(opd_config) => Some(opd_config),
                     _ => None,
                 }).context("Sat Figures requires an opd_analysis task configuration to reuse its filters")?;
-                if let Err(e) = sat_figures::run(figures_config, opd_config) {
+                if let Err(e) = sat_figures::run(figures_config, opd_config, start_date.as_deref())
+                {
                     error!("Error running SatFigures task #{}: {:#}", task_idx, e);
                     anyhow::bail!("SatFigures task {} failed: {:#}", task_idx, e);
                 }
@@ -301,6 +316,9 @@ fn get_manifest() -> AppManifest {
             ),
             AppArg::new("--send-exceptions", ArgType::Boolean).depends_on(
                 std::collections::HashMap::from([("--task".to_string(), vec!["1".to_string()])]),
+            ),
+            AppArg::new("--start-date", ArgType::String).depends_on(
+                std::collections::HashMap::from([("--task".to_string(), vec!["6".to_string()])]),
             ),
         ],
     }
