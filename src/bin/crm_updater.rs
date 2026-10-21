@@ -14,7 +14,7 @@ struct Args {
     #[arg(long, help = "Only run the update pipeline")]
     update_only: bool,
 
-    #[arg(long, help = "Only collect logs into local ZIP archives")]
+    #[arg(long, help = "Move reports, logs, and diagnostics into collected_logs without compression")]
     logs_only: bool,
 
     #[arg(long, help = "Print the manifest and exit")]
