@@ -67,10 +67,9 @@ param(
     [string]$CsvPath,
     [string]$EmailTo,
     [string]$EmailCc,
-    [string]$EmailSubject
+    [string]$ImagePath
 )
 $ErrorActionPreference = "Stop"
-$imagePath = $null
 $bitmap = $null
 $graphics = $null
 $headerFont = $null
@@ -78,9 +77,6 @@ $valueFont = $null
 $brush = $null
 $headerBrush = $null
 $borderPen = $null
-$outlook = $null
-$mail = $null
-$attachment = $null
 try {
     Add-Type -AssemblyName System.Drawing
     $row = @(Import-Csv -LiteralPath $CsvPath)
@@ -126,22 +122,8 @@ try {
         $x += $cellWidth
     }
 
-    $imagePath = Join-Path $env:TEMP ("sat_figures_" + [guid]::NewGuid().ToString("N") + ".png")
-    $bitmap.Save($imagePath, [System.Drawing.Imaging.ImageFormat]::Png)
-
-    $outlook = New-Object -ComObject Outlook.Application
-    $mail = $outlook.CreateItem(0)
-    $mail.To = $EmailTo
-    if ($EmailCc) { $mail.CC = $EmailCc }
-    $mail.Subject = $EmailSubject
-    $attachment = $mail.Attachments.Add($imagePath)
-    $attachment.PropertyAccessor.SetProperty(
-        "http://schemas.microsoft.com/mapi/proptag/0x3712001F",
-        "SatFiguresImage"
-    )
-    $mail.HTMLBody = "<html><body><img src='cid:SatFiguresImage' alt='Sat Figures report' /></body></html>"
-    $mail.Send()
-    Write-Output "TRACE: Sat Figures inline image email sent successfully."
+    $bitmap.Save($ImagePath, [System.Drawing.Imaging.ImageFormat]::Png)
+    Write-Output "TRACE: Sat Figures PNG generated at $ImagePath."
 } catch {
     Write-Error "Sat Figures email generation failed: $_"
     exit 1
@@ -154,17 +136,11 @@ try {
     if ($headerBrush) { $headerBrush.Dispose() }
     if ($whiteBrush) { $whiteBrush.Dispose() }
     if ($borderPen) { $borderPen.Dispose() }
-    if ($attachment) { try { [System.Runtime.Interopservices.Marshal]::ReleaseComObject($attachment) | Out-Null } catch {} }
-    if ($mail) { try { [System.Runtime.Interopservices.Marshal]::ReleaseComObject($mail) | Out-Null } catch {} }
-    if ($outlook) {
-        try { [System.Runtime.Interopservices.Marshal]::ReleaseComObject($outlook) | Out-Null } catch {}
-    }
-    if ($imagePath -and (Test-Path -LiteralPath $imagePath)) { Remove-Item -LiteralPath $imagePath -Force -ErrorAction SilentlyContinue }
 }
 "#
 }
 
-pub fn run(config: &SatFiguresConfig, opd_config: &OpdAnalysisConfig) -> Result<()> {
+pub fn run(config: &SatFiguresConfig, opd_config: &OpdAnalysisConfig, start_date: Option<&str>) -> Result<()> {
     let download_dir = resolve(&config.download_path);
     if !download_dir.is_dir() {
         anyhow::bail!(
@@ -207,18 +183,30 @@ pub fn run(config: &SatFiguresConfig, opd_config: &OpdAnalysisConfig) -> Result<
     writer.flush()?;
 
     let csv_path = output_path.to_string_lossy().into_owned();
+    let image_path = output_path.with_extension("png");
+    let image_path_string = image_path.to_string_lossy().into_owned();
     let manager = crate::tasker::script_manager::ScriptManager::new();
     manager.run_script_with_args(
         "Sat Figures",
         "sat_figures_email.ps1",
         get_email_script(),
-        &[
-            ("-CsvPath", &csv_path),
-            ("-EmailTo", &config.email_to),
-            ("-EmailCc", &config.email_cc),
-            ("-EmailSubject", &config.email_subject),
-        ],
+        &[("-CsvPath", &csv_path), ("-ImagePath", &image_path_string)],
     )?;
+
+    let body = match start_date {
+        Some(value) => {
+            let date = chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d")
+                .with_context(|| format!("Invalid Sat Figures start date '{}'; expected YYYY-MM-DD", value))?;
+            format!("<html><body>Sat Booking {}</body></html>", date.format("%d-%b"))
+        }
+        None => String::new(),
+    };
+    let attachment_paths = [image_path_string.as_str()];
+    let send_result = crate::tasker::email::outlook::send_email_with_attachments(
+        &config.email_to, &config.email_cc, &config.email_subject, &body, &attachment_paths, "Send()",
+    );
+    let _ = fs::remove_file(&image_path);
+    send_result?;
 
     info!(
         "Sat Figures completed from {:?}: booked={}, total={}, vacant={}, percentage={:.2}%",
@@ -256,10 +244,11 @@ mod tests {
     fn email_script_uses_configured_recipients_and_cleans_up_temporary_files() {
         let script = get_email_script();
         assert!(script.contains("$mail.To = $EmailTo"));
-        assert!(script.contains("cid:SatFiguresImage"));
-        assert!(script.contains("$mail.Send()"));
+        assert!(script.contains("$bitmap.Save($ImagePath"));
+        assert!(!script.contains("cid:SatFiguresImage"));
+        assert!(!script.contains("$mail.Send()"));
         assert!(script.contains("sat_figures_"));
-        assert!(script.contains("Remove-Item -LiteralPath $imagePath"));
+
     }
 
     #[test]
