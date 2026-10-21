@@ -101,6 +101,17 @@ function Send-OutlookMail {
         if (-not (Test-Path -LiteralPath $attachmentPath -PathType Leaf)) { throw "Email attachment not found: $attachmentPath" }
         $mail.Attachments.Add([System.IO.Path]::GetFullPath($attachmentPath)) | Out-Null
     }
+    if ($Mode -eq "ReplyAll") {
+        $unresolvedRecipients = @()
+        foreach ($recipient in $mail.Recipients) {
+            if (-not $recipient.Resolved) {
+                $unresolvedRecipients += [string]$recipient.Name
+            }
+        }
+        if ($unresolvedRecipients.Count -gt 0) {
+            throw ("Outlook could not resolve ReplyAll recipient(s): " + ($unresolvedRecipients -join "; "))
+        }
+    }
     if ($SendAtNextSevenAm) {
         $now = Get-Date
         $targetTime = $now.Date.AddHours(7)
