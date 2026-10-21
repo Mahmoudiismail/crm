@@ -163,7 +163,10 @@ fn collect_files(exe_dir: &Path, logs_dir: &Path) -> Vec<CollectedFile> {
             for report_entry in walkdir::WalkDir::new(path).into_iter().filter_map(|entry| entry.ok()) {
                 let report_path = report_entry.path();
                 if !report_entry.file_type().is_file()
-                    || !has_extension(report_path, &["csv", "xls", "xlsx", "xlsm", "pdf"])
+                    || !has_extension(
+                        report_path,
+                        &["csv", "xls", "xlsx", "xlsm", "pdf", "html", "htm", "json"],
+                    )
                 {
                     continue;
                 }
@@ -227,12 +230,12 @@ mod tests {
         fs::write(reports_dir.join("ignore.exe"), "not a report").unwrap();
 
         let files = collect_files(&exe_dir, &logs_dir);
-        let names: HashSet<_> = files.iter().map(|file| file.relative_path.to_string_lossy().into_owned()).collect();
-        assert!(names.contains("crm_updater.log"));
-        assert!(names.contains("logs/TaskA/same.log"));
-        assert!(names.contains("debug_html/failure.json"));
-        assert!(names.contains("crm_windows/Downloads/report.csv"));
-        assert!(!names.contains("crm_windows/Downloads/ignore.exe"));
+        let names: HashSet<_> = files.iter().map(|file| file.relative_path.clone()).collect();
+        assert!(names.contains(&PathBuf::from("crm_updater.log")));
+        assert!(names.contains(&PathBuf::from("logs").join("TaskA").join("same.log")));
+        assert!(names.contains(&PathBuf::from("debug_html").join("failure.json")));
+        assert!(names.contains(&PathBuf::from("crm_windows").join("Downloads").join("report.csv")));
+        assert!(!names.contains(&PathBuf::from("crm_windows").join("Downloads").join("ignore.exe")));
         assert_eq!(files.len(), 4);
     }
 
