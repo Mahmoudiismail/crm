@@ -72,8 +72,16 @@ function Send-OutlookMail {
         }
     }
     if ($RemoveCc -and $Mode -eq "ReplyAll") {
-        $ccRecipients = @(([string]$mail.CC -split ';') | ForEach-Object { $_.Trim() } | Where-Object { $_ -and $_.IndexOf($RemoveCc, [System.StringComparison]::OrdinalIgnoreCase) -lt 0 })
-        $mail.CC = $ccRecipients -join "; "
+        $ccRecipients = @(([string]$mail.CC -split ';') | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+        $hasRecipientToRemove = @($ccRecipients | Where-Object {
+            $_.IndexOf($RemoveCc, [System.StringComparison]::OrdinalIgnoreCase) -ge 0
+        }).Count -gt 0
+        if ($hasRecipientToRemove) {
+            $remainingCcRecipients = @($ccRecipients | Where-Object {
+                $_.IndexOf($RemoveCc, [System.StringComparison]::OrdinalIgnoreCase) -lt 0
+            })
+            $mail.CC = $remainingCcRecipients -join "; "
+        }
     }
     if ($Subject) { $mail.Subject = $Subject }
     if ($HtmlBodyPath) {
