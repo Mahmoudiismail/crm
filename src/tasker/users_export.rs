@@ -143,14 +143,46 @@ pub fn run(config: &UsersExportConfig) -> Result<()> {
     let files = recent_latest_user_csvs(&download_dir, config.minutes_ago)?;
 
     if files.is_empty() {
+        let directory_status = if download_dir.is_dir() {
+            "exists"
+        } else if download_dir.exists() {
+            "exists but is not a directory"
+        } else {
+            "does not exist"
+        };
+        let mut matching_files = Vec::new();
+        if download_dir.is_dir() {
+            for entry in walkdir::WalkDir::new(&download_dir)
+                .into_iter()
+                .filter_map(|entry| entry.ok())
+                .filter(|entry| entry.file_type().is_file())
+            {
+                let path = entry.path();
+                let name = path.file_name().and_then(|v| v.to_str()).unwrap_or_default();
+                if name.to_ascii_lowercase().starts_with("users_")
+                    && path.extension().and_then(|v| v.to_str()).is_some_and(|ext| ext.eq_ignore_ascii_case("csv"))
+                {
+                    let age = entry.metadata().ok()
+                        .and_then(|metadata| metadata.modified().ok())
+                        .and_then(|modified| SystemTime::now().duration_since(modified).ok())
+                        .map(|duration| format!("{} minute(s) old", duration.as_secs() / 60))
+                        .unwrap_or_else(|| "age unavailable".to_string());
+                    matching_files.push(format!("{} ({})", path.display(), age));
+                }
+            }
+        }
         warn!(
-            "Users export cannot continue: no users_*.csv files created within the last {} minute(s) in {:?}; stopping task execution to avoid running dependent tasks",
+            "Users export cannot continue: no recent users_*.csv files. Search directory {:?} {}; allowed age {} minute(s); matching files found: [{}]. Stopping dependent tasks to avoid using stale data.",
+            download_dir,
+            directory_status,
             config.minutes_ago,
-            download_dir
+            matching_files.join("; ")
         );
         anyhow::bail!(
-            "Users export stopped because no users_*.csv files were available within the last {} minute(s)",
-            config.minutes_ago
+            "Users export stopped: no users_*.csv files within {} minute(s) in {:?} (directory {})",
+            config.minutes_ago,
+            download_dir,
+            directory_status
         );
     }
 
