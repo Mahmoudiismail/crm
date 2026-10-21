@@ -54,14 +54,19 @@ pub fn process_update_pipeline(config: &crate::crm_updater::config::UpdaterConfi
     let zip_path_opt = download_update_zip_from_drafts(downloads_dir)?;
     let extracted_files = if let Some(zip_path) = zip_path_opt {
         let _zip_guard = FileCleanupGuard::new(&zip_path);
-        info!("Found update package {:?}; extracting into {:?}", zip_path, downloads_dir);
+        info!(
+            "Found update package {:?}; extracting into {:?}",
+            zip_path, downloads_dir
+        );
         let files = extract_zip(&zip_path, downloads_dir, b"123456")?;
         if files.is_empty() {
             bail!("Update package was empty; no application files were extracted.");
         }
         files
     } else {
-        let existing_sources: Vec<PathBuf> = config.file_replacement_map.iter()
+        let existing_sources: Vec<PathBuf> = config
+            .file_replacement_map
+            .iter()
             .map(|entry| downloads_dir.join(&entry.source_file))
             .filter(|path| path.is_file())
             .collect();
@@ -77,7 +82,9 @@ pub fn process_update_pipeline(config: &crate::crm_updater::config::UpdaterConfi
     };
 
     // Never launch a partial update: every configured replacement must have a staged source.
-    let missing_sources: Vec<String> = config.file_replacement_map.iter()
+    let missing_sources: Vec<String> = config
+        .file_replacement_map
+        .iter()
         .map(|entry| downloads_dir.join(&entry.source_file))
         .filter(|path| !path.is_file())
         .map(|path| path.display().to_string())

@@ -157,7 +157,11 @@ try {
 "#
 }
 
-pub fn run(config: &SatFiguresConfig, opd_config: &OpdAnalysisConfig, start_date: Option<&str>) -> Result<()> {
+pub fn run(
+    config: &SatFiguresConfig,
+    opd_config: &OpdAnalysisConfig,
+    start_date: Option<&str>,
+) -> Result<()> {
     let download_dir = resolve(&config.download_path);
     if !download_dir.is_dir() {
         anyhow::bail!(
@@ -212,15 +216,27 @@ pub fn run(config: &SatFiguresConfig, opd_config: &OpdAnalysisConfig, start_date
 
     let body = match start_date {
         Some(value) => {
-            let date = chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d")
-                .with_context(|| format!("Invalid Sat Figures start date '{}'; expected YYYY-MM-DD", value))?;
-            format!("<html><body>Sat Booking {}</body></html>", date.format("%d-%b"))
+            let date = chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d").with_context(|| {
+                format!(
+                    "Invalid Sat Figures start date '{}'; expected YYYY-MM-DD",
+                    value
+                )
+            })?;
+            format!(
+                "<html><body>Sat Booking {}</body></html>",
+                date.format("%d-%b")
+            )
         }
         None => String::new(),
     };
     let attachment_paths = [image_path_string.as_str()];
     let send_result = crate::tasker::email::outlook::send_email_with_attachments(
-        &config.email_to, &config.email_cc, &config.email_subject, &body, &attachment_paths, "Send()",
+        &config.email_to,
+        &config.email_cc,
+        &config.email_subject,
+        &body,
+        &attachment_paths,
+        "Send()",
     );
     let _ = fs::remove_file(&image_path);
     send_result?;
@@ -265,7 +281,6 @@ mod tests {
         assert!(!script.contains("cid:SatFiguresImage"));
         assert!(!script.contains("$mail.Send()"));
         assert!(script.contains("sat_figures_"));
-
     }
 
     #[test]

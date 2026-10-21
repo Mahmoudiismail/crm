@@ -46,7 +46,11 @@ pub fn process_and_collect_logs(config: &UpdaterConfig) -> Result<()> {
         let destination = run_dir.join(&file.relative_path);
         if let Some(parent) = destination.parent() {
             if let Err(error) = fs::create_dir_all(parent) {
-                warn!("Could not create destination directory {}: {}", parent.display(), error);
+                warn!(
+                    "Could not create destination directory {}: {}",
+                    parent.display(),
+                    error
+                );
                 failed += 1;
                 continue;
             }
@@ -54,11 +58,20 @@ pub fn process_and_collect_logs(config: &UpdaterConfig) -> Result<()> {
 
         match move_file(&file.path, &destination) {
             Ok(()) => {
-                info!("Moved '{}' to '{}'.", file.path.display(), destination.display());
+                info!(
+                    "Moved '{}' to '{}'.",
+                    file.path.display(),
+                    destination.display()
+                );
                 moved += 1;
             }
             Err(error) => {
-                warn!("Could not move '{}' to '{}': {}", file.path.display(), destination.display(), error);
+                warn!(
+                    "Could not move '{}' to '{}': {}",
+                    file.path.display(),
+                    destination.display(),
+                    error
+                );
                 failed += 1;
             }
         }
@@ -66,10 +79,16 @@ pub fn process_and_collect_logs(config: &UpdaterConfig) -> Result<()> {
 
     info!(
         "Local collection finished: moved {} file(s), {} failed. Collection directory: {}",
-        moved, failed, run_dir.display()
+        moved,
+        failed,
+        run_dir.display()
     );
     if failed > 0 {
-        anyhow::bail!("Collection incomplete: moved {} file(s), {} failed; see warnings above", moved, failed);
+        anyhow::bail!(
+            "Collection incomplete: moved {} file(s), {} failed; see warnings above",
+            moved,
+            failed
+        );
     }
     Ok(())
 }
@@ -83,7 +102,11 @@ fn move_file(source: &Path, destination: &Path) -> Result<()> {
                 format!("rename failed ({rename_error}); copy fallback also failed")
             })?;
             fs::remove_file(source).with_context(|| {
-                format!("copied to {} but could not remove original {}", destination.display(), source.display())
+                format!(
+                    "copied to {} but could not remove original {}",
+                    destination.display(),
+                    source.display()
+                )
             })?;
             Ok(())
         }
@@ -111,10 +134,14 @@ fn collect_files(exe_dir: &Path, logs_dir: &Path) -> Vec<CollectedFile> {
 
     // Per-task logs under runner_logs_dir.
     if logs_dir.is_dir() {
-        let prefix = logs_dir.file_name()
+        let prefix = logs_dir
+            .file_name()
             .filter(|name| !name.is_empty())
             .unwrap_or_else(|| std::ffi::OsStr::new("logs"));
-        for entry in walkdir::WalkDir::new(logs_dir).into_iter().filter_map(|entry| entry.ok()) {
+        for entry in walkdir::WalkDir::new(logs_dir)
+            .into_iter()
+            .filter_map(|entry| entry.ok())
+        {
             let path = entry.path();
             if !path.is_file() || !has_extension(path, &["log"]) {
                 continue;
@@ -130,7 +157,10 @@ fn collect_files(exe_dir: &Path, logs_dir: &Path) -> Vec<CollectedFile> {
     // Yasweb HTML/JSON diagnostics are collected without touching its sent subfolder.
     let diagnostics_dir = exe_dir.join("debug_html");
     if diagnostics_dir.is_dir() {
-        for entry in walkdir::WalkDir::new(&diagnostics_dir).into_iter().filter_map(|entry| entry.ok()) {
+        for entry in walkdir::WalkDir::new(&diagnostics_dir)
+            .into_iter()
+            .filter_map(|entry| entry.ok())
+        {
             let path = entry.path();
             if !path.is_file()
                 || !has_extension(path, &["html", "json"])
@@ -139,7 +169,12 @@ fn collect_files(exe_dir: &Path, logs_dir: &Path) -> Vec<CollectedFile> {
                 continue;
             }
             let relative = path.strip_prefix(exe_dir).unwrap_or(path);
-            add_file(&mut files, &mut seen, path.to_path_buf(), relative.to_path_buf());
+            add_file(
+                &mut files,
+                &mut seen,
+                path.to_path_buf(),
+                relative.to_path_buf(),
+            );
         }
     }
 
@@ -155,12 +190,17 @@ fn collect_files(exe_dir: &Path, logs_dir: &Path) -> Vec<CollectedFile> {
         {
             let path = entry.path();
             if !entry.file_type().is_dir()
-                || !path.file_name().is_some_and(|name| name.to_string_lossy().eq_ignore_ascii_case("downloads"))
+                || !path
+                    .file_name()
+                    .is_some_and(|name| name.to_string_lossy().eq_ignore_ascii_case("downloads"))
             {
                 continue;
             }
 
-            for report_entry in walkdir::WalkDir::new(path).into_iter().filter_map(|entry| entry.ok()) {
+            for report_entry in walkdir::WalkDir::new(path)
+                .into_iter()
+                .filter_map(|entry| entry.ok())
+            {
                 let report_path = report_entry.path();
                 if !report_entry.file_type().is_file()
                     || !has_extension(
@@ -172,7 +212,12 @@ fn collect_files(exe_dir: &Path, logs_dir: &Path) -> Vec<CollectedFile> {
                 }
 
                 let relative = report_path.strip_prefix(search_root).unwrap_or(report_path);
-                add_file(&mut files, &mut seen, report_path.to_path_buf(), relative.to_path_buf());
+                add_file(
+                    &mut files,
+                    &mut seen,
+                    report_path.to_path_buf(),
+                    relative.to_path_buf(),
+                );
             }
         }
     }
@@ -189,10 +234,17 @@ fn add_file(
     let identity = path.canonicalize().unwrap_or_else(|_| path.clone());
     if seen.insert(identity) {
         if let Err(error) = fs::metadata(&path) {
-            tracing::warn!("Skipping unreadable collection candidate {}: {}", path.display(), error);
+            tracing::warn!(
+                "Skipping unreadable collection candidate {}: {}",
+                path.display(),
+                error
+            );
             return;
         }
-        files.push(CollectedFile { path, relative_path });
+        files.push(CollectedFile {
+            path,
+            relative_path,
+        });
     }
 }
 
@@ -230,12 +282,23 @@ mod tests {
         fs::write(reports_dir.join("ignore.exe"), "not a report").unwrap();
 
         let files = collect_files(&exe_dir, &logs_dir);
-        let names: HashSet<_> = files.iter().map(|file| file.relative_path.clone()).collect();
+        let names: HashSet<_> = files
+            .iter()
+            .map(|file| file.relative_path.clone())
+            .collect();
         assert!(names.contains(&PathBuf::from("crm_updater.log")));
         assert!(names.contains(&PathBuf::from("logs").join("TaskA").join("same.log")));
         assert!(names.contains(&PathBuf::from("debug_html").join("failure.json")));
-        assert!(names.contains(&PathBuf::from("crm_windows").join("Downloads").join("report.csv")));
-        assert!(!names.contains(&PathBuf::from("crm_windows").join("Downloads").join("ignore.exe")));
+        assert!(names.contains(
+            &PathBuf::from("crm_windows")
+                .join("Downloads")
+                .join("report.csv")
+        ));
+        assert!(!names.contains(
+            &PathBuf::from("crm_windows")
+                .join("Downloads")
+                .join("ignore.exe")
+        ));
         assert_eq!(files.len(), 4);
     }
 
