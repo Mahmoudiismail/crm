@@ -49,29 +49,45 @@ pub fn process_update_pipeline(config: &crate::crm_updater::config::UpdaterConfi
         fs::create_dir_all(downloads_dir)?;
     }
 
-    // 1. Scan Outlook Drafts for the update ZIP
+    // 1. Prefer a fresh update ZIP from Outlook Drafts. If Outlook has no draft,
+    // allow already-extracted application binaries in downloads/ to be applied.
     let zip_path_opt = download_update_zip_from_drafts(downloads_dir)?;
-
-    let zip_path = match zip_path_opt {
-        Some(path) => path,
-        None => {
-            info!("No update draft found. Update pipeline finished.");
+    let extracted_files = if let Some(zip_path) = zip_path_opt {
+        let _zip_guard = FileCleanupGuard::new(&zip_path);
+        info!("Found update package {:?}; extracting into {:?}", zip_path, downloads_dir);
+        let files = extract_zip(&zip_path, downloads_dir, b"123456")?;
+        if files.is_empty() {
+            bail!("Update package was empty; no application files were extracted.");
+        }
+        files
+    } else {
+        let existing_sources: Vec<PathBuf> = config.file_replacement_map.iter()
+            .map(|entry| downloads_dir.join(&entry.source_file))
+            .filter(|path| path.is_file())
+            .collect();
+        if existing_sources.is_empty() {
+            info!("No update draft or staged application files found. Update pipeline finished.");
             return Ok(());
         }
+        info!(
+            "No Outlook update draft found; using {} application file(s) already staged in downloads.",
+            existing_sources.len()
+        );
+        existing_sources
     };
 
-    let _zip_guard = FileCleanupGuard::new(&zip_path);
-
-    // 2. Extract ZIP
-    info!(
-        "Extracting update zip {:?} to {:?}",
-        zip_path, downloads_dir
-    );
-    let extracted_files = extract_zip(&zip_path, downloads_dir, b"123456")?;
-
-    if extracted_files.is_empty() {
-        warn!("Update zip was empty or extraction failed.");
-        return Ok(());
+    // Never launch a partial update: every configured replacement must have a staged source.
+    let missing_sources: Vec<String> = config.file_replacement_map.iter()
+        .map(|entry| downloads_dir.join(&entry.source_file))
+        .filter(|path| !path.is_file())
+        .map(|path| path.display().to_string())
+        .collect();
+    if !missing_sources.is_empty() {
+        bail!(
+            "Update is incomplete; missing {} configured source file(s): {}",
+            missing_sources.len(),
+            missing_sources.join(", ")
+        );
     }
 
     // Unblock all extracted files
@@ -397,7 +413,8 @@ try {
                     throw "File copy failed"
                 }
             } else {
-                Write-Log "Source file '$SrcPath' not found. Skipping replacement."
+                Write-Log "FAILURE: Required update source file '$SrcPath' was not found."
+                throw "Required update source file missing: $SrcPath"
             }
         }
     }
