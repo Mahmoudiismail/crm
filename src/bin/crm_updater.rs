@@ -90,6 +90,8 @@ fn main() -> Result<()> {
         parse_log_level(&config.log_file_level)?,
     )?;
 
+    crm_tool::tasker::script_manager::ScriptManager::new().install_builtin_scripts()?;
+
     info!("Loaded config: {:#?}", config);
 
     let run_all = !args.update_only && !args.logs_only;
