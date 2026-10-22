@@ -3,7 +3,7 @@ use std::io::Write;
 use std::path::PathBuf;
 use tempfile::NamedTempFile;
 
-const OUTLOOK_HELPER_SCRIPT: &str = const OUTLOOK_HELPER_SCRIPT: &str = include_str!("outlook_mail.ps1");;
+const OUTLOOK_HELPER_SCRIPT: &str = const OUTLOOK_HELPER_SCRIPT: &str = include_str!("outlook_mail.ps1");
 
 const OUTLOOK_WRAPPER_TEMPLATE: &str = r#"
 param(
