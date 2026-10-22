@@ -82,7 +82,7 @@ impl ScriptManager {
     /// This makes the complete script set available for inspection before any task is executed.
     pub fn install_builtin_scripts(&self) -> Result<()> {
         let scripts: &[(&str, &str, &str)] = &[
-            ("Email", "outlook_mail.ps1", include_str!("email/outlook_mail.ps1")),
+            ("_shared", "outlook_mail.ps1", include_str!("email/outlook_mail.ps1")),
             ("Email", "send_email.ps1", include_str!("email/send_email.ps1")),
             ("Dashboard Updater", "dashboard_updater.ps1", include_str!("scripts/dashboard_updater.ps1")),
             ("Department Split", "department_split.ps1", include_str!("scripts/department_split.ps1")),
