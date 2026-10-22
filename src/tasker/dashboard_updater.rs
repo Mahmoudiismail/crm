@@ -87,7 +87,7 @@ mod tests {
 
     #[test]
     fn test_task2_dashboard_updater_calculation_mode() {
-        let src = include_str!("dashboard_updater.rs");
+        let src = include_str!("scripts/dashboard_updater.ps1");
         let open_idx = src
             .find("$workbook = $workbooks.Open(")
             .expect("Should find open workbook");
