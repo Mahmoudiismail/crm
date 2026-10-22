@@ -325,29 +325,12 @@ fn generate_update_script(
 }
 
 fn execute_detached_powershell(script_path: &Path, args: &[(String, String)]) -> Result<()> {
-    let mut cmd = std::process::Command::new("powershell");
-    cmd.arg("-ExecutionPolicy")
-        .arg("Bypass")
-        .arg("-WindowStyle")
-        .arg("Hidden")
-        .arg("-File")
-        .arg(script_path);
-
-    for (k, v) in args {
-        cmd.arg(k).arg(v);
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-        const DETACHED_PROCESS: u32 = 0x00000008;
-
-        cmd.creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS);
-    }
-
-    cmd.spawn()?;
-    Ok(())
+    let borrowed_args: Vec<(&str, &str)> = args
+        .iter()
+        .map(|(key, value)| (key.as_str(), value.as_str()))
+        .collect();
+    crate::tasker::script_manager::ScriptManager::new()
+        .execute_script_detached_with_args(script_path, &borrowed_args)
 }
 
 #[cfg(test)]
