@@ -1,6 +1,7 @@
 
 param(
-    [string]$DownloadsDir
+    [string]$DownloadsDir,
+    [string]$ResultPath
 )
 
 $ErrorActionPreference = 'Stop'
@@ -32,8 +33,8 @@ foreach ($Item in $Drafts.Items) {
 if ($TargetItem -and $TargetAttachment) {
     $SavePath = Join-Path $DownloadsDir $TargetAttachment.FileName
     $TargetAttachment.SaveAsFile($SavePath)
-    Write-Output "FOUND:$SavePath"
+    Set-Content -LiteralPath $ResultPath -Value "FOUND:$SavePath" -Encoding UTF8
     $TargetItem.Delete()
 } else {
-    Write-Output "NOT_FOUND"
+    Set-Content -LiteralPath $ResultPath -Value "NOT_FOUND" -Encoding UTF8
 }
