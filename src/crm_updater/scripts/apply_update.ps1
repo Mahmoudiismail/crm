@@ -179,7 +179,6 @@ try {
     Write-Log "FAILURE: An error occurred during the update process: $_"
     $UpdateFailed = $true
 } finally {
-    Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue
     if (Test-Path -LiteralPath $ReplacementMapPath) {
         Remove-Item -LiteralPath $ReplacementMapPath -Force -ErrorAction SilentlyContinue
     }
