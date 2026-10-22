@@ -1,5 +1,5 @@
 use crate::utils::FileCleanupGuard;
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use serde::Serialize;
 use std::fs;
 use std::io::Write;
