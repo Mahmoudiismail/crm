@@ -101,6 +101,18 @@ function Send-OutlookMail {
         if (-not (Test-Path -LiteralPath $attachmentPath -PathType Leaf)) { throw "Email attachment not found: $attachmentPath" }
         $mail.Attachments.Add([System.IO.Path]::GetFullPath($attachmentPath)) | Out-Null
     }
+    if ($Mode -eq "ReplyAll") {
+        $mail.Recipients.ResolveAll() | Out-Null
+        $unresolvedRecipients = @()
+        foreach ($recipient in $mail.Recipients) {
+            if (-not $recipient.Resolved) {
+                $unresolvedRecipients += [string]$recipient.Name
+            }
+        }
+        if ($unresolvedRecipients.Count -gt 0) {
+            throw ("Outlook could not resolve ReplyAll recipient(s): " + ($unresolvedRecipients -join "; "))
+        }
+    }
     if ($SendAtNextSevenAm) {
         $now = Get-Date
         $targetTime = $now.Date.AddHours(7)
@@ -303,6 +315,8 @@ mod tests {
         assert!(OUTLOOK_HELPER_SCRIPT.contains("function Send-OutlookMail"));
         assert!(OUTLOOK_HELPER_SCRIPT.contains(r#"[ValidateSet("New", "ReplyAll")]"#));
         assert!(OUTLOOK_HELPER_SCRIPT.contains("$mail = $mail.ReplyAll()"));
+        assert!(OUTLOOK_HELPER_SCRIPT.contains("$mail.Recipients.ResolveAll()"));
+        assert!(OUTLOOK_HELPER_SCRIPT.contains("Outlook could not resolve ReplyAll recipient(s):"));
         assert!(OUTLOOK_HELPER_SCRIPT.contains("-Encoding UTF8"));
         assert!(OUTLOOK_HELPER_SCRIPT.contains("foreach ($attachmentPath in $AttachmentPaths)"));
         assert!(OUTLOOK_HELPER_SCRIPT.contains("DeferredDeliveryTime"));
