@@ -211,7 +211,7 @@ The PowerShell logic for the following Tasker operations is maintained in standa
 - OPD analysis email: `src/tasker/opd_task/opd_analysis_email.ps1`.
 - SAT figures email: `src/tasker/sat_figures_email.ps1`.
 
-These are source-controlled templates, not scripts that must be shipped as loose files beside the executable. Runtime execution and persistent managed-script behavior remain the responsibility of `ScriptManager` where used by the calling code.
+At startup, Tasker calls `ScriptManager::install_builtin_scripts()` to materialize all built-in PowerShell templates under `<exe_dir>/scripts/<Task Name>/`, including the shared Outlook helper and CRM Updater templates. Each script is therefore present on disk before a configured task starts, and execution continues through the managed files. The source files are also embedded in the executable at build time so they can be restored if missing.
 
 ### Outlook recipient handling
 
