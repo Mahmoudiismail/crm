@@ -142,7 +142,7 @@ mod tests {
 
     #[test]
     fn test_task3_crm_open_sohail_pivot_safe_cast() {
-        let src = include_str!("powershell.rs");
+        let src = include_str!("slicer_extract.ps1");
         assert!(
             src.contains("if ($value -as [double]) { $value -as [double] } elseif ([double]::TryParse($value, [ref]$null))"),
             "Script must use safe casting (-as [double]) and TryParse to prevent 'Input string was not in a correct format' errors"
@@ -151,7 +151,7 @@ mod tests {
 
     #[test]
     fn test_pivot_extraction_uses_bulk_values_and_shared_extractor() {
-        let src = include_str!("powershell.rs");
+        let src = include_str!("slicer_extract.ps1");
         let script = src
             .split("let ps_script = r#\"")
             .nth(1)
@@ -175,7 +175,7 @@ mod tests {
 
     #[test]
     fn test_pivot_extraction_uses_linear_time_row_collection() {
-        let src = include_str!("powershell.rs");
+        let src = include_str!("slicer_extract.ps1");
         let script = src
             .split("let ps_script = r#\"")
             .nth(1)
@@ -191,7 +191,7 @@ mod tests {
 
     #[test]
     fn test_dsfmc_awali_filter_and_clear_logic() {
-        let src = include_str!("powershell.rs");
+        let src = include_str!("slicer_extract.ps1");
         // Assert we are explicitly clearing ALL filters before filtering/processing
         assert!(
             src.contains("$Pivot.ClearAllFilters()"),
