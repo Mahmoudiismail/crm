@@ -418,7 +418,8 @@ impl ScriptManager {
             cmd.creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS);
         }
 
-        cmd.spawn().context("Failed to launch detached PowerShell script")?;
+        cmd.spawn()
+            .context("Failed to launch detached PowerShell script")?;
         Ok(())
     }
 }

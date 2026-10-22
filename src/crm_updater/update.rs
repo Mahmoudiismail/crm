@@ -153,7 +153,10 @@ fn download_update_zip_from_drafts(downloads_dir: &Path) -> Result<Option<PathBu
     if result == "NOT_FOUND" {
         return Ok(None);
     }
-    anyhow::bail!("Outlook draft scan returned an unexpected result: {}", result)
+    anyhow::bail!(
+        "Outlook draft scan returned an unexpected result: {}",
+        result
+    )
 }
 
 #[cfg(not(target_os = "windows"))]
