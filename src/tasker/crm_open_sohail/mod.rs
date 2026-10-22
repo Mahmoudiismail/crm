@@ -95,7 +95,7 @@ mod tests {
 
     #[test]
     fn test_reply_all_uses_shared_outlook_function() {
-        let src = include_str!("../email/outlook.rs");
+        let src = include_str!("../email/outlook_mail.ps1");
         assert!(src.contains("function Send-OutlookMail"));
         assert!(src.contains("Find-OutlookOriginalMessage"));
         assert!(src.contains("ReplyAll"));
