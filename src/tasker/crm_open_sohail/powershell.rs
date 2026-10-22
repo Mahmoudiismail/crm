@@ -75,7 +75,7 @@ pub fn extract_data(config: &CrmOpenSohailConfig) -> Result<Vec<ExtractedSlicerD
 
     let current_month = chrono::Local::now().format("%b-%Y").to_string();
 
-    let ps_script = let ps_script = include_str!("slicer_extract.ps1");;
+    let ps_script = include_str!("slicer_extract.ps1");
 
     if config.dashboard_config.save_email_as_html.unwrap_or(false) {
         info!("save_email_as_html is true, skipping actual slicer execution via powershell for testing.");
