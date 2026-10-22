@@ -207,28 +207,19 @@ fn extract_zip(zip_path: &Path, extract_dir: &Path, password: &[u8]) -> Result<V
 }
 
 fn unblock_file(path: &Path) {
-    // PowerShell's -Command mode treats trailing arguments as command text rather than
-    // binding them to a param() block. Pass the path through the environment instead,
-    // avoiding both the empty -LiteralPath seen in production and command injection.
-    let result = std::process::Command::new("powershell")
-        .arg("-NoProfile")
-        .arg("-ExecutionPolicy")
-        .arg("Bypass")
-        .arg("-Command")
-        .arg("$ErrorActionPreference = 'Stop'; Unblock-File -LiteralPath $env:CRM_UPDATER_UNBLOCK_PATH")
-        .env("CRM_UPDATER_UNBLOCK_PATH", path)
-        .status();
+    let path_string = path.to_string_lossy().into_owned();
+    let result = crate::tasker::script_manager::ScriptManager::new().run_script_with_args(
+        "CRM Updater",
+        "unblock_file.ps1",
+        include_str!("scripts/unblock_file.ps1"),
+        &[("-LiteralPath", path_string.as_str())],
+    );
 
-    match result {
-        Ok(status) if status.success() => {}
-        Ok(status) => warn!(
-            "Failed to unblock extracted file {:?}: PowerShell exited with {}",
-            path, status
-        ),
-        Err(error) => warn!(
-            "Failed to run PowerShell to unblock extracted file {:?}: {}",
+    if let Err(error) = result {
+        warn!(
+            "Failed to unblock extracted file {:?} through ScriptManager: {}",
             path, error
-        ),
+        );
     }
 }
 
