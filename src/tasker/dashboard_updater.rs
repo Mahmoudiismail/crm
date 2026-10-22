@@ -11,7 +11,7 @@ pub fn run(config: &DashboardUpdaterConfig) -> Result<()> {
 
     info!("Updating dashboard '{}'", dashboard_path_str);
 
-    let ps_script = let ps_script = include_str!("scripts/dashboard_updater.ps1");;
+    let ps_script = include_str!("scripts/dashboard_updater.ps1");
 
     // Only run PowerShell if not a dry run test
     if !config.save_email_as_html.unwrap_or(false) {
