@@ -132,7 +132,7 @@ mod opd_autofilter_tests {
 
     #[test]
     fn test_regression_autofilter_visible_dropdown_hidden() {
-        let src = include_str!("powershell_email.rs");
+        let src = include_str!("opd_analysis_email.ps1");
 
         // Verify that the code iterates through columns and preserves existing filters
 
