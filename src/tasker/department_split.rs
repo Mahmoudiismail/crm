@@ -130,12 +130,12 @@ mod tests {
 
         // Assert the safe version does exist
         assert!(
-            src.contains("${{target}}: ${{targetPath}}") || src.contains("target: ${{target}}"),
-            "Should contain strictly safe string interpolation"
+            src.contains("${target}.xlsm") && src.contains("(target: ${target})"),
+            "Should use braced interpolation where a variable touches adjacent text"
         );
         assert!(
-            src.contains("${{target}}"),
-            "Should use safe bracket notation for target"
+            src.contains("${target}"),
+            "Should use safe braced interpolation for target"
         );
     }
 }
