@@ -151,14 +151,7 @@ mod tests {
 
     #[test]
     fn test_pivot_extraction_uses_bulk_values_and_shared_extractor() {
-        let src = include_str!("slicer_extract.ps1");
-        let script = src
-            .split("let ps_script = r#\"")
-            .nth(1)
-            .unwrap()
-            .split("\"#;")
-            .next()
-            .unwrap();
+        let script = include_str!("slicer_extract.ps1");
         assert_eq!(
             script.matches("function Add-PivotDataToCollection").count(),
             1
@@ -175,14 +168,7 @@ mod tests {
 
     #[test]
     fn test_pivot_extraction_uses_linear_time_row_collection() {
-        let src = include_str!("slicer_extract.ps1");
-        let script = src
-            .split("let ps_script = r#\"")
-            .nth(1)
-            .unwrap()
-            .split("\"#;")
-            .next()
-            .unwrap();
+        let script = include_str!("slicer_extract.ps1");
         assert!(script.contains("$dataset = [System.Collections.Generic.List[object]]::new()"));
         assert!(script.contains("$dataset.Add($row)"));
         assert!(script.contains("data = $dataset.ToArray()"));
