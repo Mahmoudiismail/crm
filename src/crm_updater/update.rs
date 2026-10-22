@@ -119,52 +119,41 @@ const SCAN_DRAFTS_TEMPLATE: &str = include_str!("scripts/scan_update_drafts.ps1"
 
 #[cfg(target_os = "windows")]
 fn download_update_zip_from_drafts(downloads_dir: &Path) -> Result<Option<PathBuf>> {
-    let abs_downloads_dir = match std::fs::canonicalize(downloads_dir) {
-        Ok(path) => path,
-        Err(e) => bail!("Failed to canonicalize downloads directory: {}", e),
-    };
-
+    let abs_downloads_dir = std::fs::canonicalize(downloads_dir)
+        .map_err(|e| anyhow::anyhow!("Failed to canonicalize downloads directory: {}", e))?;
     let abs_downloads_dir_str = clean_canonicalized_path(&abs_downloads_dir);
-
-    let mut temp_file = tempfile::Builder::new()
-        .prefix("scan_drafts_")
-        .suffix(".ps1")
+    let result_file = tempfile::Builder::new()
+        .prefix("scan_drafts_result_")
+        .suffix(".txt")
         .tempfile()?;
+    let result_path = result_file.path().to_path_buf();
+    drop(result_file);
 
-    temp_file.write_all(SCAN_DRAFTS_TEMPLATE.as_bytes())?;
-    temp_file.as_file().sync_all()?;
-
-    let (file, path) = temp_file.keep()?;
-    drop(file);
-    let _guard = FileCleanupGuard::new(&path);
-
-    let output = std::process::Command::new("powershell")
-        .arg("-ExecutionPolicy")
-        .arg("Bypass")
-        .arg("-File")
-        .arg(&path)
-        .arg("-DownloadsDir")
-        .arg(&abs_downloads_dir_str)
-        .output()?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-
-    for line in stdout.lines() {
-        let line = line.trim();
-        if line.starts_with("FOUND:") {
-            let file_path = line.trim_start_matches("FOUND:");
-            return Ok(Some(PathBuf::from(file_path)));
-        } else if line == "NOT_FOUND" {
-            return Ok(None);
-        }
+    let run_result = crate::tasker::script_manager::ScriptManager::new().run_script_with_args(
+        "CRM Updater",
+        "scan_update_drafts.ps1",
+        SCAN_DRAFTS_TEMPLATE,
+        &[
+            ("-DownloadsDir", abs_downloads_dir_str.as_str()),
+            ("-ResultPath", result_path.to_string_lossy().as_ref()),
+        ],
+    );
+    if let Err(error) = run_result {
+        let _ = std::fs::remove_file(&result_path);
+        return Err(error.context("Failed to scan Outlook drafts through ScriptManager"));
     }
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        bail!("PowerShell draft scan failed: {}", stderr);
+    let result = std::fs::read_to_string(&result_path)
+        .map_err(|e| anyhow::anyhow!("Failed to read Outlook draft scan result: {}", e))?;
+    let _ = std::fs::remove_file(&result_path);
+    let result = result.trim().trim_start_matches('\u{feff}');
+    if let Some(file_path) = result.strip_prefix("FOUND:") {
+        return Ok(Some(PathBuf::from(file_path.trim())));
     }
-
-    Ok(None)
+    if result == "NOT_FOUND" {
+        return Ok(None);
+    }
+    anyhow::bail!("Outlook draft scan returned an unexpected result: {}", result)
 }
 
 #[cfg(not(target_os = "windows"))]
