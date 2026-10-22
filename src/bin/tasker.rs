@@ -353,6 +353,8 @@ fn main() -> Result<()> {
         parse_log_level(&file_lvl)?,
     )?;
 
+    crm_tool::tasker::script_manager::ScriptManager::new().install_builtin_scripts()?;
+
     if let Err(e) = run_app(options) {
         error!("Fatal application error: {:#}", e);
         anyhow::bail!(e);
