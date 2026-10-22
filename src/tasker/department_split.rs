@@ -84,7 +84,7 @@ pub fn run(config: &DepartmentSplitConfig) -> Result<()> {
         .to_str()
         .context("Failed to convert mapping_file to string")?;
 
-    let ps_script = let ps_script = include_str!("scripts/department_split.ps1");;
+    let ps_script = include_str!("scripts/department_split.ps1");
 
     crate::tasker::script_manager::ScriptManager::new().run_script_with_args(
         "Department Split",
