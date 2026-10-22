@@ -299,16 +299,9 @@ fn generate_update_script(
 
     let payload_json = serde_json::to_string(&payload)?;
 
-    let mut temp_file = tempfile::Builder::new()
-        .prefix("update_")
-        .suffix(".ps1")
-        .tempfile()?;
-
-    temp_file.write_all(UPDATE_SCRIPT_TEMPLATE.as_bytes())?;
-    temp_file.as_file().sync_all()?;
-
-    let (file, script_path) = temp_file.keep()?;
-    drop(file);
+    let script_path = crate::tasker::script_manager::ScriptManager::new()
+        .get_or_create_script("CRM Updater", "apply_update.ps1", UPDATE_SCRIPT_TEMPLATE)
+        .context("Failed to prepare detached updater script through ScriptManager")?;
 
     let args = vec![
         ("-LogPath".to_string(), log_path),
