@@ -56,3 +56,11 @@ Ticket exports are grouped into batches of at most three calendar months, with u
 ## CRM Execution & Error Propagation
 - The `crm` binary correctly propagates individual report failures (e.g. `HTTP 500`) outwards, immediately terminating the binary execution with a non-zero exit code.
 - Relative date logic and CLI resolution exclusively utilizes Local system time (`chrono::Local::now()`) to prevent date boundary shifts (due to UTC vs timezone offset collisions).
+
+## PowerShell Script Source and CRM Updater Lifecycle
+
+Production PowerShell templates touched by Tasker and CRM Updater are kept as standalone `.ps1` source files and embedded at compile time with `include_str!`, rather than maintained as large Rust raw-string literals. This keeps script logic editable and reviewable without requiring loose script files at runtime.
+
+Tasker uses `ScriptManager` for managed script persistence and execution where wired by the caller. CRM Updater uses managed scripts for draft scanning, file unblocking, and applying updates. The update application script is launched detached through `ScriptManager::execute_script_detached_with_args`; this is intentional because the updater process must be able to exit while the replacement script waits for processes to stop, replaces executables, and restarts configured applications. The replacement-map JSON is passed as a temporary data file, not embedded as PowerShell source.
+
+Yasweb is browser automation driven by Rust and injected JavaScript; the reviewed Yasweb sources did not contain PowerShell scripts to externalize in this change.
