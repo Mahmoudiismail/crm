@@ -175,8 +175,8 @@ mod tests {
         assert!(OUTLOOK_HELPER_SCRIPT.contains("function Send-OutlookMail"));
         assert!(OUTLOOK_HELPER_SCRIPT.contains(r#"[ValidateSet("New", "ReplyAll")]"#));
         assert!(OUTLOOK_HELPER_SCRIPT.contains("$mail = $mail.ReplyAll()"));
-        assert!(OUTLOOK_HELPER_SCRIPT.contains("$mail.Recipients.ResolveAll()"));
-        assert!(OUTLOOK_HELPER_SCRIPT.contains("Outlook could not resolve ReplyAll recipient(s):"));
+        assert!(!OUTLOOK_HELPER_SCRIPT.contains("$mail.Recipients.ResolveAll()"));
+        assert!(!OUTLOOK_HELPER_SCRIPT.contains("Outlook could not resolve ReplyAll recipient(s):"));
         assert!(OUTLOOK_HELPER_SCRIPT.contains("-Encoding UTF8"));
         assert!(OUTLOOK_HELPER_SCRIPT.contains("foreach ($attachmentPath in $AttachmentPaths)"));
         assert!(OUTLOOK_HELPER_SCRIPT.contains("DeferredDeliveryTime"));
