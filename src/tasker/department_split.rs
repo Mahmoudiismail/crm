@@ -109,14 +109,14 @@ pub fn run(config: &DepartmentSplitConfig) -> Result<()> {
 mod tests {
     #[test]
     fn test_department_header_scan_reads_range_in_bulk() {
-        let src = include_str!("department_split.rs");
+        let src = include_str!("scripts/department_split.ps1");
         assert!(src.contains("$headerValues = $Sheet.Range($Sheet.Cells.Item(1, 1), $Sheet.Cells.Item(20, 50)).Value2"));
         assert!(src.contains("$cellVal = [string]$headerValues[$r, $c]"));
     }
 
     #[test]
     fn test_powershell_interpolation_safety() {
-        let src = include_str!("department_split.rs");
+        let src = include_str!("scripts/department_split.ps1");
 
         // Assert the problematic unsafe interpolation does not exist
         assert!(
@@ -142,7 +142,7 @@ mod tests {
 
 #[test]
 fn test_special_cells_and_com_cleanup() {
-    let src = include_str!("department_split.rs");
+    let src = include_str!("scripts/department_split.ps1");
 
     // Verify SpecialCells is wrapped properly
     // Use replace to strip out \r on windows for consistent matching
