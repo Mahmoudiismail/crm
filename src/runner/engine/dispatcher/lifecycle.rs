@@ -9,7 +9,6 @@ use tracing::{error, info};
 use crate::runner::config::{RunnerConfig, RunnerTask};
 use crate::runner::engine::dispatcher::mod_handle_command;
 use crate::runner::engine::dispatcher::schedule::schedule_is_due;
-use crate::runner::engine::pipeline::run_task_inner;
 use crate::runner::engine::state::{
     ExecutionManagerCommand, ExecutionPolicy, RunnerCommand, RunnerHandle, RunnerStatus,
 };
