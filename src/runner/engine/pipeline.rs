@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -11,11 +11,18 @@ use crate::runner::engine::state::{ExecutionPolicy, RunnerStatus};
 
 use crate::runner::engine::app_lock::AppLockManager;
 
+fn execution_timestamp(scheduled_time: &str, actual_start_time: DateTime<Utc>) -> DateTime<Utc> {
+    DateTime::parse_from_rfc3339(scheduled_time)
+        .map(|scheduled| scheduled.with_timezone(&Utc))
+        .unwrap_or(actual_start_time)
+}
+
 async fn execute_action(
     action: &ActionSpec,
     logger: &TaskLogger,
     policy: &ExecutionPolicy,
     timeout_seconds: u64,
+    execution_at: DateTime<Utc>,
 ) -> Result<()> {
     match action {
         ActionSpec::ShellCommand(spec) => {
@@ -34,8 +41,21 @@ async fn execute_action(
         }
         ActionSpec::ExternalApp(spec) => {
             if let Some(app) = policy.registered_apps.iter().find(|a| a.id == spec.app_id) {
-                let now = Utc::now();
-                let periods = crate::runner::config::resolve_app_periods_at(spec, now)?;
+                let periods = crate::runner::config::resolve_app_periods_at(spec, execution_at)?;
+                logger
+                    .log(&format!(
+                        "Resolved date period for app '{}' at {}: start_expression='{}', end_expression='{}', periods={}",
+                        app.name,
+                        execution_at.to_rfc3339(),
+                        spec.start_date.as_deref().unwrap_or("today"),
+                        spec.end_date.as_deref().unwrap_or("<same as start>"),
+                        periods
+                            .iter()
+                            .map(|period| format!("{} -> {}", period.start_date, period.end_date))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ))
+                    .await;
 
                 if app.allow_concurrent_tasks {
                     let total_periods = periods.len();
@@ -114,6 +134,7 @@ async fn execute_step(
     status: &Arc<Mutex<RunnerStatus>>,
     app_lock_manager: &AppLockManager,
     task_id: &str,
+    execution_at: DateTime<Utc>,
 ) -> Result<()> {
     let mut required_apps = std::collections::HashSet::new();
     for action in &step.actions {
@@ -189,7 +210,7 @@ async fn execute_step(
         ExecutionMode::Sequential => {
             let mut step_result = Ok(());
             for action in &step.actions {
-                if let Err(e) = execute_action(action, logger, policy, timeout_seconds).await {
+                if let Err(e) = execute_action(action, logger, policy, timeout_seconds, execution_at).await {
                     step_result = Err(e);
                     break;
                 }
@@ -204,7 +225,7 @@ async fn execute_step(
                 let policy = policy.clone();
 
                 tasks.spawn(async move {
-                    let result = execute_action(&action, &logger, &policy, timeout_seconds).await;
+                    let result = execute_action(&action, &logger, &policy, timeout_seconds, execution_at).await;
                     (action, result)
                 });
             }
@@ -246,6 +267,7 @@ async fn execute_pipeline(
     status: &Arc<Mutex<RunnerStatus>>,
     app_lock_manager: &AppLockManager,
     task_id: &str,
+    execution_at: DateTime<Utc>,
 ) -> Result<()> {
     for step in steps {
         execute_step(
@@ -256,6 +278,7 @@ async fn execute_pipeline(
             status,
             app_lock_manager,
             task_id,
+            execution_at,
         )
         .await?;
     }
@@ -275,6 +298,7 @@ pub async fn run_task_inner(
 
     let start_time = Utc::now();
     let scheduled_time = task.next_run_at.clone();
+    let execution_at = execution_timestamp(&scheduled_time, start_time.clone());
 
     // Per-task lifecycle details belong in the task-specific log, not runner.log.
     logger
@@ -305,6 +329,7 @@ pub async fn run_task_inner(
         status,
         app_lock_manager,
         &task.id,
+        execution_at,
     )
     .await;
 
@@ -325,6 +350,7 @@ pub async fn run_task_inner(
                     status,
                     app_lock_manager,
                     &task.id,
+                    execution_at,
                 )
                 .await;
                 match post_run_result {
@@ -381,6 +407,19 @@ pub async fn run_task_inner(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::TimeZone;
+
+    #[test]
+    fn execution_timestamp_uses_schedule_and_falls_back_for_manual_runs() {
+        let actual = Utc.with_ymd_and_hms(2026, 10, 24, 20, 0, 0).unwrap();
+        let scheduled = execution_timestamp("2026-10-25T07:00:00+03:00", actual);
+        assert_eq!(
+            scheduled,
+            Utc.with_ymd_and_hms(2026, 10, 25, 4, 0, 0).unwrap()
+        );
+        assert_eq!(execution_timestamp("", actual), actual);
+        assert_eq!(execution_timestamp("not-a-timestamp", actual), actual);
+    }
     use crate::runner::config::ShellCommandSpec;
     use std::sync::atomic::{AtomicU32, Ordering};
     use tokio::sync::Barrier;
@@ -429,6 +468,7 @@ mod tests {
             &status,
             &app_lock_mgr,
             "test_task",
+            Utc::now(),
         )
         .await
         .unwrap();
@@ -471,7 +511,8 @@ mod tests {
             5,
             &status,
             &app_lock_mgr,
-            "test_task"
+            "test_task",
+            Utc::now(),
         )
         .await
         .is_err());
@@ -515,6 +556,7 @@ mod tests {
             &status,
             &app_lock_mgr,
             "test_task",
+            Utc::now(),
         )
         .await
         .unwrap();
@@ -534,7 +576,8 @@ mod tests {
             5,
             &status,
             &app_lock_mgr,
-            "test_task"
+            "test_task",
+            Utc::now(),
         )
         .await
         .is_err());

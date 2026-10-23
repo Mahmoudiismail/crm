@@ -201,6 +201,8 @@ pub async fn run_external_app(
             .map(str::to_string)
             .or(discovered.1);
 
+        let start_arg_name = start_arg.clone();
+        let end_arg_name = end_arg.clone();
         insert_period_args(
             &mut effective_args,
             start_arg,
@@ -208,6 +210,12 @@ pub async fn run_external_app(
             &start_str,
             &end_str,
         );
+        logger
+            .log(&format!(
+                "Resolved date arguments for app '{}': start_arg={:?}, start_date={}, end_arg={:?}, end_date={}",
+                app.name, start_arg_name, start_str, end_arg_name, end_str
+            ))
+            .await;
     }
 
     validate_explicit_date_range(&effective_args)?;
