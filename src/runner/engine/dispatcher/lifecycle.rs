@@ -133,15 +133,14 @@ pub fn spawn_execution_manager(
                         let mut task_to_run = task_to_run_for_spawn;
                         let task_id = task_to_run.id.clone();
 
-                        let result =
-                            crate::runner::engine::pipeline::run_task_inner_at(
-                                &mut task_to_run,
-                                &policy,
-                                &st_clone,
-                                &app_lock_mgr,
-                                scheduled_at,
-                            )
-                            .await;
+                        let result = crate::runner::engine::pipeline::run_task_inner_at(
+                            &mut task_to_run,
+                            &policy,
+                            &st_clone,
+                            &app_lock_mgr,
+                            scheduled_at,
+                        )
+                        .await;
 
                         let _ = tx_finish
                             .send(ExecutionManagerCommand::TaskFinished {
