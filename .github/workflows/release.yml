@@ -75,7 +75,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: rust-repo-windows
-          save-if: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-on-failure: true
       - name: Build and package selected binaries
         id: build
