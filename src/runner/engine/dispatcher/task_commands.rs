@@ -180,7 +180,7 @@ pub async fn run_task_by_id(
             let scheduled_at = if is_manual {
                 now
             } else {
-                scheduled_execution_at(task, now
+                scheduled_execution_at(task, now)
             };
             task.last_run_at = now.to_rfc3339();
             if !is_manual {
