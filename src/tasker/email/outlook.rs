@@ -127,11 +127,7 @@ fn run_outlook_mail(request: OutlookMailRequest<'_>) -> Result<()> {
         .as_ref()
         .map(|file| file.path().to_string_lossy().into_owned())
         .unwrap_or_default();
-    let send_at_seven = if request.send_at_next_seven_am {
-        "true"
-    } else {
-        "false"
-    };
+    let send_at_seven = if request.send_at_next_seven_am { "true" } else { "false" };
     manager.execute_script_with_args(
         &script_path,
         &[
