@@ -675,11 +675,11 @@ Write-Output "To: $Email, Subject: $Subject"
 "#;
 
         let path1 = manager
-            .get_or_create_script("Email Task", "send_email.ps1", parameterized_template)
+            .get_or_create_script("Email Task", "outlook_mail.ps1", parameterized_template)
             .unwrap();
 
         let path2 = manager
-            .get_or_create_script("Email Task", "send_email.ps1", parameterized_template)
+            .get_or_create_script("Email Task", "outlook_mail.ps1", parameterized_template)
             .unwrap();
 
         assert_eq!(path1, path2);
@@ -692,7 +692,7 @@ Write-Output "To: $Email, Subject: $Subject"
             .collect();
 
         assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0], "send_email.ps1");
+        assert_eq!(entries[0], "outlook_mail.ps1");
     }
 
     #[test]
