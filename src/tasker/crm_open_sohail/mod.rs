@@ -98,9 +98,10 @@ mod tests {
         assert!(src.contains("Find-OutlookOriginalMessage"));
         assert!(src.contains("ReplyAll"));
         assert!(src.contains("Get-OutlookHtmlFragment"));
-        assert!(src.contains("SendAtNextSevenAm"));
+        assert!(src.contains("SaveDraft"));
+        assert!(src.contains("Write-OutlookStep"));
         assert!(src.contains("AdditionalTo"));
-        assert!(src.contains("RemoveCc"));
+        assert!(!src.contains("RemoveCc"));
         assert!(include_str!("mod.rs").contains("reply_all_email("));
     }
 }
