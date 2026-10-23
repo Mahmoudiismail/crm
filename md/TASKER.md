@@ -204,7 +204,7 @@ PowerShell integration relies on `ScriptManager` persistence. Script generators 
 
 The PowerShell logic for the following Tasker operations is maintained in standalone `.ps1` files and embedded into the executable at build time with Rust `include_str!`:
 
-- Outlook email helper and send wrapper: `src/tasker/email/outlook_mail.ps1` and `src/tasker/email/send_email.ps1`.
+- Outlook email helper and send wrapper: `src/tasker/email/outlook_mail.ps1` and `src/tasker/email/outlook_mail.ps1`.
 - Dashboard refresh: `src/tasker/scripts/dashboard_updater.ps1`.
 - Department workbook split: `src/tasker/scripts/department_split.ps1`.
 - CRM Open Sohail slicer extraction: `src/tasker/crm_open_sohail/slicer_extract.ps1`.
