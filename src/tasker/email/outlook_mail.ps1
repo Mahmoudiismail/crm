@@ -8,7 +8,7 @@ param(
     [string]$SubjectPrefix = "", [string]$AdditionalTo = "",
     [string]$SendAtNextSevenAm = "false"
 )
-function Write-OutlookStep([string]$Message) { Write-Output ("TRACE: [Outlook] " + $Message) }
+function Write-OutlookStep([string]$Message) { [Console]::Out.WriteLine("TRACE: [Outlook] " + $Message) }
 function Get-OutlookSenderAddress($Item) {
     $senderAddress = ""
     try { $senderAddress = [string]$Item.SenderEmailAddress } catch {}
