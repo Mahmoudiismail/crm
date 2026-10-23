@@ -83,14 +83,9 @@ impl ScriptManager {
     pub fn install_builtin_scripts(&self) -> Result<()> {
         let scripts: &[(&str, &str, &str)] = &[
             (
-                "_shared",
+                "Email",
                 "outlook_mail.ps1",
                 include_str!("email/outlook_mail.ps1"),
-            ),
-            (
-                "Email",
-                "send_email.ps1",
-                include_str!("email/send_email.ps1"),
             ),
             (
                 "Dashboard Updater",
