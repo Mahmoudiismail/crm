@@ -64,7 +64,6 @@ pub fn run(config: &CrmOpenSohailConfig) -> Result<()> {
             &subject,
             &final_html,
             "miismail@fakeeh.care",
-            false,
         ) {
             error!("Failed to send scheduled ReplyAll: {}", e);
             anyhow::bail!("Failed to send scheduled ReplyAll: {e}");
