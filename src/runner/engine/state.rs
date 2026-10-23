@@ -68,6 +68,7 @@ pub enum ExecutionManagerCommand {
     QueueTask {
         task: Box<crate::runner::config::RunnerTask>,
         policy: ExecutionPolicy,
+        scheduled_at: chrono::DateTime<chrono::Utc>,
     },
     TaskFinished {
         task_id: String,

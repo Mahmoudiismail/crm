@@ -39,9 +39,9 @@ try {
     $stage = "Create drawing brushes and pen"
     Write-Output "TRACE: Sat Figures stage: $stage"
     $brush = [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(35, 45, 55))
-    $headerBrush = [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(46, 92, 135))
+    $headerBrush = [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(76, 175, 80))
     $whiteBrush = [System.Drawing.SolidBrush]::new([System.Drawing.Color]::White)
-    $borderPen = [System.Drawing.Pen]::new([System.Drawing.Color]::FromArgb(190, 200, 210), 1)
+    $borderPen = [System.Drawing.Pen]::new([System.Drawing.Color]::Black, 1)
 
     $stage = "Draw Sat Figures cells"
     Write-Output "TRACE: Sat Figures stage: $stage"
