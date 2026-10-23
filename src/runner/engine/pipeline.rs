@@ -226,7 +226,6 @@ async fn execute_step(
                 let action = action.clone();
                 let logger = logger.clone();
                 let policy = policy.clone();
-                let execution_at = execution_at;
 
                 tasks.spawn(async move {
                     let result =
