@@ -22,7 +22,7 @@ fn scheduled_execution_at(task: &RunnerTask, now: DateTime<Utc>) -> DateTime<Utc
     } else {
         task.schedules
             .iter()
-            .filter(|schedule| schedule.due_now(now.clone()))
+            .filter(|schedule| schedule.due_now(now))
             .filter_map(|schedule| {
                 let next_run_at = match schedule {
                     TaskSchedule::Once { next_run_at, .. }
@@ -66,8 +66,8 @@ pub async fn run_due_tasks(
                     );
                     continue;
                 }
-                let scheduled_at = scheduled_execution_at(task, now.clone());
-                update_next_run(task, now.clone(), policy.min_task_interval_seconds);
+                let scheduled_at = scheduled_execution_at(task, now);
+                update_next_run(task, now, policy.min_task_interval_seconds);
                 inner_queue.push((task.clone(), policy.clone(), scheduled_at));
             }
         }
@@ -119,7 +119,7 @@ pub async fn run_all_tasks_now(
                 if !is_manual {
                     update_next_run(task, now, policy.min_task_interval_seconds);
                 }
-                inner_queue.push((task.clone(), policy.clone(), now.clone()));
+                inner_queue.push((task.clone(), policy.clone(), now));
             }
         }
         Ok(inner_queue)
@@ -178,9 +178,9 @@ pub async fn run_task_by_id(
             }
 
             let scheduled_at = if is_manual {
-                now.clone()
+                now
             } else {
-                scheduled_execution_at(task, now.clone())
+                scheduled_execution_at(task, now
             };
             task.last_run_at = now.to_rfc3339();
             if !is_manual {
