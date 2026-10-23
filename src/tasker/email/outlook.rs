@@ -23,11 +23,8 @@ struct OutlookMailRequest<'a> {
 }
 
 pub fn get_outlook_helper_path() -> Result<PathBuf> {
-    crate::tasker::script_manager::ScriptManager::new().get_or_create_script(
-        "_shared",
-        "outlook_mail.ps1",
-        OUTLOOK_HELPER_SCRIPT,
-    )
+    crate::tasker::script_manager::ScriptManager::new()
+        .get_or_create_script("Email", "outlook_mail.ps1", OUTLOOK_HELPER_SCRIPT)
 }
 
 pub fn send_email(
@@ -76,7 +73,6 @@ pub fn reply_all_email(
     subject: &str,
     html_body: &str,
     additional_to: &str,
-    send_at_next_seven_am: bool,
 ) -> Result<()> {
     run_outlook_mail(OutlookMailRequest {
         mode: "ReplyAll",
