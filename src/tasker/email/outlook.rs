@@ -3,8 +3,7 @@ use std::io::Write;
 use std::path::PathBuf;
 use tempfile::NamedTempFile;
 
-const OUTLOOK_HELPER_SCRIPT: &str = include_str!("outlook_mail.ps1");
-
+const OUTLOOK_SCRIPT: &str = include_str!("outlook_mail.ps1");
 
 #[derive(Clone, Copy)]
 struct OutlookMailRequest<'a> {
@@ -24,7 +23,7 @@ struct OutlookMailRequest<'a> {
 
 pub fn get_outlook_helper_path() -> Result<PathBuf> {
     crate::tasker::script_manager::ScriptManager::new()
-        .get_or_create_script("Email", "outlook_mail.ps1", OUTLOOK_HELPER_SCRIPT)
+        .get_or_create_script("Email", "outlook_mail.ps1", OUTLOOK_SCRIPT)
 }
 
 pub fn send_email(
@@ -92,7 +91,7 @@ pub fn reply_all_email(
 
 fn run_outlook_mail(request: OutlookMailRequest<'_>) -> Result<()> {
     let manager = crate::tasker::script_manager::ScriptManager::new();
-    let script_path = manager.get_or_create_script("Email", "outlook_mail.ps1", OUTLOOK_HELPER_SCRIPT)?;
+    let script_path = manager.get_or_create_script("Email", "outlook_mail.ps1", OUTLOOK_SCRIPT)?;
 
     // Keep potentially large email HTML out of the Windows command line.
     let html_file: Option<NamedTempFile> = request
@@ -158,23 +157,23 @@ mod tests {
 
     #[test]
     fn test_shared_outlook_function_supports_new_and_reply_all() {
-        assert!(OUTLOOK_HELPER_SCRIPT.contains("function Send-OutlookMail"));
-        assert!(OUTLOOK_HELPER_SCRIPT.contains(r#"[ValidateSet("New", "ReplyAll")]"#));
-        assert!(OUTLOOK_HELPER_SCRIPT.contains("$mail = $mail.ReplyAll()"));
-        assert!(!OUTLOOK_HELPER_SCRIPT.contains("ResolveAll()"));
-        assert!(!OUTLOOK_HELPER_SCRIPT.contains("RemoveCc"));
-        assert!(OUTLOOK_HELPER_SCRIPT.contains("SaveDraft"));
-        assert!(OUTLOOK_HELPER_SCRIPT.contains("Write-OutlookStep"));
-        assert!(OUTLOOK_HELPER_SCRIPT.contains("-Encoding UTF8"));
-        assert!(OUTLOOK_HELPER_SCRIPT.contains("foreach ($attachmentPath in $AttachmentPaths)"));
-        assert!(OUTLOOK_HELPER_SCRIPT.contains("DeferredDeliveryTime"));
-        assert!(OUTLOOK_HELPER_SCRIPT.contains("$AttachmentListPath"));
-        assert!(OUTLOOK_HELPER_SCRIPT.contains("Get-Content -LiteralPath $AttachmentListPath"));
+        assert!(OUTLOOK_SCRIPT.contains("function Send-OutlookMail"));
+        assert!(OUTLOOK_SCRIPT.contains(r#"[ValidateSet("New", "ReplyAll")]"#));
+        assert!(OUTLOOK_SCRIPT.contains("$mail = $mail.ReplyAll()"));
+        assert!(!OUTLOOK_SCRIPT.contains("ResolveAll()"));
+        assert!(!OUTLOOK_SCRIPT.contains("RemoveCc"));
+        assert!(OUTLOOK_SCRIPT.contains("SaveDraft"));
+        assert!(OUTLOOK_SCRIPT.contains("Write-OutlookStep"));
+        assert!(OUTLOOK_SCRIPT.contains("-Encoding UTF8"));
+        assert!(OUTLOOK_SCRIPT.contains("foreach ($attachmentPath in $AttachmentPaths)"));
+        assert!(OUTLOOK_SCRIPT.contains("DeferredDeliveryTime"));
+        assert!(OUTLOOK_SCRIPT.contains("$AttachmentListPath"));
+        assert!(OUTLOOK_SCRIPT.contains("Get-Content -LiteralPath $AttachmentListPath"));
     }
 
     #[test]
     fn test_email_body_is_passed_through_file_not_command_line() {
-        assert!(OUTLOOK_HELPER_SCRIPT
+        assert!(OUTLOOK_SCRIPT
             .contains("Get-Content -LiteralPath $HtmlBodyPath -Raw -Encoding UTF8"));
         assert!(include_str!("outlook.rs").contains("NamedTempFile::new"));
     }
