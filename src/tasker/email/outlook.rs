@@ -83,12 +83,12 @@ pub fn reply_all_email(
         subject,
         html_body: Some(html_body),
         attachment_paths: &[],
-        display_or_send: "SaveDraft",
+        display_or_send: "Send",
         body_mode: "Prepend",
         sender_account,
         subject_prefix,
         additional_to,
-        send_at_next_seven_am: false,
+        send_at_next_seven_am: true,
     })
 }
 
@@ -170,6 +170,9 @@ mod tests {
         assert!(OUTLOOK_SCRIPT.contains("-Encoding UTF8"));
         assert!(OUTLOOK_SCRIPT.contains("foreach ($attachmentPath in $AttachmentPaths)"));
         assert!(OUTLOOK_SCRIPT.contains("DeferredDeliveryTime"));
+        assert!(OUTLOOK_SCRIPT.contains("$recipient = $mail.Recipients.Add($AdditionalTo)"));
+        assert!(OUTLOOK_SCRIPT.contains("$recipient.Type = 1"));
+        assert!(OUTLOOK_SCRIPT.contains("if ($SendAtNextSevenAm -and $DisplayOrSend -ne \"SaveDraft\")"));
         assert!(OUTLOOK_SCRIPT.contains("$AttachmentListPath"));
         assert!(OUTLOOK_SCRIPT.contains("Get-Content -LiteralPath $AttachmentListPath"));
     }
