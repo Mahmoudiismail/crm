@@ -25,13 +25,20 @@ function Get-OutlookSenderAddress($Item) {
 }
 
 function Find-OutlookOriginalMessage($Folder, [string]$SortProperty, [string]$SenderAccount, [string]$SubjectPrefix) {
+    Write-OutlookStep "Reading Outlook folder items for original-message search"
     $items = $Folder.Items
+    Write-OutlookStep ("Folder item count=" + $items.Count)
     $items.Sort($SortProperty, $true)
     foreach ($item in $items) {
         if (-not $item.Subject -or -not $item.Subject.StartsWith($SubjectPrefix, [System.StringComparison]::OrdinalIgnoreCase)) { continue }
+        Write-OutlookStep "Subject prefix matched; checking sender account"
         $senderAddress = Get-OutlookSenderAddress $item
-        if ([string]::Equals($senderAddress.Trim(), $SenderAccount.Trim(), [System.StringComparison]::OrdinalIgnoreCase)) { return $item }
+        if ([string]::Equals($senderAddress.Trim(), $SenderAccount.Trim(), [System.StringComparison]::OrdinalIgnoreCase)) {
+            Write-OutlookStep "Original-message sender matched"
+            return $item
+        }
     }
+    Write-OutlookStep "No matching original message in this folder"
     return $null
 }
 
