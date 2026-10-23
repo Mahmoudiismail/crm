@@ -22,8 +22,11 @@ struct OutlookMailRequest<'a> {
 }
 
 pub fn get_outlook_helper_path() -> Result<PathBuf> {
-    crate::tasker::script_manager::ScriptManager::new()
-        .get_or_create_script("Email", "outlook_mail.ps1", OUTLOOK_SCRIPT)
+    crate::tasker::script_manager::ScriptManager::new().get_or_create_script(
+        "Email",
+        "outlook_mail.ps1",
+        OUTLOOK_SCRIPT,
+    )
 }
 
 pub fn send_email(
@@ -127,7 +130,11 @@ fn run_outlook_mail(request: OutlookMailRequest<'_>) -> Result<()> {
         .as_ref()
         .map(|file| file.path().to_string_lossy().into_owned())
         .unwrap_or_default();
-    let send_at_seven = if request.send_at_next_seven_am { "true" } else { "false" };
+    let send_at_seven = if request.send_at_next_seven_am {
+        "true"
+    } else {
+        "false"
+    };
     manager.execute_script_with_args(
         &script_path,
         &[
@@ -169,8 +176,9 @@ mod tests {
 
     #[test]
     fn test_email_body_is_passed_through_file_not_command_line() {
-        assert!(OUTLOOK_SCRIPT
-            .contains("Get-Content -LiteralPath $HtmlBodyPath -Raw -Encoding UTF8"));
+        assert!(
+            OUTLOOK_SCRIPT.contains("Get-Content -LiteralPath $HtmlBodyPath -Raw -Encoding UTF8")
+        );
         assert!(include_str!("outlook.rs").contains("NamedTempFile::new"));
     }
 }
