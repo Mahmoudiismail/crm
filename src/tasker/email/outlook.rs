@@ -5,7 +5,6 @@ use tempfile::NamedTempFile;
 
 const OUTLOOK_HELPER_SCRIPT: &str = include_str!("outlook_mail.ps1");
 
-const OUTLOOK_WRAPPER_TEMPLATE: &str = include_str!("send_email.ps1");
 
 #[derive(Clone, Copy)]
 struct OutlookMailRequest<'a> {
@@ -20,7 +19,6 @@ struct OutlookMailRequest<'a> {
     sender_account: &'a str,
     subject_prefix: &'a str,
     additional_to: &'a str,
-    remove_cc: &'a str,
     send_at_next_seven_am: bool,
 }
 
@@ -68,7 +66,6 @@ pub fn send_email_with_attachments(
         sender_account: "",
         subject_prefix: "",
         additional_to: "",
-        remove_cc: "",
         send_at_next_seven_am: false,
     })
 }
@@ -79,7 +76,6 @@ pub fn reply_all_email(
     subject: &str,
     html_body: &str,
     additional_to: &str,
-    remove_cc: &str,
     send_at_next_seven_am: bool,
 ) -> Result<()> {
     run_outlook_mail(OutlookMailRequest {
@@ -89,19 +85,18 @@ pub fn reply_all_email(
         subject,
         html_body: Some(html_body),
         attachment_paths: &[],
-        display_or_send: "Send()",
+        display_or_send: "SaveDraft",
         body_mode: "Prepend",
         sender_account,
         subject_prefix,
         additional_to,
-        remove_cc,
-        send_at_next_seven_am,
+        send_at_next_seven_am: false,
     })
 }
 
 fn run_outlook_mail(request: OutlookMailRequest<'_>) -> Result<()> {
     let manager = crate::tasker::script_manager::ScriptManager::new();
-    let helper_path = get_outlook_helper_path()?;
+    let script_path = manager.get_or_create_script("Email", "outlook_mail.ps1", OUTLOOK_HELPER_SCRIPT)?;
 
     // Keep potentially large email HTML out of the Windows command line.
     let html_file: Option<NamedTempFile> = request
@@ -120,7 +115,6 @@ fn run_outlook_mail(request: OutlookMailRequest<'_>) -> Result<()> {
         .as_ref()
         .map(|file| file.path().to_string_lossy().into_owned())
         .unwrap_or_default();
-    let helper_path = helper_path.to_string_lossy().into_owned();
     let attachment_list_file: Option<NamedTempFile> = if request.attachment_paths.is_empty() {
         None
     } else {
@@ -143,12 +137,9 @@ fn run_outlook_mail(request: OutlookMailRequest<'_>) -> Result<()> {
     } else {
         "false"
     };
-    manager.run_script_with_args(
-        "Email",
-        "send_email.ps1",
-        OUTLOOK_WRAPPER_TEMPLATE,
+    manager.execute_script_with_args(
+        &script_path,
         &[
-            ("-OutlookHelperPath", &helper_path),
             ("-Mode", request.mode),
             ("-To", request.to),
             ("-Cc", request.cc),
@@ -160,7 +151,6 @@ fn run_outlook_mail(request: OutlookMailRequest<'_>) -> Result<()> {
             ("-SenderAccount", request.sender_account),
             ("-SubjectPrefix", request.subject_prefix),
             ("-AdditionalTo", request.additional_to),
-            ("-RemoveCc", request.remove_cc),
             ("-SendAtNextSevenAm", send_at_seven),
         ],
     )
@@ -175,14 +165,15 @@ mod tests {
         assert!(OUTLOOK_HELPER_SCRIPT.contains("function Send-OutlookMail"));
         assert!(OUTLOOK_HELPER_SCRIPT.contains(r#"[ValidateSet("New", "ReplyAll")]"#));
         assert!(OUTLOOK_HELPER_SCRIPT.contains("$mail = $mail.ReplyAll()"));
-        assert!(!OUTLOOK_HELPER_SCRIPT.contains("$mail.Recipients.ResolveAll()"));
-        assert!(!OUTLOOK_HELPER_SCRIPT.contains("Outlook could not resolve ReplyAll recipient(s):"));
+        assert!(!OUTLOOK_HELPER_SCRIPT.contains("ResolveAll()"));
+        assert!(!OUTLOOK_HELPER_SCRIPT.contains("RemoveCc"));
+        assert!(OUTLOOK_HELPER_SCRIPT.contains("SaveDraft"));
+        assert!(OUTLOOK_HELPER_SCRIPT.contains("Write-OutlookStep"));
         assert!(OUTLOOK_HELPER_SCRIPT.contains("-Encoding UTF8"));
         assert!(OUTLOOK_HELPER_SCRIPT.contains("foreach ($attachmentPath in $AttachmentPaths)"));
         assert!(OUTLOOK_HELPER_SCRIPT.contains("DeferredDeliveryTime"));
-        assert!(OUTLOOK_WRAPPER_TEMPLATE.contains(". $OutlookHelperPath"));
-        assert!(OUTLOOK_WRAPPER_TEMPLATE.contains("$AttachmentListPath"));
-        assert!(OUTLOOK_WRAPPER_TEMPLATE.contains("Get-Content -LiteralPath $AttachmentListPath"));
+        assert!(OUTLOOK_HELPER_SCRIPT.contains("$AttachmentListPath"));
+        assert!(OUTLOOK_HELPER_SCRIPT.contains("Get-Content -LiteralPath $AttachmentListPath"));
     }
 
     #[test]
