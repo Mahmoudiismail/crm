@@ -73,6 +73,10 @@ jobs:
       - name: Rust Cache
         if: success()
         uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: rust-repo-windows
+          save-if: true
+          cache-on-failure: true
       - name: Build and package selected binaries
         id: build
         if: success()
