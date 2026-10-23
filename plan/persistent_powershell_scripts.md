@@ -18,7 +18,7 @@ User manual edits to active `.ps1` scripts must be preserved when the Rust gener
    - `src/tasker/dashboard_updater.rs` (`scripts/Dashboard Updater/dashboard_update.ps1` & `dashboard_email.ps1`)
    - `src/tasker/crm_open_sohail/powershell.rs` (`scripts/CRM Open Sohail/slicer_extract.ps1` & `reply_email.ps1`)
    - `src/tasker/opd_task/powershell_email.rs` (`scripts/OPD Analysis/opd_analysis_email.ps1`)
-   - `src/tasker/email/outlook.rs` (`scripts/Email/send_email.ps1`)
+   - `src/tasker/email/outlook.rs` (`scripts/Email/outlook_mail.ps1`)
 
 3. **Documentation Update**:
    - `md/TASKER.md`: Document persistent script locations, `.metadata.json` fingerprinting, and preservation of user manual edits.
@@ -48,7 +48,7 @@ Scripts live relative to `crate::utils::executable_dir()`:
     │   └── opd_analysis_email.ps1
     └── Email/
         ├── .metadata.json
-        └── send_email.ps1
+        └── outlook_mail.ps1
 ```
 
 ### 2. Sidecar Metadata Schema (`.metadata.json`)

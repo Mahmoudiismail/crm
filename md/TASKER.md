@@ -155,7 +155,7 @@ The `crm_open_sohail` task automates the generation and delivery of Branch & Mon
 3. Automatically maps and iterates over Slicer Items for "Branch" and "Month" slicers.
 4. Extracts tabular data dynamically from `PivotTable1` in the `TKT - Dashboard` worksheet.
 5. Loads data from `team_mapping_file` (a CSV) to associate team names with owners and target email addresses, mapping these to an `OUL` HTML hyperlink (`<a href="mailto:...">@Owner</a>`) or falling back to plain text mention or default string.
-6. Aggregates data and dispatches an Outlook HTML Email populated with nested summary tables mimicking the required visual identity (Blue headers, Red "Grand Total" row). The ReplyAll email also appends `miismail@fakeeh.care` to CC unless that address is already present, preserving existing CC recipients.
+6. Aggregates data and dispatches an Outlook HTML Email populated with nested summary tables mimicking the required visual identity (Blue headers, Red "Grand Total" row). The ReplyAll draft appends `miismail@fakeeh.care` to To unless that address is already present.
 
 ### Example Configuration
 ```json
@@ -204,7 +204,7 @@ PowerShell integration relies on `ScriptManager` persistence. Script generators 
 
 The PowerShell logic for the following Tasker operations is maintained in standalone `.ps1` files and embedded into the executable at build time with Rust `include_str!`:
 
-- Outlook email helper and send wrapper: `src/tasker/email/outlook_mail.ps1` and `src/tasker/email/send_email.ps1`.
+- Outlook email execution: `src/tasker/email/outlook_mail.ps1` is the single script for creating, replying, sending, displaying, and saving draft messages.
 - Dashboard refresh: `src/tasker/scripts/dashboard_updater.ps1`.
 - Department workbook split: `src/tasker/scripts/department_split.ps1`.
 - CRM Open Sohail slicer extraction: `src/tasker/crm_open_sohail/slicer_extract.ps1`.
@@ -215,4 +215,4 @@ At startup, Tasker calls `ScriptManager::install_builtin_scripts()` to materiali
 
 ### Outlook recipient handling
 
-The Outlook helper no longer calls `Recipients.ResolveAll()` or blocks sending on a preflight recipient-resolution check. Outlook itself determines whether the recipients can be resolved when the message is sent. This removes the application custom validation gate; it does not guarantee that Outlook will accept or deliver an invalid recipient.
+The Outlook script does not call `Recipients.ResolveAll()` and does not run custom recipient pre-validation. `CRM Open Sohail` creates a ReplyAll message and saves it as a Draft; it does not send or schedule that message. Each Outlook operation logs its execution stages through the Tasker log without logging full recipient addresses or message content.
