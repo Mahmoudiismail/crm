@@ -11,12 +11,6 @@ use crate::runner::engine::state::{ExecutionPolicy, RunnerStatus};
 
 use crate::runner::engine::app_lock::AppLockManager;
 
-fn execution_timestamp(scheduled_time: &str, actual_start_time: DateTime<Utc>) -> DateTime<Utc> {
-    DateTime::parse_from_rfc3339(scheduled_time)
-        .map(|scheduled| scheduled.with_timezone(&Utc))
-        .unwrap_or(actual_start_time)
-}
-
 async fn execute_action(
     action: &ActionSpec,
     logger: &TaskLogger,
@@ -294,12 +288,21 @@ pub async fn run_task_inner(
     status: &Arc<Mutex<RunnerStatus>>,
     app_lock_manager: &AppLockManager,
 ) -> TaskExecutionResult {
+    run_task_inner_at(task, policy, status, app_lock_manager, Utc::now()).await
+}
+
+pub(crate) async fn run_task_inner_at(
+    task: &mut RunnerTask,
+    policy: &ExecutionPolicy,
+    status: &Arc<Mutex<RunnerStatus>>,
+    app_lock_manager: &AppLockManager,
+    execution_at: DateTime<Utc>,
+) -> TaskExecutionResult {
     let logger = TaskLogger::new(&task.id, &task.name);
     logger.log("Initializing task execution...").await;
 
     let start_time = Utc::now();
-    let scheduled_time = task.next_run_at.clone();
-    let execution_at = execution_timestamp(&scheduled_time, start_time.clone());
+    let scheduled_time = execution_at.to_rfc3339();
 
     // Per-task lifecycle details belong in the task-specific log, not runner.log.
     logger
@@ -408,19 +411,6 @@ pub async fn run_task_inner(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::TimeZone;
-
-    #[test]
-    fn execution_timestamp_uses_schedule_and_falls_back_for_manual_runs() {
-        let actual = Utc.with_ymd_and_hms(2026, 10, 24, 20, 0, 0).unwrap();
-        let scheduled = execution_timestamp("2026-10-25T07:00:00+03:00", actual.clone());
-        assert_eq!(
-            scheduled,
-            Utc.with_ymd_and_hms(2026, 10, 25, 4, 0, 0).unwrap()
-        );
-        assert_eq!(execution_timestamp("", actual.clone()), actual);
-        assert_eq!(execution_timestamp("not-a-timestamp", actual), actual);
-    }
     use crate::runner::config::ShellCommandSpec;
     use std::sync::atomic::{AtomicU32, Ordering};
     use tokio::sync::Barrier;

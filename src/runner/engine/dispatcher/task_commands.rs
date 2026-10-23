@@ -1,14 +1,43 @@
 use anyhow::Result;
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 use tracing::info;
 
-use crate::runner::config::RunnerTask;
+use crate::runner::config::{RunnerTask, TaskSchedule};
 use crate::runner::engine::dispatcher::schedule::{
     advance_schedule, policy_from_config, set_schedule_enabled, update_next_run,
 };
 use crate::runner::engine::state::{ExecutionManagerCommand, RunnerStatus};
+
+fn scheduled_execution_at(task: &RunnerTask, now: DateTime<Utc>) -> DateTime<Utc> {
+    let parse_timestamp = |value: &str| {
+        DateTime::parse_from_rfc3339(value)
+            .ok()
+            .map(|scheduled| scheduled.with_timezone(&Utc))
+    };
+
+    let scheduled = if task.schedules.is_empty() {
+        parse_timestamp(&task.next_run_at)
+    } else {
+        task.schedules
+            .iter()
+            .filter(|schedule| schedule.due_now(now.clone()))
+            .filter_map(|schedule| {
+                let next_run_at = match schedule {
+                    TaskSchedule::Once { next_run_at, .. }
+                    | TaskSchedule::Interval { next_run_at, .. }
+                    | TaskSchedule::DailyTimes { next_run_at, .. }
+                    | TaskSchedule::Weekly { next_run_at, .. }
+                    | TaskSchedule::Monthly { next_run_at, .. } => next_run_at,
+                };
+                parse_timestamp(next_run_at)
+            })
+            .min()
+    };
+
+    scheduled.unwrap_or(now)
+}
 
 pub async fn run_due_tasks(
     path: &str,
@@ -23,6 +52,7 @@ pub async fn run_due_tasks(
     let tasks_to_queue: Vec<(
         crate::runner::config::RunnerTask,
         crate::runner::engine::state::ExecutionPolicy,
+        DateTime<Utc>,
     )> = crate::runner::engine::dispatcher::helpers::modify_config(path, move |cfg| {
         let mut inner_queue = vec![];
         let now = Utc::now();
@@ -36,19 +66,21 @@ pub async fn run_due_tasks(
                     );
                     continue;
                 }
-                update_next_run(task, now, policy.min_task_interval_seconds);
-                inner_queue.push((task.clone(), policy.clone()));
+                let scheduled_at = scheduled_execution_at(task, now.clone());
+                update_next_run(task, now.clone(), policy.min_task_interval_seconds);
+                inner_queue.push((task.clone(), policy.clone(), scheduled_at));
             }
         }
         Ok(inner_queue)
     })
     .await?;
 
-    for (task, policy) in tasks_to_queue {
+    for (task, policy, scheduled_at) in tasks_to_queue {
         let _ = exec_tx
             .send(ExecutionManagerCommand::QueueTask {
                 task: Box::new(task),
                 policy,
+                scheduled_at,
             })
             .await;
     }
@@ -69,6 +101,7 @@ pub async fn run_all_tasks_now(
     let tasks_to_queue: Vec<(
         crate::runner::config::RunnerTask,
         crate::runner::engine::state::ExecutionPolicy,
+        DateTime<Utc>,
     )> = crate::runner::engine::dispatcher::helpers::modify_config(path, move |cfg| {
         let mut inner_queue = vec![];
         let now = Utc::now();
@@ -86,17 +119,18 @@ pub async fn run_all_tasks_now(
                 if !is_manual {
                     update_next_run(task, now, policy.min_task_interval_seconds);
                 }
-                inner_queue.push((task.clone(), policy.clone()));
+                inner_queue.push((task.clone(), policy.clone(), now.clone()));
             }
         }
         Ok(inner_queue)
     })
     .await?;
-    for (task, policy) in tasks_to_queue {
+    for (task, policy, scheduled_at) in tasks_to_queue {
         let _ = exec_tx
             .send(ExecutionManagerCommand::QueueTask {
                 task: Box::new(task),
                 policy,
+                scheduled_at,
             })
             .await;
     }
@@ -132,6 +166,7 @@ pub async fn run_task_by_id(
     let task_to_queue: Option<(
         crate::runner::config::RunnerTask,
         crate::runner::engine::state::ExecutionPolicy,
+        DateTime<Utc>,
     )> = crate::runner::engine::dispatcher::helpers::modify_config(path, move |cfg| {
         let now = Utc::now();
         let policy = policy_from_config(cfg);
@@ -142,6 +177,11 @@ pub async fn run_task_by_id(
                 return Ok(None);
             }
 
+            let scheduled_at = if is_manual {
+                now.clone()
+            } else {
+                scheduled_execution_at(task, now.clone())
+            };
             task.last_run_at = now.to_rfc3339();
             if !is_manual {
                 if !task.schedules.is_empty() {
@@ -154,17 +194,18 @@ pub async fn run_task_by_id(
                     update_next_run(task, now, policy.min_task_interval_seconds);
                 }
             }
-            return Ok(Some((task.clone(), policy.clone())));
+            return Ok(Some((task.clone(), policy.clone(), scheduled_at)));
         }
         Err(anyhow::anyhow!("Task '{}' not found", tid))
     })
     .await?;
 
-    if let Some((t, p)) = task_to_queue {
+    if let Some((t, p, scheduled_at)) = task_to_queue {
         let _ = exec_tx
             .send(ExecutionManagerCommand::QueueTask {
                 task: Box::new(t),
                 policy: p,
+                scheduled_at,
             })
             .await;
     }
@@ -413,8 +454,37 @@ mod tests {
 
     use crate::runner::config::{RunnerConfig, RunnerTask, TaskSchedule};
     use crate::runner::engine::state::{ExecutionManagerCommand, RunnerStatus};
-    use chrono::{TimeDelta, Utc};
+    use chrono::{DateTime, TimeDelta, Utc};
     use tempfile::tempdir;
+
+    #[test]
+    fn scheduled_execution_at_preserves_due_schedule_timestamp() {
+        let scheduled_at = DateTime::parse_from_rfc3339("2026-10-24T07:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let now = DateTime::parse_from_rfc3339("2026-10-24T08:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let task = RunnerTask {
+            id: "scheduled".to_string(),
+            name: "Scheduled".to_string(),
+            enabled: true,
+            repetition: crate::runner::config::Repetition::Once,
+            frequency_seconds: 0,
+            next_run_at: String::new(),
+            schedules: vec![TaskSchedule::Once {
+                enabled: true,
+                next_run_at: scheduled_at.to_rfc3339(),
+            }],
+            steps: Vec::new(),
+            post_run_steps: Vec::new(),
+            last_run_at: String::new(),
+            last_status: String::new(),
+            timeout_seconds: 0,
+        };
+
+        assert_eq!(scheduled_execution_at(&task, now), scheduled_at);
+    }
 
     #[tokio::test]
     async fn test_multiple_schedules_only_advance_due_schedules() {

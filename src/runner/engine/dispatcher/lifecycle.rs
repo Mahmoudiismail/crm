@@ -1,4 +1,4 @@
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use std::collections::VecDeque;
 use std::fs;
 use std::sync::Arc;
@@ -25,14 +25,19 @@ pub fn spawn_execution_manager(
     let tx_clone = tx.clone();
 
     tokio::spawn(async move {
-        let mut queued_tasks: VecDeque<(Box<RunnerTask>, ExecutionPolicy)> = VecDeque::new();
+        let mut queued_tasks: VecDeque<(Box<RunnerTask>, ExecutionPolicy, DateTime<Utc>)> =
+            VecDeque::new();
         let mut running_tasks: Vec<(RunnerTask, tokio::task::JoinHandle<()>)> = Vec::new();
 
         while let Some(cmd) = rx.recv().await {
             match cmd {
-                ExecutionManagerCommand::QueueTask { task, policy } => {
+                ExecutionManagerCommand::QueueTask {
+                    task,
+                    policy,
+                    scheduled_at,
+                } => {
                     let mut st = status.lock().await;
-                    let is_queued = queued_tasks.iter().any(|(t, _)| t.id == task.id);
+                    let is_queued = queued_tasks.iter().any(|(t, _, _)| t.id == task.id);
                     let is_running = running_tasks.iter().any(|(t, _)| t.id == task.id);
 
                     if is_queued || is_running {
@@ -44,7 +49,7 @@ pub fn spawn_execution_manager(
                         if !st.queued_task_ids.contains(&task.id) {
                             st.queued_task_ids.push(task.id.clone());
                         }
-                        queued_tasks.push_back((task, policy));
+                        queued_tasks.push_back((task, policy, scheduled_at));
                     }
                 }
                 ExecutionManagerCommand::TaskFinished {
@@ -99,7 +104,7 @@ pub fn spawn_execution_manager(
 
             let mut i = 0;
             while i < queued_tasks.len() {
-                let (task, _policy) = &queued_tasks[i];
+                let (task, _policy, _scheduled_at) = &queued_tasks[i];
                 let mut can_run = true;
 
                 if running_tasks.iter().any(|(t, _)| t.id == task.id) {
@@ -107,7 +112,7 @@ pub fn spawn_execution_manager(
                 }
 
                 if can_run {
-                    let (task_to_run_box, policy) =
+                    let (task_to_run_box, policy, scheduled_at) =
                         queued_tasks.remove(i).expect("Queue index out of bounds");
                     let task_to_run = *task_to_run_box;
                     {
@@ -129,8 +134,14 @@ pub fn spawn_execution_manager(
                         let task_id = task_to_run.id.clone();
 
                         let result =
-                            run_task_inner(&mut task_to_run, &policy, &st_clone, &app_lock_mgr)
-                                .await;
+                            crate::runner::engine::pipeline::run_task_inner_at(
+                                &mut task_to_run,
+                                &policy,
+                                &st_clone,
+                                &app_lock_mgr,
+                                scheduled_at,
+                            )
+                            .await;
 
                         let _ = tx_finish
                             .send(ExecutionManagerCommand::TaskFinished {
