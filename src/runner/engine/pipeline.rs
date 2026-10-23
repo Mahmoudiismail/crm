@@ -35,8 +35,7 @@ async fn execute_action(
         }
         ActionSpec::ExternalApp(spec) => {
             if let Some(app) = policy.registered_apps.iter().find(|a| a.id == spec.app_id) {
-                let periods =
-                    crate::runner::config::resolve_app_periods_at(spec, execution_at)?;
+                let periods = crate::runner::config::resolve_app_periods_at(spec, execution_at)?;
                 logger
                     .log(&format!(
                         "Resolved date period for app '{}' at {}: start_expression='{}', end_expression='{}', periods={}",
@@ -205,14 +204,8 @@ async fn execute_step(
         ExecutionMode::Sequential => {
             let mut step_result = Ok(());
             for action in &step.actions {
-                if let Err(e) = execute_action(
-                    action,
-                    logger,
-                    policy,
-                    timeout_seconds,
-                    execution_at,
-                )
-                .await
+                if let Err(e) =
+                    execute_action(action, logger, policy, timeout_seconds, execution_at).await
                 {
                     step_result = Err(e);
                     break;
