@@ -94,13 +94,10 @@ function Send-OutlookMail {
     }
     Write-OutlookStep "Mail item ready"
     $stage = "update recipients"
-    if ($AdditionalTo -and $Mode -eq "ReplyAll") {
-        Write-OutlookStep "Checking additional recipient"
-        $currentTo = [string]$mail.To
-        if ($currentTo.IndexOf($AdditionalTo, [System.StringComparison]::OrdinalIgnoreCase) -lt 0) {
-            if ([string]::IsNullOrWhiteSpace($currentTo)) { $mail.To = $AdditionalTo }
-            else { $mail.To = $currentTo.TrimEnd(';', ' ', ',') + "; " + $AdditionalTo }
-        }
+    if ($AdditionalTo) {
+        Write-OutlookStep "Adding additional recipient as To"
+        $recipient = $mail.Recipients.Add($AdditionalTo)
+        $recipient.Type = 1 # olTo
     }
     Write-OutlookStep "Recipient stage complete"
     $stage = "set subject"
@@ -137,14 +134,14 @@ function Send-OutlookMail {
         $mail.Attachments.Add([System.IO.Path]::GetFullPath($attachmentPath)) | Out-Null
     }
     Write-OutlookStep "Attachment stage complete"
-    if ($SendAtNextSevenAm -eq "true" -and $DisplayOrSend -ne "SaveDraft") {
+    if ($SendAtNextSevenAm -and $DisplayOrSend -ne "SaveDraft") {
         $stage = "set deferred delivery time"
-        Write-OutlookStep "Setting deferred delivery time"
         $now = Get-Date
         $targetTime = $now.Date.AddHours(7)
         if ($now -ge $targetTime) { $targetTime = $targetTime.AddDays(1) }
+        Write-OutlookStep ("Setting deferred delivery time to " + $targetTime.ToString("yyyy-MM-dd HH:mm:ss"))
         $mail.DeferredDeliveryTime = $targetTime
-    } elseif ($DisplayOrSend -eq "SaveDraft" -and $SendAtNextSevenAm -eq "true") {
+    } elseif ($DisplayOrSend -eq "SaveDraft" -and $SendAtNextSevenAm) {
         Write-OutlookStep "Deferred delivery skipped for draft"
     }
     $stage = "final action"
