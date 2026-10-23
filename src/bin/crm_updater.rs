@@ -47,6 +47,8 @@ fn main() -> Result<()> {
         .and_then(|p| p.parent().map(|p| p.to_path_buf()))
         .unwrap_or_else(|| PathBuf::from("."));
 
+    crm_tool::tasker::script_manager::ScriptManager::new().install_builtin_scripts()?;
+
     let config_path = exe_dir.join("updater_config.json");
 
     let default_config = UpdaterConfig {

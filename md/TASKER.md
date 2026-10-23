@@ -199,3 +199,20 @@ PowerShell integration relies on `ScriptManager` persistence. Script generators 
 - When generating files across concurrent processes, an OS-level lock via `fs2` ensures metadata file updates (`.metadata.json`) are perfectly coordinated.
 - In the event of a crash during write, `.metadata.json.corrupted_*` backups are generated and state is safely auto-healed.
 - Manual user modifications to active scripts are intentionally kept preserved if the source generator algorithm hash remains identical to the metadata.
+
+## PowerShell Script Files
+
+The PowerShell logic for the following Tasker operations is maintained in standalone `.ps1` files and embedded into the executable at build time with Rust `include_str!`:
+
+- Outlook email helper and send wrapper: `src/tasker/email/outlook_mail.ps1` and `src/tasker/email/send_email.ps1`.
+- Dashboard refresh: `src/tasker/scripts/dashboard_updater.ps1`.
+- Department workbook split: `src/tasker/scripts/department_split.ps1`.
+- CRM Open Sohail slicer extraction: `src/tasker/crm_open_sohail/slicer_extract.ps1`.
+- OPD analysis email: `src/tasker/opd_task/opd_analysis_email.ps1`.
+- SAT figures email: `src/tasker/sat_figures_email.ps1`.
+
+At startup, Tasker calls `ScriptManager::install_builtin_scripts()` to materialize all built-in PowerShell templates under `<exe_dir>/scripts/<Task Name>/`, including the shared Outlook helper and CRM Updater templates. Each script is therefore present on disk before a configured task starts, and execution continues through the managed files. The source files are also embedded in the executable at build time so they can be restored if missing.
+
+### Outlook recipient handling
+
+The Outlook helper no longer calls `Recipients.ResolveAll()` or blocks sending on a preflight recipient-resolution check. Outlook itself determines whether the recipients can be resolved when the message is sent. This removes the application custom validation gate; it does not guarantee that Outlook will accept or deliver an invalid recipient.

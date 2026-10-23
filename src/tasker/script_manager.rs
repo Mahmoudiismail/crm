@@ -78,6 +78,68 @@ impl ScriptManager {
         }
     }
 
+    /// Materialize every built-in PowerShell template under the executable's scripts directory.
+    /// This makes the complete script set available for inspection before any task is executed.
+    pub fn install_builtin_scripts(&self) -> Result<()> {
+        let scripts: &[(&str, &str, &str)] = &[
+            (
+                "_shared",
+                "outlook_mail.ps1",
+                include_str!("email/outlook_mail.ps1"),
+            ),
+            (
+                "Email",
+                "send_email.ps1",
+                include_str!("email/send_email.ps1"),
+            ),
+            (
+                "Dashboard Updater",
+                "dashboard_updater.ps1",
+                include_str!("scripts/dashboard_updater.ps1"),
+            ),
+            (
+                "Department Split",
+                "department_split.ps1",
+                include_str!("scripts/department_split.ps1"),
+            ),
+            (
+                "CRM Open Sohail",
+                "slicer_extract.ps1",
+                include_str!("crm_open_sohail/slicer_extract.ps1"),
+            ),
+            (
+                "OPD Analysis",
+                "opd_analysis_email.ps1",
+                include_str!("opd_task/opd_analysis_email.ps1"),
+            ),
+            (
+                "Sat Figures",
+                "sat_figures_email.ps1",
+                include_str!("sat_figures_email.ps1"),
+            ),
+            (
+                "CRM Updater",
+                "scan_update_drafts.ps1",
+                include_str!("../crm_updater/scripts/scan_update_drafts.ps1"),
+            ),
+            (
+                "CRM Updater",
+                "apply_update.ps1",
+                include_str!("../crm_updater/scripts/apply_update.ps1"),
+            ),
+            (
+                "CRM Updater",
+                "unblock_file.ps1",
+                include_str!("../crm_updater/scripts/unblock_file.ps1"),
+            ),
+        ];
+
+        for (task_name, logical_name, content) in scripts {
+            self.get_or_create_script(task_name, logical_name, content)?;
+        }
+        Ok(())
+    }
+
     pub fn sanitize_task_name(task_name: &str) -> String {
         let invalid_chars = ['\\', '/', ':', '*', '?', '"', '<', '>', '|'];
         let clean = task_name
@@ -379,6 +441,48 @@ impl ScriptManager {
 
     pub fn execute_script(&self, script_path: &Path) -> Result<()> {
         self.execute_script_with_args(script_path, &[])
+    }
+
+    /// Launch a managed PowerShell script without waiting for it to exit.
+    /// Intended for workflows such as self-update that must outlive the caller.
+    pub fn execute_script_detached_with_args(
+        &self,
+        script_path: &Path,
+        args: &[(&str, &str)],
+    ) -> Result<()> {
+        if !script_path.exists() {
+            anyhow::bail!("PowerShell script file does not exist at {:?}", script_path);
+        }
+
+        let script_path_str = script_path
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("Invalid unicode path for script {:?}", script_path))?;
+        let mut cmd = std::process::Command::new("powershell");
+        cmd.args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-WindowStyle",
+            "Hidden",
+            "-File",
+            script_path_str,
+        ]);
+        for (key, value) in args {
+            cmd.arg(key).arg(value);
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            const DETACHED_PROCESS: u32 = 0x00000008;
+            cmd.creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS);
+        }
+
+        cmd.spawn()
+            .context("Failed to launch detached PowerShell script")?;
+        Ok(())
     }
 }
 

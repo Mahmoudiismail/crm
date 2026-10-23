@@ -119,7 +119,7 @@ pub async fn run_task_by_id(
     is_manual: bool,
 ) -> Result<()> {
     #[cfg(test)]
-    if RACE_TESTING.load(std::sync::atomic::Ordering::SeqCst) {
+    if task_id == "race_task" && RACE_TESTING.load(std::sync::atomic::Ordering::SeqCst) {
         RACE_BARRIER.wait().await;
     }
 

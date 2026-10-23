@@ -1,5 +1,5 @@
 use crate::utils::FileCleanupGuard;
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use serde::Serialize;
 use std::fs;
 use std::io::Write;
@@ -115,95 +115,48 @@ pub fn process_update_pipeline(config: &crate::crm_updater::config::UpdaterConfi
 }
 
 #[allow(dead_code)]
-const SCAN_DRAFTS_TEMPLATE: &str = r#"
-param(
-    [string]$DownloadsDir
-)
-
-$ErrorActionPreference = 'Stop'
-try {
-    $Outlook = [Runtime.Interopservices.Marshal]::GetActiveObject("Outlook.Application")
-} catch {
-    $Outlook = New-Object -ComObject Outlook.Application
-}
-
-$Namespace = $Outlook.GetNamespace("MAPI")
-$Drafts = $Namespace.GetDefaultFolder(16) # olFolderDrafts
-
-$TargetItem = $null
-$TargetAttachment = $null
-
-foreach ($Item in $Drafts.Items) {
-    if ($Item.Attachments.Count -gt 0) {
-        foreach ($Attachment in $Item.Attachments) {
-            if ($Attachment.FileName -match "^crm_tool_.*\.zip$") {
-                $TargetItem = $Item
-                $TargetAttachment = $Attachment
-                break
-            }
-        }
-    }
-    if ($TargetItem) { break }
-}
-
-if ($TargetItem -and $TargetAttachment) {
-    $SavePath = Join-Path $DownloadsDir $TargetAttachment.FileName
-    $TargetAttachment.SaveAsFile($SavePath)
-    Write-Output "FOUND:$SavePath"
-    $TargetItem.Delete()
-} else {
-    Write-Output "NOT_FOUND"
-}
-"#;
+const SCAN_DRAFTS_TEMPLATE: &str = include_str!("scripts/scan_update_drafts.ps1");
 
 #[cfg(target_os = "windows")]
 fn download_update_zip_from_drafts(downloads_dir: &Path) -> Result<Option<PathBuf>> {
-    let abs_downloads_dir = match std::fs::canonicalize(downloads_dir) {
-        Ok(path) => path,
-        Err(e) => bail!("Failed to canonicalize downloads directory: {}", e),
-    };
-
+    let abs_downloads_dir = std::fs::canonicalize(downloads_dir)
+        .map_err(|e| anyhow::anyhow!("Failed to canonicalize downloads directory: {}", e))?;
     let abs_downloads_dir_str = clean_canonicalized_path(&abs_downloads_dir);
-
-    let mut temp_file = tempfile::Builder::new()
-        .prefix("scan_drafts_")
-        .suffix(".ps1")
+    let result_file = tempfile::Builder::new()
+        .prefix("scan_drafts_result_")
+        .suffix(".txt")
         .tempfile()?;
+    let result_path = result_file.path().to_path_buf();
+    drop(result_file);
 
-    temp_file.write_all(SCAN_DRAFTS_TEMPLATE.as_bytes())?;
-    temp_file.as_file().sync_all()?;
-
-    let (file, path) = temp_file.keep()?;
-    drop(file);
-    let _guard = FileCleanupGuard::new(&path);
-
-    let output = std::process::Command::new("powershell")
-        .arg("-ExecutionPolicy")
-        .arg("Bypass")
-        .arg("-File")
-        .arg(&path)
-        .arg("-DownloadsDir")
-        .arg(&abs_downloads_dir_str)
-        .output()?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-
-    for line in stdout.lines() {
-        let line = line.trim();
-        if line.starts_with("FOUND:") {
-            let file_path = line.trim_start_matches("FOUND:");
-            return Ok(Some(PathBuf::from(file_path)));
-        } else if line == "NOT_FOUND" {
-            return Ok(None);
-        }
+    let run_result = crate::tasker::script_manager::ScriptManager::new().run_script_with_args(
+        "CRM Updater",
+        "scan_update_drafts.ps1",
+        SCAN_DRAFTS_TEMPLATE,
+        &[
+            ("-DownloadsDir", abs_downloads_dir_str.as_str()),
+            ("-ResultPath", result_path.to_string_lossy().as_ref()),
+        ],
+    );
+    if let Err(error) = run_result {
+        let _ = std::fs::remove_file(&result_path);
+        return Err(error.context("Failed to scan Outlook drafts through ScriptManager"));
     }
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        bail!("PowerShell draft scan failed: {}", stderr);
+    let result = std::fs::read_to_string(&result_path)
+        .map_err(|e| anyhow::anyhow!("Failed to read Outlook draft scan result: {}", e))?;
+    let _ = std::fs::remove_file(&result_path);
+    let result = result.trim().trim_start_matches('\u{feff}');
+    if let Some(file_path) = result.strip_prefix("FOUND:") {
+        return Ok(Some(PathBuf::from(file_path.trim())));
     }
-
-    Ok(None)
+    if result == "NOT_FOUND" {
+        return Ok(None);
+    }
+    anyhow::bail!(
+        "Outlook draft scan returned an unexpected result: {}",
+        result
+    )
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -246,28 +199,19 @@ fn extract_zip(zip_path: &Path, extract_dir: &Path, password: &[u8]) -> Result<V
 }
 
 fn unblock_file(path: &Path) {
-    // PowerShell's -Command mode treats trailing arguments as command text rather than
-    // binding them to a param() block. Pass the path through the environment instead,
-    // avoiding both the empty -LiteralPath seen in production and command injection.
-    let result = std::process::Command::new("powershell")
-        .arg("-NoProfile")
-        .arg("-ExecutionPolicy")
-        .arg("Bypass")
-        .arg("-Command")
-        .arg("$ErrorActionPreference = 'Stop'; Unblock-File -LiteralPath $env:CRM_UPDATER_UNBLOCK_PATH")
-        .env("CRM_UPDATER_UNBLOCK_PATH", path)
-        .status();
+    let path_string = path.to_string_lossy().into_owned();
+    let result = crate::tasker::script_manager::ScriptManager::new().run_script_with_args(
+        "CRM Updater",
+        "unblock_file.ps1",
+        include_str!("scripts/unblock_file.ps1"),
+        &[("-LiteralPath", path_string.as_str())],
+    );
 
-    match result {
-        Ok(status) if status.success() => {}
-        Ok(status) => warn!(
-            "Failed to unblock extracted file {:?}: PowerShell exited with {}",
-            path, status
-        ),
-        Err(error) => warn!(
-            "Failed to run PowerShell to unblock extracted file {:?}: {}",
+    if let Err(error) = result {
+        warn!(
+            "Failed to unblock extracted file {:?} through ScriptManager: {}",
             path, error
-        ),
+        );
     }
 }
 
@@ -283,196 +227,7 @@ fn resolve_target_dir(exe_dir: &Path, target_path: &str) -> PathBuf {
     exe_dir.join(target_path)
 }
 
-const UPDATE_SCRIPT_TEMPLATE: &str = r#"
-param(
-    [string]$LogPath,
-    [string]$DownloadsDir,
-    [int]$ParentPid,
-    [string]$ReplacementMapPath
-)
-
-$ErrorActionPreference = 'Stop'
-
-function Write-Log {
-    param([string]$Message)
-    $Timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
-    $LogLine = "[$Timestamp] $Message"
-    Write-Output $LogLine
-    if ($LogPath) {
-        Add-Content -LiteralPath $LogPath -Value $LogLine
-    }
-}
-
-try {
-    Write-Log "Detached update process started."
-    Write-Log "Downloads directory resolved to: $DownloadsDir"
-    Write-Log "Waiting for original updater process (PID: $ParentPid) to exit..."
-
-    $TimeoutSeconds = 30
-    $WaitCount = 0
-    while ((Get-Process -Id $ParentPid -ErrorAction SilentlyContinue) -and ($WaitCount -lt $TimeoutSeconds)) {
-        Start-Sleep -Seconds 1
-        $WaitCount++
-    }
-
-    if (Get-Process -Id $ParentPid -ErrorAction SilentlyContinue) {
-        Write-Log "FAILURE: Original updater process (PID: $ParentPid) failed to terminate after $TimeoutSeconds seconds."
-        throw "Original updater termination timeout"
-    } else {
-        Write-Log "Original updater process terminated successfully."
-    }
-
-    $Config = Get-Content -LiteralPath $ReplacementMapPath -Raw | ConvertFrom-Json
-
-    if ($Config.apps_to_stop) {
-        foreach ($App in $Config.apps_to_stop) {
-            $ProcessName = $App.process_name
-            $TargetPaths = @($App.target_paths)
-
-            $Processes = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue
-            if ($Processes) {
-                foreach ($Proc in $Processes) {
-                    $ProcPath = $null
-                    $PathError = $null
-
-                    try {
-                        $ProcPath = $Proc.Path
-                    } catch {
-                        $PathError = $_
-                    }
-
-                    if ([string]::IsNullOrWhiteSpace($ProcPath)) {
-                        try {
-                            $ProcPath = $Proc.MainModule.FileName
-                        } catch {
-                            if (-not $PathError) {
-                                $PathError = $_
-                            } else {
-                                $PathError = "$PathError | $_"
-                            }
-                        }
-                    }
-
-                    if ([string]::IsNullOrWhiteSpace($ProcPath)) {
-                        Write-Log "FAILURE: Cannot safely inspect process path for process ID $($Proc.Id) ($ProcessName). Error: $PathError"
-                        throw "Unsafe process targeting: Cannot inspect process path."
-                    }
-
-                    $IsTargetMatch = $false
-                    foreach ($tp in $TargetPaths) {
-                        if ([string]::Equals($ProcPath.Trim(), $tp.Trim(), [System.StringComparison]::OrdinalIgnoreCase)) {
-                            $IsTargetMatch = $true
-                            break
-                        }
-                    }
-
-                    if ($IsTargetMatch) {
-                        Write-Log "Target process '$ProcessName' (PID: $($Proc.Id)) matches one of the target paths. Stopping..."
-
-                        try {
-                            Stop-Process -Id $Proc.Id -Force -ErrorAction Stop
-                        } catch {
-                            Write-Log "FAILURE: Stop-Process failed for process '$ProcessName' (PID: $($Proc.Id)). Error: $_"
-                            throw "Process termination error"
-                        }
-
-                        $WaitCount = 0
-                        while ((Get-Process -Id $Proc.Id -ErrorAction SilentlyContinue) -and ($WaitCount -lt $TimeoutSeconds)) {
-                            Start-Sleep -Seconds 1
-                            $WaitCount++
-                        }
-
-                        if (Get-Process -Id $Proc.Id -ErrorAction SilentlyContinue) {
-                            Write-Log "FAILURE: Process '$ProcessName' (PID: $($Proc.Id)) failed to terminate after $TimeoutSeconds seconds."
-                            throw "Process termination timeout"
-                        } else {
-                            Write-Log "Process '$ProcessName' (PID: $($Proc.Id)) terminated successfully."
-                        }
-                    } else {
-                        Write-Log "Process '$ProcessName' (PID: $($Proc.Id)) is running at a different path ($ProcPath). Skipping termination."
-                    }
-                }
-            } else {
-                Write-Log "Target process '$ProcessName' is not running. No stop required."
-            }
-        }
-    }
-
-    if ($Config.file_replacements) {
-        foreach ($Item in $Config.file_replacements) {
-            $SrcPath = $Item.source_path
-            $DstPath = $Item.destination_path
-
-            if (Test-Path -LiteralPath $SrcPath) {
-                Write-Log "Replacing '$DstPath' with '$SrcPath'..."
-                Copy-Item -LiteralPath $SrcPath -Destination $DstPath -Force
-                if (Test-Path -LiteralPath $DstPath) {
-                    $SrcHash = (Get-FileHash -LiteralPath $SrcPath -Algorithm SHA256).Hash
-                    $DstHash = (Get-FileHash -LiteralPath $DstPath -Algorithm SHA256).Hash
-                    if ($SrcHash -eq $DstHash) {
-                        Write-Log "Successfully replaced '$DstPath' and verified SHA-256 hash."
-                    } else {
-                        Write-Log "FAILURE: Hash mismatch after copying to '$DstPath'. Source: $SrcHash, Dest: $DstHash"
-                        throw "File verification failed"
-                    }
-                } else {
-                    Write-Log "FAILURE: File '$DstPath' not found after copy."
-                    throw "File copy failed"
-                }
-            } else {
-                Write-Log "FAILURE: Required update source file '$SrcPath' was not found."
-                throw "Required update source file missing: $SrcPath"
-            }
-        }
-    }
-
-    if ($Config.restart_apps) {
-        foreach ($App in $Config.restart_apps) {
-            $DstPath = $App.destination_path
-            $WorkDir = $App.working_directory
-            $Autostart = $App.autostart
-            $RestartArgs = @($App.restart_args)
-
-            if ($Autostart) {
-                if (Test-Path -LiteralPath $DstPath) {
-                    Write-Log "Autostart is enabled. Starting '$DstPath'..."
-                    if ($RestartArgs -and $RestartArgs.Count -gt 0) {
-                        Start-Process -FilePath $DstPath -WorkingDirectory $WorkDir -ArgumentList $RestartArgs
-                    } else {
-                        Start-Process -FilePath $DstPath -WorkingDirectory $WorkDir
-                    }
-                    Write-Log "Started '$DstPath' successfully."
-                }
-            } else {
-                Write-Log "Autostart is disabled for '$DstPath'. Leaving it stopped."
-            }
-        }
-    }
-
-    if ($Config.file_replacements) {
-        foreach ($Item in $Config.file_replacements) {
-            $SrcPath = $Item.source_path
-            if (Test-Path -LiteralPath $SrcPath) {
-                Remove-Item -LiteralPath $SrcPath -Force
-                Write-Log "Cleaned up source file '$SrcPath'."
-            }
-        }
-    }
-
-    Write-Log "SUCCESS: Update completed successfully."
-} catch {
-    Write-Log "FAILURE: An error occurred during the update process: $_"
-    $UpdateFailed = $true
-} finally {
-    Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue
-    if (Test-Path -LiteralPath $ReplacementMapPath) {
-        Remove-Item -LiteralPath $ReplacementMapPath -Force -ErrorAction SilentlyContinue
-    }
-    if ($UpdateFailed) {
-        exit 1
-    }
-}
-"#;
+const UPDATE_SCRIPT_TEMPLATE: &str = include_str!("scripts/apply_update.ps1");
 
 fn generate_update_script(
     config: &crate::crm_updater::config::UpdaterConfig,
@@ -547,16 +302,9 @@ fn generate_update_script(
 
     let payload_json = serde_json::to_string(&payload)?;
 
-    let mut temp_file = tempfile::Builder::new()
-        .prefix("update_")
-        .suffix(".ps1")
-        .tempfile()?;
-
-    temp_file.write_all(UPDATE_SCRIPT_TEMPLATE.as_bytes())?;
-    temp_file.as_file().sync_all()?;
-
-    let (file, script_path) = temp_file.keep()?;
-    drop(file);
+    let script_path = crate::tasker::script_manager::ScriptManager::new()
+        .get_or_create_script("CRM Updater", "apply_update.ps1", UPDATE_SCRIPT_TEMPLATE)
+        .context("Failed to prepare detached updater script through ScriptManager")?;
 
     let args = vec![
         ("-LogPath".to_string(), log_path),
@@ -580,29 +328,12 @@ fn generate_update_script(
 }
 
 fn execute_detached_powershell(script_path: &Path, args: &[(String, String)]) -> Result<()> {
-    let mut cmd = std::process::Command::new("powershell");
-    cmd.arg("-ExecutionPolicy")
-        .arg("Bypass")
-        .arg("-WindowStyle")
-        .arg("Hidden")
-        .arg("-File")
-        .arg(script_path);
-
-    for (k, v) in args {
-        cmd.arg(k).arg(v);
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-        const DETACHED_PROCESS: u32 = 0x00000008;
-
-        cmd.creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS);
-    }
-
-    cmd.spawn()?;
-    Ok(())
+    let borrowed_args: Vec<(&str, &str)> = args
+        .iter()
+        .map(|(key, value)| (key.as_str(), value.as_str()))
+        .collect();
+    crate::tasker::script_manager::ScriptManager::new()
+        .execute_script_detached_with_args(script_path, &borrowed_args)
 }
 
 #[cfg(test)]
@@ -722,8 +453,9 @@ mod tests {
             !src.contains(&bad_pattern),
             "Found vulnerable string interpolation in unblock_file"
         );
-        assert!(src.contains(".env(\"CRM_UPDATER_UNBLOCK_PATH\", path)"));
-        assert!(src.contains("Unblock-File -LiteralPath $env:CRM_UPDATER_UNBLOCK_PATH"));
+        let script = include_str!("scripts/unblock_file.ps1");
+        assert!(script.contains("[string]$LiteralPath"));
+        assert!(script.contains("Unblock-File -LiteralPath $LiteralPath"));
 
         let malicious_path =
             Path::new("C:\\temp\\file_with 'single quote' & command; calc.exe.txt");
