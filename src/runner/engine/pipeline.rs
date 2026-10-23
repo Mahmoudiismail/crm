@@ -36,7 +36,7 @@ async fn execute_action(
         ActionSpec::ExternalApp(spec) => {
             if let Some(app) = policy.registered_apps.iter().find(|a| a.id == spec.app_id) {
                 let periods =
-                    crate::runner::config::resolve_app_periods_at(spec, execution_at.clone())?;
+                    crate::runner::config::resolve_app_periods_at(spec, execution_at)?;
                 logger
                     .log(&format!(
                         "Resolved date period for app '{}' at {}: start_expression='{}', end_expression='{}', periods={}",
@@ -210,7 +210,7 @@ async fn execute_step(
                     logger,
                     policy,
                     timeout_seconds,
-                    execution_at.clone(),
+                    execution_at,
                 )
                 .await
                 {
@@ -226,7 +226,7 @@ async fn execute_step(
                 let action = action.clone();
                 let logger = logger.clone();
                 let policy = policy.clone();
-                let execution_at = execution_at.clone();
+                let execution_at = execution_at;
 
                 tasks.spawn(async move {
                     let result =
@@ -284,7 +284,7 @@ async fn execute_pipeline(
             status,
             app_lock_manager,
             task_id,
-            execution_at.clone(),
+            execution_at,
         )
         .await?;
     }
@@ -344,7 +344,7 @@ pub(crate) async fn run_task_inner_at(
         status,
         app_lock_manager,
         &task.id,
-        execution_at.clone(),
+        execution_at,
     )
     .await;
 
@@ -365,7 +365,7 @@ pub(crate) async fn run_task_inner_at(
                     status,
                     app_lock_manager,
                     &task.id,
-                    execution_at.clone(),
+                    execution_at,
                 )
                 .await;
                 match post_run_result {
