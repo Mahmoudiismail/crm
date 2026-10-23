@@ -57,7 +57,7 @@ pub fn run(config: &CrmOpenSohailConfig) -> Result<()> {
         std::fs::write(&old_html_path, final_html)?;
         info!("save_email_as_html is true. Saved email body to {}. Skipping PowerShell send for testing.", html_path.display());
     } else {
-        info!("Creating ReplyAll draft through the shared Outlook script...");
+        info!("Sending ReplyAll through Outlook with deferred delivery at 7:00 AM...");
         if let Err(e) = crate::tasker::email::outlook::reply_all_email(
             &sender_account_email,
             &reply_subject_prefix,
@@ -65,10 +65,10 @@ pub fn run(config: &CrmOpenSohailConfig) -> Result<()> {
             &final_html,
             "miismail@fakeeh.care",
         ) {
-            error!("Failed to save ReplyAll draft: {}", e);
-            anyhow::bail!("Failed to save ReplyAll draft: {e}");
+            error!("Failed to send scheduled ReplyAll email: {}", e);
+            anyhow::bail!("Failed to send scheduled ReplyAll email: {e}");
         }
-        info!("ReplyAll draft saved successfully.");
+        info!("ReplyAll email handed to Outlook for delivery at 7:00 AM.");
     }
 
     Ok(())
@@ -98,7 +98,8 @@ mod tests {
         assert!(src.contains("Find-OutlookOriginalMessage"));
         assert!(src.contains("ReplyAll"));
         assert!(src.contains("Get-OutlookHtmlFragment"));
-        assert!(src.contains("SaveDraft"));
+        assert!(src.contains("$mail.Recipients.Add($AdditionalTo)"));
+        assert!(src.contains("$recipient.Type = 1"));
         assert!(src.contains("Write-OutlookStep"));
         assert!(src.contains("AdditionalTo"));
         assert!(!src.contains("RemoveCc"));
