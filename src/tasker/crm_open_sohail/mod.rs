@@ -100,6 +100,11 @@ mod tests {
         assert!(src.contains("Get-OutlookHtmlFragment"));
         assert!(src.contains("$mail.Recipients.Add($AdditionalTo)"));
         assert!(src.contains("$recipient.Type = 1"));
+        assert!(src.contains("$targetTime = $now.Date.AddHours(7)"));
+        assert!(src.contains("if ($now -ge $targetTime) { $targetTime = $targetTime.AddDays(1) }"));
+        let outlook_rs = include_str!("../email/outlook.rs");
+        assert!(outlook_rs.contains("display_or_send: \"Send\""));
+        assert!(outlook_rs.contains("send_at_next_seven_am: true"));
         assert!(src.contains("Write-OutlookStep"));
         assert!(src.contains("AdditionalTo"));
         assert!(!src.contains("RemoveCc"));
