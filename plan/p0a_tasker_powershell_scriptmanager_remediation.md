@@ -16,7 +16,7 @@ Every production PowerShell execution path found in the repository is classified
 | `src/tasker/department_split.rs` | `department_split.ps1` | Static template + CLI args | **B** (Already Static) | Verify parameter contract; no structural changes required. |
 | `src/tasker/dashboard_updater.rs` | `dashboard_update.ps1` & `dashboard_email.ps1` | Static template + CLI args | **B** (Already Static) | Verify parameter contract; no structural changes required. |
 | `src/tasker/opd_task/powershell_email.rs` | `opd_analysis_email.ps1` | Static template + CLI args | **B** (Already Static) | Verify parameter contract; no structural changes required. |
-| `src/tasker/email/outlook.rs` & `src/tasker/email/client.rs` | `send_email.ps1` | Dynamic string interpolation in `client.rs` passed to `outlook::run_powershell` | **A** (Refactor to Static) | Refactor `send_email.ps1` to static template with parameters `[string]$To`, `[string]$Cc`, `[string]$Subject`, `[string]$HtmlBody`, `[string]$AttachmentPath`, `[string]$LeadsPath`, `[string]$DisplayOrSend`. Pass values via `execute_script_with_args`. |
+| `src/tasker/email/outlook.rs` & `src/tasker/email/client.rs` | `outlook_mail.ps1` | Dynamic string interpolation in `client.rs` passed to `outlook::run_powershell` | **A** (Refactor to Static) | Refactor `outlook_mail.ps1` to static template with parameters `[string]$To`, `[string]$Cc`, `[string]$Subject`, `[string]$HtmlBody`, `[string]$AttachmentPath`, `[string]$LeadsPath`, `[string]$DisplayOrSend`. Pass values via `execute_script_with_args`. |
 | `src/crm_updater/logs.rs` | `send_logs_email` | Dynamic string interpolation via `format!` calling `run_powershell` | **A** (Refactor to Static) | Refactor to static template `send_logs.ps1` accepting parameters `[string]$Recipient`, `[string]$AttachmentsCsv`. Pass attachments cleanly without inline script formatting. |
 | `src/crm_updater/update.rs` | `download_update_zip_from_drafts` | Dynamic PS script string written to temp `.ps1` | **A** (Refactor to Static) | Refactor to static template `scan_drafts.ps1` accepting parameter `[string]$DownloadsDir`. Pass directory path via CLI argument. |
 | `src/crm_updater/update.rs` | `unblock_file` | `powershell -Command "param([string]$Path) Unblock-File -LiteralPath $Path"` | **B** (Already Static) | Parameter is passed positionally via `.arg(path)` to script block; no script interpolation exists. |
@@ -109,7 +109,7 @@ When `.metadata.json` contains malformed JSON or invalid/malicious `active_scrip
   - Test parameter signature matching between Rust caller and PowerShell template.
   - Test exact variable bindings and error handling.
 
-### B. `send_email.ps1` (`src/tasker/email/outlook.rs` & `src/tasker/email/client.rs`)
+### B. `outlook_mail.ps1` (`src/tasker/email/outlook.rs` & `src/tasker/email/client.rs`)
 - **Parameter Interface**:
   ```powershell
   param(
@@ -188,7 +188,7 @@ Add a native Rust integration test (`tests/script_manager_concurrency.rs`):
 ## 7. Plan Steps & Execution Order (Post-Authorization)
 
 1. **Step 1**: Fix `reply_email.ps1` in `src/tasker/crm_open_sohail/mod.rs` with full parameter interface and behavioral tests.
-2. **Step 2**: Refactor `send_email.ps1` in `src/tasker/email/` and `send_logs_email` in `src/crm_updater/logs.rs` to static parameterized scripts.
+2. **Step 2**: Refactor `outlook_mail.ps1` in `src/tasker/email/` and `send_logs_email` in `src/crm_updater/logs.rs` to static parameterized scripts.
 3. **Step 3**: Refactor `src/crm_updater/update.rs` (`scan_drafts.ps1`, `detached_update.ps1`) to static parameterized scripts.
 4. **Step 4**: Enhance `ScriptManager` with path safety validation, corrupted metadata recovery, and atomic `.tmp` file operations.
 5. **Step 5**: Add injection safety, fingerprinting, manual edit preservation, and deterministic timestamp collision unit tests.
