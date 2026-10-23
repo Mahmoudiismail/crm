@@ -57,7 +57,7 @@ pub fn run(config: &CrmOpenSohailConfig) -> Result<()> {
         std::fs::write(&old_html_path, final_html)?;
         info!("save_email_as_html is true. Saved email body to {}. Skipping PowerShell send for testing.", html_path.display());
     } else {
-        info!("Sending scheduled ReplyAll through shared Outlook function...");
+        info!("Creating ReplyAll draft through the shared Outlook script...");
         if let Err(e) = crate::tasker::email::outlook::reply_all_email(
             &sender_account_email,
             &reply_subject_prefix,
@@ -65,10 +65,10 @@ pub fn run(config: &CrmOpenSohailConfig) -> Result<()> {
             &final_html,
             "miismail@fakeeh.care",
         ) {
-            error!("Failed to send scheduled ReplyAll: {}", e);
-            anyhow::bail!("Failed to send scheduled ReplyAll: {e}");
+            error!("Failed to save ReplyAll draft: {}", e);
+            anyhow::bail!("Failed to save ReplyAll draft: {e}");
         }
-        info!("ReplyAll sent/scheduled successfully.");
+        info!("ReplyAll draft saved successfully.");
     }
 
     Ok(())
