@@ -172,7 +172,8 @@ mod tests {
         assert!(OUTLOOK_SCRIPT.contains("DeferredDeliveryTime"));
         assert!(OUTLOOK_SCRIPT.contains("$recipient = $mail.Recipients.Add($AdditionalTo)"));
         assert!(OUTLOOK_SCRIPT.contains("$recipient.Type = 1"));
-        assert!(OUTLOOK_SCRIPT.contains("if ($SendAtNextSevenAm -and $DisplayOrSend -ne \"SaveDraft\")"));
+        assert!(OUTLOOK_SCRIPT
+            .contains("if ($SendAtNextSevenAm -and $DisplayOrSend -ne \"SaveDraft\")"));
         assert!(OUTLOOK_SCRIPT.contains("$AttachmentListPath"));
         assert!(OUTLOOK_SCRIPT.contains("Get-Content -LiteralPath $AttachmentListPath"));
     }
