@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::Path;
 use tracing::{debug, info};
+use super::token_store;
 
 const SECRET_CONFIG_KEYS: [&str; 6] = [
     "password",
