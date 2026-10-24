@@ -124,9 +124,7 @@ mod tests {
         use super::write_mapping_temp_file;
         use std::collections::HashMap;
 
-        let mapping = HashMap::from([
-            ("CARDIOLOGY".to_string(), "CHAIR A".to_string()),
-        ]);
+        let mapping = HashMap::from([("CARDIOLOGY".to_string(), "CHAIR A".to_string())]);
         let first = write_mapping_temp_file(&mapping).unwrap();
         let second = write_mapping_temp_file(&mapping).unwrap();
         let _first_guard = crate::utils::FileCleanupGuard::new(&first);

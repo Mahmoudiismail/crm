@@ -5,9 +5,7 @@ use std::fs::File;
 use tracing::{error, info};
 
 use crate::tasker::config::EmailConfig;
-use crate::tasker::email::attachments::{
-    generate_ticket_attachment, unique_email_artifact_path,
-};
+use crate::tasker::email::attachments::{generate_ticket_attachment, unique_email_artifact_path};
 use crate::tasker::email::html::{escape_html, generate_pivot_html};
 use crate::tasker::email::message::TicketRow;
 use crate::tasker::email::recipients::{
@@ -386,8 +384,9 @@ where
             &exception_teams,
         );
         if config.send_emails.unwrap_or(false) {
-            ensure_to_recipients(&to_emails)
-                .map_err(|e| anyhow::anyhow!("Cannot send email for bucket '{}': {e}", bucket_name))?;
+            ensure_to_recipients(&to_emails).map_err(|e| {
+                anyhow::anyhow!("Cannot send email for bucket '{}': {e}", bucket_name)
+            })?;
         }
 
         let html_table = generate_pivot_html(rows, &statuses_vec, is_branch);

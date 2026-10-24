@@ -97,13 +97,9 @@ pub fn normalize_and_validate_task(
 
 fn validate_weekday(day_of_week: &str) -> anyhow::Result<()> {
     match day_of_week.trim().to_lowercase().as_str() {
-        "sunday" | "sun" | "0"
-        | "monday" | "mon" | "1"
-        | "tuesday" | "tue" | "2"
-        | "wednesday" | "wed" | "3"
-        | "thursday" | "thu" | "4"
-        | "friday" | "fri" | "5"
-        | "saturday" | "sat" | "6" => Ok(()),
+        "sunday" | "sun" | "0" | "monday" | "mon" | "1" | "tuesday" | "tue" | "2" | "wednesday"
+        | "wed" | "3" | "thursday" | "thu" | "4" | "friday" | "fri" | "5" | "saturday" | "sat"
+        | "6" => Ok(()),
         _ => anyhow::bail!(
             "Invalid day of week '{}'. Use monday-sunday (or mon-sun, 0-6)",
             day_of_week
@@ -285,10 +281,33 @@ mod tests {
 
     #[test]
     fn validates_weekday_even_when_next_run_is_preconfigured() {
-        for day in ["Sunday", "sun", "0", "Monday", "mon", "1", "Tuesday", "tue", "2",
-            "Wednesday", "wed", "3", "Thursday", "thu", "4", "Friday", "fri", "5",
-            "Saturday", "sat", "6"] {
-            assert!(validate_weekday(day).is_ok(), "expected {day} to be accepted");
+        for day in [
+            "Sunday",
+            "sun",
+            "0",
+            "Monday",
+            "mon",
+            "1",
+            "Tuesday",
+            "tue",
+            "2",
+            "Wednesday",
+            "wed",
+            "3",
+            "Thursday",
+            "thu",
+            "4",
+            "Friday",
+            "fri",
+            "5",
+            "Saturday",
+            "sat",
+            "6",
+        ] {
+            assert!(
+                validate_weekday(day).is_ok(),
+                "expected {day} to be accepted"
+            );
         }
         assert!(validate_weekday("Funday").is_err());
         assert!(validate_weekday("7").is_err());

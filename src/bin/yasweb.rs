@@ -181,22 +181,31 @@ pub fn finalize_download(
         let entry = entry.with_context(|| format!("Failed to read entry in {:?}", temp_dl_dir))?;
         let path = entry.path();
         if path.is_file()
-            && path.extension().and_then(|ext| ext.to_str()).is_some_and(|ext| {
-                ext.eq_ignore_ascii_case("xlsx")
-                    || ext.eq_ignore_ascii_case("xls")
-                    || ext.eq_ignore_ascii_case("csv")
-            })
+            && path
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .is_some_and(|ext| {
+                    ext.eq_ignore_ascii_case("xlsx")
+                        || ext.eq_ignore_ascii_case("xls")
+                        || ext.eq_ignore_ascii_case("csv")
+                })
         {
             report_files.push(path);
         }
     }
 
     if report_files.is_empty() {
-        anyhow::bail!("No completed XLSX, XLS, or CSV report was found in {:?}", temp_dl_dir);
+        anyhow::bail!(
+            "No completed XLSX, XLS, or CSV report was found in {:?}",
+            temp_dl_dir
+        );
     }
 
     for path in &report_files {
-        let ext = path.extension().and_then(|ext| ext.to_str()).unwrap_or("xlsx");
+        let ext = path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .unwrap_or("xlsx");
         let mut final_name = final_filename.to_string();
         if !ext.eq_ignore_ascii_case("xlsx") {
             final_name = final_name.replace(".xlsx", &format!(".{}", ext));
@@ -239,8 +248,12 @@ pub fn finalize_download(
     }
 
     // Only remove the temporary directory after every report file has been moved successfully.
-    std::fs::remove_dir_all(temp_dl_dir)
-        .with_context(|| format!("Reports moved, but failed to clean temporary directory {:?}", temp_dl_dir))?;
+    std::fs::remove_dir_all(temp_dl_dir).with_context(|| {
+        format!(
+            "Reports moved, but failed to clean temporary directory {:?}",
+            temp_dl_dir
+        )
+    })?;
     Ok(())
 }
 /// Runs the YAS Web scraper command-line application.
@@ -749,7 +762,10 @@ mod tests_yasweb_finalization {
 
         assert!(finalize_download(&src_dir, &dst_file, "final.xlsx").is_err());
         assert!(src_dir.join("report.xlsx").exists());
-        assert_eq!(std::fs::read(src_dir.join("report.xlsx")).unwrap(), b"report contents");
+        assert_eq!(
+            std::fs::read(src_dir.join("report.xlsx")).unwrap(),
+            b"report contents"
+        );
     }
 
     #[test]

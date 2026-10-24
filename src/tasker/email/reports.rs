@@ -95,11 +95,14 @@ pub fn generate_leads_report(
         let current_headers = rdr.headers()?.clone();
         if let Some(expected_headers) = &headers {
             let headers_match = expected_headers.len() == current_headers.len()
-                && expected_headers.iter().zip(current_headers.iter()).all(|(expected, actual)| {
-                    let expected = expected.trim().trim_start_matches('\u{feff}');
-                    let actual = actual.trim().trim_start_matches('\u{feff}');
-                    expected.eq_ignore_ascii_case(actual)
-                });
+                && expected_headers
+                    .iter()
+                    .zip(current_headers.iter())
+                    .all(|(expected, actual)| {
+                        let expected = expected.trim().trim_start_matches('\u{feff}');
+                        let actual = actual.trim().trim_start_matches('\u{feff}');
+                        expected.eq_ignore_ascii_case(actual)
+                    });
             if !headers_match {
                 anyhow::bail!(
                     "Lead report '{}' has a different header layout from the first input file",

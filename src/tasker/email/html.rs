@@ -126,7 +126,10 @@ pub fn generate_pivot_html(
         r_html.push_str("<tr>");
         r_html.push_str(&format!(
             "<td style='padding: 8px; padding-left: {}px; border: 1px solid black;'>{}{}{}</td>",
-            indent_px, bold_tag, escape_html(name), bold_end
+            indent_px,
+            bold_tag,
+            escape_html(name),
+            bold_end
         ));
 
         for st in &active_statuses {
