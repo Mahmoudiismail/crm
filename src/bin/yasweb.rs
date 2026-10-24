@@ -651,11 +651,7 @@ async fn main() -> Result<()> {
                         ));
 
                         let args = vec![
-                            std::ffi::OsStr::new("--ignore-certificate-errors"),
                             std::ffi::OsStr::new("--start-maximized"),
-                            std::ffi::OsStr::new("--disable-web-security"),
-                            std::ffi::OsStr::new("--disable-site-isolation-trials"),
-                            std::ffi::OsStr::new("--disable-features=IsolateOrigins,site-per-process"),
                             std::ffi::OsStr::new("--disable-session-crashed-bubble"),
                             std::ffi::OsStr::new("--no-first-run"),
                             std::ffi::OsStr::new("--disable-infobars"),
@@ -667,7 +663,6 @@ async fn main() -> Result<()> {
 
                         let launch_options = headless_chrome::LaunchOptions::default_builder()
                             .headless(config_task.headless)
-                            .sandbox(false)
                             .idle_browser_timeout(std::time::Duration::MAX)
                             .user_data_dir(Some(user_data_dir.clone()))
                             .args(args)
