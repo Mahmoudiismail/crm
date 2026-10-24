@@ -147,10 +147,11 @@ impl AppConfig {
         let config: AppConfig =
             crate::utils::load_or_create_config(config_path, &AppConfig::default())?;
 
-        // Ensure stripping logic/saving is invoked if it was created/merged
-        // load_or_create_config does a standard atomic write, but doesn't apply `save()` logic
-        // which strips secrets if remember_secrets=false. We'll rely on the existing
-        // save mechanism inside `AppConfig::save` for subsequent writes.
+        // The generic loader writes merged defaults directly, so enforce the secret-retention
+        // preference immediately after loading rather than waiting for a later save.
+        if !config.remember_secrets {
+            config.save(&config_path.to_string_lossy())?;
+        }
 
         Ok(config)
     }
@@ -372,6 +373,39 @@ mod tests {
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(err_msg.contains("Failed to parse config file"));
+    }
+
+    #[test]
+    fn test_load_strips_persisted_secrets_when_remember_secrets_is_false() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let config_path = temp_dir.path().join("config.json");
+        let config = AppConfig {
+            remember_secrets: false,
+            password: "password-secret".to_string(),
+            access_token: "access-secret".to_string(),
+            access_token_expiry: "expiry-secret".to_string(),
+            id_token: "id-secret".to_string(),
+            refresh_token: "refresh-secret".to_string(),
+            token_timestamp: "timestamp-secret".to_string(),
+            ..AppConfig::default()
+        };
+        std::fs::write(&config_path, serde_json::to_string(&config).unwrap()).unwrap();
+
+        let loaded = AppConfig::load(config_path.to_str().unwrap()).unwrap();
+        assert_eq!(loaded.password, "password-secret");
+
+        let persisted: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&config_path).unwrap()).unwrap();
+        for key in [
+            "password",
+            "access_token",
+            "access_token_expiry",
+            "id_token",
+            "refresh_token",
+            "token_timestamp",
+        ] {
+            assert!(!persisted.get(key).is_some(), "secret key {key} persisted");
+        }
     }
 
     #[test]
