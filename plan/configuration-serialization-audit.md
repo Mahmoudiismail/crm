@@ -29,6 +29,12 @@ Audit configuration loading, defaults/merging, migration, validation, serializat
 - Review the existing performance audit and avoid repeating optimizations already present in `main`.
 - Confirm any performance optimization preserves output ordering, aggregation values, filtering, and public API behavior.
 
+## Phase 3 audit notes
+
+- The existing `plan/performance_audit.md` documents earlier streaming, record-buffer reuse, string-building, and deferred-logging optimizations already present on `main`; these were treated as existing baseline work rather than repeated.
+- A follow-up allocation hotspot was found in `src/tasker/email/html.rs`: pivot generation cloned every owned `TicketRow` only to sort the rows. It now sorts a vector of borrowed row references. A regression test verifies the existing team ordering and confirms that the input order is unchanged.
+- This is a structural allocation reduction; no numerical speedup is claimed because the benchmark/test environment has not yet run for this PR.
+
 ## Completion criteria
 - No untested behavior change.
 - Legacy configuration shapes remain supported where intended.
