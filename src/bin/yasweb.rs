@@ -210,6 +210,10 @@ async fn persist_discovered_filters(
     }
 
     if updated_filters {
+        info!(
+            "Updating yasweb_config.json with newly discovered filters for {}...",
+            report_name
+        );
         let serialized = serde_json::to_string_pretty(&latest_config)
             .context("Failed to serialize Yasweb config after discovering filters")?;
         let path = config_path.to_path_buf();
