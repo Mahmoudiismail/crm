@@ -164,17 +164,21 @@ function Send-OutlookMail {
 }
 
 
-$ErrorActionPreference = "Stop"
-try {
-    $attachments = @()
-    if ($AttachmentListPath) {
-        if (-not (Test-Path -LiteralPath $AttachmentListPath -PathType Leaf)) { throw "Attachment list file not found: $AttachmentListPath" }
-        $attachments = @(Get-Content -LiteralPath $AttachmentListPath -Encoding UTF8 | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+# When this file is dot-sourced, expose helper functions only. Do not run
+# the standalone mail operation with this script's default (empty) parameters.
+if ($MyInvocation.InvocationName -ne '.') {
+    $ErrorActionPreference = "Stop"
+    try {
+        $attachments = @()
+        if ($AttachmentListPath) {
+            if (-not (Test-Path -LiteralPath $AttachmentListPath -PathType Leaf)) { throw "Attachment list file not found: $AttachmentListPath" }
+            $attachments = @(Get-Content -LiteralPath $AttachmentListPath -Encoding UTF8 | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+        }
+        Write-OutlookStep ("Script entry; attachment count=" + $attachments.Count)
+        $sendAtSeven = $SendAtNextSevenAm -eq "true"
+        Send-OutlookMail -Mode $Mode -To $To -Cc $Cc -Subject $Subject -HtmlBodyPath $HtmlBodyPath -AttachmentPaths $attachments -DisplayOrSend $DisplayOrSend -BodyMode $BodyMode -SenderAccount $SenderAccount -SubjectPrefix $SubjectPrefix -AdditionalTo $AdditionalTo -SendAtNextSevenAm:$sendAtSeven
+    } catch {
+        Write-Error ("Outlook operation failed: " + $_.Exception.Message)
+        exit 1
     }
-    Write-OutlookStep ("Script entry; attachment count=" + $attachments.Count)
-    $sendAtSeven = $SendAtNextSevenAm -eq "true"
-    Send-OutlookMail -Mode $Mode -To $To -Cc $Cc -Subject $Subject -HtmlBodyPath $HtmlBodyPath -AttachmentPaths $attachments -DisplayOrSend $DisplayOrSend -BodyMode $BodyMode -SenderAccount $SenderAccount -SubjectPrefix $SubjectPrefix -AdditionalTo $AdditionalTo -SendAtNextSevenAm:$sendAtSeven
-} catch {
-    Write-Error ("Outlook operation failed: " + $_.Exception.Message)
-    exit 1
 }
