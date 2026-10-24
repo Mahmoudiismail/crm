@@ -1111,6 +1111,18 @@ mod configuration_merge_regression_tests {
     }
 
     #[test]
+    fn malformed_config_is_not_replaced_with_defaults() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let path = temp_dir.path().join("malformed.json");
+        let malformed = r#"{"enabled":"#;
+        std::fs::write(&path, malformed).unwrap();
+        let defaults = json!({ "enabled": true });
+
+        assert!(super::load_or_create_config(&path, &defaults).is_err());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), malformed);
+    }
+
+    #[test]
     fn ordinary_arrays_remain_atomic_during_merge() {
         let defaults = json!({ "exclude_branches": ["default"], "new_field": true });
         let mut current = json!({ "exclude_branches": ["custom", "other"] });
