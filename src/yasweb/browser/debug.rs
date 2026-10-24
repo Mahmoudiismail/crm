@@ -8,7 +8,7 @@ pub fn save_html_state(
     step_num: u32,
     step_name: &str,
 ) {
-    if std::env::var("CRM_YASWEB_CAPTURE_DIAGNOSTICS").as_deref() != Ok("1") {
+    if std::env::var("CRM_YASWEB_CAPTURE_DIAGNOSTICS").ok().as_deref() != Some("1") {
         return;
     }
 
