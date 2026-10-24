@@ -195,13 +195,16 @@ pub fn merge_json(current: &mut serde_json::Value, default: &serde_json::Value) 
                                         == Some(false);
 
                                 if is_disabled_opt_in {
-                                    let existing_index = def_item.get("type").and_then(|task_type| {
-                                        curr_arr
-                                            .iter()
-                                            .position(|task| task.get("type") == Some(task_type))
-                                    });
+                                    let existing_index = def_item
+                                        .get("type")
+                                        .and_then(|task_type| {
+                                            curr_arr
+                                                .iter()
+                                                .position(|task| task.get("type") == Some(task_type))
+                                        });
                                     if let Some(index) = existing_index {
-                                        // Fill missing defaults without changing the user's enabled choice.
+                                        // Fill missing defaults without changing the user's
+                                        // enabled choice.
                                         changed |= merge_json(&mut curr_arr[index], def_item);
                                     } else {
                                         curr_arr.push(def_item.clone());
@@ -1061,13 +1064,17 @@ mod configuration_merge_regression_tests {
         assert_eq!(current["tasks"][0]["dashboard_file"], "custom.xlsx");
         assert_eq!(current["tasks"][1]["type"], "csv_analysis");
         assert_eq!(current["tasks"][1]["minutes_ago"], 30);
-        assert_eq!(current["tasks"][1]["email_config"]["send_emails"], true);
+        assert!(current["tasks"][1]["email_config"]["send_emails"]
+            .as_bool()
+            .unwrap_or(false));
         assert_eq!(
             current["tasks"][1]["email_config"]["default_to_email"],
             "fallback@example.com"
         );
         assert_eq!(current["tasks"][2]["type"], "sat_figures");
-        assert_eq!(current["tasks"][2]["enabled"], false);
+        assert!(!current["tasks"][2]["enabled"]
+            .as_bool()
+            .unwrap_or(true));
     }
 
     #[test]
@@ -1093,7 +1100,7 @@ mod configuration_merge_regression_tests {
         });
 
         assert!(merge_json(&mut current, &defaults));
-        assert_eq!(current["tasks"][0]["enabled"], true);
+        assert!(current["tasks"][0]["enabled"].as_bool().unwrap_or(false));
         assert_eq!(current["tasks"][0]["minutes_ago"], 10);
         assert_eq!(current["tasks"][0]["output_file"], "custom-users.csv");
     }
@@ -1129,6 +1136,6 @@ mod configuration_merge_regression_tests {
 
         assert!(merge_json(&mut current, &defaults));
         assert_eq!(current["exclude_branches"], json!(["custom", "other"]));
-        assert_eq!(current["new_field"], true);
+        assert!(current["new_field"].as_bool().unwrap_or(false));
     }
 }
