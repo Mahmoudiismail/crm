@@ -125,6 +125,16 @@ jobs:
             cd target/release
             7z a -p123456 "$ARCHIVE" "${EXE_FILES[@]}"
           )
+          ARCHIVE_PATH="target/release/$ARCHIVE"
+          7z t -p123456 "$ARCHIVE_PATH"
+          VERIFY_DIR="$(mktemp -d)"
+          7z x -y -p123456 "-o$VERIFY_DIR" "$ARCHIVE_PATH"
+          for exe in "${EXE_FILES[@]}"; do
+            if [[ ! -s "$VERIFY_DIR/$exe" ]]; then
+              echo "Release archive is missing or contains an empty binary: $exe" >&2
+              exit 1
+            fi
+          done
       - name: Publish GitHub Release
         id: publish
         if: success()

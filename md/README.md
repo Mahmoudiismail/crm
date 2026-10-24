@@ -8,6 +8,10 @@ This folder is the consolidated documentation root for the CRM Tool codebase, in
 - `issues/`: issue analyses and remediation records.
 - `audits/`: repository assessments and audit reports.
 
+## Production Readiness
+
+- `PRODUCTION_READINESS.md`: current security mitigations and release blockers that must be closed before general production rollout.
+
 ## Agent Entry Point
 
 All AI coding agents must read repository-root `AGENTS.md` before making changes. That file requires agents to keep this `md/` documentation set updated in the same change as code, config, dependency, or script edits.

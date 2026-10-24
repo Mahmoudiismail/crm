@@ -50,6 +50,12 @@ By extracting discrete functions (like `login::execute_login` and `download::wai
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings` complete with 0 warnings.
 - `cargo test --workspace` passes entirely.
 
+## Production Security Defaults
+
+- Chromium launches without flags that disable TLS certificate validation, web security, or site isolation, and without disabling the browser sandbox. Validate the real YAS portal on a representative Windows workstation before rollout; do not restore these global security bypasses without an explicit, scoped risk decision.
+- Routine login logs do not include raw page HTML, and network response logs do not include response header values.
+- HTML snapshots and failure diagnostics are disabled and cannot be enabled through an environment-variable override. This avoids persisting authenticated page content that may contain sensitive operational data.
+
 ## Remaining Technical Debt
 - The Javascript injected into the page inside `reports.rs` is still quite lengthy and relies heavily on hard-coded class names (`.dx-list-item`, `.btn-search`, etc.). If the target web application updates its UI framework, these scripts will still break.
 - Headless chrome network event listeners might leak slightly if the tab panics before `remove_event_listener` is called.

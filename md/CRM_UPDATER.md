@@ -34,6 +34,12 @@ When an update ZIP is found in Outlook Drafts, the updater extracts it into `dow
 
 If no Outlook draft is found, the updater can apply a complete set of already-staged application files in `downloads`. It refuses to start a partial update when any configured source file is missing. The detached script preflights all sources and destinations before stopping target applications. It stages each replacement beside its destination, verifies SHA-256 hashes, and keeps a backup of each existing destination until the complete replacement set has succeeded. If a replacement fails, it attempts to roll back already-replaced files in reverse order and logs any rollback failures. After all replacements are verified, it removes backups, restarts configured applications, and logs the result in `updater_detached.log`.
 
+## Update Package Trust (Production Gate)
+
+The updater currently decrypts incoming ZIP attachments with the legacy fixed password `123456` and validates file replacement consistency with SHA-256. These checks do **not** authenticate who created the incoming package. A hash calculated from the same untrusted package or email is not an authenticity check.
+
+Do not use this updater for general production rollout until a trusted package-verification mechanism is implemented and enforced **before stopping applications or replacing binaries**. Preferred options are a signed manifest verified against a trusted public key embedded in the updater, or Authenticode verification with an enforced publisher identity. The signing key must not be embedded in the client. The existing ZIP password remains unchanged for compatibility and must not be treated as a security boundary.
+
 ## Configuration
 
 When first run, `crm_updater` generates a default `updater_config.json` configuration file:

@@ -114,6 +114,32 @@ jobs:
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
 
+
+  dependency-audit:
+    name: Dependency Security Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Audit RustSec advisories
+        run: cargo audit
+
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+
+      - name: Check configured advisory policy
+        run: cargo deny check advisories
+
   test:
     name: Test Suite
     needs: [format, clippy]
