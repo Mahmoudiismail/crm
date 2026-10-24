@@ -15,7 +15,6 @@ fn username_matches(displayed: &str, configured: &str) -> bool {
     !configured.trim().is_empty() && displayed.trim().eq_ignore_ascii_case(configured.trim())
 }
 
-
 /// Automates the login flow and waits for the dashboard to appear.
 ///
 /// The function records HTML snapshots for successful navigation and login steps,
