@@ -113,6 +113,13 @@ pub fn group_tickets_into_buckets(
     }
 }
 
+pub fn ensure_to_recipients(to_emails: &str) -> Result<()> {
+    if clean_email_string(to_emails).is_empty() {
+        anyhow::bail!("No To recipients resolved; refusing to send email");
+    }
+    Ok(())
+}
+
 fn clean_email_string(emails: &str) -> String {
     emails
         .split(';')
