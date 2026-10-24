@@ -2,6 +2,10 @@
 
 `tasker` is a lightweight, stateless task runner binary part of the CRM Tool suite. It is designed to be executed by the `runner` and can process various configured tasks in a single pass before exiting. Because it operates cleanly and exits, it can safely be invoked multiple times in parallel by the runner scheduler without deadlocks, provided tasks are configured with different targets.
 
+## Failure propagation
+
+Configured tasks are run in order. If a task fails, Tasker logs the error and returns a non-zero failure result immediately instead of continuing to later tasks and exiting successfully. This allows Runner to record a failed execution rather than showing a false success. Outlook email failures are propagated directly; Tasker does not attempt to send an error notification through the same Outlook COM transport that just failed.
+
 ## Note for AI Agents (AGENTS.md Addendum)
 
 > **Important**: If any modifications are made to the `csv_analysis` task within `tasker`, you MUST run the validation test using the provided raw dataset (from the user's pastebin) and compare it to the expected output before submitting the PR to ensure regressions are avoided.
