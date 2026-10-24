@@ -30,9 +30,7 @@ impl TokenCache {
     }
 
     pub fn has_tokens(&self) -> bool {
-        !self.access_token.is_empty()
-            || !self.id_token.is_empty()
-            || !self.refresh_token.is_empty()
+        !self.access_token.is_empty() || !self.id_token.is_empty() || !self.refresh_token.is_empty()
     }
 
     pub fn fill_missing_from(&mut self, stored: Self) {

@@ -230,8 +230,11 @@ impl AppConfig {
         if !self.remember_secrets {
             // Persist tokens first. If DPAPI fails, do not overwrite the config file or lose
             // the only copy of an existing token. Passwords are deliberately never cached.
-            token_store::save(std::path::Path::new(path), &token_store::TokenCache::from_config(self))
-                .context("Failed to protect CRM tokens with Windows DPAPI")?;
+            token_store::save(
+                std::path::Path::new(path),
+                &token_store::TokenCache::from_config(self),
+            )
+            .context("Failed to protect CRM tokens with Windows DPAPI")?;
         }
 
         let mut value = serde_json::to_value(self)?;

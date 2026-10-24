@@ -424,7 +424,11 @@ async fn refresh_cognito_tokens(
             .ok()
             .and_then(|json| json["message"].as_str().map(str::to_owned))
             .unwrap_or_else(|| "Unknown error".to_string());
-        bail!("Cognito refresh-token request failed (HTTP {}): {}", status, safe_message);
+        bail!(
+            "Cognito refresh-token request failed (HTTP {}): {}",
+            status,
+            safe_message
+        );
     }
 
     let response_json: serde_json::Value = serde_json::from_str(&response_text)?;
