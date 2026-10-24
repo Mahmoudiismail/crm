@@ -77,6 +77,13 @@ pub fn process_files(
             }
         }
 
+        if ticket_id_idx.is_none() {
+            anyhow::bail!(
+                "CSV file '{}' is missing required 'Ticket Id' column",
+                file_path.display()
+            );
+        }
+
         if out_headers.is_none() {
             let mut h = headers.clone();
             h.push_field("Position");
@@ -130,10 +137,6 @@ pub fn process_files(
 
             let ticket_id_val = ticket_id_idx.and_then(|idx| record.get(idx)).unwrap_or("");
             let ticket_id_val_owned = ticket_id_val.to_string();
-            if !seen_tickets.insert(ticket_id_val_owned.clone()) {
-                total_deduped_rows += 1;
-                continue;
-            }
 
             let branch_val = branch_idx
                 .and_then(|idx| record.get(idx))
@@ -199,8 +202,9 @@ pub fn process_files(
                                 let b_trim = b.trim().to_lowercase();
                                 b_trim.is_empty()
                                     || b_trim == branch_val
-                                    || b_trim.contains(&branch_val)
-                                    || branch_val.contains(&b_trim)
+                                    || (!branch_val.is_empty()
+                                        && (b_trim.contains(&branch_val)
+                                            || branch_val.contains(&b_trim)))
                             });
 
                             if branch_matches {
@@ -234,6 +238,15 @@ pub fn process_files(
                         continue;
                     }
                 }
+            }
+
+            // Apply exclusions before deduplication so an excluded copy cannot
+            // suppress a later, valid record with the same ticket ID.
+            if !ticket_id_val_owned.trim().is_empty()
+                && !seen_tickets.insert(ticket_id_val_owned.clone())
+            {
+                total_deduped_rows += 1;
+                continue;
             }
 
             record.push_field(position.as_deref().unwrap_or(""));
