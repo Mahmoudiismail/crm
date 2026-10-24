@@ -167,38 +167,80 @@ pub fn finalize_download(
     final_out_dir: &std::path::Path,
     final_filename: &str,
 ) -> anyhow::Result<()> {
-    // Move and rename the file
-    if let Ok(entries) = std::fs::read_dir(temp_dl_dir) {
-        let _ = std::fs::create_dir_all(final_out_dir);
+    if !temp_dl_dir.is_dir() {
+        anyhow::bail!("Download directory does not exist: {:?}", temp_dl_dir);
+    }
 
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if let Some(ext) = path.extension() {
-                if ext == "xlsx" || ext == "xls" || ext == "csv" {
-                    let mut out_file = final_out_dir.to_path_buf();
-                    // If the original file was not xlsx, adapt the extension, but we requested XLSX
-                    let ext_str = ext.to_string_lossy().to_string();
-                    let mut final_name = final_filename.to_string();
-                    if ext_str != "xlsx" {
-                        final_name = final_name.replace(".xlsx", &format!(".{}", ext_str));
-                    }
-                    out_file.push(final_name);
+    std::fs::create_dir_all(final_out_dir)
+        .with_context(|| format!("Failed to create download directory {:?}", final_out_dir))?;
 
-                    tracing::info!("Moving downloaded file from {:?} to {:?}", path, out_file);
-                    if let Err(e) = std::fs::rename(&path, &out_file) {
-                        tracing::error!("Failed to rename/move file: {}", e);
-                        // Fallback to copy+delete across mount points
-                        if std::fs::copy(&path, &out_file).is_ok() {
-                            let _ = std::fs::remove_file(&path);
-                        }
-                    }
-                }
-            }
+    let entries = std::fs::read_dir(temp_dl_dir)
+        .with_context(|| format!("Failed to read download directory {:?}", temp_dl_dir))?;
+    let mut report_files = Vec::new();
+    for entry in entries {
+        let entry = entry.with_context(|| format!("Failed to read entry in {:?}", temp_dl_dir))?;
+        let path = entry.path();
+        if path.is_file()
+            && path.extension().and_then(|ext| ext.to_str()).is_some_and(|ext| {
+                ext.eq_ignore_ascii_case("xlsx")
+                    || ext.eq_ignore_ascii_case("xls")
+                    || ext.eq_ignore_ascii_case("csv")
+            })
+        {
+            report_files.push(path);
         }
     }
 
-    // Cleanup temp dir
-    let _ = std::fs::remove_dir_all(temp_dl_dir);
+    if report_files.is_empty() {
+        anyhow::bail!("No completed XLSX, XLS, or CSV report was found in {:?}", temp_dl_dir);
+    }
+
+    for path in &report_files {
+        let ext = path.extension().and_then(|ext| ext.to_str()).unwrap_or("xlsx");
+        let mut final_name = final_filename.to_string();
+        if !ext.eq_ignore_ascii_case("xlsx") {
+            final_name = final_name.replace(".xlsx", &format!(".{}", ext));
+        }
+        let out_file = final_out_dir.join(final_name);
+
+        tracing::info!("Moving downloaded file from {:?} to {:?}", path, out_file);
+        if let Err(rename_error) = std::fs::rename(path, &out_file) {
+            tracing::warn!(
+                "Rename/move failed for {:?} -> {:?}: {}; falling back to copy",
+                path,
+                out_file,
+                rename_error
+            );
+            if let Err(copy_error) = std::fs::copy(path, &out_file) {
+                let _ = std::fs::remove_file(&out_file);
+                return Err(copy_error).with_context(|| {
+                    format!("Failed to move or copy report {:?} to {:?}", path, out_file)
+                });
+            }
+
+            let source_len = std::fs::metadata(path)
+                .with_context(|| format!("Failed to inspect source report {:?}", path))?
+                .len();
+            let destination_len = std::fs::metadata(&out_file)
+                .with_context(|| format!("Failed to inspect copied report {:?}", out_file))?
+                .len();
+            if source_len != destination_len {
+                let _ = std::fs::remove_file(&out_file);
+                anyhow::bail!(
+                    "Copied report size mismatch for {:?} -> {:?}",
+                    path,
+                    out_file
+                );
+            }
+
+            std::fs::remove_file(path)
+                .with_context(|| format!("Copied report but could not remove source {:?}", path))?;
+        }
+    }
+
+    // Only remove the temporary directory after every report file has been moved successfully.
+    std::fs::remove_dir_all(temp_dl_dir)
+        .with_context(|| format!("Reports moved, but failed to clean temporary directory {:?}", temp_dl_dir))?;
     Ok(())
 }
 /// Runs the YAS Web scraper command-line application.
@@ -610,13 +652,8 @@ async fn main() -> Result<()> {
                         dir
                     };
 
-                    if !final_out_dir.exists() {
-                        if let Err(e) = std::fs::create_dir_all(&final_out_dir) {
-                            error!("Failed to create download directory {:?}: {:?}", final_out_dir, e);
-                        }
-                    }
-
-                    let _ = finalize_download(&temp_dl_dir, &final_out_dir, &final_filename);
+                    finalize_download(&temp_dl_dir, &final_out_dir, &final_filename)
+                        .with_context(|| format!("Failed to finalize Yasweb report '{}'", active_report_name_clone))?;
 
                     if !discovered_filters.is_empty() {
                         // Reload config from disk to avoid race conditions with other concurrent reports
@@ -696,11 +733,23 @@ mod tests_yasweb_finalization {
         let tmp = std::env::temp_dir();
         let src_dir = tmp.join("yasweb_test_src_missing");
         let dst_dir = tmp.join("yasweb_test_dst_missing");
-        // We do not create src_dir to simulate missing source
-
-        // Should not error, just does nothing cleanly
-        finalize_download(&src_dir, &dst_dir, "final_report.xlsx").unwrap();
+        // A missing download directory is a failed report finalization, not success.
+        assert!(finalize_download(&src_dir, &dst_dir, "final_report.xlsx").is_err());
         assert!(!dst_dir.join("final_report.xlsx").exists());
+    }
+
+    #[test]
+    fn test_finalize_download_preserves_source_when_destination_cannot_be_written() {
+        let root = tempfile::tempdir().unwrap();
+        let src_dir = root.path().join("source");
+        let dst_file = root.path().join("destination_is_a_file");
+        std::fs::create_dir_all(&src_dir).unwrap();
+        std::fs::write(src_dir.join("report.xlsx"), b"report contents").unwrap();
+        std::fs::write(&dst_file, b"not a directory").unwrap();
+
+        assert!(finalize_download(&src_dir, &dst_file, "final.xlsx").is_err());
+        assert!(src_dir.join("report.xlsx").exists());
+        assert_eq!(std::fs::read(src_dir.join("report.xlsx")).unwrap(), b"report contents");
     }
 
     #[test]
