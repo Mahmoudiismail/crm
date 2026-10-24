@@ -198,9 +198,9 @@ pub fn merge_json(current: &mut serde_json::Value, default: &serde_json::Value) 
                                     let existing_index = def_item
                                         .get("type")
                                         .and_then(|task_type| {
-                                            curr_arr
-                                                .iter()
-                                                .position(|task| task.get("type") == Some(task_type))
+                                            curr_arr.iter().position(|task| {
+                                                task.get("type") == Some(task_type)
+                                            })
                                         });
                                     if let Some(index) = existing_index {
                                         // Fill missing defaults without changing the user's
@@ -213,10 +213,11 @@ pub fn merge_json(current: &mut serde_json::Value, default: &serde_json::Value) 
                                     continue;
                                 }
 
-                                let current_index = if let Some(default_type) = def_item.get("type") {
-                                    curr_arr
-                                        .iter()
-                                        .position(|task| task.get("type") == Some(default_type))
+                                let current_index =
+                                    if let Some(default_type) = def_item.get("type") {
+                                    curr_arr.iter().position(|task| {
+                                        task.get("type") == Some(default_type)
+                                    })
                                         .or_else(|| {
                                             curr_arr.get(i).and_then(|task| {
                                                 task.as_object()
@@ -1008,7 +1009,6 @@ impl Drop for FileCleanupGuard {
         }
     }
 }
-
 
 #[cfg(test)]
 mod configuration_merge_regression_tests {
