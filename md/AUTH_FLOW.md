@@ -115,7 +115,7 @@ The SRP-6a modular exponentiation math in `compute_s` is unit-tested against kno
 - Default TLS verification is strictly enabled (`no_verify_ssl = false`) in production by default. Explicitly setting `no_verify_ssl: true` is an intentional insecure override.
 - Authentication tokens/secrets and raw authentication responses must not be logged.
 - Useful CRM API error response bodies may be logged when needed to diagnose API failures, provided they do not contain authentication secrets/credentials.
-- Use `remember_secrets = false` if config should not retain tokens/password. CRM strips persisted password/token fields during config loading as well as on later saves, while keeping any loaded values available in memory for the current run.
+- `remember_secrets` defaults to `false`; passwords and tokens are not persisted by default. Set it to `true` only when persistent credential/token caching is explicitly required and the local config file is appropriately protected. When false, CRM strips persisted password/token fields during config loading as well as on later saves, while keeping values loaded for the current run available in memory.
 - Do not log raw passwords.
 
 ## CRM Cognito SRP Authentication Enhancements (Recent Updates)
