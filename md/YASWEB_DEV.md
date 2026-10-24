@@ -17,18 +17,15 @@ the `YASWEB RUN`, `YASWEB STAGE`, and `AUTOMATION STEP` entries. Each stage
 records its start/end, result, elapsed milliseconds, and the error chain when it
 fails.
 
-On a browser automation failure, Yasweb also writes a redacted diagnostic JSON
-file under `debug_html/` next to the executable. The file includes the current
-URL without query/fragment, page title/readiness, iframe metadata, and a DOM
-snapshot with form values removed. Existing numbered `step_*.html` snapshots
-are still available for the automation checkpoints; treat those HTML files as
-potentially sensitive because they can contain application data.
+For production privacy, Yasweb does not persist authenticated page HTML or DOM
+diagnostic snapshots. The `save_html_state` and `save_failure_diagnostics` hooks
+log that snapshots were skipped because page contents can include credentials,
+session data, and customer information. Use the stage and automation-step logs
+to diagnose failures; do not re-enable raw page snapshots in production.
 
 Set `keep_open` to `true` in `yasweb_config.json` when you need the visible
-browser to remain open for up to 60 seconds after a failure. With
-`keep_open: false`, the browser closes after the failure, but diagnostic files
-are still saved. Never share logs or HTML snapshots publicly without reviewing
-them for usernames, patient/customer data, and other sensitive information.
+browser to remain open for up to 60 seconds after a failure. This keeps the
+browser available for manual inspection without writing page contents to disk.
 
 A failed menu lookup, MIS click, MIS Reports transition, report-type selection,
 report search, filter application, or download wait must return an error rather
