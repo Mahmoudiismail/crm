@@ -148,7 +148,7 @@ function Send-OutlookMail {
         Write-OutlookStep "Deferred delivery skipped for draft"
     }
     $stage = "final action"
-    if ($DisplayOrSend -ne "Display" -and $DisplayOrSend -ne "SaveDraft" -and $mail.Recipients.Count -eq 0) {
+    if ($DisplayOrSend -ne "Display" -and $DisplayOrSend -ne "SaveDraft" -and [string]::IsNullOrWhiteSpace([string]$mail.To) -and [string]::IsNullOrWhiteSpace([string]$mail.CC) -and $mail.Recipients.Count -eq 0) {
         throw "Cannot send Outlook email: no recipients were added. Check the To/CC configuration and parameter values."
     }
     switch ($DisplayOrSend) {
