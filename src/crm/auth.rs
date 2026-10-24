@@ -92,7 +92,40 @@ pub async fn ensure_authenticated(
         }
     }
 
-    // 3. Fresh login
+    // 3. Refresh a persisted token before falling back to password-based SRP login.
+    // This is important when remember_secrets=false: the refresh token is persisted in
+    // DPAPI, but the password deliberately is not persisted.
+    if !config.refresh_token.is_empty() {
+        match refresh_cognito_tokens(config, client).await {
+            Ok(tokens) => {
+                config.access_token = tokens.access_token;
+                if !tokens.id_token.is_empty() {
+                    config.id_token = tokens.id_token;
+                }
+                if !tokens.refresh_token.is_empty() {
+                    config.refresh_token = tokens.refresh_token;
+                }
+                let now = Utc::now();
+                let expiry = now + chrono::TimeDelta::seconds(tokens.expires_in as i64);
+                config.access_token_expiry = expiry.to_rfc3339();
+                config.token_timestamp = now.to_rfc3339();
+                info!("Cached Cognito token refreshed; expires at {}", expiry);
+                return if !config.id_token.is_empty() {
+                    Ok(config.id_token.clone())
+                } else {
+                    Ok(config.access_token.clone())
+                };
+            }
+            Err(_) if config.password.is_empty() => {
+                bail!("Cached CRM token expired and could not be refreshed. Re-enter the password to authenticate again.");
+            }
+            Err(_) => {
+                debug!("Cached token refresh failed; falling back to SRP login");
+            }
+        }
+    }
+
+    // 4. Fresh login
     info!("Performing Cognito SRP authentication...");
     let tokens = cognito_srp_login(config, client).await?;
 
@@ -350,6 +383,85 @@ async fn respond_to_auth_challenge(
         access_token,
         id_token,
         refresh_token,
+        expires_in,
+    })
+}
+
+async fn refresh_cognito_tokens(
+    config: &AppConfig,
+    client: &reqwest::Client,
+) -> Result<AuthTokens> {
+    let refresh_url = if config.region.starts_with("http") {
+        config.region.clone()
+    } else {
+        format!("https://cognito-idp.{}.amazonaws.com/", config.region)
+    };
+
+    let body = serde_json::json!({
+        "AuthFlow": "REFRESH_TOKEN_AUTH",
+        "ClientId": config.client_id,
+        "AuthParameters": {
+            "REFRESH_TOKEN": config.refresh_token
+        }
+    });
+
+    let response = client
+        .post(&refresh_url)
+        .header("Content-Type", "application/x-amz-json-1.1")
+        .header(
+            "X-Amz-Target",
+            "AWSCognitoIdentityProviderService.InitiateAuth",
+        )
+        .json(&body)
+        .send()
+        .await
+        .context("Cognito refresh-token request failed")?;
+
+    let status = response.status();
+    let response_text = response.text().await?;
+    if !status.is_success() {
+        let safe_message = serde_json::from_str::<serde_json::Value>(&response_text)
+            .ok()
+            .and_then(|json| json["message"].as_str().map(str::to_owned))
+            .unwrap_or_else(|| "Unknown error".to_string());
+        bail!(
+            "Cognito refresh-token request failed (HTTP {}): {}",
+            status,
+            safe_message
+        );
+    }
+
+    let response_json: serde_json::Value = serde_json::from_str(&response_text)?;
+    let result = response_json
+        .get("AuthenticationResult")
+        .context("Missing AuthenticationResult in refresh-token response")?;
+    let access_token = result
+        .get("AccessToken")
+        .and_then(serde_json::Value::as_str)
+        .filter(|token| !token.trim().is_empty())
+        .context("Missing or empty AccessToken in refresh-token response")?
+        .to_string();
+    let id_token = result
+        .get("IdToken")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default()
+        .to_string();
+    let rotated_refresh_token = result
+        .get("RefreshToken")
+        .and_then(serde_json::Value::as_str)
+        .filter(|token| !token.trim().is_empty())
+        .unwrap_or(&config.refresh_token)
+        .to_string();
+    let expires_in = result
+        .get("ExpiresIn")
+        .and_then(serde_json::Value::as_u64)
+        .filter(|seconds| *seconds > 0 && *seconds <= i64::MAX as u64)
+        .context("Missing or invalid ExpiresIn in refresh-token response")?;
+
+    Ok(AuthTokens {
+        access_token,
+        id_token,
+        refresh_token: rotated_refresh_token,
         expires_in,
     })
 }
@@ -896,6 +1008,49 @@ mod auth_fix_tests {
             result2.is_ok(),
             "Token with 6 mins remaining should be valid and bypassed"
         );
+    }
+
+    #[tokio::test]
+    async fn test_refresh_token_auth_preserves_refresh_token_when_not_rotated() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let url = format!("http://{}", addr);
+        tokio::spawn(async move {
+            if let Ok((mut socket, _)) = listener.accept().await {
+                let mut buf = [0; 2048];
+                let _ = socket.read(&mut buf).await;
+                let json = serde_json::json!({
+                    "AuthenticationResult": {
+                        "AccessToken": "new-access",
+                        "IdToken": "new-id",
+                        "ExpiresIn": 3600
+                    }
+                });
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    json.to_string().len(),
+                    json
+                );
+                let _ = socket.write_all(response.as_bytes()).await;
+            }
+        });
+
+        let config = AppConfig {
+            region: url,
+            client_id: "client".to_string(),
+            refresh_token: "existing-refresh".to_string(),
+            ..AppConfig::default()
+        };
+        let tokens = refresh_cognito_tokens(&config, &reqwest::Client::new())
+            .await
+            .unwrap();
+        assert_eq!(tokens.access_token, "new-access");
+        assert_eq!(tokens.id_token, "new-id");
+        assert_eq!(tokens.refresh_token, "existing-refresh");
+        assert_eq!(tokens.expires_in, 3600);
     }
 
     #[test]

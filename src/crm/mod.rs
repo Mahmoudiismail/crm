@@ -2,6 +2,7 @@ pub mod auth;
 pub mod config;
 pub mod downloader;
 pub mod fetcher;
+mod token_store;
 
 use anyhow::Result;
 
