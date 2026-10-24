@@ -278,8 +278,6 @@ fn test_task1_generate_results_and_html_email() {
     let count = rdr.records().count();
     assert!(count > 0, "Should have created results file");
 
-    let temp_dir = std::env::temp_dir();
-
     let html_path = find_temp_artifact("Pre_authorization_", "email.html");
     assert!(
         html_path.exists(),
