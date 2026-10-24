@@ -1,4 +1,5 @@
 use crate::tasker::config::CrmOpenSohailConfig;
+use crate::tasker::email::html::escape_html;
 use anyhow::Result;
 use std::collections::HashMap;
 use tracing::{error, info, warn};
@@ -200,8 +201,8 @@ fn outlook_mention_html(owner: &str, email: &str) -> String {
     format!(
         "<a id=\"OWAAM{:032X}Z\" href=\"mailto:{}\">@{}</a>",
         rand::random::<u128>(),
-        email,
-        owner
+        escape_html(email),
+        escape_html(owner)
     )
 }
 
@@ -235,11 +236,11 @@ fn enrich_dataset(
                     if info.is_shared || is_main_branch {
                         match (&info.owner_name, &info.owner_email) {
                             (o, e) if !o.is_empty() && !e.is_empty() => outlook_mention_html(o, e),
-                            (o, _) if !o.is_empty() => o.to_string(),
-                            _ => fallback_oul_text.to_string(),
+                            (o, _) if !o.is_empty() => escape_html(o),
+                            _ => escape_html(fallback_oul_text),
                         }
                     } else {
-                        fallback_oul_text.to_string()
+                        escape_html(fallback_oul_text)
                     }
                 }
                 None => {
@@ -248,7 +249,7 @@ fn enrich_dataset(
                     } else {
                         warn!("Missing team mapping for: {}", row.team.trim());
                     }
-                    fallback_oul_text.to_string()
+                    escape_html(fallback_oul_text)
                 }
             };
 
@@ -299,6 +300,14 @@ pub fn process_extracted_data(
 #[cfg(test)]
 mod mention_tests {
     use super::outlook_mention_html;
+
+    #[test]
+    fn mention_fields_are_html_escaped() {
+        let html = outlook_mention_html("Owner <script>", "owner\" onclick=\"alert(1)");
+        assert!(html.contains("@Owner &lt;script&gt;</a>"));
+        assert!(html.contains("mailto:owner&quot; onclick=&quot;alert(1)"));
+        assert!(!html.contains("<script>"));
+    }
 
     #[test]
     fn oul_email_uses_outlook_mention_markup() {
