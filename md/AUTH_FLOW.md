@@ -84,13 +84,22 @@ From `AuthenticationResult`:
 - `RefreshToken`
 - `ExpiresIn`
 
-## Token Update in Config
+## Token Update and Persistence
 
-On success:
+On successful authentication:
 
-- update tokens,
+- update access, ID, and refresh tokens,
 - set `access_token_expiry = now + expires_in`,
 - set `token_timestamp = now`.
+
+Storage follows `remember_secrets`:
+
+- `true`: persist the password and token fields in the config JSON, preserving the existing opt-in behavior.
+- `false`: store only the token cache (access token, ID token, refresh token, expiry, and timestamp) using Windows DPAPI CurrentUser scope in a sidecar file named `<config filename>.tokens.dpapi`. The password is not stored in DPAPI or JSON.
+- Existing JSON tokens are migrated to DPAPI before token fields are removed from the JSON. Unknown config fields are preserved.
+- If DPAPI protection fails, config secrets are not stripped, preventing silent token loss.
+- DPAPI data is bound to the current Windows user and machine; it cannot be used by a different Windows account or moved to another PC.
+- Switching back to `remember_secrets = true` allows the cached DPAPI tokens to be loaded and written to JSON on the next successful config save; the DPAPI sidecar is then removed.
 
 ## Error Cases
 
