@@ -21,9 +21,9 @@ fn find_temp_artifact(prefix: &str, suffix: &str) -> PathBuf {
             .and_then(|metadata| metadata.modified())
             .ok()
     });
-    matches.pop().unwrap_or_else(|| {
-        panic!("generated artifact not found matching {prefix}*{suffix}")
-    })
+    matches
+        .pop()
+        .unwrap_or_else(|| panic!("generated artifact not found matching {prefix}*{suffix}"))
 }
 
 // A. VALID NORMAL CSV
