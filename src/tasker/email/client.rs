@@ -636,7 +636,7 @@ mod tests {
     fn find_artifact(prefix: &str, suffix: &str) -> std::path::PathBuf {
         std::fs::read_dir(std::env::temp_dir())
             .unwrap()
-            .filter_map(Result::ok)
+            .filter_map(|entry| entry.ok())
             .map(|entry| entry.path())
             .find(|path| {
                 path.file_name()
