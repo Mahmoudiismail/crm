@@ -6,7 +6,7 @@
 - Network response logs retain status, URL path, and MIME type but no longer emit response header values.
 - Routine login logs no longer include raw authenticated page HTML.
 - HTML snapshots and failure diagnostics are disabled and are not enabled through an environment-variable override. This avoids persisting authenticated page content that may contain sensitive business or personal data.
-- CRM secret persistence defaults to opt-in (`remember_secrets: false`) for newly generated or otherwise missing settings. If an existing `crm_config.json` explicitly contains `remember_secrets: true`, it continues to do so for compatibility; administrators should set it to `false` and restart CRM to stop persisting credentials and tokens.
+- CRM JSON secret persistence defaults to opt-out (`remember_secrets: false`) for newly generated or otherwise missing settings. Existing `crm_config.json` files that explicitly contain `remember_secrets: true` retain that compatibility setting. Set it to `false` and restart CRM to remove passwords and tokens from JSON; token cache remains protected separately with Windows DPAPI, while passwords are never cached.
 - The manual release workflow now records build history under `md/plans/v1-release-build-history.csv`, matching the consolidated documentation structure.
 
 ## Required release checks still outstanding
@@ -23,7 +23,7 @@ The hardened Chromium launch options must be tested against the real YAS portal 
 
 ### Existing configuration review
 
-The safer default only applies when a setting is absent or a new config is generated. Existing configurations that already contain `remember_secrets: true` retain that explicit value. Review deployed `crm_config.json` files and set `remember_secrets` to `false` unless local credential/token persistence is intentionally accepted.
+The safer default only applies when a setting is absent or a new config is generated. Existing configurations that already contain `remember_secrets: true` retain that explicit value. Review deployed `crm_config.json` files and set `remember_secrets` to `false` unless plaintext JSON persistence of passwords and tokens is intentionally accepted. With `false`, tokens still persist in the DPAPI-protected cache.
 
 ## Verification
 
