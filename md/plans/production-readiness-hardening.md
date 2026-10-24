@@ -5,7 +5,7 @@ Address the actionable production-readiness findings from the post-update reposi
 
 ## Scope
 1. Harden Yasweb Chromium launch defaults by removing flags that disable certificate validation, web security, site isolation, and the browser sandbox.
-2. Prevent authenticated page HTML from being written to routine logs or diagnostic files by default. Keep sensitive diagnostic capture available only through an explicit environment opt-in.
+2. Prevent authenticated page HTML from being written to routine logs or diagnostic files. Keep HTML snapshots and failure diagnostics disabled without an environment-variable opt-in.
 3. Stop logging response header values, which can contain credentials or session material.
 4. Make CRM secret persistence opt-in by default; retain explicit opt-in compatibility and ensure missing config values resolve to the safer default.
 5. Fix the release workflow's build-history path to the consolidated `md/plans/` location.
