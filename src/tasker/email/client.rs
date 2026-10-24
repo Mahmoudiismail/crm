@@ -11,7 +11,7 @@ use crate::tasker::email::attachments::{
 use crate::tasker::email::html::{escape_html, generate_pivot_html};
 use crate::tasker::email::message::TicketRow;
 use crate::tasker::email::recipients::{
-    group_tickets_into_buckets, load_team_mappings, resolve_recipients,
+    ensure_to_recipients, group_tickets_into_buckets, load_team_mappings, resolve_recipients,
 };
 use crate::tasker::email::reports::generate_leads_report;
 
@@ -385,6 +385,10 @@ where
             effective_send_exceptions,
             &exception_teams,
         );
+        if config.send_emails.unwrap_or(false) {
+            ensure_to_recipients(&to_emails)
+                .map_err(|e| anyhow::anyhow!("Cannot send email for bucket '{}': {e}", bucket_name))?;
+        }
 
         let html_table = generate_pivot_html(rows, &statuses_vec, is_branch);
 
