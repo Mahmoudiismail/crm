@@ -37,7 +37,7 @@ fn date_args_from_manifest(manifest: &serde_json::Value) -> (Option<String>, Opt
         .get("arguments")
         .and_then(serde_json::Value::as_array)
     else {
-        return (None, None, None);
+        return (None, None);
     };
 
     let mut start = None;
