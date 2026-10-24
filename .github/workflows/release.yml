@@ -76,6 +76,7 @@ jobs:
         with:
           shared-key: rust-repo-windows
           add-job-id-key: false
+          add-rust-environment-hash-key: false
           cache-on-failure: true
       - name: Build and package selected binaries
         id: build
