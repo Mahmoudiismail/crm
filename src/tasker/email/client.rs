@@ -8,7 +8,7 @@ use crate::tasker::config::EmailConfig;
 use crate::tasker::email::attachments::{
     generate_ticket_attachment, unique_email_artifact_path,
 };
-use crate::tasker::email::html::generate_pivot_html;
+use crate::tasker::email::html::{escape_html, generate_pivot_html};
 use crate::tasker::email::message::TicketRow;
 use crate::tasker::email::recipients::{
     group_tickets_into_buckets, load_team_mappings, resolve_recipients,
@@ -510,7 +510,11 @@ where
         {}
     </div>
 </body></html>"#,
-                receiver_name, bucket_name, from_date_str, today_str, html_table
+                escape_html(&receiver_name),
+                escape_html(bucket_name),
+                escape_html(&from_date_str),
+                escape_html(&today_str),
+                html_table
             );
             let subject = format!("Open TKTs - {}", bucket_name);
             (subject, body)
