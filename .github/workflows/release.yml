@@ -72,9 +72,10 @@ jobs:
           targets: x86_64-pc-windows-msvc
       - name: Rust Cache
         if: success()
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@v2.9.2
         with:
           shared-key: rust-repo-windows
+          add-job-id-key: false
           cache-on-failure: true
       - name: Build and package selected binaries
         id: build
