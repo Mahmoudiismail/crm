@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod config;
+mod token_store;
 pub mod downloader;
 pub mod fetcher;
 
