@@ -121,14 +121,8 @@ function Send-OutlookMail {
         } else { $mail.HTMLBody = $htmlBody }
     }
     Write-OutlookStep "HTML body stage complete"
-    $stage = "load attachment list"
-    $AttachmentPaths = @()
-    if ($AttachmentListPath) {
-        Write-OutlookStep "Reading attachment list"
-        if (-not (Test-Path -LiteralPath $AttachmentListPath -PathType Leaf)) { throw "Attachment list file not found: $AttachmentListPath" }
-        $AttachmentPaths = @(Get-Content -LiteralPath $AttachmentListPath -Encoding UTF8 | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-    }
-    Write-OutlookStep ("Attachment list loaded; count=" + $AttachmentPaths.Count)
+    $stage = "load attachments"
+    Write-OutlookStep ("Attachment paths received; count=" + @($AttachmentPaths).Count)
     $stage = "add attachments"
     foreach ($attachmentPath in $AttachmentPaths) {
         Write-OutlookStep "Validating and adding attachment"
