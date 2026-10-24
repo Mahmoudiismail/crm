@@ -5,6 +5,10 @@ on:
     branches: [main]
     paths:
       - '**/*.rs'
+      - '**/*.js'
+      - '**/*.ps1'
+      - '**/*.json'
+      - '**/*.jsonc'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.github/workflows/test.yml'
@@ -16,6 +20,10 @@ on:
     branches: [main]
     paths:
       - '**/*.rs'
+      - '**/*.js'
+      - '**/*.ps1'
+      - '**/*.json'
+      - '**/*.jsonc'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.github/workflows/test.yml'
