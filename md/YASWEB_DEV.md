@@ -38,3 +38,9 @@ than being treated as a successful run with an empty filter list.
 ## Concurrent report tabs
 
 Each report execution uses its own Chrome tab. Tab creation is serialized and retried up to three times when Chrome fails to deliver the target-created event. This prevents concurrent report jobs from navigating or modifying the same first tab. A live Yasweb run is still required to confirm behavior against the deployed Angular application.
+
+## Filesystem safety and async responsiveness
+
+Yasweb sanitizes report-name and date-derived filename components before creating temporary download folders, Chrome profile folders, or final report filenames. Path separators, control characters, and Windows-invalid filename characters are replaced, and traversal sequences are neutralized. The temporary download directory is created with checked async filesystem I/O; final report moves/copies run in `spawn_blocking` so large files do not block Tokio's async executor.
+
+When concurrent reports discover new filter names, their configuration updates are serialized within the Yasweb process. Each update reloads and validates the current JSON while holding the update lock, adds only missing filters, and writes atomically. If the config cannot be read or parsed, Yasweb logs a warning and preserves the existing file rather than replacing it with a stale in-memory copy. This lock coordinates report tasks in one Yasweb process; it is not a cross-process file lock.
