@@ -213,20 +213,18 @@ pub fn merge_json(current: &mut serde_json::Value, default: &serde_json::Value) 
                                     continue;
                                 }
 
-                                let current_index =
-                                    if let Some(default_type) = def_item.get("type") {
-                                    curr_arr.iter().position(|task| {
-                                        task.get("type") == Some(default_type)
-                                    })
+                                let current_index = match def_item.get("type") {
+                                    Some(default_type) => curr_arr
+                                        .iter()
+                                        .position(|task| task.get("type") == Some(default_type))
                                         .or_else(|| {
                                             curr_arr.get(i).and_then(|task| {
                                                 task.as_object()
                                                     .is_some_and(|object| object.is_empty())
                                                     .then_some(i)
                                             })
-                                        })
-                                } else {
-                                    (i < curr_arr.len()).then_some(i)
+                                        }),
+                                    None => (i < curr_arr.len()).then_some(i),
                                 };
 
                                 if let Some(index) = current_index {
