@@ -85,6 +85,7 @@ jobs:
         with:
           shared-key: rust-repo-windows
           add-job-id-key: false
+          add-rust-environment-hash-key: false
           cache-on-failure: true
 
       - name: Run clippy
@@ -114,6 +115,7 @@ jobs:
         with:
           shared-key: rust-repo-windows
           add-job-id-key: false
+          add-rust-environment-hash-key: false
           cache-on-failure: true
 
       - name: Run tests
