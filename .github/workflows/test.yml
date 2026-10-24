@@ -128,9 +128,6 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install cargo-audit
-        run: cargo install cargo-audit --locked
-
       - name: Resolve updated dependency graph
         run: cargo update
 
@@ -140,6 +137,9 @@ jobs:
           name: updated-cargo-lock
           path: Cargo.lock
           if-no-files-found: error
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
 
       - name: Audit RustSec advisories
         run: cargo audit
