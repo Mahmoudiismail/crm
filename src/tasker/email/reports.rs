@@ -177,13 +177,11 @@ pub fn generate_leads_report(
                 continue;
             }
 
-            {
-                let row_idx = (written_records + 1) as u32;
-                for (col_idx, field) in record.iter().enumerate() {
-                    worksheet.write_string(row_idx, col_idx as u16, field)?;
-                }
-                written_records += 1;
+            let row_idx = (written_records + 1) as u32;
+            for (col_idx, field) in record.iter().enumerate() {
+                worksheet.write_string(row_idx, col_idx as u16, field)?;
             }
+            written_records += 1;
         }
     }
 
@@ -246,6 +244,33 @@ mod tests {
         assert!(path.to_string_lossy().contains("Call_Center_Leads_"));
 
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn excluded_duplicate_does_not_suppress_valid_lead() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("lead_report_duplicates.csv");
+        let mut file = File::create(&file_path).unwrap();
+        writeln!(file, "Lead Id,Branch,Status").unwrap();
+        writeln!(file, "L1,Excluded Branch,New").unwrap();
+        writeln!(file, "L1,Main Branch,New").unwrap();
+
+        let excluded = vec!["Excluded Branch".to_string()];
+        let result = generate_leads_report(dir.path().to_str().unwrap(), 10, &excluded)
+            .unwrap()
+            .expect("valid duplicate should be included");
+
+        use calamine::Reader;
+        let mut workbook = calamine::open_workbook_auto(&result).unwrap();
+        let range = workbook.worksheet_range_at(0).unwrap().unwrap();
+        let lead_ids = range
+            .rows()
+            .skip(1)
+            .map(|row| row[0].to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(lead_ids, vec!["L1"]);
+
+        let _ = std::fs::remove_file(result);
     }
 
     #[test]
