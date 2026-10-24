@@ -7,6 +7,14 @@ use tracing::{error, info};
 use crate::yasweb::browser::debug;
 use crate::yasweb::config::YaswebConfig;
 
+/// Compare the portal's displayed account name with the configured username.
+///
+/// Trim surrounding whitespace and ignore case differences, but require an exact
+/// match so a different username containing the configured name is rejected.
+fn username_matches(displayed: &str, configured: &str) -> bool {
+    !configured.trim().is_empty() && displayed.trim().eq_ignore_ascii_case(configured.trim())
+}
+
 /// Automates the login flow and waits for the dashboard to appear.
 ///
 /// The function records HTML snapshots for successful navigation and login steps,
@@ -145,7 +153,7 @@ pub fn execute_login(
 
                 if let Ok(usr_id_element) = tab.find_element("span.usr-id") {
                     let inner_text = usr_id_element.get_inner_text().unwrap_or_default();
-                    if inner_text.contains(&config.username) {
+                    if username_matches(&inner_text, &config.username) {
                         login_success = true;
                         info!("Successfully verified configured username on the page.");
                     } else {
@@ -175,5 +183,25 @@ pub fn execute_login(
 
             Err(anyhow::anyhow!("Failed to find elements to login"))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::username_matches;
+
+    #[test]
+    fn accepts_exact_username_ignoring_case_and_outer_whitespace() {
+        assert!(username_matches("  Mahmoud.Ibrahim ", "mahmoud.ibrahim"));
+    }
+
+    #[test]
+    fn rejects_username_that_only_contains_configured_username() {
+        assert!(!username_matches("other-mahmoud", "mahmoud"));
+    }
+
+    #[test]
+    fn rejects_empty_configured_username() {
+        assert!(!username_matches("mahmoud", "   "));
     }
 }
