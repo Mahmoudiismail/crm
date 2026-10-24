@@ -499,8 +499,8 @@ mod security_tests {
 
     #[test]
     fn test_missing_remember_secrets_defaults_to_false() {
-        let config: AppConfig = serde_json::from_str(r#"{"region":"us-east-1"}"#)
-            .expect("Failed to parse JSON");
+        let config: AppConfig =
+            serde_json::from_str(r#"{"region":"us-east-1"}"#).expect("Failed to parse JSON");
         assert!(!config.remember_secrets);
     }
 
