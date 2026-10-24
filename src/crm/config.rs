@@ -153,7 +153,7 @@ impl AppConfig {
     /// If the file does not exist, create it with defaults.
     pub fn load(path: &str) -> Result<Self> {
         let config_path = Path::new(path);
-        let config: AppConfig =
+        let mut config: AppConfig =
             crate::utils::load_or_create_config(config_path, &AppConfig::default())?;
 
         // Migrate legacy JSON tokens to DPAPI before removing them. If JSON no longer
@@ -267,6 +267,10 @@ impl AppConfig {
 
         if let Ok(existing_content) = std::fs::read_to_string(path) {
             if existing_content == pretty {
+                if self.remember_secrets {
+                    token_store::remove(std::path::Path::new(path))
+                        .context("Failed to remove stale DPAPI token cache")?;
+                }
                 debug!("Config unchanged, skipping file write");
                 return Ok(());
             }
@@ -275,6 +279,10 @@ impl AppConfig {
                 serde_json::from_str::<serde_json::Value>(&pretty),
             ) {
                 if existing_val == new_val {
+                    if self.remember_secrets {
+                        token_store::remove(std::path::Path::new(path))
+                            .context("Failed to remove stale DPAPI token cache")?;
+                    }
                     debug!("Config unchanged, skipping file write");
                     return Ok(());
                 }
