@@ -191,11 +191,19 @@ async fn persist_discovered_filters(
     update_lock: &tokio::sync::Mutex<()>,
 ) -> Result<()> {
     let _guard = update_lock.lock().await;
-    let latest_config_content = fs::read_to_string(config_path)
-        .await
-        .with_context(|| format!("Failed to read Yasweb config at {:?} before updating filters", config_path))?;
+    let latest_config_content = fs::read_to_string(config_path).await.with_context(|| {
+        format!(
+            "Failed to read Yasweb config at {:?} before updating filters",
+            config_path
+        )
+    })?;
     let mut latest_config: YaswebConfig = serde_json::from_str(&latest_config_content)
-        .with_context(|| format!("Refusing to overwrite invalid Yasweb config at {:?}", config_path))?;
+        .with_context(|| {
+            format!(
+                "Refusing to overwrite invalid Yasweb config at {:?}",
+                config_path
+            )
+        })?;
 
     let Some(report) = latest_config.reports.get_mut(report_name) else {
         return Ok(());
@@ -791,9 +799,18 @@ mod tests_yasweb_finalization {
 
     #[test]
     fn filename_components_cannot_escape_their_directory() {
-        assert_eq!(sanitize_filename_component("../../outside\\file.csv"), "____outside_file.csv");
-        assert_eq!(sanitize_filename_component("C:\\temp\\report.csv"), "C__temp_report.csv");
-        assert_eq!(sanitize_filename_component("report 🚀 data.xlsx"), "report 🚀 data.xlsx");
+        assert_eq!(
+            sanitize_filename_component("../../outside\\file.csv"),
+            "____outside_file.csv"
+        );
+        assert_eq!(
+            sanitize_filename_component("C:\\temp\\report.csv"),
+            "C__temp_report.csv"
+        );
+        assert_eq!(
+            sanitize_filename_component("report 🚀 data.xlsx"),
+            "report 🚀 data.xlsx"
+        );
         assert_eq!(sanitize_filename_component("..."), "report");
     }
 
@@ -805,20 +822,26 @@ mod tests_yasweb_finalization {
             url: "https://example.test".to_string(),
             username: "test".to_string(),
             reports: std::collections::HashMap::from([
-                ("first".to_string(), ReportConfig {
-                    report_type: "Standard Report".to_string(),
-                    filters: std::collections::HashMap::new(),
-                    start_date_key: None,
-                    end_date_key: None,
-                    download_path: None,
-                }),
-                ("second".to_string(), ReportConfig {
-                    report_type: "Standard Report".to_string(),
-                    filters: std::collections::HashMap::new(),
-                    start_date_key: None,
-                    end_date_key: None,
-                    download_path: None,
-                }),
+                (
+                    "first".to_string(),
+                    ReportConfig {
+                        report_type: "Standard Report".to_string(),
+                        filters: std::collections::HashMap::new(),
+                        start_date_key: None,
+                        end_date_key: None,
+                        download_path: None,
+                    },
+                ),
+                (
+                    "second".to_string(),
+                    ReportConfig {
+                        report_type: "Standard Report".to_string(),
+                        filters: std::collections::HashMap::new(),
+                        start_date_key: None,
+                        end_date_key: None,
+                        download_path: None,
+                    },
+                ),
             ]),
             ..YaswebConfig::default()
         };
@@ -851,7 +874,9 @@ mod tests_yasweb_finalization {
             "first",
             vec!["filter_a".to_string()],
             &lock,
-        ).await.is_err());
+        )
+        .await
+        .is_err());
         assert_eq!(std::fs::read_to_string(&config_path).unwrap(), invalid);
     }
     use std::io::Write;
