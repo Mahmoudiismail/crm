@@ -1,4 +1,5 @@
 use crate::tasker::config::CrmOpenSohailConfig;
+use crate::tasker::email::html::escape_html;
 
 use super::models::EnrichedDataset;
 
@@ -27,7 +28,7 @@ pub fn generate_html_report(
 
         sections_html.push_str(&format!(
             "<div style=\"font-family: Calibri, sans-serif; font-size: 14px; font-weight: bold; color: #44546A;\">{}</div>",
-            title
+            escape_html(&title)
         ));
 
         // Start Table
@@ -62,13 +63,13 @@ pub fn generate_html_report(
                 <th width=\"{w5}\" style=\"border: 1px solid #8EA9DB; padding: 5px;\">Grand Total</th>
                 <th width=\"{w6}\" style=\"border: 1px solid #8EA9DB; padding: 5px;\">OUL</th>
             </tr>",
-            w0 = safe_widths[0],
-            w1 = safe_widths[1],
-            w2 = safe_widths[2],
-            w3 = safe_widths[3],
-            w4 = safe_widths[4],
-            w5 = safe_widths[5],
-            w6 = safe_widths[6],
+            w0 = escape_html(&safe_widths[0]),
+            w1 = escape_html(&safe_widths[1]),
+            w2 = escape_html(&safe_widths[2]),
+            w3 = escape_html(&safe_widths[3]),
+            w4 = escape_html(&safe_widths[4]),
+            w5 = escape_html(&safe_widths[5]),
+            w6 = escape_html(&safe_widths[6]),
         ));
 
         let mut ds_closed_total = 0.0;
@@ -116,7 +117,13 @@ pub fn generate_html_report(
                     <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
                     <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
                 </tr>",
-                row.team, closed_str, open_str, perc_closed_str, perc_open_str, grand_total_str, row.oul
+                escape_html(&row.team),
+                closed_str,
+                open_str,
+                perc_closed_str,
+                perc_open_str,
+                grand_total_str,
+                row.oul
             ));
         }
 
