@@ -168,7 +168,7 @@ async fn discover_date_args(
                     app.name
                 ))
                 .await;
-            (None, None)
+            (None, None, None)
         }
     }
 }
