@@ -16,7 +16,6 @@ on:
 
 permissions:
   contents: read
-  actions: read
 
 env:
   RUSTFLAGS: "-Dwarnings"
@@ -75,37 +74,6 @@ jobs:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
           persist-credentials: false
 
-      - name: Find reusable build artifact from PR #443
-        id: source-artifact
-        if: github.event_name == 'pull_request' && github.event.pull_request.number != 443
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          run_id=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?event=pull_request&per_page=100" --jq '[.workflow_runs[] | select(.head_branch == "fix/runner-date-argument-dependencies" and .status == "completed")][0].id // empty')
-          if [ -n "$run_id" ]; then
-            artifact_count=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts" --jq '[.artifacts[] | select(.name == "rust-target-pr443" and .expired == false)] | length')
-            if [ "$artifact_count" -gt 0 ]; then
-              echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
-              echo "Found reusable Rust build artifact in run $run_id"
-            else
-              echo "No reusable artifact found in run $run_id; continuing with normal cache/build."
-            fi
-          else
-            echo "No completed run for PR #443 found; continuing with normal cache/build."
-          fi
-
-      - name: Download reusable Rust build artifacts from PR #443
-        if: steps.source-artifact.outputs.run_id != ''
-        uses: actions/download-artifact@v4
-        continue-on-error: true
-        with:
-          name: rust-target-pr443
-          path: target/
-          repository: ${{ github.repository }}
-          run-id: ${{ steps.source-artifact.outputs.run_id }}
-          github-token: ${{ github.token }}
-
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -113,25 +81,15 @@ jobs:
           components: clippy
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@v2.9.2
         with:
           shared-key: rust-repo-windows
+          add-job-id-key: false
           cache-on-failure: true
 
       - name: Run clippy
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
-      - name: Upload reusable Rust build artifacts for the next PR
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: rust-target-pr443
-          path: |
-            target/
-            !target/debug/incremental/**
-          if-no-files-found: warn
-          compression-level: 0
-          retention-days: 30
 
   test:
     name: Test Suite
@@ -152,7 +110,7 @@ jobs:
           targets: x86_64-pc-windows-msvc
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@v2.9.2
         with:
           shared-key: rust-repo-windows
           cache-on-failure: true
