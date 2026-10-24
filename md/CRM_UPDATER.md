@@ -32,7 +32,7 @@ The `--logs-only` option moves files locally into a timestamped subfolder under 
 ### 3. Update Pipeline
 When an update ZIP is found in Outlook Drafts, the updater extracts it into `downloads` and validates that every file in `file_replacement_map` is present before launching the detached replacement script.
 
-If no Outlook draft is found, the updater can apply a complete set of already-staged application files in `downloads`. It refuses to start a partial update when any configured source file is missing. The detached script stops target applications, replaces each executable, verifies SHA-256 hashes, restarts configured applications, and logs the result in `updater_detached.log`.
+If no Outlook draft is found, the updater can apply a complete set of already-staged application files in `downloads`. It refuses to start a partial update when any configured source file is missing. The detached script preflights all sources and destinations before stopping target applications. It stages each replacement beside its destination, verifies SHA-256 hashes, and keeps a backup of each existing destination until the complete replacement set has succeeded. If a replacement fails, it attempts to roll back already-replaced files in reverse order and logs any rollback failures. After all replacements are verified, it removes backups, restarts configured applications, and logs the result in `updater_detached.log`.
 
 ## Configuration
 
