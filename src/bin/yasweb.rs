@@ -853,6 +853,20 @@ mod tests_yasweb_finalization {
     use std::io::Write;
 
     #[test]
+    fn finalize_download_keeps_sanitized_filename_inside_output_directory() {
+        let root = tempfile::tempdir().unwrap();
+        let src_dir = root.path().join("source");
+        let dst_dir = root.path().join("destination");
+        std::fs::create_dir_all(&src_dir).unwrap();
+        std::fs::write(src_dir.join("report.xlsx"), b"safe report").unwrap();
+
+        finalize_download(&src_dir, &dst_dir, "../outside.xlsx").unwrap();
+
+        assert!(dst_dir.join("_outside.xlsx").exists());
+        assert!(!root.path().join("outside.xlsx").exists());
+    }
+
+    #[test]
     fn test_finalize_download_rename_success() {
         let tmp = std::env::temp_dir();
         let src_dir = tmp.join("yasweb_test_src_1");
