@@ -89,6 +89,18 @@ jobs:
       - name: Run clippy
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
+      - name: Upload reusable Rust build artifacts for the next PR
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-target-pr443
+          path: |
+            target/
+            !target/debug/incremental/**
+          if-no-files-found: warn
+          compression-level: 0
+          retention-days: 3
+
   test:
     name: Test Suite
     needs: [format, clippy]
