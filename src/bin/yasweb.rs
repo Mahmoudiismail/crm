@@ -593,7 +593,8 @@ async fn main() -> Result<()> {
                             "yasweb_downloads_tmp_{}_{}_{}",
                             safe_report_name, safe_date_suffix, i
                         ));
-                        std::fs::create_dir_all(&dir)
+                        fs::create_dir_all(&dir)
+                            .await
                             .with_context(|| format!("Failed to create temporary download directory {:?}", dir))?;
                         dir
                     };
@@ -734,8 +735,14 @@ async fn main() -> Result<()> {
                         dir
                     };
 
-                    finalize_download(&temp_dl_dir, &final_out_dir, &final_filename)
-                        .with_context(|| format!("Failed to finalize Yasweb report '{}'", active_report_name_clone))?;
+                    let finalization = tokio::task::spawn_blocking(move || {
+                        finalize_download(&temp_dl_dir, &final_out_dir, &final_filename)
+                    })
+                    .await
+                    .context("Yasweb download finalization task failed to join")?;
+                    finalization.with_context(|| {
+                        format!("Failed to finalize Yasweb report '{}'", active_report_name_clone)
+                    })?;
 
                     if !discovered_filters.is_empty() {
                         if let Err(e) = persist_discovered_filters(
