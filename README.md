@@ -103,7 +103,7 @@ When code is merged to the main branch or tagged, individual workflows (`release
 
 ## 📚 Documentation
 
-Detailed documentation is stored in the `md/` directory.
+Detailed documentation is consolidated under `md/`. Core application guides are at the top level of that directory; historical plans, issue analyses, and audits are grouped in `md/plans/`, `md/issues/`, and `md/audits/`.
 
 1. [`AGENTS.md`](./AGENTS.md) - **Mandatory reading for AI agents**
 2. [`APPLICATION_SUMMARY.md`](./md/APPLICATION_SUMMARY.md) - Application overview

@@ -46,7 +46,7 @@ When a bug is fixed or a new feature is added, a corresponding test case **MUST*
 
 - **Unit tests:** Place them in the same file as the code they test in a `#[cfg(test)] mod tests` block.
 - **Integration tests:** Place them in the `tests/` directory.
-- Use mock datasets located in `TestingDownloads/` instead of downloading remote files during tests.
+- Keep test fixtures synthetic and under the relevant `tests/` fixture directory; do not use production exports or a shared `TestingDownloads/` folder.
 - Prefer testing externally visible behavior over internal implementation.
 
 ## How to Update Documentation

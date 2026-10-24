@@ -1,7 +1,7 @@
 # Execution Planning Directive
-- **MANDATORY**: Before initiating any work, the agent MUST create a detailed execution plan document (e.g. `plan.md`) explaining the intended changes.
-- The plan file MUST be placed inside the `plan/` directory.
-- The plan file MUST be given a unique filename identifying the content of the changes (e.g., `plan/fix_dashboard_updater_issue.md`).
+- **MANDATORY**: Before initiating any work, the agent MUST create a detailed execution plan document (e.g. `md/plans/<unique-plan-name>.md`) explaining the intended changes.
+- The plan file MUST be placed inside `md/plans/`.
+- The plan file MUST be given a unique filename identifying the content of the changes (e.g., `md/plans/fix_dashboard_updater_issue.md`).
 - This file must be committed along with the code changes.
 
 # Agent Instructions for This Repository

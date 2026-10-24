@@ -1,6 +1,12 @@
 # CRM Tool Documentation Index
 
-This folder is the full rebuild and operations reference for the CRM Tool codebase.
+This folder is the consolidated documentation root for the CRM Tool codebase, including core guides, historical plans, issue analyses, and repository audits.
+
+## Documentation Areas
+
+- `plans/`: implementation plans and audit plans.
+- `issues/`: issue analyses and remediation records.
+- `audits/`: repository assessments and audit reports.
 
 ## Agent Entry Point
 
