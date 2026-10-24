@@ -174,8 +174,9 @@ pub fn merge_json(current: &mut serde_json::Value, default: &serde_json::Value) 
                 curr_map.insert(k.clone(), v.clone());
                 changed = true;
             } else {
-                // Task autoheal requirement: if we're merging "tasks" array, elements that are empty objects `{}`
-                // get replaced completely by the default at that index, and otherwise recursively merged.
+                // Tasker task defaults are matched by type so reordering user tasks cannot
+                // merge one task's defaults into an unrelated task. Other task arrays retain
+                // their legacy positional behavior.
                 if k == "tasks" {
                     if let (Some(curr_arr), Some(def_arr)) = (
                         curr_map.get_mut(k).and_then(|val| val.as_array_mut()),
@@ -189,6 +190,7 @@ pub fn merge_json(current: &mut serde_json::Value, default: &serde_json::Value) 
                                 let is_disabled_opt_in =
                                     def_item.get("enabled").and_then(serde_json::Value::as_bool)
                                         == Some(false);
+
                                 if is_disabled_opt_in {
                                     let default_type = def_item.get("type");
                                     let already_present = default_type.is_some_and(|task_type| {
@@ -200,14 +202,26 @@ pub fn merge_json(current: &mut serde_json::Value, default: &serde_json::Value) 
                                         curr_arr.push(def_item.clone());
                                         changed = true;
                                     }
-                                } else if i < curr_arr.len() {
-                                    if curr_arr[i].is_object()
-                                        && curr_arr[i].as_object().unwrap().is_empty()
+                                    continue;
+                                }
+
+                                let current_index = if let Some(default_type) = def_item.get("type") {
+                                    curr_arr
+                                        .iter()
+                                        .position(|task| task.get("type") == Some(default_type))
+                                } else {
+                                    (i < curr_arr.len()).then_some(i)
+                                };
+
+                                if let Some(index) = current_index {
+                                    if curr_arr[index]
+                                        .as_object()
+                                        .is_some_and(|object| object.is_empty())
                                     {
-                                        curr_arr[i] = def_item.clone();
+                                        curr_arr[index] = def_item.clone();
                                         changed = true;
                                     } else {
-                                        changed |= merge_json(&mut curr_arr[i], def_item);
+                                        changed |= merge_json(&mut curr_arr[index], def_item);
                                     }
                                 }
                             }
@@ -977,5 +991,80 @@ impl Drop for FileCleanupGuard {
                 );
             }
         }
+    }
+}
+
+
+#[cfg(test)]
+mod configuration_merge_regression_tests {
+    use super::merge_json;
+    use serde_json::json;
+
+    #[test]
+    fn task_defaults_follow_task_type_when_user_reorders_tasks() {
+        let defaults = json!({
+            "tasks": [
+                {
+                    "type": "csv_analysis",
+                    "enabled": true,
+                    "minutes_ago": 15,
+                    "email_config": {
+                        "send_emails": false,
+                        "default_to_email": "fallback@example.com"
+                    }
+                },
+                {
+                    "type": "dashboard_updater",
+                    "enabled": true,
+                    "dashboard_file": "default.xlsx"
+                },
+                {
+                    "type": "sat_figures",
+                    "enabled": false,
+                    "output_file": "sat_figures.csv"
+                }
+            ]
+        });
+        let mut current = json!({
+            "tasks": [
+                {
+                    "type": "dashboard_updater",
+                    "enabled": true,
+                    "dashboard_file": "custom.xlsx"
+                },
+                {
+                    "type": "csv_analysis",
+                    "enabled": true,
+                    "minutes_ago": 30,
+                    "email_config": {
+                        "send_emails": true
+                    }
+                }
+            ]
+        });
+
+        assert!(merge_json(&mut current, &defaults));
+
+        assert_eq!(current["tasks"][0]["type"], "dashboard_updater");
+        assert_eq!(current["tasks"][0]["dashboard_file"], "custom.xlsx");
+        assert_eq!(current["tasks"][1]["type"], "csv_analysis");
+        assert_eq!(current["tasks"][1]["minutes_ago"], 30);
+        assert_eq!(current["tasks"][1]["email_config"]["send_emails"], true);
+        assert_eq!(
+            current["tasks"][1]["email_config"]["default_to_email"],
+            "fallback@example.com"
+        );
+        assert_eq!(current["tasks"][2]["type"], "sat_figures");
+        assert_eq!(current["tasks"][2]["enabled"], false);
+    }
+
+    #[test]
+    fn ordinary_arrays_remain_atomic_during_merge() {
+        let defaults = json!({ "exclude_branches": ["default"], "new_field": true });
+        let mut current = json!({ "exclude_branches": ["custom", "other"] });
+
+        assert!(merge_json(&mut current, &defaults));
+        assert_eq!(current["exclude_branches"], json!(["custom", "other"]));
+        assert_eq!(current["new_field"], true);
     }
 }
