@@ -209,7 +209,7 @@ jobs:
           from datetime import datetime, timezone
           from pathlib import Path
 
-          path = Path("plan/v1-release-build-history.csv")
+          path = Path("md/plans/v1-release-build-history.csv")
           path.parent.mkdir(parents=True, exist_ok=True)
           fields = [
               "timestamp_utc", "run_id", "run_attempt", "source_sha", "version",
@@ -243,7 +243,7 @@ jobs:
           PY
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add plan/v1-release-build-history.csv
+          git add md/plans/v1-release-build-history.csv
           if git diff --cached --quiet; then
             echo "No history change to commit."
             exit 0
