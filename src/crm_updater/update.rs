@@ -181,7 +181,7 @@ fn extract_zip(zip_path: &Path, extract_dir: &Path, password: &[u8]) -> Result<V
             None => continue,
         };
 
-        if file.name().ends_with('/') {
+        if file.name()?.ends_with('/') {
             fs::create_dir_all(&outpath)?;
         } else {
             if let Some(p) = outpath.parent() {
