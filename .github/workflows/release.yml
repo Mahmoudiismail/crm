@@ -77,6 +77,8 @@ jobs:
           shared-key: rust-repo-windows
           add-job-id-key: false
           add-rust-environment-hash-key: false
+          key: ${{ github.run_id }}-${{ github.job }}
+          cache-workspace-crates: true
           cache-on-failure: true
       - name: Build and package selected binaries
         id: build
