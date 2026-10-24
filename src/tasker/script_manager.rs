@@ -47,7 +47,7 @@ impl Default for ScriptManager {
 fn rename_with_fallback(from: &Path, to: &Path) -> std::io::Result<()> {
     match fs::rename(from, to) {
         Ok(()) => Ok(()),
-        Err(first_error) if !to.exists() => Err(first_error),
+        Err(first_error) if !from.exists() || !to.exists() => Err(first_error),
         Err(first_error) => {
             // Windows cannot rename over an existing destination. Preserve the old
             // file until the replacement succeeds so a failed rename cannot destroy it.
