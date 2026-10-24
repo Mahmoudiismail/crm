@@ -2,13 +2,17 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{error, info};
 
+fn diagnostics_enabled(value: Option<&str>) -> bool {
+    value == Some("1")
+}
+
 pub fn save_html_state(
     tab: &Arc<headless_chrome::Tab>,
     active_report_name: &str,
     step_num: u32,
     step_name: &str,
 ) {
-    if std::env::var("CRM_YASWEB_CAPTURE_DIAGNOSTICS").ok().as_deref() != Some("1") {
+    if !diagnostics_enabled(std::env::var("CRM_YASWEB_CAPTURE_DIAGNOSTICS").ok().as_deref()) {
         return;
     }
 
@@ -247,5 +251,18 @@ pub fn save_failure_diagnostics(tab: &Arc<headless_chrome::Tab>, step_name: &str
             "Failed to collect failure diagnostics for '{}': {e}",
             step_name
         ),
+    }
+}
+
+#[cfg(test)]
+mod diagnostics_gate_tests {
+    use super::diagnostics_enabled;
+
+    #[test]
+    fn diagnostics_are_disabled_unless_explicitly_enabled() {
+        assert!(!diagnostics_enabled(None));
+        assert!(!diagnostics_enabled(Some("0")));
+        assert!(!diagnostics_enabled(Some("true")));
+        assert!(diagnostics_enabled(Some("1")));
     }
 }
