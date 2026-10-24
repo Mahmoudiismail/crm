@@ -34,8 +34,14 @@ mod tests {
         let first = unique_email_artifact_path("Call Center", "email.html");
         let second = unique_email_artifact_path("Call Center", "email.html");
         assert_ne!(first, second);
-        assert!(first.ends_with("email.html"));
-        assert!(second.ends_with("email.html"));
+        assert!(first
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.ends_with("email.html")));
+        assert!(second
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.ends_with("email.html")));
     }
 }
 
