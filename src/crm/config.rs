@@ -34,7 +34,7 @@ pub struct AppConfig {
     pub password: String,
     #[serde(default)]
     pub no_verify_ssl: bool,
-    #[serde(default = "default_true")]
+    #[serde(default = "default_false")]
     pub remember_secrets: bool,
     #[serde(default)]
     pub email: String,
@@ -99,9 +99,8 @@ fn default_file_log_level() -> String {
     "TRACE".to_string()
 }
 
-fn default_true() -> bool {
-    true
-}
+fn default_false() -> bool {
+    false}
 
 fn default_recent_download_window_seconds() -> u64 {
     30
@@ -120,7 +119,7 @@ impl Default for AppConfig {
             username: "".into(),
             password: "".into(),
             no_verify_ssl: false,
-            remember_secrets: true,
+            remember_secrets: false,
             email: "Mahmoud_iismail@rayacx.com".into(),
             from_date: "2025-01-01".into(),
             calls_from_date: "2026-02-01".into(),
@@ -327,6 +326,13 @@ mod tests {
     use super::*;
     use std::io::Write;
     use tempfile::NamedTempFile;
+
+    #[test]
+    fn secret_persistence_is_disabled_by_default() {
+        assert!(!AppConfig::default().remember_secrets);
+        let config: AppConfig = serde_json::from_str(r#"{"region":"us-east-1"}"#).unwrap();
+        assert!(!config.remember_secrets);
+    }
 
     #[test]
     fn test_load_creates_default_file_if_missing() {
