@@ -633,6 +633,19 @@ mod tests {
     use std::io::Write;
     use tempfile::NamedTempFile;
 
+    fn find_artifact(prefix: &str, suffix: &str) -> std::path::PathBuf {
+        std::fs::read_dir(std::env::temp_dir())
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .find(|path| {
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.starts_with(prefix) && name.ends_with(suffix))
+            })
+            .unwrap_or_else(|| panic!("artifact not found: {}*{}", prefix, suffix))
+    }
+
     #[test]
     fn test_email_processing_skips_closed() {
         let download_dir = tempfile::tempdir().unwrap();
@@ -734,17 +747,16 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let temp_dir = std::env::temp_dir();
-        let email_html_path = temp_dir.join("Call_center_email.html");
-        assert!(email_html_path.exists());
+        let email_html_path = find_artifact("Call_Center_", ".email.html");
 
         let html_content = std::fs::read_to_string(&email_html_path).unwrap();
         assert!(!html_content.contains("<body></body>"));
         assert!(html_content.contains("Kindly find below"));
         assert!(html_content.contains("margin-left:20px;"));
 
-        let _ = std::fs::remove_file(email_html_path);
-        let _ = std::fs::remove_file(temp_dir.join("Call_Center_open_tickets.csv"));
+        let _ = std::fs::remove_file(&email_html_path);
+        let attachment_path = find_artifact("Call_Center_", ".open_tickets.csv");
+        let _ = std::fs::remove_file(attachment_path);
     }
 
     #[test]
@@ -801,15 +813,13 @@ mod tests {
         )
         .unwrap();
 
-        let system_temp = std::env::temp_dir();
-        let attachment_csv = system_temp.join("Team_a_open_tickets.csv");
-        assert!(attachment_csv.exists());
+        let attachment_csv = find_artifact("Team_A_", ".open_tickets.csv");
 
         let attachment_content = std::fs::read_to_string(&attachment_csv).unwrap();
         assert!(attachment_content.contains("101"));
         assert!(!attachment_content.contains("102"));
 
-        let email_html = system_temp.join("Team_a_email.html");
+        let email_html = find_artifact("Team_A_", ".email.html");
         let html_content = std::fs::read_to_string(&email_html).unwrap();
         assert!(html_content.contains("alice"));
         assert!(!html_content.contains("bob"));
