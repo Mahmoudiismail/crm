@@ -212,6 +212,13 @@ pub fn merge_json(current: &mut serde_json::Value, default: &serde_json::Value) 
                                     curr_arr
                                         .iter()
                                         .position(|task| task.get("type") == Some(default_type))
+                                        .or_else(|| {
+                                            curr_arr.get(i).and_then(|task| {
+                                                task.as_object()
+                                                    .is_some_and(|object| object.is_empty())
+                                                    .then_some(i)
+                                            })
+                                        })
                                 } else {
                                     (i < curr_arr.len()).then_some(i)
                                 };
