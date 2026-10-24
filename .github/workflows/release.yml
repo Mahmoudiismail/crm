@@ -75,10 +75,8 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: rust-repo-windows
-          add-job-id-key: false
-          add-rust-environment-hash-key: false
-          key: ${{ github.run_id }}-${{ github.job }}
-          cache-workspace-crates: true
+          key: release
+          save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-on-failure: true
       - name: Build and package selected binaries
         id: build
