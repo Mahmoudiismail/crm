@@ -92,21 +92,43 @@ pub fn generate_leads_report(
             .delimiter(delimiter)
             .from_reader(file_content.as_bytes());
 
-        if headers.is_none() {
-            let h = rdr.headers()?.clone();
-            for (i, col_name) in h.iter().enumerate() {
-                let lower = col_name.trim().to_lowercase();
-                let lower = lower.trim_start_matches('\u{feff}');
+        let current_headers = rdr.headers()?.clone();
+        if let Some(expected_headers) = &headers {
+            let headers_match = expected_headers.len() == current_headers.len()
+                && expected_headers.iter().zip(current_headers.iter()).all(|(expected, actual)| {
+                    let expected = expected.trim().trim_start_matches('\u{feff}');
+                    let actual = actual.trim().trim_start_matches('\u{feff}');
+                    expected.eq_ignore_ascii_case(actual)
+                });
+            if !headers_match {
+                anyhow::bail!(
+                    "Lead report '{}' has a different header layout from the first input file",
+                    file_path.display()
+                );
+            }
+        } else {
+            for (i, col_name) in current_headers.iter().enumerate() {
+                let normalized = col_name
+                    .trim()
+                    .trim_start_matches('\u{feff}')
+                    .to_lowercase();
 
-                if lower == "lead id" {
+                if normalized == "lead id" {
                     lead_id_idx = Some(i);
-                } else if lower == "branch" {
+                } else if normalized == "branch" {
                     branch_idx = Some(i);
-                } else if lower == "status" {
+                } else if normalized == "status" {
                     status_idx = Some(i);
                 }
             }
-            headers = Some(h);
+
+            if lead_id_idx.is_none() || branch_idx.is_none() || status_idx.is_none() {
+                anyhow::bail!(
+                    "Lead report '{}' must contain Lead Id, Branch, and Status columns",
+                    file_path.display()
+                );
+            }
+            headers = Some(current_headers);
         }
 
         for result in rdr.records() {
@@ -131,9 +153,6 @@ pub fn generate_leads_report(
                 .unwrap_or("")
                 .trim()
                 .to_string();
-            if !seen_leads.insert(lead_id.clone()) {
-                continue;
-            }
 
             let branch = branch_idx
                 .and_then(|idx| record.get(idx))
@@ -147,10 +166,18 @@ pub fn generate_leads_report(
                 .to_lowercase();
 
             let is_excluded_branch = exclude_branches_lower.contains(&branch);
-
             let status_matches = status == "new" || status == "follow-up";
+            if is_excluded_branch || !status_matches {
+                continue;
+            }
 
-            if !is_excluded_branch && status_matches {
+            // Excluded or unsupported rows must not reserve an ID and suppress
+            // a later valid record with the same Lead Id.
+            if !lead_id.is_empty() && !seen_leads.insert(lead_id) {
+                continue;
+            }
+
+            {
                 let row_idx = (written_records + 1) as u32;
                 for (col_idx, field) in record.iter().enumerate() {
                     worksheet.write_string(row_idx, col_idx as u16, field)?;
