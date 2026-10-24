@@ -100,6 +100,9 @@ function Send-OutlookMail {
         $recipient.Type = 1 # olTo
     }
     Write-OutlookStep "Recipient stage complete"
+    $recipientCount = $mail.Recipients.Count
+    $hasToField = -not [string]::IsNullOrWhiteSpace([string]$mail.To)
+    Write-OutlookStep ("Recipient diagnostics; To field configured=" + $hasToField + "; resolved recipient collection count=" + $recipientCount)
     $stage = "set subject"
     if ($Subject) { $mail.Subject = $Subject }
     Write-OutlookStep "Subject stage complete"
@@ -145,6 +148,9 @@ function Send-OutlookMail {
         Write-OutlookStep "Deferred delivery skipped for draft"
     }
     $stage = "final action"
+    if ($DisplayOrSend -ne "Display" -and $DisplayOrSend -ne "SaveDraft" -and $mail.Recipients.Count -eq 0) {
+        throw "Cannot send Outlook email: no recipients were added. Check the To/CC configuration and parameter values."
+    }
     switch ($DisplayOrSend) {
         "Display" { Write-OutlookStep "Displaying item"; $mail.Display() }
         "SaveDraft" { Write-OutlookStep "Saving draft"; $mail.Save(); Write-OutlookStep "Draft saved" }
