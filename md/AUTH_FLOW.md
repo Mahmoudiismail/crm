@@ -9,7 +9,9 @@ Implementation: `src/crm/auth.rs`
 Decision tree:
 
 1. If cached token and `access_token_expiry` are valid (with a 5-minute safety buffer) -> reuse token.
-2. Else perform fresh SRP login.
+2. If expired or missing and a refresh token exists -> attempt Cognito `REFRESH_TOKEN_AUTH`.
+3. If refresh fails and a password is available in memory -> perform fresh SRP login.
+4. If refresh fails and no password is available -> return a clear re-authentication error.
 
 Current runtime policy: CRM execution always requires login flow (no user-facing skip-login option).
 
@@ -75,7 +77,11 @@ Body includes:
 - `PASSWORD_CLAIM_SIGNATURE`
 - `TIMESTAMP`
 
-### 6) Token Extraction
+### 6) Refreshing an Existing Session
+
+When the access token expires, the CRM attempts Cognito `REFRESH_TOKEN_AUTH` using the cached refresh token. If Cognito rotates the refresh token, the new value is stored; otherwise, the existing refresh token is retained. Refresh failures are not logged with raw response bodies or token values. When password retention is disabled and refresh fails, the application asks for the password to be re-entered rather than attempting SRP with an empty password.
+
+### 7) Token Extraction
 
 From `AuthenticationResult`:
 
