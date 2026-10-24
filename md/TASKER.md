@@ -145,6 +145,10 @@ This task is similar to `csv_analysis`, in that it processes raw ticket CSVs to 
 
 The `department_split` task takes a master macro-enabled Excel dashboard and automatically splits it into individual departmental copies based on a target mapping file, while fully preserving all formatting, sheets, and VBA macro modules.
 
+## Pivot HTML performance
+
+The email pivot HTML renderer sorts borrowed ticket-row references instead of cloning the full input rows. This reduces avoidable row/string copying while preserving the existing team/assignee/subtype/category sort order and rendered totals.
+
 ## Logging
 
 `tasker` includes detailed logging for auditing and debugging. It leverages the `tracing` framework to output logs both to STDOUT and to a rolling log file `task_csv_analysis.log` situated in the same folder as the executable. Every step (config parsing, file reading, row counting, filtering, pivot creation, and Outlook automation) is rigorously tracked in this file.
