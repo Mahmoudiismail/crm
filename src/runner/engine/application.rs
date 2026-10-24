@@ -70,6 +70,43 @@ fn date_args_from_manifest(manifest: &serde_json::Value) -> (Option<String>, Opt
     (start, end)
 }
 
+/// Check whether a manifest argument's declared dependencies are satisfied by the
+/// arguments already configured for this invocation. Unknown arguments remain allowed
+/// for backward compatibility with apps that do not expose a manifest.
+fn manifest_arg_dependencies_satisfied(
+    manifest: &serde_json::Value,
+    arg_name: &str,
+    effective_args: &HashMap<String, String>,
+) -> bool {
+    let Some(arg) = manifest
+        .get("arguments")
+        .and_then(serde_json::Value::as_array)
+        .and_then(|args| {
+            args.iter()
+                .find(|arg| arg.get("name").and_then(serde_json::Value::as_str) == Some(arg_name))
+        })
+    else {
+        return true;
+    };
+
+    let Some(dependencies) = arg.get("depends_on").and_then(serde_json::Value::as_object) else {
+        return true;
+    };
+
+    dependencies
+        .iter()
+        .all(|(dependency_name, allowed_values)| {
+            let Some(actual_value) = effective_args.get(dependency_name) else {
+                return false;
+            };
+            allowed_values.as_array().is_some_and(|values| {
+                values
+                    .iter()
+                    .any(|value| value.as_str() == Some(actual_value.as_str()))
+            })
+        })
+}
+
 fn insert_period_args(
     effective_args: &mut HashMap<String, String>,
     start_arg: Option<String>,
@@ -88,7 +125,7 @@ fn insert_period_args(
 async fn discover_date_args(
     logger: &TaskLogger,
     app: &RegisteredApp,
-) -> (Option<String>, Option<String>) {
+) -> (Option<String>, Option<String>, Option<serde_json::Value>) {
     let executable = resolve_executable(&app.executable_path);
     let mut command = tokio::process::Command::new(executable);
     command
@@ -100,7 +137,10 @@ async fn discover_date_args(
     match tokio::time::timeout(MANIFEST_TIMEOUT, command.output()).await {
         Ok(Ok(output)) if output.status.success() => {
             match serde_json::from_slice::<serde_json::Value>(&output.stdout) {
-                Ok(manifest) => date_args_from_manifest(&manifest),
+                Ok(manifest) => {
+                    let (start, end) = date_args_from_manifest(&manifest);
+                    (start, end, Some(manifest))
+                }
                 Err(error) => {
                     logger
                         .log(&format!(
@@ -108,7 +148,7 @@ async fn discover_date_args(
                             app.name, error
                         ))
                         .await;
-                    (None, None)
+                    (None, None, None)
                 }
             }
         }
@@ -119,7 +159,7 @@ async fn discover_date_args(
                     app.name, output.status
                 ))
                 .await;
-            (None, None)
+            (None, None, None)
         }
         Ok(Err(error)) => {
             logger
@@ -128,7 +168,7 @@ async fn discover_date_args(
                     app.name, error
                 ))
                 .await;
-            (None, None)
+            (None, None, None)
         }
         Err(_) => {
             logger
@@ -137,7 +177,7 @@ async fn discover_date_args(
                     app.name
                 ))
                 .await;
-            (None, None)
+            (None, None, None)
         }
     }
 }
@@ -179,27 +219,30 @@ pub async fn run_external_app(
     }
 
     if period.is_some() {
-        // Explicit task mappings always win. If they are absent, use the app manifest
-        // to discover non-standard date flags, then retain the legacy flag names as fallback.
-        let needs_manifest = spec.start_date_arg.as_deref().is_none_or(str::is_empty)
-            || spec.end_date_arg.as_deref().is_none_or(str::is_empty);
-        let discovered = if needs_manifest {
-            discover_date_args(logger, app).await
-        } else {
-            (None, None)
-        };
+        // Explicit mappings take precedence, while manifest dependencies still
+        // determine whether a configured argument is valid for this invocation.
+        let discovered = discover_date_args(logger, app).await;
+        let manifest = discovered.2.as_ref();
         let start_arg = spec
             .start_date_arg
             .as_deref()
             .filter(|name| !name.is_empty())
             .map(str::to_string)
-            .or(discovered.0);
+            .or(discovered.0)
+            .filter(|name| {
+                manifest
+                    .is_none_or(|m| manifest_arg_dependencies_satisfied(m, name, &effective_args))
+            });
         let end_arg = spec
             .end_date_arg
             .as_deref()
             .filter(|name| !name.is_empty())
             .map(str::to_string)
-            .or(discovered.1);
+            .or(discovered.1)
+            .filter(|name| {
+                manifest
+                    .is_none_or(|m| manifest_arg_dependencies_satisfied(m, name, &effective_args))
+            });
 
         let start_arg_name = start_arg.clone();
         let end_arg_name = end_arg.clone();
@@ -272,8 +315,34 @@ pub async fn run_external_app(
 
 #[cfg(test)]
 mod tests {
-    use super::{date_args_from_manifest, insert_period_args};
+    use super::{date_args_from_manifest, insert_period_args, manifest_arg_dependencies_satisfied};
     use std::collections::HashMap;
+
+    #[test]
+    fn respects_manifest_dependencies_for_explicit_date_arguments() {
+        let manifest = serde_json::json!({
+            "arguments": [
+                {
+                    "name": "--start-date",
+                    "arg_type": "string",
+                    "depends_on": {"--task": ["6"]}
+                }
+            ]
+        });
+        let wrong_task = HashMap::from([("--task".to_string(), "1".to_string())]);
+        let sat_figures = HashMap::from([("--task".to_string(), "6".to_string())]);
+
+        assert!(!manifest_arg_dependencies_satisfied(
+            &manifest,
+            "--start-date",
+            &wrong_task
+        ));
+        assert!(manifest_arg_dependencies_satisfied(
+            &manifest,
+            "--start-date",
+            &sat_figures
+        ));
+    }
 
     #[test]
     fn rejects_inverted_explicit_iso_date_args_before_launch() {

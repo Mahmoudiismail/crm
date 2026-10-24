@@ -12,6 +12,17 @@ on:
       - '.github/workflows/release.yml'
       - '.gitignore'
       - 'deny.toml'
+  push:
+    branches: [main]
+    paths:
+      - '**/*.rs'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/test.yml'
+      - '.github/workflows/auto-format.yml'
+      - '.github/workflows/release.yml'
+      - '.gitignore'
+      - 'deny.toml'
   workflow_dispatch:
 
 permissions:
@@ -84,10 +95,13 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: rust-repo-windows
+          key: clippy
+          save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-on-failure: true
 
       - name: Run clippy
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
 
   test:
     name: Test Suite
@@ -111,6 +125,8 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: rust-repo-windows
+          key: test
+          save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-on-failure: true
 
       - name: Run tests
