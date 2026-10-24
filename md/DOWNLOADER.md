@@ -18,14 +18,17 @@ Behavior:
 2. URL-decode filename.
 3. Ensure `target_dir` exists.
 4. GET request with timeout and identity encoding.
-5. Stream bytes to file asynchronously using a `BufWriter` (128 KiB buffer) to reduce write syscalls on large downloads.
-6. Flush and return filename.
+5. Stream bytes to a uniquely-created temporary file asynchronously using a `BufWriter` (128 KiB buffer) to reduce write syscalls on large downloads.
+6. Remove the temporary file on HTTP, stream, write, flush, or rename failure.
+7. Rename the verified completed temporary file to its final destination and return the filename.
 
 ## HTTP Details
 
 - Method: GET
 - Header: `accept-encoding: identity`
-- Timeout: 60 seconds
+- Timeout: 60 seconds per HTTP attempt.
+- The fetcher retries a signed-URL download up to three times, then requests a fresh URL for the same report range if those attempts fail.
+- A failed download is propagated to the overall fetch operation; partial temporary files are removed rather than left as report CSVs.
 
 ## File Placement
 
