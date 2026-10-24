@@ -172,6 +172,9 @@ fn sanitize_filename_component(value: &str) -> String {
         }
     }
 
+    if sanitized.chars().all(|ch| ch == '.' || ch == ' ') {
+        return "report".to_string();
+    }
     let sanitized = sanitized.replace("..", "_");
     let sanitized = sanitized.trim().trim_matches('.').trim_end_matches(' ');
     if sanitized.is_empty() {
