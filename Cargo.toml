@@ -80,6 +80,7 @@ name = "crm"
 path = "src/bin/crm.rs"
 
 [target.'cfg(target_os = "windows")'.dependencies]
+windows-dpapi = "0.2.0"
 tray-icon = "0.24.0"
 muda = "0.19.2"
 winit = "0.30.13"

@@ -1,3 +1,4 @@
+use super::token_store;
 use anyhow::{Context, Result};
 use chrono::Local;
 use serde::{Deserialize, Serialize};
@@ -100,7 +101,8 @@ fn default_file_log_level() -> String {
 }
 
 fn default_false() -> bool {
-    false}
+    false
+}
 
 fn default_recent_download_window_seconds() -> u64 {
     30
@@ -152,13 +154,29 @@ impl AppConfig {
     /// If the file does not exist, create it with defaults.
     pub fn load(path: &str) -> Result<Self> {
         let config_path = Path::new(path);
-        let config: AppConfig =
+        let mut config: AppConfig =
             crate::utils::load_or_create_config(config_path, &AppConfig::default())?;
 
-        // The generic loader writes merged defaults directly, so remove persisted secrets
-        // immediately when retention is disabled. Edit the raw JSON to preserve unknown fields
-        // that a newer or custom configuration may contain.
-        if !config.remember_secrets {
+        // Migrate legacy JSON tokens to DPAPI before removing them. If JSON no longer
+        // contains tokens, restore the token cache from DPAPI when one exists.
+        let mut tokens = token_store::TokenCache::from_config(&config);
+        if let Some(stored_tokens) = token_store::load(config_path)? {
+            tokens.fill_missing_from(stored_tokens);
+        }
+
+        if config.remember_secrets {
+            config.apply_tokens(tokens);
+        } else {
+            if tokens.has_tokens() {
+                token_store::save(config_path, &tokens)
+                    .context("Failed to protect CRM tokens with Windows DPAPI")?;
+            } else {
+                token_store::remove(config_path)
+                    .context("Failed to remove stale CRM token cache")?;
+            }
+            config.apply_tokens(tokens);
+
+            // Preserve unknown JSON fields while removing the password and all token fields.
             let raw = std::fs::read_to_string(config_path)
                 .context("Failed to read CRM config while stripping persisted secrets")?;
             let mut value: Value = serde_json::from_str(&raw)
@@ -210,6 +228,16 @@ impl AppConfig {
 
     /// Save config to file, optionally stripping secrets and null values.
     pub fn save(&self, path: &str) -> Result<()> {
+        if !self.remember_secrets {
+            // Persist tokens first. If DPAPI fails, do not overwrite the config file or lose
+            // the only copy of an existing token. Passwords are deliberately never cached.
+            token_store::save(
+                std::path::Path::new(path),
+                &token_store::TokenCache::from_config(self),
+            )
+            .context("Failed to protect CRM tokens with Windows DPAPI")?;
+        }
+
         let mut value = serde_json::to_value(self)?;
 
         if !self.remember_secrets {
@@ -217,7 +245,7 @@ impl AppConfig {
                 for key in &SECRET_CONFIG_KEYS {
                     map.remove(*key);
                 }
-                debug!("Stripped secret fields from config (remember_secrets=false)");
+                debug!("Stripped password and token fields from config (remember_secrets=false)");
             }
         }
 
@@ -243,6 +271,10 @@ impl AppConfig {
 
         if let Ok(existing_content) = std::fs::read_to_string(path) {
             if existing_content == pretty {
+                if self.remember_secrets {
+                    token_store::remove(std::path::Path::new(path))
+                        .context("Failed to remove stale DPAPI token cache")?;
+                }
                 debug!("Config unchanged, skipping file write");
                 return Ok(());
             }
@@ -251,6 +283,10 @@ impl AppConfig {
                 serde_json::from_str::<serde_json::Value>(&pretty),
             ) {
                 if existing_val == new_val {
+                    if self.remember_secrets {
+                        token_store::remove(std::path::Path::new(path))
+                            .context("Failed to remove stale DPAPI token cache")?;
+                    }
                     debug!("Config unchanged, skipping file write");
                     return Ok(());
                 }
@@ -259,8 +295,23 @@ impl AppConfig {
 
         crate::utils::atomic_write(std::path::Path::new(path), &pretty)
             .with_context(|| format!("Failed to write config to {}", path))?;
+
+        if self.remember_secrets {
+            // The JSON config is now the selected storage mode; remove any stale DPAPI copy.
+            token_store::remove(std::path::Path::new(path))
+                .context("Failed to remove stale DPAPI token cache")?;
+        }
+
         info!("Config saved to {}", path);
         Ok(())
+    }
+
+    fn apply_tokens(&mut self, tokens: token_store::TokenCache) {
+        self.access_token = tokens.access_token;
+        self.access_token_expiry = tokens.access_token_expiry;
+        self.id_token = tokens.id_token;
+        self.refresh_token = tokens.refresh_token;
+        self.token_timestamp = tokens.token_timestamp;
     }
 }
 
@@ -328,13 +379,6 @@ mod tests {
     use tempfile::NamedTempFile;
 
     #[test]
-    fn secret_persistence_is_disabled_by_default() {
-        assert!(!AppConfig::default().remember_secrets);
-        let config: AppConfig = serde_json::from_str(r#"{"region":"us-east-1"}"#).unwrap();
-        assert!(!config.remember_secrets);
-    }
-
-    #[test]
     fn test_load_creates_default_file_if_missing() {
         let temp_dir = tempfile::tempdir().unwrap();
         let config_path = temp_dir.path().join("missing_config.json");
@@ -397,8 +441,9 @@ mod tests {
         assert!(err_msg.contains("Failed to parse config file"));
     }
 
+    #[cfg(windows)]
     #[test]
-    fn test_load_strips_persisted_secrets_when_remember_secrets_is_false() {
+    fn test_load_migrates_legacy_tokens_to_dpapi_and_removes_json_secrets() {
         let temp_dir = tempfile::tempdir().unwrap();
         let config_path = temp_dir.path().join("config.json");
         let config = AppConfig {
@@ -417,20 +462,25 @@ mod tests {
 
         let loaded = AppConfig::load(config_path.to_str().unwrap()).unwrap();
         assert_eq!(loaded.password, "password-secret");
+        assert_eq!(loaded.access_token, "access-secret");
+        assert_eq!(loaded.refresh_token, "refresh-secret");
 
         let persisted: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(&config_path).unwrap()).unwrap();
         assert_eq!(persisted["future_option"], "preserve-me");
-        for key in [
-            "password",
-            "access_token",
-            "access_token_expiry",
-            "id_token",
-            "refresh_token",
-            "token_timestamp",
-        ] {
+        for key in SECRET_CONFIG_KEYS {
             assert!(persisted.get(key).is_none(), "secret key {key} persisted");
         }
+
+        let encrypted = std::fs::read_to_string(token_store::cache_path(&config_path)).unwrap();
+        assert!(!encrypted.contains("access-secret"));
+        assert!(!encrypted.contains("password-secret"));
+
+        let loaded_again = AppConfig::load(config_path.to_str().unwrap()).unwrap();
+        assert_eq!(loaded_again.access_token, "access-secret");
+        assert_eq!(loaded_again.id_token, "id-secret");
+        assert_eq!(loaded_again.refresh_token, "refresh-secret");
+        assert!(loaded_again.password.is_empty());
     }
 
     #[test]
@@ -442,30 +492,44 @@ mod tests {
         let config = AppConfig {
             remember_secrets: false,
             password: "my_super_secret_password".to_string(),
-            access_token: "some_token".to_string(),
             ..AppConfig::default()
         };
 
         config.save(path_str).expect("Failed to save config");
 
-        // Read the raw JSON
-        let raw_json = std::fs::read_to_string(path_str).unwrap();
-        let parsed_json: serde_json::Value = serde_json::from_str(&raw_json).unwrap();
-
-        // Verify secrets are missing
-        if let serde_json::Value::Object(map) = parsed_json {
-            assert!(!map.contains_key("password"), "Password should be stripped");
-            assert!(
-                !map.contains_key("access_token"),
-                "Access token should be stripped"
-            );
-            assert!(
-                map.contains_key("region"),
-                "Non-secret fields should remain"
-            );
-        } else {
-            panic!("Expected JSON object");
+        let parsed_json: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(path_str).unwrap()).unwrap();
+        for key in SECRET_CONFIG_KEYS {
+            assert!(!parsed_json.as_object().unwrap().contains_key(key));
         }
+        assert!(parsed_json.get("region").is_some());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_save_stores_only_tokens_in_dpapi_when_remember_secrets_is_false() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let config_path = temp_dir.path().join("save_config.json");
+        let config = AppConfig {
+            remember_secrets: false,
+            password: "must-not-be-stored".to_string(),
+            access_token: "token-only-secret".to_string(),
+            refresh_token: "refresh-only-secret".to_string(),
+            ..AppConfig::default()
+        };
+
+        config.save(config_path.to_str().unwrap()).unwrap();
+
+        let json = std::fs::read_to_string(&config_path).unwrap();
+        assert!(!json.contains("token-only-secret"));
+        assert!(!json.contains("must-not-be-stored"));
+        let encrypted = std::fs::read_to_string(token_store::cache_path(&config_path)).unwrap();
+        assert!(!encrypted.contains("token-only-secret"));
+        assert!(!encrypted.contains("must-not-be-stored"));
+
+        let tokens = token_store::load(&config_path).unwrap().unwrap();
+        assert_eq!(tokens.access_token, "token-only-secret");
+        assert_eq!(tokens.refresh_token, "refresh-only-secret");
     }
 
     #[test]
@@ -494,6 +558,21 @@ mod tests {
 #[cfg(test)]
 mod security_tests {
     use super::*;
+
+    #[test]
+    fn test_default_config_does_not_persist_secrets() {
+        assert!(
+            !AppConfig::default().remember_secrets,
+            "Secrets should not be persisted by default"
+        );
+    }
+
+    #[test]
+    fn test_missing_remember_secrets_defaults_to_false() {
+        let config: AppConfig =
+            serde_json::from_str(r#"{"region":"us-east-1"}"#).expect("Failed to parse JSON");
+        assert!(!config.remember_secrets);
+    }
 
     #[test]
     fn test_default_config_tls_verification_enabled() {

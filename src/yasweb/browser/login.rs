@@ -9,16 +9,16 @@ use crate::yasweb::config::YaswebConfig;
 
 /// Automates the login flow and waits for the dashboard to appear.
 ///
-/// Optional HTML diagnostics are captured only when
-/// `CRM_YASWEB_CAPTURE_DIAGNOSTICS=1` is set. It returns an error when required
+/// The function records HTML snapshots for successful navigation and login steps,
+/// updating `step_num` after each snapshot. It returns an error when required
 /// login elements cannot be found, input cannot be entered, the login button
 /// cannot be clicked, a login error is displayed, or the dashboard does not
 /// appear within the timeout.
 ///
 /// # Parameters
 ///
-/// * `active_report_name` — Identifies the report associated with optional diagnostic snapshots.
-/// * `step_num` — Step counter used for naming optional snapshots.
+/// * `active_report_name` — Identifies the report associated with saved HTML snapshots.
+/// * `step_num` — Step counter used for naming snapshots; incremented after successful navigation and login.
 ///
 /// # Examples
 ///
@@ -76,6 +76,7 @@ pub fn execute_login(
 
     if !username_found {
         error!("Failed to find username input after extended wait.");
+
         return Err(anyhow::anyhow!("Failed to find elements to login"));
     }
 
@@ -84,6 +85,7 @@ pub fn execute_login(
             info!("Typing username...");
             if let Err(e) = user_input.type_into(&config.username) {
                 error!("Failed to type username: {:?}", e);
+
                 return Err(anyhow::anyhow!("Failed to type username"));
             }
             info!("Successfully typed username.");
@@ -96,12 +98,14 @@ pub fn execute_login(
                         info!("Typing password...");
                         if let Err(e) = pass_input.type_into(password) {
                             error!("Failed to type password: {:?}", e);
+
                             return Err(anyhow::anyhow!("Failed to type password"));
                         }
                         info!("Successfully typed password.");
                     }
                     Err(e) => {
                         error!("Failed to find password input: {:?}", e);
+
                         return Err(anyhow::anyhow!("Failed to find password input"));
                     }
                 }
@@ -114,14 +118,17 @@ pub fn execute_login(
                     info!("Clicking login button...");
                     if let Err(e) = login_button.click() {
                         error!("Failed to click login button: {:?}", e);
+
                         return Err(anyhow::anyhow!("Failed to click login button"));
                     }
                     info!("Successfully clicked login button.");
+
                     debug::save_html_state(tab, active_report_name, *step_num, "After login");
                     *step_num += 1;
                 }
                 Err(e) => {
                     error!("Failed to find login button: {:?}", e);
+
                     return Err(anyhow::anyhow!("Failed to find login button"));
                 }
             }
@@ -132,16 +139,18 @@ pub fn execute_login(
                 if let Ok(err_alert) = tab.find_element(".alert-danger.fade.show") {
                     let msg = err_alert.get_inner_text().unwrap_or_default();
                     error!("Login failed: {}", msg.trim());
+
                     return Err(anyhow::anyhow!("Login failed: {}", msg.trim()));
                 }
 
                 if let Ok(usr_id_element) = tab.find_element("span.usr-id") {
-                    login_success = true;
                     let inner_text = usr_id_element.get_inner_text().unwrap_or_default();
                     if inner_text.contains(&config.username) {
+                        login_success = true;
                         info!("Successfully verified configured username on the page.");
                     } else {
                         error!("The username displayed by the portal did not match the configured username.");
+                        return Err(anyhow::anyhow!("Logged-in username did not match configured username"));
                     }
                     break;
                 }
@@ -150,6 +159,7 @@ pub fn execute_login(
 
             if !login_success {
                 error!("Dashboard did not load within timeout, or login failed silently.");
+
                 return Err(anyhow::anyhow!("Dashboard wait timeout"));
             }
 
@@ -160,6 +170,7 @@ pub fn execute_login(
                 "Failed to find username input, likely because page did not load: {:?}",
                 e
             );
+
             Err(anyhow::anyhow!("Failed to find elements to login"))
         }
     }
