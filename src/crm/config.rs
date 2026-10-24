@@ -5,6 +5,15 @@ use serde_json::Value;
 use std::path::Path;
 use tracing::{debug, info};
 
+const SECRET_CONFIG_KEYS: [&str; 6] = [
+    "password",
+    "access_token",
+    "access_token_expiry",
+    "id_token",
+    "refresh_token",
+    "token_timestamp",
+];
+
 /// Application configuration for the CRM tool.
 ///
 /// Serves as the structured mapping of `crm_config.json`.
@@ -147,10 +156,25 @@ impl AppConfig {
         let config: AppConfig =
             crate::utils::load_or_create_config(config_path, &AppConfig::default())?;
 
-        // The generic loader writes merged defaults directly, so enforce the secret-retention
-        // preference immediately after loading rather than waiting for a later save.
+        // The generic loader writes merged defaults directly, so remove persisted secrets
+        // immediately when retention is disabled. Edit the raw JSON to preserve unknown fields
+        // that a newer or custom configuration may contain.
         if !config.remember_secrets {
-            config.save(&config_path.to_string_lossy())?;
+            let raw = std::fs::read_to_string(config_path)
+                .context("Failed to read CRM config while stripping persisted secrets")?;
+            let mut value: Value = serde_json::from_str(&raw)
+                .context("Failed to parse CRM config while stripping persisted secrets")?;
+            let mut secrets_removed = false;
+            if let Value::Object(ref mut map) = value {
+                for key in &SECRET_CONFIG_KEYS {
+                    secrets_removed |= map.remove(*key).is_some();
+                }
+            }
+            if secrets_removed {
+                let pretty = serde_json::to_string_pretty(&value)?;
+                crate::utils::atomic_write(config_path, &pretty)
+                    .context("Failed to persist CRM config without secrets")?;
+            }
         }
 
         Ok(config)
@@ -191,15 +215,7 @@ impl AppConfig {
 
         if !self.remember_secrets {
             if let Value::Object(ref mut map) = value {
-                let secret_keys = [
-                    "password",
-                    "access_token",
-                    "access_token_expiry",
-                    "id_token",
-                    "refresh_token",
-                    "token_timestamp",
-                ];
-                for key in &secret_keys {
+                for key in &SECRET_CONFIG_KEYS {
                     map.remove(*key);
                 }
                 debug!("Stripped secret fields from config (remember_secrets=false)");
@@ -389,13 +405,16 @@ mod tests {
             token_timestamp: "timestamp-secret".to_string(),
             ..AppConfig::default()
         };
-        std::fs::write(&config_path, serde_json::to_string(&config).unwrap()).unwrap();
+        let mut serialized = serde_json::to_value(&config).unwrap();
+        serialized["future_option"] = serde_json::Value::String("preserve-me".to_string());
+        std::fs::write(&config_path, serde_json::to_string(&serialized).unwrap()).unwrap();
 
         let loaded = AppConfig::load(config_path.to_str().unwrap()).unwrap();
         assert_eq!(loaded.password, "password-secret");
 
         let persisted: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(&config_path).unwrap()).unwrap();
+        assert_eq!(persisted["future_option"], "preserve-me");
         for key in [
             "password",
             "access_token",
