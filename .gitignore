@@ -20,6 +20,13 @@ delayed/
 swim/
 logs/email_payloads/*.html
 
+# Machine-specific runtime configuration and diagnostic snapshots.
+config.json
+runner_config.json
+tasker_config.json
+yasweb_config.json
+debug_html/
+
 # Local operational exports and real-world test data must never be committed.
 /TestingDownloads/**
 !/TestingDownloads/README.md

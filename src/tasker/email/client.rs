@@ -5,11 +5,11 @@ use std::fs::File;
 use tracing::{error, info};
 
 use crate::tasker::config::EmailConfig;
-use crate::tasker::email::attachments::generate_ticket_attachment;
-use crate::tasker::email::html::generate_pivot_html;
+use crate::tasker::email::attachments::{generate_ticket_attachment, unique_email_artifact_path};
+use crate::tasker::email::html::{escape_html, generate_pivot_html};
 use crate::tasker::email::message::TicketRow;
 use crate::tasker::email::recipients::{
-    group_tickets_into_buckets, load_team_mappings, resolve_recipients,
+    ensure_to_recipients, group_tickets_into_buckets, load_team_mappings, resolve_recipients,
 };
 use crate::tasker::email::reports::generate_leads_report;
 
@@ -383,6 +383,11 @@ where
             effective_send_exceptions,
             &exception_teams,
         );
+        if config.send_emails.unwrap_or(false) {
+            ensure_to_recipients(&to_emails).map_err(|e| {
+                anyhow::anyhow!("Cannot send email for bucket '{}': {e}", bucket_name)
+            })?;
+        }
 
         let html_table = generate_pivot_html(rows, &statuses_vec, is_branch);
 
@@ -508,7 +513,11 @@ where
         {}
     </div>
 </body></html>"#,
-                receiver_name, bucket_name, from_date_str, today_str, html_table
+                escape_html(&receiver_name),
+                escape_html(bucket_name),
+                escape_html(&from_date_str),
+                escape_html(&today_str),
+                html_table
             );
             let subject = format!("Open TKTs - {}", bucket_name);
             (subject, body)
@@ -521,8 +530,6 @@ where
             .replace("margin-left:20px;", &indentation_css)
             .replace("margin-left: 20px;", &indentation_css);
 
-        let tmp_dir = std::env::temp_dir();
-        let safe_name = bucket_name.replace(|c: char| !c.is_ascii_alphanumeric(), "_");
         let skip_team_col = !is_branch && team_idx.is_some();
         let skip_team_idx = if skip_team_col { team_idx } else { None };
 
@@ -541,7 +548,7 @@ where
         let save_as_html = config.save_email_as_html.unwrap_or(false);
         if save_as_html {
             use std::io::Write;
-            let html_path = tmp_dir.join(format!("{}_email.html", safe_name));
+            let html_path = unique_email_artifact_path(bucket_name, "email.html");
             let mut f = std::fs::File::create(&html_path)?;
             f.write_all(body.as_bytes())?;
             f.sync_all()?;
@@ -625,6 +632,23 @@ mod tests {
     use std::fs::File;
     use std::io::Write;
     use tempfile::NamedTempFile;
+
+    fn find_artifact(prefix: &str, suffix: &str) -> std::path::PathBuf {
+        std::fs::read_dir(std::env::temp_dir())
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.path())
+            .find(|path| {
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .map(str::to_ascii_lowercase)
+                    .is_some_and(|name| {
+                        name.starts_with(&prefix.to_ascii_lowercase())
+                            && name.ends_with(&suffix.to_ascii_lowercase())
+                    })
+            })
+            .unwrap_or_else(|| panic!("artifact not found: {}*{}", prefix, suffix))
+    }
 
     #[test]
     fn test_email_processing_skips_closed() {
@@ -727,17 +751,16 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let temp_dir = std::env::temp_dir();
-        let email_html_path = temp_dir.join("Call_center_email.html");
-        assert!(email_html_path.exists());
+        let email_html_path = find_artifact("Call_Center_", ".email.html");
 
         let html_content = std::fs::read_to_string(&email_html_path).unwrap();
         assert!(!html_content.contains("<body></body>"));
         assert!(html_content.contains("Kindly find below"));
         assert!(html_content.contains("margin-left:20px;"));
 
-        let _ = std::fs::remove_file(email_html_path);
-        let _ = std::fs::remove_file(temp_dir.join("Call_Center_open_tickets.csv"));
+        let _ = std::fs::remove_file(&email_html_path);
+        let attachment_path = find_artifact("Call_Center_", ".open_tickets.csv");
+        let _ = std::fs::remove_file(attachment_path);
     }
 
     #[test]
@@ -794,15 +817,13 @@ mod tests {
         )
         .unwrap();
 
-        let system_temp = std::env::temp_dir();
-        let attachment_csv = system_temp.join("Team_a_open_tickets.csv");
-        assert!(attachment_csv.exists());
+        let attachment_csv = find_artifact("Team_A_", ".open_tickets.csv");
 
         let attachment_content = std::fs::read_to_string(&attachment_csv).unwrap();
         assert!(attachment_content.contains("101"));
         assert!(!attachment_content.contains("102"));
 
-        let email_html = system_temp.join("Team_a_email.html");
+        let email_html = find_artifact("Team_A_", ".email.html");
         let html_content = std::fs::read_to_string(&email_html).unwrap();
         assert!(html_content.contains("alice"));
         assert!(!html_content.contains("bob"));

@@ -2,8 +2,25 @@ use crate::tasker::config::DepartmentSplitConfig;
 use anyhow::{Context, Result};
 use calamine::{open_workbook, DataType, Reader, Xlsx};
 use std::collections::HashMap;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use tracing::info;
+
+fn write_mapping_temp_file(mapping: &HashMap<String, String>) -> Result<PathBuf> {
+    let mapping_json = serde_json::to_vec(mapping)?;
+    let mut file = tempfile::Builder::new()
+        .prefix("chair_mapping_")
+        .suffix(".json")
+        .tempfile()
+        .context("Failed to create temporary mapping JSON")?;
+    file.write_all(&mapping_json)
+        .context("Failed to write mapping JSON")?;
+    let (file, path) = file
+        .keep()
+        .map_err(|error| anyhow::anyhow!("Failed to preserve mapping JSON: {}", error.error))?;
+    drop(file);
+    Ok(path)
+}
 
 pub fn run(config: &DepartmentSplitConfig) -> Result<()> {
     info!(
@@ -74,11 +91,9 @@ pub fn run(config: &DepartmentSplitConfig) -> Result<()> {
         path_str.strip_prefix(r"\?\").unwrap_or(path_str)
     };
 
-    // Write mapping to a temporary JSON file to pass to PowerShell
-    let mapping_json = serde_json::to_string(&mapping)?;
-    let tmp_dir = std::env::temp_dir();
-    let mapping_file = tmp_dir.join("chair_mapping.json");
-    std::fs::write(&mapping_file, mapping_json).context("Failed to write mapping JSON")?;
+    // Use a unique path so concurrent task runs cannot overwrite each other's mapping.
+    let mapping_file = write_mapping_temp_file(&mapping)?;
+    let _mapping_cleanup_guard = crate::utils::FileCleanupGuard::new(&mapping_file);
 
     let mapping_file_str = mapping_file
         .to_str()
@@ -97,9 +112,6 @@ pub fn run(config: &DepartmentSplitConfig) -> Result<()> {
         ],
     )?;
 
-    // Clean up temporary mapping file
-    let _ = std::fs::remove_file(&mapping_file);
-
     info!("Departmental Splitter task completed successfully.");
     Ok(())
 }
@@ -107,6 +119,23 @@ pub fn run(config: &DepartmentSplitConfig) -> Result<()> {
 #[cfg(test)]
 #[allow(unused_imports)]
 mod tests {
+    #[test]
+    fn mapping_temp_files_are_unique_and_contain_json() {
+        use super::write_mapping_temp_file;
+        use std::collections::HashMap;
+
+        let mapping = HashMap::from([("CARDIOLOGY".to_string(), "CHAIR A".to_string())]);
+        let first = write_mapping_temp_file(&mapping).unwrap();
+        let second = write_mapping_temp_file(&mapping).unwrap();
+        let _first_guard = crate::utils::FileCleanupGuard::new(&first);
+        let _second_guard = crate::utils::FileCleanupGuard::new(&second);
+
+        assert_ne!(first, second);
+        let parsed: HashMap<String, String> =
+            serde_json::from_slice(&std::fs::read(&first).unwrap()).unwrap();
+        assert_eq!(parsed, mapping);
+    }
+
     #[test]
     fn test_department_header_scan_reads_range_in_bulk() {
         let src = include_str!("scripts/department_split.ps1");

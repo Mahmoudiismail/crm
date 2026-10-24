@@ -46,14 +46,59 @@ impl Default for ScriptManager {
 
 fn rename_with_fallback(from: &Path, to: &Path) -> std::io::Result<()> {
     match fs::rename(from, to) {
-        Ok(_) => Ok(()),
-        Err(e) => {
-            tracing::trace!(
-                "Initial rename failed ({}), attempting fallback remove...",
-                e
-            );
-            let _ = fs::remove_file(to);
-            fs::rename(from, to)
+        Ok(()) => Ok(()),
+        Err(first_error) if !from.exists() || !to.exists() => Err(first_error),
+        Err(first_error) => {
+            // Windows cannot rename over an existing destination. Preserve the old
+            // file until the replacement succeeds so a failed rename cannot destroy it.
+            let file_name = to
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("file");
+            let nonce = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos();
+            let backup = to.with_file_name(format!(
+                ".{}.backup-{}-{}",
+                file_name,
+                std::process::id(),
+                nonce
+            ));
+
+            fs::rename(to, &backup).map_err(|backup_error| {
+                std::io::Error::new(
+                    backup_error.kind(),
+                    format!(
+                        "rename failed ({first_error}); could not preserve existing destination: {backup_error}"
+                    ),
+                )
+            })?;
+
+            match fs::rename(from, to) {
+                Ok(()) => {
+                    if let Err(cleanup_error) = fs::remove_file(&backup) {
+                        tracing::warn!(
+                            "Replacement succeeded but backup cleanup failed for {:?}: {}",
+                            backup,
+                            cleanup_error
+                        );
+                    }
+                    Ok(())
+                }
+                Err(replacement_error) => {
+                    if let Err(restore_error) = fs::rename(&backup, to) {
+                        return Err(std::io::Error::new(
+                            replacement_error.kind(),
+                            format!(
+                                "replacement failed ({replacement_error}) and restoring backup {:?} failed ({restore_error})",
+                                backup
+                            ),
+                        ));
+                    }
+                    Err(replacement_error)
+                }
+            }
         }
     }
 }
@@ -485,6 +530,17 @@ impl ScriptManager {
 mod tests {
     use super::*;
     use tempfile::tempdir;
+
+    #[test]
+    fn rename_replacement_preserves_old_file_if_source_is_missing() {
+        let temp_dir = tempdir().unwrap();
+        let destination = temp_dir.path().join("destination.txt");
+        let missing_source = temp_dir.path().join("missing.txt");
+        fs::write(&destination, "original").unwrap();
+
+        assert!(rename_with_fallback(&missing_source, &destination).is_err());
+        assert_eq!(fs::read_to_string(&destination).unwrap(), "original");
+    }
 
     #[test]
     fn test_first_run_creates_base_script() {

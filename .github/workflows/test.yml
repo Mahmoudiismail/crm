@@ -5,6 +5,10 @@ on:
     branches: [main]
     paths:
       - '**/*.rs'
+      - '**/*.js'
+      - '**/*.ps1'
+      - '**/*.json'
+      - '**/*.jsonc'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.github/workflows/test.yml'
@@ -16,6 +20,10 @@ on:
     branches: [main]
     paths:
       - '**/*.rs'
+      - '**/*.js'
+      - '**/*.ps1'
+      - '**/*.json'
+      - '**/*.jsonc'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.github/workflows/test.yml'
@@ -43,6 +51,7 @@ jobs:
       - name: Checkout PR branch
         uses: actions/checkout@v7
         with:
+          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
 
       - name: Install Rust
@@ -55,6 +64,7 @@ jobs:
         run: cargo fmt
 
       - name: Commit formatting changes when needed
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
         shell: bash
         env:
           TARGET_BRANCH: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
@@ -82,6 +92,7 @@ jobs:
       - name: Checkout formatted source
         uses: actions/checkout@v7
         with:
+          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
           persist-credentials: false
 
@@ -96,7 +107,7 @@ jobs:
         with:
           shared-key: rust-repo-windows
           key: clippy
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          save-if: ${{ github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) }}
           cache-on-failure: true
 
       - name: Run clippy
@@ -113,8 +124,33 @@ jobs:
       - name: Checkout formatted source
         uses: actions/checkout@v7
         with:
+          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
           persist-credentials: false
+
+      - name: Check JavaScript syntax
+        shell: pwsh
+        run: |
+          Get-ChildItem -Path src -Recurse -Filter *.js | ForEach-Object {
+            node --check $_.FullName
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      - name: Check PowerShell syntax
+        shell: pwsh
+        run: |
+          $failed = $false
+          Get-ChildItem -Path src -Recurse -Filter *.ps1 | ForEach-Object {
+            $tokens = $null
+            $parseErrors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$parseErrors) | Out-Null
+            if ($parseErrors.Count -gt 0) {
+              $failed = $true
+              Write-Error "PowerShell syntax errors in $($_.FullName)"
+              $parseErrors | ForEach-Object { Write-Error $_.Message }
+            }
+          }
+          if ($failed) { exit 1 }
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -126,7 +162,7 @@ jobs:
         with:
           shared-key: rust-repo-windows
           key: test
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          save-if: ${{ github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) }}
           cache-on-failure: true
 
       - name: Run tests

@@ -3,6 +3,27 @@ use anyhow::Result;
 use rust_xlsxwriter::Workbook;
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+static NEXT_ARTIFACT_ID: AtomicU64 = AtomicU64::new(0);
+
+/// Build a per-process unique path for a generated email artifact.
+pub fn unique_email_artifact_path(bucket_name: &str, suffix: &str) -> PathBuf {
+    let safe_name = bucket_name.replace(|c: char| !c.is_ascii_alphanumeric(), "_");
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or_default();
+    let sequence = NEXT_ARTIFACT_ID.fetch_add(1, Ordering::Relaxed);
+    std::env::temp_dir().join(format!(
+        "{safe_name}_{}_{}_{}.{}",
+        std::process::id(),
+        timestamp,
+        sequence,
+        suffix.trim_start_matches('.')
+    ))
+}
 
 #[allow(clippy::too_many_arguments)]
 pub fn generate_ticket_attachment(
@@ -15,11 +36,8 @@ pub fn generate_ticket_attachment(
     month_idx: Option<usize>,
     save_as_csv: bool,
 ) -> Result<PathBuf> {
-    let tmp_dir = std::env::temp_dir();
-    let safe_name = bucket_name.replace(|c: char| !c.is_ascii_alphanumeric(), "_");
-
     if save_as_csv {
-        let csv_path = tmp_dir.join(format!("{}_open_tickets.csv", safe_name));
+        let csv_path = unique_email_artifact_path(bucket_name, "open_tickets.csv");
         let mut f = std::fs::File::create(&csv_path)?;
         f.write_all(b"\xEF\xBB\xBF")?;
         let mut wtr = csv::WriterBuilder::new().from_writer(f);
@@ -56,7 +74,7 @@ pub fn generate_ticket_attachment(
         wtr.flush()?;
         Ok(csv_path)
     } else {
-        let xlsx_path = tmp_dir.join(format!("{}_open_tickets.xlsx", safe_name));
+        let xlsx_path = unique_email_artifact_path(bucket_name, "open_tickets.xlsx");
         let mut workbook = Workbook::new();
         let worksheet = workbook.add_worksheet();
 
@@ -94,5 +112,25 @@ pub fn generate_ticket_attachment(
         }
         workbook.save(&xlsx_path)?;
         Ok(xlsx_path)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::unique_email_artifact_path;
+
+    #[test]
+    fn generated_artifact_paths_are_unique() {
+        let first = unique_email_artifact_path("Call Center", "email.html");
+        let second = unique_email_artifact_path("Call Center", "email.html");
+        assert_ne!(first, second);
+        assert!(first
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.ends_with("email.html")));
+        assert!(second
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.ends_with("email.html")));
     }
 }

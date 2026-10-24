@@ -2,13 +2,20 @@
 
 ## 1. Executive Summary
 
+**Implementation status on `fix/v1-audit-first-batch` (verified against current source):** Tasker failure propagation, Outlook error-cascade removal, signed-URL download retries/error propagation, and asynchronous Runner metadata polling are implemented. The updater now preflights and stages each replacement, verifies hashes, and attempts reverse-order rollback if the replacement set fails. The hard-coded ZIP password remains deferred because the external ZIP-generation pipeline must be coordinated before changing the password source.
+
 A comprehensive engineering audit of the CRM tool repository was conducted, covering the CRM report fetcher, CRM Updater, Tasker background processing, Runner scheduling, and general repository practices.
+
+**Reading note:** The finding narratives below preserve the original audit trail and may describe pre-fix behavior. The explicit status labels and current-source summary above supersede any older “Current behavior” or “Expected behavior” text inside a resolved finding. Phase-one changes added since the original audit also validate weekly schedule days even when `next_run_at` is preconfigured and refuse to send an email when recipient resolution produces no `To` address.
+
 
 The audit identified critical issues regarding error propagation in Tasker (where task failures are swallowed, resulting in false success states) and an Outlook COM error notification cascade that obscures original failures. Additionally, CRM report downloading suffers from missing HTTP retry logic, leading to silent data loss on transient network errors. Several items initially flagged (like the Runner's semaphore `.unwrap()` and Updater's `Unblock-File`) have been investigated and reclassified as safe or non-bugs based on actual control flow.
 
 ## 2. P0 Findings
 
 ### [P0] Task failures silently swallowed in Tasker execution loop
+
+**Status: RESOLVED in current source.** `src/bin/tasker.rs` now returns an error from failed CsvAnalysis and DashboardUpdater tasks rather than continuing to a false-success exit.
 
 **Component:** Tasker
 **Exact file(s):** `src/bin/tasker.rs`, `src/tasker/csv_task/mod.rs`, `src/tasker/dashboard_updater.rs`
@@ -47,6 +54,8 @@ Change `error!(...)` to `anyhow::bail!(...)` (or propagate the error via `?`) fo
 ---
 
 ### [P0] Outlook Error-Notification Cascade
+
+**Status: RESOLVED in current source.** The email-processing path propagates the original send error and no longer attempts a second Outlook COM operation to notify through the same failed transport.
 
 **Component:** Tasker (Email Client)
 **Exact file(s):** `src/tasker/email/client.rs`
@@ -89,6 +98,8 @@ Delete the `err_script` formatting and the `if let Err(e2) = run_powershell(&err
 ## 3. P1 Findings
 
 ### [P1] CRM signed-URL download failures are not retried
+
+**Status: RESOLVED in current source.** Signed-URL downloads retry up to three times, then request a fresh URL for the same report range and retry it up to three times. Download failures propagate through the awaited download processor, and temporary partial files are removed.
 
 **Component:** CRM Fetcher
 **Exact file(s):** `src/crm/fetcher.rs`, `src/crm/downloader.rs`
@@ -141,6 +152,8 @@ To retry the *exact same signed URL 3 times*, and if it fails, *request the same
 
 ### [P2] RUNNER `std::fs::metadata` inside async loop
 
+**Status: RESOLVED in current source.** The scheduler polling loop uses `tokio::fs::metadata(...).await` for modification-time checks.
+
 **Component:** Runner
 **Exact file(s):** `src/runner/engine/dispatcher/lifecycle.rs`
 **Function/module:** `start_scheduler`
@@ -168,6 +181,8 @@ Change the closure to an async block/function using `tokio::fs::metadata(path).a
 ## 5. P3 / Security Findings
 
 ### [P3] Hard-coded ZIP Password
+
+**Status: DEFERRED — deployment coordination required.** Do not change only the Rust extraction password: the external ZIP producer must be updated in the same deployment, otherwise legitimate update packages will stop working.
 
 **Component:** CRM Updater
 **Exact file(s):** `src/crm_updater/update.rs`

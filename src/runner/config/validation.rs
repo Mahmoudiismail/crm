@@ -95,6 +95,18 @@ pub fn normalize_and_validate_task(
     Ok(())
 }
 
+fn validate_weekday(day_of_week: &str) -> anyhow::Result<()> {
+    match day_of_week.trim().to_lowercase().as_str() {
+        "sunday" | "sun" | "0" | "monday" | "mon" | "1" | "tuesday" | "tue" | "2" | "wednesday"
+        | "wed" | "3" | "thursday" | "thu" | "4" | "friday" | "fri" | "5" | "saturday" | "sat"
+        | "6" => Ok(()),
+        _ => anyhow::bail!(
+            "Invalid day of week '{}'. Use monday-sunday (or mon-sun, 0-6)",
+            day_of_week
+        ),
+    }
+}
+
 fn normalize_and_validate_schedules(
     task: &mut RunnerTask,
     min_task_interval_seconds: u64,
@@ -215,6 +227,7 @@ fn normalize_and_validate_schedules(
                 ..
             } => {
                 *day_of_week = day_of_week.trim().to_string();
+                validate_weekday(day_of_week)?;
                 *at_time = at_time.trim().to_string();
                 if !at_time.is_empty() {
                     chrono::NaiveTime::parse_from_str(at_time, "%H:%M")
@@ -260,4 +273,44 @@ fn normalize_and_validate_schedules(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_weekday;
+
+    #[test]
+    fn validates_weekday_even_when_next_run_is_preconfigured() {
+        for day in [
+            "Sunday",
+            "sun",
+            "0",
+            "Monday",
+            "mon",
+            "1",
+            "Tuesday",
+            "tue",
+            "2",
+            "Wednesday",
+            "wed",
+            "3",
+            "Thursday",
+            "thu",
+            "4",
+            "Friday",
+            "fri",
+            "5",
+            "Saturday",
+            "sat",
+            "6",
+        ] {
+            assert!(
+                validate_weekday(day).is_ok(),
+                "expected {day} to be accepted"
+            );
+        }
+        assert!(validate_weekday("Funday").is_err());
+        assert!(validate_weekday("7").is_err());
+        assert!(validate_weekday("").is_err());
+    }
 }

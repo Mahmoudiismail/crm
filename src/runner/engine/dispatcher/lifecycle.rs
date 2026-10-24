@@ -186,9 +186,10 @@ pub fn start_scheduler(runner_config_path: String) -> RunnerHandle {
     let exec_tx = spawn_execution_manager(status.clone(), config_path.clone(), app_lock_manager);
     let _exec_tx_loop = exec_tx.clone();
 
-    let get_mod_time = |p: &str| -> Option<SystemTime> { fs::metadata(p).ok()?.modified().ok() };
-
-    let mut last_modified = get_mod_time(&config_path).unwrap_or(SystemTime::now());
+    let mut last_modified = fs::metadata(&config_path)
+        .ok()
+        .and_then(|metadata| metadata.modified().ok())
+        .unwrap_or(SystemTime::now());
     let mut last_cleanup =
         Utc::now() - chrono::Duration::try_hours(24).unwrap_or(chrono::Duration::zero());
 
@@ -255,7 +256,10 @@ pub fn start_scheduler(runner_config_path: String) -> RunnerHandle {
                         }
                     }
 
-                    let current_modified = get_mod_time(&config_path_loop);
+                    let current_modified = tokio::fs::metadata(&config_path_loop)
+                        .await
+                        .ok()
+                        .and_then(|metadata| metadata.modified().ok());
                     if let Some(now_modified) = current_modified {
                         if now_modified > last_modified {
                             info!("Config file changed");

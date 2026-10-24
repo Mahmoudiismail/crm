@@ -92,6 +92,8 @@ Operational impact:
 - Recursive date-range splits run concurrently, and signed-URL downloads are processed with up to six downloads in flight.
 - The users report's Base64 CSV processing errors are propagated instead of being logged and treated as success.
 - The fetcher waits for the download processor to finish before returning a report-fetch error, so queued downloads are not left running detached from the failed request.
+- Each signed-URL download is attempted up to three times. If all attempts fail, the fetcher requests a fresh signed URL for the same report range and tries it up to three times; a failed fresh-URL attempt is propagated rather than silently reported as success.
+- Download writes use unique temporary files, which are removed on HTTP, stream, write, flush, or rename failures.
 - A fetch or download failure causes the overall fetch operation to return an error; it is not represented as a successful report result.
 
 ## Result Shape

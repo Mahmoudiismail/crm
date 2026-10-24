@@ -1,6 +1,16 @@
 use crate::tasker::email::message::TicketRow;
 use std::collections::{HashMap, HashSet};
 
+/// Escape untrusted text before inserting it into HTML text nodes.
+pub fn escape_html(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
 pub fn generate_pivot_html(
     rows: &[TicketRow],
     statuses: &[String],
@@ -94,7 +104,7 @@ pub fn generate_pivot_html(
     for s in &active_statuses {
         html.push_str(&format!(
             "<th style='border: 1px solid black; padding: 8px 15px; text-align: center;'>{}</th>",
-            s
+            escape_html(s)
         ));
     }
     html.push_str(
@@ -116,7 +126,10 @@ pub fn generate_pivot_html(
         r_html.push_str("<tr>");
         r_html.push_str(&format!(
             "<td style='padding: 8px; padding-left: {}px; border: 1px solid black;'>{}{}{}</td>",
-            indent_px, bold_tag, name, bold_end
+            indent_px,
+            bold_tag,
+            escape_html(name),
+            bold_end
         ));
 
         for st in &active_statuses {
@@ -271,6 +284,14 @@ pub fn generate_pivot_html(
 mod tests {
     use super::*;
     use csv::StringRecord;
+
+    #[test]
+    fn escape_html_encodes_markup_and_quotes() {
+        assert_eq!(
+            escape_html("<script a='x'>&\""),
+            "&lt;script a=&#39;x&#39;&gt;&amp;&quot;"
+        );
+    }
 
     #[test]
     fn test_email_html_pivot_generation() {

@@ -76,23 +76,45 @@
       })
       .then(res => res.json())
       .then(data => {
+          previewContainer.replaceChildren();
           if (!data.success) {
-              previewContainer.innerHTML = `<span class='text-red-600 font-semibold'>${data.error || "Validation error"}</span>`;
+              const error = document.createElement("span");
+              error.className = "text-red-600 font-semibold";
+              error.textContent = data.error || "Validation error";
+              previewContainer.appendChild(error);
               return;
           }
           if (!data.executions || data.executions.length === 0) {
-              previewContainer.innerHTML = "<span class='text-gray-500 italic'>No upcoming executions</span>";
+              const empty = document.createElement("span");
+              empty.className = "text-gray-500 italic";
+              empty.textContent = "No upcoming executions";
+              previewContainer.appendChild(empty);
               return;
           }
-          let html = "<ul class='list-disc list-inside space-y-1'>";
+
+          const list = document.createElement("ul");
+          list.className = "list-disc list-inside space-y-1";
           data.executions.forEach((item, idx) => {
-              html += `<li><span class='font-semibold text-emerald-900'>#${idx + 1}:</span> ${item.scheduled_at_formatted} <span class='text-gray-500'>(Period: ${item.period_start} &rarr; ${item.period_end})</span></li>`;
+              const entry = document.createElement("li");
+              const number = document.createElement("span");
+              number.className = "font-semibold text-emerald-900";
+              number.textContent = `#${idx + 1}:`;
+              entry.append(number, document.createTextNode(` ${item.scheduled_at_formatted ?? ""} `));
+
+              const period = document.createElement("span");
+              period.className = "text-gray-500";
+              period.textContent = `(Period: ${item.period_start ?? ""} → ${item.period_end ?? ""})`;
+              entry.appendChild(period);
+              list.appendChild(entry);
           });
-          html += "</ul>";
-          previewContainer.innerHTML = html;
+          previewContainer.appendChild(list);
       })
       .catch(err => {
-          previewContainer.innerHTML = `<span class='text-amber-600'>Error loading preview: ${err.message}</span>`;
+          previewContainer.replaceChildren();
+          const error = document.createElement("span");
+          error.className = "text-amber-600";
+          error.textContent = `Error loading preview: ${err?.message ?? "Unknown error"}`;
+          previewContainer.appendChild(error);
       });
   }
 (function () {
