@@ -5,7 +5,9 @@ use std::fs::File;
 use tracing::{error, info};
 
 use crate::tasker::config::EmailConfig;
-use crate::tasker::email::attachments::generate_ticket_attachment;
+use crate::tasker::email::attachments::{
+    generate_ticket_attachment, unique_email_artifact_path,
+};
 use crate::tasker::email::html::generate_pivot_html;
 use crate::tasker::email::message::TicketRow;
 use crate::tasker::email::recipients::{
@@ -521,8 +523,6 @@ where
             .replace("margin-left:20px;", &indentation_css)
             .replace("margin-left: 20px;", &indentation_css);
 
-        let tmp_dir = std::env::temp_dir();
-        let safe_name = bucket_name.replace(|c: char| !c.is_ascii_alphanumeric(), "_");
         let skip_team_col = !is_branch && team_idx.is_some();
         let skip_team_idx = if skip_team_col { team_idx } else { None };
 
@@ -541,7 +541,7 @@ where
         let save_as_html = config.save_email_as_html.unwrap_or(false);
         if save_as_html {
             use std::io::Write;
-            let html_path = tmp_dir.join(format!("{}_email.html", safe_name));
+            let html_path = unique_email_artifact_path(bucket_name, "email.html");
             let mut f = std::fs::File::create(&html_path)?;
             f.write_all(body.as_bytes())?;
             f.sync_all()?;
