@@ -150,7 +150,9 @@ pub fn execute_login(
                         info!("Successfully verified configured username on the page.");
                     } else {
                         error!("The username displayed by the portal did not match the configured username.");
-                        return Err(anyhow::anyhow!("Logged-in username did not match configured username"));
+                        return Err(anyhow::anyhow!(
+                            "Logged-in username did not match configured username"
+                        ));
                     }
                     break;
                 }

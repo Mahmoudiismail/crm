@@ -339,7 +339,14 @@ impl std::fmt::Debug for AppConfig {
             .field("region", &self.region)
             .field("user_pool_id", &self.user_pool_id)
             .field("client_id", &self.client_id)
-            .field("username", &if self.username.is_empty() { "" } else { "***REDACTED***" })
+            .field(
+                "username",
+                &if self.username.is_empty() {
+                    ""
+                } else {
+                    "***REDACTED***"
+                },
+            )
             .field("password", &"***REDACTED***")
             .field("no_verify_ssl", &self.no_verify_ssl)
             .field("remember_secrets", &self.remember_secrets)
