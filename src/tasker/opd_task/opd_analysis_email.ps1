@@ -13,6 +13,12 @@ $ErrorActionPreference = "Stop"
 
 $checkCurrentYear = if ($CheckCurrentYear -eq "true") { $true } else { $false }
 
+$EmailTo = if ($null -eq $EmailTo) { "" } else { $EmailTo.Trim() }
+Write-Output ("TRACE: Email recipient configured=" + (-not [string]::IsNullOrWhiteSpace($EmailTo)) + "; length=" + $EmailTo.Length)
+if ([string]::IsNullOrWhiteSpace($EmailTo)) {
+    throw "EmailTo is empty. Configure a recipient for the OPD Analysis task before sending."
+}
+
 $excel = New-Object -ComObject Excel.Application
 $excel.Visible = $true
 $excel.WindowState = -4140 # xlMinimized
