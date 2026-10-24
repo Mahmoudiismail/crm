@@ -107,7 +107,7 @@ jobs:
         with:
           shared-key: rust-repo-windows
           key: clippy
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          save-if: ${{ github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) }}
           cache-on-failure: true
 
       - name: Run clippy
@@ -162,7 +162,7 @@ jobs:
         with:
           shared-key: rust-repo-windows
           key: test
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          save-if: ${{ github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) }}
           cache-on-failure: true
 
       - name: Run tests
