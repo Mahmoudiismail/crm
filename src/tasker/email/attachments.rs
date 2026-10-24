@@ -25,6 +25,20 @@ pub fn unique_email_artifact_path(bucket_name: &str, suffix: &str) -> PathBuf {
     ))
 }
 
+#[cfg(test)]
+mod tests {
+    use super::unique_email_artifact_path;
+
+    #[test]
+    fn generated_artifact_paths_are_unique() {
+        let first = unique_email_artifact_path("Call Center", "email.html");
+        let second = unique_email_artifact_path("Call Center", "email.html");
+        assert_ne!(first, second);
+        assert!(first.ends_with("email.html"));
+        assert!(second.ends_with("email.html"));
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn generate_ticket_attachment(
     bucket_name: &str,
