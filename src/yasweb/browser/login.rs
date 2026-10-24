@@ -12,8 +12,7 @@ use crate::yasweb::config::YaswebConfig;
 /// Trim surrounding whitespace and ignore case differences, but require an exact
 /// match so a different username containing the configured name is rejected.
 fn username_matches(displayed: &str, configured: &str) -> bool {
-    !configured.trim().is_empty()
-        && displayed.trim().eq_ignore_ascii_case(configured.trim())
+    !configured.trim().is_empty() && displayed.trim().eq_ignore_ascii_case(configured.trim())
 }
 
 #[cfg(test)]
