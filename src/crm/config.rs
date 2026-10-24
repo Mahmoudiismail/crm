@@ -404,7 +404,7 @@ mod tests {
             "refresh_token",
             "token_timestamp",
         ] {
-            assert!(!persisted.get(key).is_some(), "secret key {key} persisted");
+            assert!(persisted.get(key).is_none(), "secret key {key} persisted");
         }
     }
 
