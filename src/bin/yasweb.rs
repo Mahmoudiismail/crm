@@ -3,7 +3,7 @@ use chrono::Local;
 use crm_tool::manifest::{AppArg, AppManifest, ArgType};
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use clap::Parser;
@@ -162,11 +162,68 @@ fn get_manifest(config_path: Option<PathBuf>) -> AppManifest {
     }
 }
 
+fn sanitize_filename_component(value: &str) -> String {
+    let mut sanitized = String::with_capacity(value.len());
+    for ch in value.chars() {
+        if ch.is_control() || matches!(ch, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') {
+            sanitized.push('_');
+        } else {
+            sanitized.push(ch);
+        }
+    }
+
+    let sanitized = sanitized.trim().trim_matches('.').trim_end_matches(' ');
+    if sanitized.is_empty() {
+        "report".to_string()
+    } else {
+        sanitized.to_string()
+    }
+}
+
+async fn persist_discovered_filters(
+    config_path: &Path,
+    report_name: &str,
+    discovered_filters: Vec<String>,
+    update_lock: &tokio::sync::Mutex<()>,
+) -> Result<()> {
+    let _guard = update_lock.lock().await;
+    let latest_config_content = fs::read_to_string(config_path)
+        .await
+        .with_context(|| format!("Failed to read Yasweb config at {:?} before updating filters", config_path))?;
+    let mut latest_config: YaswebConfig = serde_json::from_str(&latest_config_content)
+        .with_context(|| format!("Refusing to overwrite invalid Yasweb config at {:?}", config_path))?;
+
+    let Some(report) = latest_config.reports.get_mut(report_name) else {
+        return Ok(());
+    };
+
+    let mut updated_filters = false;
+    for filter in discovered_filters {
+        if let std::collections::hash_map::Entry::Vacant(entry) = report.filters.entry(filter) {
+            entry.insert(String::new());
+            updated_filters = true;
+        }
+    }
+
+    if updated_filters {
+        let serialized = serde_json::to_string_pretty(&latest_config)
+            .context("Failed to serialize Yasweb config after discovering filters")?;
+        let path = config_path.to_path_buf();
+        tokio::task::spawn_blocking(move || crm_tool::utils::atomic_write(&path, &serialized))
+            .await
+            .context("Failed to join Yasweb config write task")?
+            .context("Failed to persist discovered Yasweb filters")?;
+    }
+
+    Ok(())
+}
+
 pub fn finalize_download(
     temp_dl_dir: &std::path::Path,
     final_out_dir: &std::path::Path,
     final_filename: &str,
 ) -> anyhow::Result<()> {
+    let final_filename = sanitize_filename_component(final_filename);
     if !temp_dl_dir.is_dir() {
         anyhow::bail!("Download directory does not exist: {:?}", temp_dl_dir);
     }
@@ -400,6 +457,8 @@ async fn main() -> Result<()> {
     info!("Loaded config for URL: {}", config.url);
 
     let mut report_futures = Vec::new();
+    // Serialize config read-modify-write cycles so concurrent reports cannot lose discovered filters.
+    let config_update_lock = Arc::new(tokio::sync::Mutex::new(()));
     // A zero limit means unlimited operations; positive values share one semaphore across reports.
     let operation_limit =
         (config.concurrency > 0).then(|| Arc::new(tokio::sync::Semaphore::new(config.concurrency)));
@@ -418,6 +477,7 @@ async fn main() -> Result<()> {
 
         let config = config.clone();
         let config_path_clone = config_path.clone();
+        let config_update_lock = config_update_lock.clone();
         let operation_limit = operation_limit.clone();
 
         let active_report_name_clone_for_future = active_report_name.clone();
@@ -524,13 +584,16 @@ async fn main() -> Result<()> {
                         chrono::Local::now().format("%d-%m-%Y").to_string()
                     };
 
+                    let safe_report_name = sanitize_filename_component(&active_report_name);
+                    let safe_date_suffix = sanitize_filename_component(&date_suffix);
                     let temp_dl_dir = {
                         let mut dir = executable_dir()?;
                         dir.push(format!(
                             "yasweb_downloads_tmp_{}_{}_{}",
-                            active_report_name, date_suffix, i
+                            safe_report_name, safe_date_suffix, i
                         ));
-                        let _ = std::fs::create_dir_all(&dir);
+                        std::fs::create_dir_all(&dir)
+                            .with_context(|| format!("Failed to create temporary download directory {:?}", dir))?;
                         dir
                     };
 
@@ -563,7 +626,12 @@ async fn main() -> Result<()> {
 
                         let mut user_data_dir = crm_tool::utils::executable_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
                         user_data_dir.push("yasweb_chrome_data");
-                        user_data_dir.push(format!("session_{}_{}_{}", active_report_name_for_dir, date_suffix, i));
+                        user_data_dir.push(format!(
+                            "session_{}_{}_{}",
+                            sanitize_filename_component(&active_report_name_for_dir),
+                            sanitize_filename_component(&date_suffix),
+                            i
+                        ));
 
                         let args = vec![
                             std::ffi::OsStr::new("--ignore-certificate-errors"),
@@ -669,35 +737,18 @@ async fn main() -> Result<()> {
                         .with_context(|| format!("Failed to finalize Yasweb report '{}'", active_report_name_clone))?;
 
                     if !discovered_filters.is_empty() {
-                        // Reload config from disk to avoid race conditions with other concurrent reports
-                        let latest_config_content = fs::read_to_string(&config_path_clone).await.unwrap_or_default();
-                        let mut latest_config: YaswebConfig = match serde_json::from_str(&latest_config_content) {
-                            Ok(c) => c,
-                            Err(_) => config_clone.clone(), // Fallback to our initial config state
-                        };
-
-                        if let Some(report) = latest_config.reports.get_mut(&active_report_name_clone) {
-                            let mut updated_filters = false;
-                            for f in discovered_filters {
-                                if let std::collections::hash_map::Entry::Vacant(e) =
-                                    report.filters.entry(f)
-                                {
-                                    e.insert("".to_string());
-                                    updated_filters = true;
-                                }
-                            }
-                            if updated_filters {
-                                info!("Updating yasweb_config.json with newly discovered filters for {}...", active_report_name_clone);
-                                let content = match serde_json::to_string_pretty(&latest_config) {
-                                    Ok(c) => c,
-                                    Err(_) => continue,
-                                };
-                                // Best effort write
-                                let _ = tokio::task::spawn_blocking({
-                                    let path = config_path_clone.clone();
-                                    move || crm_tool::utils::atomic_write(&path, &content)
-                                }).await;
-                            }
+                        if let Err(e) = persist_discovered_filters(
+                            &config_path_clone,
+                            &active_report_name_clone,
+                            discovered_filters,
+                            &config_update_lock,
+                        ).await {
+                            // Filter discovery is optional; never overwrite a config that could not be read or parsed.
+                            tracing::warn!(
+                                "Could not persist discovered filters for '{}': {:#}",
+                                active_report_name_clone,
+                                e
+                            );
                         }
                     }
                 }
@@ -721,6 +772,73 @@ async fn main() -> Result<()> {
 mod tests_yasweb_finalization {
     use super::*;
     use std::fs::File;
+    use tokio::sync::Mutex as AsyncMutex;
+
+    #[test]
+    fn filename_components_cannot_escape_their_directory() {
+        assert_eq!(sanitize_filename_component("../../outside\\file.csv"), "____outside_file.csv");
+        assert_eq!(sanitize_filename_component("C:\\temp\\report.csv"), "C__temp_report.csv");
+        assert_eq!(sanitize_filename_component("report 🚀 data.xlsx"), "report 🚀 data.xlsx");
+        assert_eq!(sanitize_filename_component("..."), "report");
+    }
+
+    #[tokio::test]
+    async fn concurrent_filter_updates_preserve_both_reports() {
+        let root = tempfile::tempdir().unwrap();
+        let config_path = root.path().join("yasweb_config.json");
+        let config = YaswebConfig {
+            url: "https://example.test".to_string(),
+            username: "test".to_string(),
+            reports: std::collections::HashMap::from([
+                ("first".to_string(), ReportConfig {
+                    report_type: "Standard Report".to_string(),
+                    filters: std::collections::HashMap::new(),
+                    start_date_key: None,
+                    end_date_key: None,
+                    download_path: None,
+                }),
+                ("second".to_string(), ReportConfig {
+                    report_type: "Standard Report".to_string(),
+                    filters: std::collections::HashMap::new(),
+                    start_date_key: None,
+                    end_date_key: None,
+                    download_path: None,
+                }),
+            ]),
+            ..YaswebConfig::default()
+        };
+        std::fs::write(&config_path, serde_json::to_string_pretty(&config).unwrap()).unwrap();
+        let lock = Arc::new(AsyncMutex::new(()));
+
+        let (first, second) = tokio::join!(
+            persist_discovered_filters(&config_path, "first", vec!["filter_a".to_string()], &lock),
+            persist_discovered_filters(&config_path, "second", vec!["filter_b".to_string()], &lock),
+        );
+        first.unwrap();
+        second.unwrap();
+
+        let saved: YaswebConfig =
+            serde_json::from_str(&std::fs::read_to_string(&config_path).unwrap()).unwrap();
+        assert!(saved.reports["first"].filters.contains_key("filter_a"));
+        assert!(saved.reports["second"].filters.contains_key("filter_b"));
+    }
+
+    #[tokio::test]
+    async fn invalid_config_is_not_replaced_when_persisting_discovered_filters() {
+        let root = tempfile::tempdir().unwrap();
+        let config_path = root.path().join("yasweb_config.json");
+        let invalid = "{ invalid json";
+        std::fs::write(&config_path, invalid).unwrap();
+        let lock = AsyncMutex::new(());
+
+        assert!(persist_discovered_filters(
+            &config_path,
+            "first",
+            vec!["filter_a".to_string()],
+            &lock,
+        ).await.is_err());
+        assert_eq!(std::fs::read_to_string(&config_path).unwrap(), invalid);
+    }
     use std::io::Write;
 
     #[test]
