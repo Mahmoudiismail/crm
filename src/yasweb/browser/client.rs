@@ -67,36 +67,11 @@ pub fn enable_network_logging(
                 );
             }
             Event::NetworkResponseReceived(res) => {
-                let headers = res
-                    .params
-                    .response
-                    .headers
-                    .0
-                    .as_ref()
-                    .and_then(|headers| headers.as_object())
-                    .into_iter()
-                    .flat_map(|headers| headers.iter())
-                    .map(|(name, value)| {
-                        let lower_name = name.to_ascii_lowercase();
-                        if matches!(
-                            lower_name.as_str(),
-                            "authorization" | "proxy-authorization" | "cookie" | "set-cookie"
-                        ) {
-                            format!("{name}: [REDACTED]")
-                        } else {
-                            format!(
-                                "{name}: {:?}",
-                                value.as_str().unwrap_or("[non-string value]")
-                            )
-                        }
-                    })
-                    .collect::<Vec<_>>();
                 info!(
-                    "Response: {} {} {} Headers: {:?}",
+                    "Response: {} {} {}",
                     res.params.response.status,
                     redact_url(&res.params.response.url),
-                    res.params.response.mime_type,
-                    headers
+                    res.params.response.mime_type
                 );
             }
             _ => {}
