@@ -463,6 +463,25 @@ mod tests {
     }
 
     #[test]
+    fn update_script_stages_verifies_and_rolls_back_partial_replacements() {
+        let script = include_str!("scripts/apply_update.ps1");
+        assert!(script.contains("$StagedPath = Join-Path"));
+        assert!(script.contains("$BackupPath = Join-Path"));
+        assert!(script.contains("Staged file verification failed"));
+        assert!(script.contains("$ReplacementPhaseComplete = $true"));
+        assert!(script.contains("if (-not $ReplacementPhaseComplete -and $AppliedReplacements)"));
+        assert!(script.contains("Rollback restored"));
+        assert!(script.contains("Destination verification failed"));
+        let replacement_phase = script
+            .find("# Stage every replacement beside its destination")
+            .expect("staging phase should exist");
+        let restart_phase = script
+            .find("if ($Config.restart_apps)")
+            .expect("restart phase should exist");
+        assert!(replacement_phase < restart_phase);
+    }
+
+    #[test]
     fn test_unblock_file_injection_safety() {
         let src = include_str!("update.rs");
         let bad_pattern = format!("{}{}", "Unblock-File -Path '", "{}'");
