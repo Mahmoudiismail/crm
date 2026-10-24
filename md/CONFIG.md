@@ -62,7 +62,7 @@ Executables spawned via the runner or manually have their own configurations.
 
 ### Merging and Persistence Behavior
 - Across all configurations, missing properties in files are systematically injected with application defaults using a recursive object merge via `utils::merge_json`.
-- Arrays are treated as *atomic* during merges. That is, if a configuration contains an array, it strictly preserves the user's array content rather than performing element-by-element deep merges. Defaults are only applied if the array field is completely absent.
+- Arrays are normally treated as *atomic*: an existing array is preserved as-is, and defaults are applied only when the field is absent. The `tasks` field is a deliberate exception for configuration auto-healing: task objects are recursively merged, and Tasker tasks that have a `type` are matched by that type rather than list position so reordering tasks does not mix settings between task types. New opt-in task defaults with `enabled: false` are appended only when that task type is not already configured. An empty `tasks` array is populated from defaults.
 - File saves leverage `atomic_write` utilizing `tempfile` persist boundaries, preventing any JSON corruption from unexpected interrupts or I/O hangs. Optional unconfigured strings and arrays are suppressed natively from the JSON output.
 
 *(See respective markdown files for detailed schemas of these components).*
