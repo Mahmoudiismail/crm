@@ -28,7 +28,8 @@ pub fn generate_pivot_html(
         }
     }
 
-    let mut sorted_rows = rows.to_vec();
+    // Sort borrowed rows rather than cloning every TicketRow and its owned fields.
+    let mut sorted_rows: Vec<&TicketRow> = rows.iter().collect();
     sorted_rows.sort_by(|a, b| {
         let cmp_team = a.team.cmp(&b.team);
         if cmp_team != std::cmp::Ordering::Equal && include_team_col {
@@ -290,6 +291,34 @@ mod tests {
         assert_eq!(
             escape_html("<script a='x'>&\""),
             "&lt;script a=&#39;x&#39;&gt;&amp;&quot;"
+        );
+    }
+
+    #[test]
+    fn pivot_html_keeps_team_sort_order_without_mutating_input_rows() {
+        let make_row = |team: &str, ticket_id: &str| TicketRow {
+            original_row: StringRecord::from(vec![ticket_id, team, "Open", team]),
+            ticket_id: ticket_id.to_string(),
+            team: team.to_string(),
+            branch: "Main Branch".to_string(),
+            status: "Open".to_string(),
+            assignee: format!("assignee-{team}"),
+            ticket_type: "type".to_string(),
+            ticket_subtype: "subtype".to_string(),
+            ticket_category: "category".to_string(),
+            created_at_dt: None,
+        };
+        let rows = vec![make_row("Team B", "2"), make_row("Team A", "1")];
+        let original_order = rows.iter().map(|row| row.team.as_str()).collect::<Vec<_>>();
+
+        let html = generate_pivot_html(&rows, &["Open".to_string()], true);
+
+        let team_a_position = html.find("Team A").unwrap();
+        let team_b_position = html.find("Team B").unwrap();
+        assert!(team_a_position < team_b_position);
+        assert_eq!(
+            rows.iter().map(|row| row.team.as_str()).collect::<Vec<_>>(),
+            original_order
         );
     }
 
