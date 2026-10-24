@@ -68,7 +68,7 @@ pub fn generate_leads_report(
         meta_b.cmp(&meta_a)
     });
 
-    let mut headers = None;
+    let mut headers: Option<csv::StringRecord> = None;
     let mut seen_leads = HashSet::new();
     let mut written_records = 0usize;
     let mut workbook = Workbook::new();
