@@ -76,9 +76,7 @@ pub fn execute_login(
 
     if !username_found {
         error!("Failed to find username input after extended wait.");
-        if let Ok(html) = tab.get_content() {
-            error!("Page HTML at failure to find username:\n{}", html);
-        }
+
         return Err(anyhow::anyhow!("Failed to find elements to login"));
     }
 
@@ -87,9 +85,7 @@ pub fn execute_login(
             info!("Typing username...");
             if let Err(e) = user_input.type_into(&config.username) {
                 error!("Failed to type username: {:?}", e);
-                if let Ok(html) = tab.get_content() {
-                    error!("Page HTML at failure to type username:\n{}", html);
-                }
+
                 return Err(anyhow::anyhow!("Failed to type username"));
             }
             info!("Successfully typed username.");
@@ -102,18 +98,14 @@ pub fn execute_login(
                         info!("Typing password...");
                         if let Err(e) = pass_input.type_into(password) {
                             error!("Failed to type password: {:?}", e);
-                            if let Ok(html) = tab.get_content() {
-                                error!("Page HTML at failure to type password:\n{}", html);
-                            }
+
                             return Err(anyhow::anyhow!("Failed to type password"));
                         }
                         info!("Successfully typed password.");
                     }
                     Err(e) => {
                         error!("Failed to find password input: {:?}", e);
-                        if let Ok(html) = tab.get_content() {
-                            error!("Page HTML at failure to find password input:\n{}", html);
-                        }
+
                         return Err(anyhow::anyhow!("Failed to find password input"));
                     }
                 }
@@ -126,23 +118,17 @@ pub fn execute_login(
                     info!("Clicking login button...");
                     if let Err(e) = login_button.click() {
                         error!("Failed to click login button: {:?}", e);
-                        if let Ok(html) = tab.get_content() {
-                            error!("Page HTML after failed login click:\n{}", html);
-                        }
+
                         return Err(anyhow::anyhow!("Failed to click login button"));
                     }
                     info!("Successfully clicked login button.");
-                    if let Ok(html) = tab.get_content() {
-                        info!("Page HTML after clicking login:\n{}", html);
-                    }
+
                     debug::save_html_state(tab, active_report_name, *step_num, "After login");
                     *step_num += 1;
                 }
                 Err(e) => {
                     error!("Failed to find login button: {:?}", e);
-                    if let Ok(html) = tab.get_content() {
-                        error!("Page HTML at failure to find login button:\n{}", html);
-                    }
+
                     return Err(anyhow::anyhow!("Failed to find login button"));
                 }
             }
@@ -153,9 +139,7 @@ pub fn execute_login(
                 if let Ok(err_alert) = tab.find_element(".alert-danger.fade.show") {
                     let msg = err_alert.get_inner_text().unwrap_or_default();
                     error!("Login failed: {}", msg.trim());
-                    if let Ok(html) = tab.get_content() {
-                        error!("Page HTML after failed login:\n{}", html);
-                    }
+
                     return Err(anyhow::anyhow!("Login failed: {}", msg.trim()));
                 }
 
@@ -181,9 +165,7 @@ pub fn execute_login(
 
             if !login_success {
                 error!("Dashboard did not load within timeout, or login failed silently.");
-                if let Ok(html) = tab.get_content() {
-                    error!("Page HTML after wait timeout:\n{}", html);
-                }
+
                 return Err(anyhow::anyhow!("Dashboard wait timeout"));
             }
 
@@ -194,9 +176,7 @@ pub fn execute_login(
                 "Failed to find username input, likely because page did not load: {:?}",
                 e
             );
-            if let Ok(html) = tab.get_content() {
-                error!("Page HTML at failure to find username:\n{}", html);
-            }
+
             Err(anyhow::anyhow!("Failed to find elements to login"))
         }
     }

@@ -34,7 +34,7 @@ pub struct AppConfig {
     pub password: String,
     #[serde(default)]
     pub no_verify_ssl: bool,
-    #[serde(default = "default_true")]
+    #[serde(default = "default_false")]
     pub remember_secrets: bool,
     #[serde(default)]
     pub email: String,
@@ -99,8 +99,8 @@ fn default_file_log_level() -> String {
     "TRACE".to_string()
 }
 
-fn default_true() -> bool {
-    true
+fn default_false() -> bool {
+    false
 }
 
 fn default_recent_download_window_seconds() -> u64 {
@@ -120,7 +120,7 @@ impl Default for AppConfig {
             username: "".into(),
             password: "".into(),
             no_verify_ssl: false,
-            remember_secrets: true,
+            remember_secrets: false,
             email: "Mahmoud_iismail@rayacx.com".into(),
             from_date: "2025-01-01".into(),
             calls_from_date: "2026-02-01".into(),
@@ -488,6 +488,21 @@ mod tests {
 #[cfg(test)]
 mod security_tests {
     use super::*;
+
+    #[test]
+    fn test_default_config_does_not_persist_secrets() {
+        assert!(
+            !AppConfig::default().remember_secrets,
+            "Secrets should not be persisted by default"
+        );
+    }
+
+    #[test]
+    fn test_missing_remember_secrets_defaults_to_false() {
+        let config: AppConfig =
+            serde_json::from_str(r#"{"region":"us-east-1"}"#).expect("Failed to parse JSON");
+        assert!(!config.remember_secrets);
+    }
 
     #[test]
     fn test_default_config_tls_verification_enabled() {
