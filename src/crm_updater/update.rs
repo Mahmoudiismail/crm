@@ -446,6 +446,23 @@ mod tests {
     }
 
     #[test]
+    fn update_script_preflights_replacements_before_stopping_apps() {
+        let script = include_str!("scripts/apply_update.ps1");
+        let preflight = script
+            .find("# Validate the entire replacement set before stopping any application.")
+            .expect("replacement preflight should exist");
+        let stop_apps = script
+            .find("if ($Config.apps_to_stop)")
+            .expect("process-stop phase should exist");
+        assert!(
+            preflight < stop_apps,
+            "all replacement sources and destinations must be checked before stopping apps"
+        );
+        assert!(script.contains("Required update source file is missing"));
+        assert!(script.contains("Destination directory does not exist"));
+    }
+
+    #[test]
     fn test_unblock_file_injection_safety() {
         let src = include_str!("update.rs");
         let bad_pattern = format!("{}{}", "Unblock-File -Path '", "{}'");
