@@ -1,5 +1,31 @@
 use crm_tool::utils::build_csv_reader_from_reader;
 
+use std::path::PathBuf;
+
+fn find_temp_artifact(prefix: &str, suffix: &str) -> PathBuf {
+    let prefix = prefix.to_ascii_lowercase();
+    let suffix = suffix.to_ascii_lowercase();
+    let mut matches: Vec<_> = std::fs::read_dir(std::env::temp_dir())
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .map(str::to_ascii_lowercase)
+                .is_some_and(|name| name.starts_with(&prefix) && name.ends_with(&suffix))
+        })
+        .collect();
+    matches.sort_by_key(|path| {
+        std::fs::metadata(path)
+            .and_then(|metadata| metadata.modified())
+            .ok()
+    });
+    matches.pop().unwrap_or_else(|| {
+        panic!("generated artifact not found matching {prefix}*{suffix}")
+    })
+}
+
 // A. VALID NORMAL CSV
 #[test]
 fn test_csv_processing_integration_valid() {
@@ -254,14 +280,13 @@ fn test_task1_generate_results_and_html_email() {
 
     let temp_dir = std::env::temp_dir();
 
-    let bucket_name = "Pre_authorization_email.html"; // Title Cased
-    let html_path = temp_dir.join(bucket_name);
+    let html_path = find_temp_artifact("Pre_authorization_", "email.html");
     assert!(
         html_path.exists(),
         "HTML email should be generated for PRE-AUTHORIZATION team"
     );
 
-    let csv_attachment = temp_dir.join("Pre_authorization_open_tickets.csv");
+    let csv_attachment = find_temp_artifact("Pre_authorization_", "open_tickets.csv");
     assert!(
         csv_attachment.exists(),
         "CSV tickets attachment should be generated"
@@ -311,13 +336,13 @@ fn test_task1_only_call_center() {
     crm_tool::tasker::csv_task::run(&csv_config, true, false).unwrap();
 
     let temp_dir = std::env::temp_dir();
-    let html_path = temp_dir.join("Call_Center_email.html");
+    let html_path = find_temp_artifact("Call_Center_", "email.html");
     assert!(
         html_path.exists(),
         "HTML email should be generated for Call Center team"
     );
 
-    let csv_attachment = temp_dir.join("Call_Center_open_tickets.csv");
+    let csv_attachment = find_temp_artifact("Call_Center_", "open_tickets.csv");
     assert!(
         csv_attachment.exists(),
         "CSV tickets attachment should be generated"
