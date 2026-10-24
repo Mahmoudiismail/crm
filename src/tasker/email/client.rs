@@ -641,7 +641,11 @@ mod tests {
             .find(|path| {
                 path.file_name()
                     .and_then(|name| name.to_str())
-                    .is_some_and(|name| name.starts_with(prefix) && name.ends_with(suffix))
+                    .map(str::to_ascii_lowercase)
+                    .is_some_and(|name| {
+                        name.starts_with(&prefix.to_ascii_lowercase())
+                            && name.ends_with(&suffix.to_ascii_lowercase())
+                    })
             })
             .unwrap_or_else(|| panic!("artifact not found: {}*{}", prefix, suffix))
     }
