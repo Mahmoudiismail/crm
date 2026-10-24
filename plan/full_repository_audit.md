@@ -6,6 +6,9 @@
 
 A comprehensive engineering audit of the CRM tool repository was conducted, covering the CRM report fetcher, CRM Updater, Tasker background processing, Runner scheduling, and general repository practices.
 
+**Reading note:** The finding narratives below preserve the original audit trail and may describe pre-fix behavior. The explicit status labels and current-source summary above supersede any older “Current behavior” or “Expected behavior” text inside a resolved finding. Phase-one changes added since the original audit also validate weekly schedule days even when `next_run_at` is preconfigured and refuse to send an email when recipient resolution produces no `To` address.
+
+
 The audit identified critical issues regarding error propagation in Tasker (where task failures are swallowed, resulting in false success states) and an Outlook COM error notification cascade that obscures original failures. Additionally, CRM report downloading suffers from missing HTTP retry logic, leading to silent data loss on transient network errors. Several items initially flagged (like the Runner's semaphore `.unwrap()` and Updater's `Unblock-File`) have been investigated and reclassified as safe or non-bugs based on actual control flow.
 
 ## 2. P0 Findings
