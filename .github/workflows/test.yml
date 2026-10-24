@@ -51,6 +51,7 @@ jobs:
       - name: Checkout PR branch
         uses: actions/checkout@v7
         with:
+          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
 
       - name: Install Rust
@@ -63,6 +64,7 @@ jobs:
         run: cargo fmt
 
       - name: Commit formatting changes when needed
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
         shell: bash
         env:
           TARGET_BRANCH: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
@@ -90,6 +92,7 @@ jobs:
       - name: Checkout formatted source
         uses: actions/checkout@v7
         with:
+          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
           persist-credentials: false
 
@@ -121,6 +124,7 @@ jobs:
       - name: Checkout formatted source
         uses: actions/checkout@v7
         with:
+          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
           persist-credentials: false
 
