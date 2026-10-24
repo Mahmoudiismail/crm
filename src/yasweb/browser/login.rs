@@ -15,25 +15,6 @@ fn username_matches(displayed: &str, configured: &str) -> bool {
     !configured.trim().is_empty() && displayed.trim().eq_ignore_ascii_case(configured.trim())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::username_matches;
-
-    #[test]
-    fn accepts_exact_username_ignoring_case_and_outer_whitespace() {
-        assert!(username_matches("  Mahmoud.Ibrahim ", "mahmoud.ibrahim"));
-    }
-
-    #[test]
-    fn rejects_username_that_only_contains_configured_username() {
-        assert!(!username_matches("other-mahmoud", "mahmoud"));
-    }
-
-    #[test]
-    fn rejects_empty_configured_username() {
-        assert!(!username_matches("mahmoud", "   "));
-    }
-}
 
 /// Automates the login flow and waits for the dashboard to appear.
 ///
@@ -203,5 +184,25 @@ pub fn execute_login(
 
             Err(anyhow::anyhow!("Failed to find elements to login"))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::username_matches;
+
+    #[test]
+    fn accepts_exact_username_ignoring_case_and_outer_whitespace() {
+        assert!(username_matches("  Mahmoud.Ibrahim ", "mahmoud.ibrahim"));
+    }
+
+    #[test]
+    fn rejects_username_that_only_contains_configured_username() {
+        assert!(!username_matches("other-mahmoud", "mahmoud"));
+    }
+
+    #[test]
+    fn rejects_empty_configured_username() {
+        assert!(!username_matches("mahmoud", "   "));
     }
 }
