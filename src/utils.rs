@@ -195,13 +195,15 @@ pub fn merge_json(current: &mut serde_json::Value, default: &serde_json::Value) 
                                         == Some(false);
 
                                 if is_disabled_opt_in {
-                                    let default_type = def_item.get("type");
-                                    let already_present = default_type.is_some_and(|task_type| {
+                                    let existing_index = def_item.get("type").and_then(|task_type| {
                                         curr_arr
                                             .iter()
-                                            .any(|task| task.get("type") == Some(task_type))
+                                            .position(|task| task.get("type") == Some(task_type))
                                     });
-                                    if !already_present {
+                                    if let Some(index) = existing_index {
+                                        // Fill missing defaults without changing the user's enabled choice.
+                                        changed |= merge_json(&mut curr_arr[index], def_item);
+                                    } else {
                                         curr_arr.push(def_item.clone());
                                         changed = true;
                                     }
@@ -1066,6 +1068,34 @@ mod configuration_merge_regression_tests {
         );
         assert_eq!(current["tasks"][2]["type"], "sat_figures");
         assert_eq!(current["tasks"][2]["enabled"], false);
+    }
+
+    #[test]
+    fn existing_opt_in_task_gets_missing_defaults_without_overwriting_enabled_choice() {
+        let defaults = json!({
+            "tasks": [
+                {
+                    "type": "users_export",
+                    "enabled": false,
+                    "minutes_ago": 10,
+                    "output_file": "users.csv"
+                }
+            ]
+        });
+        let mut current = json!({
+            "tasks": [
+                {
+                    "type": "users_export",
+                    "enabled": true,
+                    "output_file": "custom-users.csv"
+                }
+            ]
+        });
+
+        assert!(merge_json(&mut current, &defaults));
+        assert_eq!(current["tasks"][0]["enabled"], true);
+        assert_eq!(current["tasks"][0]["minutes_ago"], 10);
+        assert_eq!(current["tasks"][0]["output_file"], "custom-users.csv");
     }
 
     #[test]
