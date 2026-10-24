@@ -139,16 +139,9 @@ pub fn execute_login(
                     login_success = true;
                     let inner_text = usr_id_element.get_inner_text().unwrap_or_default();
                     if inner_text.contains(&config.username) {
-                        info!(
-                            "Successfully verified username {} on the page.",
-                            config.username
-                        );
-                        println!("Verified username {} on the page.", config.username);
+                        info!("Successfully verified configured username on the page.");
                     } else {
-                        error!(
-                            "Found username on page ('{}') does not match expected '{}'",
-                            inner_text, config.username
-                        );
+                        error!("The username displayed by the portal did not match the configured username.");
                     }
                     break;
                 }
