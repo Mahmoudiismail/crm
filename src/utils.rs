@@ -144,7 +144,10 @@ pub fn intercept_manifest(manifest: AppManifest) -> InterceptResult {
 
 pub fn atomic_write(path: &Path, contents: &str) -> Result<()> {
     use std::io::Write;
-    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
     let mut temp_file = tempfile::NamedTempFile::new_in(parent)
         .with_context(|| format!("Failed to create temp file in {:?}", parent))?;
     temp_file
@@ -1056,6 +1059,18 @@ mod configuration_merge_regression_tests {
         );
         assert_eq!(current["tasks"][2]["type"], "sat_figures");
         assert_eq!(current["tasks"][2]["enabled"], false);
+    }
+
+    #[test]
+    fn atomic_write_supports_a_relative_filename_without_parent_directory() {
+        let file_name = format!("crm-atomic-write-relative-{}.json", std::process::id());
+        let path = std::path::Path::new(&file_name);
+
+        super::atomic_write(path, r#"{"saved":true}"#).unwrap();
+        let saved = std::fs::read_to_string(path).unwrap();
+        let _ = std::fs::remove_file(path);
+
+        assert_eq!(saved, r#"{"saved":true}"#);
     }
 
     #[test]
