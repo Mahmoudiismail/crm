@@ -37,7 +37,29 @@ try {
         Write-Log "Original updater process terminated successfully."
     }
 
+    if (-not (Test-Path -LiteralPath $ReplacementMapPath -PathType Leaf)) {
+        throw "Replacement map file is missing."
+    }
     $Config = Get-Content -LiteralPath $ReplacementMapPath -Raw | ConvertFrom-Json
+
+    # Validate the entire replacement set before stopping any application.
+    if (-not $Config.file_replacements -or @($Config.file_replacements).Count -eq 0) {
+        throw "Update contains no file replacements."
+    }
+    foreach ($Item in $Config.file_replacements) {
+        if ([string]::IsNullOrWhiteSpace($Item.source_path) -or
+            [string]::IsNullOrWhiteSpace($Item.destination_path)) {
+            throw "Update contains a replacement with an empty source or destination path."
+        }
+        if (-not (Test-Path -LiteralPath $Item.source_path -PathType Leaf)) {
+            throw "Required update source file is missing: $($Item.source_path)"
+        }
+        $DestinationDirectory = Split-Path -Parent -LiteralPath $Item.destination_path
+        if ([string]::IsNullOrWhiteSpace($DestinationDirectory) -or
+            -not (Test-Path -LiteralPath $DestinationDirectory -PathType Container)) {
+            throw "Destination directory does not exist: $DestinationDirectory"
+        }
+    }
 
     if ($Config.apps_to_stop) {
         foreach ($App in $Config.apps_to_stop) {
