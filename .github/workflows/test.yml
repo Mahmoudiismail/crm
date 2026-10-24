@@ -113,6 +113,7 @@ jobs:
         uses: Swatinem/rust-cache@v2.9.2
         with:
           shared-key: rust-repo-windows
+          add-job-id-key: false
           cache-on-failure: true
 
       - name: Run tests
