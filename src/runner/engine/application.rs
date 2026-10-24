@@ -70,7 +70,6 @@ fn date_args_from_manifest(manifest: &serde_json::Value) -> (Option<String>, Opt
     (start, end)
 }
 
-
 /// Check whether a manifest argument's declared dependencies are satisfied by the
 /// arguments already configured for this invocation. Unknown arguments remain allowed
 /// for backward compatibility with apps that do not expose a manifest.
@@ -82,7 +81,10 @@ fn manifest_arg_dependencies_satisfied(
     let Some(arg) = manifest
         .get("arguments")
         .and_then(serde_json::Value::as_array)
-        .and_then(|args| args.iter().find(|arg| arg.get("name").and_then(serde_json::Value::as_str) == Some(arg_name)))
+        .and_then(|args| {
+            args.iter()
+                .find(|arg| arg.get("name").and_then(serde_json::Value::as_str) == Some(arg_name))
+        })
     else {
         return true;
     };
@@ -91,14 +93,18 @@ fn manifest_arg_dependencies_satisfied(
         return true;
     };
 
-    dependencies.iter().all(|(dependency_name, allowed_values)| {
-        let Some(actual_value) = effective_args.get(dependency_name) else {
-            return false;
-        };
-        allowed_values
-            .as_array()
-            .is_some_and(|values| values.iter().any(|value| value.as_str() == Some(actual_value.as_str())))
-    })
+    dependencies
+        .iter()
+        .all(|(dependency_name, allowed_values)| {
+            let Some(actual_value) = effective_args.get(dependency_name) else {
+                return false;
+            };
+            allowed_values.as_array().is_some_and(|values| {
+                values
+                    .iter()
+                    .any(|value| value.as_str() == Some(actual_value.as_str()))
+            })
+        })
 }
 
 fn insert_period_args(
@@ -131,7 +137,10 @@ async fn discover_date_args(
     match tokio::time::timeout(MANIFEST_TIMEOUT, command.output()).await {
         Ok(Ok(output)) if output.status.success() => {
             match serde_json::from_slice::<serde_json::Value>(&output.stdout) {
-                Ok(manifest) => { let (start, end) = date_args_from_manifest(&manifest); (start, end, Some(manifest)) },
+                Ok(manifest) => {
+                    let (start, end) = date_args_from_manifest(&manifest);
+                    (start, end, Some(manifest))
+                }
                 Err(error) => {
                     logger
                         .log(&format!(
@@ -220,14 +229,20 @@ pub async fn run_external_app(
             .filter(|name| !name.is_empty())
             .map(str::to_string)
             .or(discovered.0)
-            .filter(|name| manifest.is_none_or(|m| manifest_arg_dependencies_satisfied(m, name, &effective_args)));
+            .filter(|name| {
+                manifest
+                    .is_none_or(|m| manifest_arg_dependencies_satisfied(m, name, &effective_args))
+            });
         let end_arg = spec
             .end_date_arg
             .as_deref()
             .filter(|name| !name.is_empty())
             .map(str::to_string)
             .or(discovered.1)
-            .filter(|name| manifest.is_none_or(|m| manifest_arg_dependencies_satisfied(m, name, &effective_args)));
+            .filter(|name| {
+                manifest
+                    .is_none_or(|m| manifest_arg_dependencies_satisfied(m, name, &effective_args))
+            });
 
         let start_arg_name = start_arg.clone();
         let end_arg_name = end_arg.clone();
@@ -303,7 +318,6 @@ mod tests {
     use super::{date_args_from_manifest, insert_period_args, manifest_arg_dependencies_satisfied};
     use std::collections::HashMap;
 
-
     #[test]
     fn respects_manifest_dependencies_for_explicit_date_arguments() {
         let manifest = serde_json::json!({
@@ -318,8 +332,16 @@ mod tests {
         let wrong_task = HashMap::from([("--task".to_string(), "1".to_string())]);
         let sat_figures = HashMap::from([("--task".to_string(), "6".to_string())]);
 
-        assert!(!manifest_arg_dependencies_satisfied(&manifest, "--start-date", &wrong_task));
-        assert!(manifest_arg_dependencies_satisfied(&manifest, "--start-date", &sat_figures));
+        assert!(!manifest_arg_dependencies_satisfied(
+            &manifest,
+            "--start-date",
+            &wrong_task
+        ));
+        assert!(manifest_arg_dependencies_satisfied(
+            &manifest,
+            "--start-date",
+            &sat_figures
+        ));
     }
 
     #[test]
