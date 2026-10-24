@@ -124,6 +124,14 @@ jobs:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
           persist-credentials: false
 
+      - name: Check JavaScript syntax
+        shell: pwsh
+        run: |
+          Get-ChildItem -Path src -Recurse -Filter *.js | ForEach-Object {
+            node --check $_.FullName
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
