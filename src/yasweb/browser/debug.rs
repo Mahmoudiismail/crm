@@ -8,6 +8,10 @@ pub fn save_html_state(
     step_num: u32,
     step_name: &str,
 ) {
+    if std::env::var("CRM_YASWEB_CAPTURE_DIAGNOSTICS").as_deref() != Ok("1") {
+        return;
+    }
+
     let get_html_js = r#"
         (function() {
             let mainHtml = document.documentElement ? document.documentElement.outerHTML : "";
@@ -85,6 +89,10 @@ pub fn save_html_state(
 /// Saves a redacted page snapshot and browser metadata when an automation step fails.
 /// The diagnostic file is kept separate from routine step snapshots to make failures easy to find.
 pub fn save_failure_diagnostics(tab: &Arc<headless_chrome::Tab>, step_name: &str) {
+    if std::env::var("CRM_YASWEB_CAPTURE_DIAGNOSTICS").as_deref() != Ok("1") {
+        return;
+    }
+
     use std::time::{SystemTime, UNIX_EPOCH};
 
     let diagnostic_js = r##"
