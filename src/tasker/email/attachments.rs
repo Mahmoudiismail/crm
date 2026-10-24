@@ -25,26 +25,6 @@ pub fn unique_email_artifact_path(bucket_name: &str, suffix: &str) -> PathBuf {
     ))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::unique_email_artifact_path;
-
-    #[test]
-    fn generated_artifact_paths_are_unique() {
-        let first = unique_email_artifact_path("Call Center", "email.html");
-        let second = unique_email_artifact_path("Call Center", "email.html");
-        assert_ne!(first, second);
-        assert!(first
-            .file_name()
-            .and_then(|name| name.to_str())
-            .is_some_and(|name| name.ends_with("email.html")));
-        assert!(second
-            .file_name()
-            .and_then(|name| name.to_str())
-            .is_some_and(|name| name.ends_with("email.html")));
-    }
-}
-
 #[allow(clippy::too_many_arguments)]
 pub fn generate_ticket_attachment(
     bucket_name: &str,
@@ -132,5 +112,25 @@ pub fn generate_ticket_attachment(
         }
         workbook.save(&xlsx_path)?;
         Ok(xlsx_path)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::unique_email_artifact_path;
+
+    #[test]
+    fn generated_artifact_paths_are_unique() {
+        let first = unique_email_artifact_path("Call Center", "email.html");
+        let second = unique_email_artifact_path("Call Center", "email.html");
+        assert_ne!(first, second);
+        assert!(first
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.ends_with("email.html")));
+        assert!(second
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.ends_with("email.html")));
     }
 }
