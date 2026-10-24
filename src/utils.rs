@@ -195,9 +195,8 @@ pub fn merge_json(current: &mut serde_json::Value, default: &serde_json::Value) 
                                         == Some(false);
 
                                 if is_disabled_opt_in {
-                                    let existing_index = def_item
-                                        .get("type")
-                                        .and_then(|task_type| {
+                                    let existing_index =
+                                        def_item.get("type").and_then(|task_type| {
                                             curr_arr.iter().position(|task| {
                                                 task.get("type") == Some(task_type)
                                             })
@@ -1070,9 +1069,7 @@ mod configuration_merge_regression_tests {
             "fallback@example.com"
         );
         assert_eq!(current["tasks"][2]["type"], "sat_figures");
-        assert!(!current["tasks"][2]["enabled"]
-            .as_bool()
-            .unwrap_or(true));
+        assert!(!current["tasks"][2]["enabled"].as_bool().unwrap_or(true));
     }
 
     #[test]
