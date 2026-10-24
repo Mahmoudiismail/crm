@@ -48,6 +48,7 @@ Executables spawned via the runner or manually have their own configurations.
 
 - **`config.json` (CRM):** Cognito user pool, API endpoints, credentials. Can override the standard `Downloads` folder using `custom_download_folder`. The CLI argument `--custom-download-folder` overrides this config key for a single run without persisting to `config.json`. Includes CRM-specific download configuration properties:
   - `recent_download_window_seconds`: (Default: 30) Recent completed-report suppression window in seconds. Set to `0` to always fetch. For date-ranged tickets, calls, and leads, suppression requires a completion marker for the same requested range and all files recorded by that marker to still exist; a lone recent chunk file is not proof of completion. Users are fetched as one direct Base64 payload and retain the recent-file check. This is not a general CRM execution cooldown.
+  - `remember_secrets`: (Default: `false`) Controls whether passwords and cached tokens are written to the CRM config file. Persistence is opt-in. Existing files that already contain `remember_secrets: true` retain that setting for compatibility; set it to `false` to stop persisting secret fields.
   - `retention_days`: (Optional) If configured with a value greater than `0`, the CRM process will clean up older downloaded CRM reports (`ticket_report_*`, `call_logs_*`, `lead_report_*`, `users_*`) modified longer than `retention_days` days ago. Missing, `null` or `0` disables cleanup. Unrelated files in the directory are safely preserved.
 
   ```json
