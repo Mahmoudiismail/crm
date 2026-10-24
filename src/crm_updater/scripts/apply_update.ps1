@@ -200,7 +200,11 @@ try {
     # All replacements verified; backups are no longer needed.
     foreach ($Applied in $AppliedReplacements) {
         if ($Applied.HadOriginal -and (Test-Path -LiteralPath $Applied.Backup -PathType Leaf)) {
-            Remove-Item -LiteralPath $Applied.Backup -Force -ErrorAction Stop
+            try {
+                Remove-Item -LiteralPath $Applied.Backup -Force -ErrorAction Stop
+            } catch {
+                Write-Log "WARNING: Updated files are verified, but backup cleanup failed for '$($Applied.Backup)': $_"
+            }
         }
     }
 
