@@ -69,6 +69,10 @@ This is a configuration review against the current `Cargo.lock` and the public R
 | RUSTSEC-2024-0370 | `Cargo.lock` contains `proc-macro-error 1.0.4`; RustSec classifies it as unmaintained. | Keep only as a documented exception while tracing the transitive build-time dependency and evaluating an upstream upgrade path. |
 | RUSTSEC-2024-0412, -0413, -0415, -0416, -0418, -0419, -0420 | The public RustSec advisory index marks these advisories as withdrawn. | Removed from `deny.toml`; re-run cargo-deny to confirm the current toolchain accepts the configuration. |
 
+### CI enforcement added (October 24, 2026)
+
+The pull-request test workflow now runs both `cargo audit` and `cargo deny check advisories`. The first CI run on this change must be inspected; this document does not claim either check has passed yet. The release workflow also tests the generated ZIP archive and verifies that every selected executable is present and non-empty before publishing it. Archive integrity/content checks do not authenticate the publisher; see `md/PRODUCTION_READINESS.md` for that remaining release blocker.
+
 ### Required follow-up
 
 1. Verify the lockfile update from `wayland-scanner 0.31.10` to `0.31.11` using `cargo check --locked` and `cargo tree -i quick-xml`; ensure no `quick-xml 0.39.4` remains.
