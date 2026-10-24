@@ -326,9 +326,11 @@ async fn respond_to_auth_challenge(
         .get("AuthenticationResult")
         .context("Missing AuthenticationResult")?;
 
-    let access_token = auth_result["AccessToken"]
-        .as_str()
-        .unwrap_or_default()
+    let access_token = auth_result
+        .get("AccessToken")
+        .and_then(serde_json::Value::as_str)
+        .filter(|token| !token.trim().is_empty())
+        .context("Missing or empty AccessToken in AuthenticationResult")?
         .to_string();
     let id_token = auth_result["IdToken"]
         .as_str()
@@ -338,7 +340,11 @@ async fn respond_to_auth_challenge(
         .as_str()
         .unwrap_or_default()
         .to_string();
-    let expires_in = auth_result["ExpiresIn"].as_u64().unwrap_or(3600);
+    let expires_in = auth_result
+        .get("ExpiresIn")
+        .and_then(serde_json::Value::as_u64)
+        .filter(|seconds| *seconds > 0 && *seconds <= i64::MAX as u64)
+        .context("Missing or invalid ExpiresIn in AuthenticationResult")?;
 
     Ok(AuthTokens {
         access_token,
