@@ -159,7 +159,7 @@ async fn discover_date_args(
                     app.name, error
                 ))
                 .await;
-            (None, None)
+            (None, None, None)
         }
         Err(_) => {
             logger
@@ -300,8 +300,27 @@ pub async fn run_external_app(
 
 #[cfg(test)]
 mod tests {
-    use super::{date_args_from_manifest, insert_period_args};
+    use super::{date_args_from_manifest, insert_period_args, manifest_arg_dependencies_satisfied};
     use std::collections::HashMap;
+
+
+    #[test]
+    fn respects_manifest_dependencies_for_explicit_date_arguments() {
+        let manifest = serde_json::json!({
+            "arguments": [
+                {
+                    "name": "--start-date",
+                    "arg_type": "string",
+                    "depends_on": {"--task": ["6"]}
+                }
+            ]
+        });
+        let wrong_task = HashMap::from([("--task".to_string(), "1".to_string())]);
+        let sat_figures = HashMap::from([("--task".to_string(), "6".to_string())]);
+
+        assert!(!manifest_arg_dependencies_satisfied(&manifest, "--start-date", &wrong_task));
+        assert!(manifest_arg_dependencies_satisfied(&manifest, "--start-date", &sat_figures));
+    }
 
     #[test]
     fn rejects_inverted_explicit_iso_date_args_before_launch() {
