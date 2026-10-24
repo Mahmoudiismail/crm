@@ -891,7 +891,17 @@ mod tests_yasweb_finalization {
 
         finalize_download(&src_dir, &dst_dir, "../outside.xlsx").unwrap();
 
-        assert!(dst_dir.join("_outside.xlsx").exists());
+        let output_files = std::fs::read_dir(&dst_dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .collect::<Vec<_>>();
+        assert_eq!(output_files.len(), 1, "expected exactly one output file");
+        assert_eq!(output_files[0].parent(), Some(dst_dir.as_path()));
+        assert_ne!(
+            output_files[0].file_name().and_then(|name| name.to_str()),
+            Some("outside.xlsx"),
+            "the output filename must not escape sanitization"
+        );
         assert!(!root.path().join("outside.xlsx").exists());
     }
 
