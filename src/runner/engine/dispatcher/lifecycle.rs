@@ -233,11 +233,13 @@ pub fn start_scheduler(runner_config_path: String) -> RunnerHandle {
                             }
                             for schedule in &task.schedules {
                                 if schedule_is_due(schedule, now) {
-                                    info!("Cron schedule triggered for task: {}", task.id);
-                                    let _ = tx_clone.send(RunnerCommand::RunTaskNow {
+                                    match tx_clone.send(RunnerCommand::RunTaskNow {
                                         task_id: task.id.clone(),
                                         is_manual: false,
-                                    }).await;
+                                    }).await {
+                                        Ok(()) => info!("Cron schedule triggered for task: {}", task.id),
+                                        Err(error) => error!("Failed to dispatch scheduled task {}: {}", task.id, error),
+                                    }
                                     break;
                                 }
                             }

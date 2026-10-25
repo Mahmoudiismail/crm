@@ -11,6 +11,11 @@ pub enum RunnerCommand {
         task_id: String,
         is_manual: bool,
     },
+    RunTaskNowWithReply {
+        task_id: String,
+        is_manual: bool,
+        reply: tokio::sync::oneshot::Sender<Result<(), String>>,
+    },
     SetTaskEnabled {
         task_id: String,
         enabled: bool,

@@ -76,13 +76,14 @@ pub async fn run_due_tasks(
     .await?;
 
     for (task, policy, scheduled_at) in tasks_to_queue {
-        let _ = exec_tx
+        exec_tx
             .send(ExecutionManagerCommand::QueueTask {
                 task: Box::new(task),
                 policy,
                 scheduled_at,
             })
-            .await;
+            .await
+            .map_err(|error| anyhow::anyhow!("Failed to queue task: {}", error))?;
     }
     Ok(())
 }
@@ -126,13 +127,14 @@ pub async fn run_all_tasks_now(
     })
     .await?;
     for (task, policy, scheduled_at) in tasks_to_queue {
-        let _ = exec_tx
+        exec_tx
             .send(ExecutionManagerCommand::QueueTask {
                 task: Box::new(task),
                 policy,
                 scheduled_at,
             })
-            .await;
+            .await
+            .map_err(|error| anyhow::anyhow!("Failed to queue task: {}", error))?;
     }
     Ok(())
 }
@@ -173,8 +175,7 @@ pub async fn run_task_by_id(
 
         if let Some(task) = cfg.tasks.iter_mut().find(|t| t.id == tid) {
             if queued_ids.contains(&task.id) || running_ids.contains(&task.id) {
-                tracing::warn!("Task '{}' is already running or queued", task.id);
-                return Ok(None);
+                return Err(anyhow::anyhow!("Task '{}' is already running or queued", task.id));
             }
 
             let scheduled_at = if is_manual {
@@ -201,13 +202,14 @@ pub async fn run_task_by_id(
     .await?;
 
     if let Some((t, p, scheduled_at)) = task_to_queue {
-        let _ = exec_tx
+        exec_tx
             .send(ExecutionManagerCommand::QueueTask {
                 task: Box::new(t),
                 policy: p,
                 scheduled_at,
             })
-            .await;
+            .await
+            .map_err(|error| anyhow::anyhow!("Failed to queue task: {}", error))?;
     }
     Ok(())
 }
