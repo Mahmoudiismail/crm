@@ -27,6 +27,15 @@ Focused regression coverage protects three runtime guarantees:
 - A `TaskLogger` initialization failure remains retryable; after the filesystem failure is removed, a later log call initializes the logger and writes its message.
 - An existing malformed `runner_config.json` causes the Runner process to exit unsuccessfully without replacing the file with defaults.
 
+## Task Dispatch Feedback and Config Persistence
+
+- Manual **Run Task** and **Run All** requests wait for the scheduler to report whether the task(s) were accepted for queueing. A closed scheduler channel, missing task, already queued/running task, or queue-send failure must be shown as an error rather than a successful trigger message.
+- The execution manager remains the final duplicate-admission authority; status snapshots are not a guarantee that a concurrent request has not already queued the same task.
+- Runner GUI and task API reads use the shared configuration lock also used by mutations, so a page does not read the file midway through a configuration update.
+- Every mutation through the dispatcher reloads `runner_config.json` after its atomic save and compares the persisted configuration with the expected configuration. A read-back mismatch is returned as an error.
+- Task edits additionally compare the saved editable task fields with the normalized submitted task. Runtime-managed fields (`last_run_at`, `last_status`, and `next_run_at`) are excluded because they can change independently of the edit form.
+- The runner's top-level log reports scheduler dispatch; detailed execution outcomes remain in each task's task-specific log.
+
 ## HTTP GUI Security Constraints
 The Runner enforces strict application and network layer protections to secure its control plane:
 - **Host Validation**: Binding to a non-loopback host interface (`0.0.0.0` or external IP) in `gui_host` without protection is actively rejected at startup, keeping access limited to local configurations (`127.0.0.1`, `localhost`).
