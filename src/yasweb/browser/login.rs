@@ -23,8 +23,16 @@ fn username_matches(displayed: &str, configured: &str) -> bool {
     {
         let displayed_id = displayed.trim_start_matches('0');
         let configured_id = configured.trim_start_matches('0');
-        let displayed_id = if displayed_id.is_empty() { "0" } else { displayed_id };
-        let configured_id = if configured_id.is_empty() { "0" } else { configured_id };
+        let displayed_id = if displayed_id.is_empty() {
+            "0"
+        } else {
+            displayed_id
+        };
+        let configured_id = if configured_id.is_empty() {
+            "0"
+        } else {
+            configured_id
+        };
         displayed_id == configured_id
     } else {
         displayed.eq_ignore_ascii_case(configured)
