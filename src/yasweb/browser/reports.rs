@@ -1088,7 +1088,7 @@ pub fn generate_mis_reports_wait_js(timeout_seconds: u64) -> String {
             const deadline = Date.now() + timeoutSeconds * 1000;
             const typeNames = ["Standard Report", "Report Manager"];
 
-            function normalize(value) {{ return (value || "").replace(/\\s+/g, " ").trim().toLowerCase(); }}
+            function normalize(value) {{ return (value || "").replace(/\s+/g, " ").trim().toLowerCase(); }}
             function isVisible(element) {{
                 if (!element) return false;
                 const view = element.ownerDocument && element.ownerDocument.defaultView;
