@@ -65,6 +65,14 @@ fn get_email_script() -> &'static str {
     include_str!("sat_figures_email.ps1")
 }
 
+fn booking_email_body(date: chrono::NaiveDate) -> String {
+    format!(
+        "<html><body>{} Booking {}</body></html>",
+        date.format("%a"),
+        date.format("%d-%b")
+    )
+}
+
 pub fn run(
     config: &SatFiguresConfig,
     opd_config: &OpdAnalysisConfig,
@@ -130,10 +138,7 @@ pub fn run(
                     value
                 )
             })?;
-            format!(
-                "<html><body>Sat Booking {}</body></html>",
-                date.format("%d-%b")
-            )
+            booking_email_body(date)
         }
         None => String::new(),
     };
@@ -189,6 +194,26 @@ mod tests {
         assert!(!script.contains("$mail.To ="));
         assert!(!script.contains("$mail.Send()"));
         assert!(!script.contains("cid:SatFiguresImage"));
+    }
+
+    #[test]
+    fn booking_email_body_uses_the_weekday_of_the_report_date() {
+        let saturday = chrono::NaiveDate::from_ymd_opt(2026, 10, 24).unwrap();
+        let sunday = chrono::NaiveDate::from_ymd_opt(2026, 10, 25).unwrap();
+        let monday = chrono::NaiveDate::from_ymd_opt(2026, 10, 26).unwrap();
+
+        assert_eq!(
+            booking_email_body(saturday),
+            "<html><body>Sat Booking 24-Oct</body></html>"
+        );
+        assert_eq!(
+            booking_email_body(sunday),
+            "<html><body>Sun Booking 25-Oct</body></html>"
+        );
+        assert_eq!(
+            booking_email_body(monday),
+            "<html><body>Mon Booking 26-Oct</body></html>"
+        );
     }
 
     #[test]
