@@ -29,7 +29,7 @@ Focused regression coverage protects three runtime guarantees:
 
 ## Task Dispatch Feedback and Config Persistence
 
-- Manual **Run Task** and **Run All** requests wait for the scheduler to report whether the task(s) were accepted for queueing. A closed scheduler channel, missing task, already queued/running task, or queue-send failure must be shown as an error rather than a successful trigger message.
+- Manual **Run Task** and **Run All** requests wait for the Execution Manager to confirm queue admission. A closed scheduler/queue channel, missing task, already queued/running task, or queue-send failure must be shown as an error rather than a successful trigger message.
 - The execution manager remains the final duplicate-admission authority; status snapshots are not a guarantee that a concurrent request has not already queued the same task.
 - Runner GUI and task API reads use the shared configuration lock also used by mutations, so a page does not read the file midway through a configuration update.
 - Every mutation through the dispatcher reloads `runner_config.json` after its atomic save and compares the persisted configuration with the expected configuration. A read-back mismatch is returned as an error.

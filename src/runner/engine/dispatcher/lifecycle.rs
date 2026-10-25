@@ -433,7 +433,6 @@ mod tests_queue {
         let barrier = Arc::new(tokio::sync::Barrier::new(2));
 
         let path1 = config_path.clone();
-        let status1 = status.clone();
         let exec_tx1 = exec_tx.clone();
         let barrier1 = barrier.clone();
 
@@ -443,7 +442,6 @@ mod tests_queue {
         });
 
         let path2 = config_path.clone();
-        let status2 = status.clone();
         let exec_tx2 = exec_tx.clone();
         let barrier2 = barrier.clone();
 
