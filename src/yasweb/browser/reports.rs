@@ -504,6 +504,7 @@ pub fn navigate_and_run_report(
 
                                             let labels = doc.querySelectorAll('mat-label');
                                             let discoveredFilters = [];
+                                            let failedFilters = [];
                                             for (let lbl of labels) {{
                                                 if (lbl.innerText) {{ discoveredFilters.push(lbl.innerText.trim()); }}
                                             }}
@@ -536,7 +537,7 @@ pub fn navigate_and_run_report(
                                                                     }}
                                                                     await simulateTyping(input, v);
                                                                     logs.push("Typed into INPUT for " + key);
-                                                                    filterFilled = true;
+                                                                    filterFilled = optionFound;
                                                                     break;
                                                                 }} else if (input.tagName === 'MAT-SELECT') {{
                                                                     input.click();
@@ -573,7 +574,13 @@ pub fn navigate_and_run_report(
                                                         }}
                                                     }}
                                                 }}
-                                                if (!filterFilled) logs.push("Failed to fill filter: " + key);
+                                                if (!filterFilled) {{
+                                                    logs.push("Failed to fill filter: " + key);
+                                                    failedFilters.push(key);
+                                                }}
+                                            }}
+                                            if (failedFilters.length > 0) {{
+                                                return JSON.stringify({{ status: "ERROR", msg: "One or more requested filters could not be applied: " + failedFilters.join(", "), failed_filters: failedFilters, discovered_filters: discoveredFilters, logs }});
                                             }}
                                             return JSON.stringify({{ status: "SUCCESS", discovered_filters: discoveredFilters, logs }});
                                         }})({});
