@@ -165,7 +165,10 @@ pub(crate) async fn handle_update_task(
             return Ok((
                 500,
                 "text/html; charset=utf-8",
-                render_error_page("Save verification failed", "Could not reload the saved task configuration."),
+                render_error_page(
+                    "Save verification failed",
+                    "Could not reload the saved task configuration.",
+                ),
             ));
         }
     };
@@ -191,7 +194,8 @@ pub(crate) async fn handle_update_task(
             "text/html; charset=utf-8",
             render_error_page(
                 "Save verification failed",
-                "The saved task settings did not match the submitted settings. Reload the task and try again.",
+                "The saved task settings did not match the submitted settings. \
+                 Reload the task and try again.",
             ),
         ));
     }
