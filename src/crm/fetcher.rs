@@ -986,30 +986,15 @@ async fn fetch_with_signed_url_split(
     download_tx: tokio::sync::mpsc::UnboundedSender<DownloadTask>,
     context_opt: Option<Arc<FetchContext>>,
 ) -> Result<Value> {
-    // Ticket exports have repeatedly failed for broad ranges. Start with at most three
-    // calendar months per request, while retaining recursive splitting as a fallback.
-    let ranges = if endpoint == "task/download-ticket-data" {
-        match split_in_month_batches(from_date, to_date, 3) {
-            Ok(ranges) => ranges,
-            Err(error) => {
-                warn!(
-                    "Could not parse ticket date range [{} to {}] for month batching: {}; trying the requested range directly",
-                    from_date, to_date, error
-                );
-                vec![(from_date.to_string(), to_date.to_string())]
-            }
-        }
-    } else {
-        vec![(from_date.to_string(), to_date.to_string())]
-    };
+    // Always try the complete requested range first. fetch_recursive splits it
+    // in half only when the API cannot generate a signed URL for that range.
+    let ranges = vec![(from_date.to_string(), to_date.to_string())];
     let total_ranges = ranges.len();
 
-    if total_ranges > 1 {
-        info!(
-            "{} [{} to {}] split into {} initial date ranges (maximum three calendar months per ticket request)",
-            endpoint, from_date, to_date, total_ranges
-        );
-    }
+    info!(
+        "Trying full requested range for {} [{} to {}] before any date splitting",
+        endpoint, from_date, to_date
+    );
 
     let mut completed = Vec::new();
     let mut failures = Vec::new();
@@ -1438,27 +1423,6 @@ pub fn split_monthly(from: &str, to: &str) -> Result<Vec<(String, String)>> {
     Ok(batches)
 }
 
-/// Group calendar-month slices into batches containing at most `max_months`
-/// calendar months. The first and last batches retain the requested partial months.
-fn split_in_month_batches(
-    from: &str,
-    to: &str,
-    max_months: usize,
-) -> Result<Vec<(String, String)>> {
-    if max_months == 0 {
-        anyhow::bail!("max_months must be greater than zero");
-    }
-
-    let monthly = split_monthly(from, to)?;
-    let mut batches = Vec::new();
-    for month_group in monthly.chunks(max_months) {
-        if let (Some(first), Some(last)) = (month_group.first(), month_group.last()) {
-            batches.push((first.0.clone(), last.1.clone()));
-        }
-    }
-    Ok(batches)
-}
-
 /// Return the last day of the given month.
 fn last_day_of_month(year: i32, month: u32) -> Option<NaiveDate> {
     let (y, m) = if month == 12 {
@@ -1840,26 +1804,6 @@ mod tests {
         assert!(recent_users.exists());
         assert!(other_csv.exists());
         assert!(other_txt.exists());
-    }
-
-    #[test]
-    fn test_split_in_month_batches_uses_at_most_three_calendar_months() {
-        let batches = split_in_month_batches("2026-01-01", "2026-10-18", 3).unwrap();
-        assert_eq!(
-            batches,
-            vec![
-                ("2026-01-01".into(), "2026-03-31".into()),
-                ("2026-04-01".into(), "2026-06-30".into()),
-                ("2026-07-01".into(), "2026-09-30".into()),
-                ("2026-10-01".into(), "2026-10-18".into()),
-            ]
-        );
-    }
-
-    #[test]
-    fn test_split_in_month_batches_preserves_partial_month_boundaries() {
-        let batches = split_in_month_batches("2026-08-08", "2026-10-18", 3).unwrap();
-        assert_eq!(batches, vec![("2026-08-08".into(), "2026-10-18".into()),]);
     }
 
     #[test]
