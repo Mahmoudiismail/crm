@@ -21,15 +21,11 @@ fn username_matches(displayed: &str, configured: &str) -> bool {
     if displayed.bytes().all(|byte| byte.is_ascii_digit())
         && configured.bytes().all(|byte| byte.is_ascii_digit())
     {
-        let normalize_id = |value: &str| {
-            let normalized = value.trim_start_matches('0');
-            if normalized.is_empty() {
-                "0"
-            } else {
-                normalized
-            }
-        };
-        normalize_id(displayed) == normalize_id(configured)
+        let displayed_id = displayed.trim_start_matches('0');
+        let configured_id = configured.trim_start_matches('0');
+        let displayed_id = if displayed_id.is_empty() { "0" } else { displayed_id };
+        let configured_id = if configured_id.is_empty() { "0" } else { configured_id };
+        displayed_id == configured_id
     } else {
         displayed.eq_ignore_ascii_case(configured)
     }
