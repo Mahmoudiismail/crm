@@ -51,6 +51,36 @@ pub fn spawn_execution_manager(
                         queued_tasks.push_back((task, policy, scheduled_at));
                     }
                 }
+                ExecutionManagerCommand::QueueTaskWithReply {
+                    task,
+                    policy,
+                    scheduled_at,
+                    reply,
+                } => {
+                    let task_id = task.id.clone();
+                    let mut st = status.lock().await;
+                    let is_queued = queued_tasks.iter().any(|(t, _, _)| t.id == task_id);
+                    let is_running = running_tasks.iter().any(|(t, _)| t.id == task_id);
+
+                    if is_queued || is_running {
+                        tracing::warn!(
+                            "Task '{}' is already running or queued; rejecting duplicate request",
+                            task_id
+                        );
+                        drop(st);
+                        let _ = reply.send(Err(format!(
+                            "Task '{}' is already running or queued",
+                            task_id
+                        )));
+                    } else {
+                        if !st.queued_task_ids.contains(&task_id) {
+                            st.queued_task_ids.push(task_id);
+                        }
+                        queued_tasks.push_back((task, policy, scheduled_at));
+                        drop(st);
+                        let _ = reply.send(Ok(()));
+                    }
+                }
                 ExecutionManagerCommand::TaskFinished {
                     task_id,
                     last_status,

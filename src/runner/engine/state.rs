@@ -79,6 +79,12 @@ pub enum ExecutionManagerCommand {
         policy: ExecutionPolicy,
         scheduled_at: chrono::DateTime<chrono::Utc>,
     },
+    QueueTaskWithReply {
+        task: Box<crate::runner::config::RunnerTask>,
+        policy: ExecutionPolicy,
+        scheduled_at: chrono::DateTime<chrono::Utc>,
+        reply: tokio::sync::oneshot::Sender<Result<(), String>>,
+    },
     TaskFinished {
         task_id: String,
         last_status: String,

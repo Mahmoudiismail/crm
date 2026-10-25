@@ -127,14 +127,20 @@ pub async fn run_all_tasks_now(
     })
     .await?;
     for (task, policy, scheduled_at) in tasks_to_queue {
+        let (reply, result) = tokio::sync::oneshot::channel();
         exec_tx
-            .send(ExecutionManagerCommand::QueueTask {
+            .send(ExecutionManagerCommand::QueueTaskWithReply {
                 task: Box::new(task),
                 policy,
                 scheduled_at,
+                reply,
             })
             .await
             .map_err(|error| anyhow::anyhow!("Failed to queue task: {}", error))?;
+        result
+            .await
+            .context("Execution manager did not confirm task admission")?
+            .map_err(anyhow::Error::msg)?;
     }
     Ok(())
 }
@@ -175,7 +181,8 @@ pub async fn run_task_by_id(
 
         if let Some(task) = cfg.tasks.iter_mut().find(|t| t.id == tid) {
             if queued_ids.contains(&task.id) || running_ids.contains(&task.id) {
-                return Err(anyhow::anyhow!("Task '{}' is already running or queued", task.id));
+                tracing::warn!("Task '{}' is already running or queued", task.id);
+                return Ok(None);
             }
 
             let scheduled_at = if is_manual {
@@ -211,6 +218,67 @@ pub async fn run_task_by_id(
             .await
             .map_err(|error| anyhow::anyhow!("Failed to queue task: {}", error))?;
     }
+    Ok(())
+}
+
+pub async fn run_task_by_id_confirmed(
+    path: &str,
+    task_id: &str,
+    exec_tx: &mpsc::Sender<ExecutionManagerCommand>,
+    is_manual: bool,
+) -> Result<()> {
+    let cfg = crate::runner::engine::dispatcher::helpers::load_config(path).await?;
+    let task = cfg
+        .tasks
+        .iter()
+        .find(|task| task.id == task_id)
+        .cloned()
+        .ok_or_else(|| anyhow::anyhow!("Task '{}' not found", task_id))?;
+    let now = Utc::now();
+    let scheduled_at = if is_manual {
+        now
+    } else {
+        scheduled_execution_at(&task, now)
+    };
+    let policy = policy_from_config(&cfg);
+    let (reply, result) = tokio::sync::oneshot::channel();
+
+    exec_tx
+        .send(ExecutionManagerCommand::QueueTaskWithReply {
+            task: Box::new(task.clone()),
+            policy: policy.clone(),
+            scheduled_at,
+            reply,
+        })
+        .await
+        .map_err(|error| anyhow::anyhow!("Failed to queue task: {}", error))?;
+    result
+        .await
+        .context("Execution manager did not confirm task admission")?
+        .map_err(anyhow::Error::msg)?;
+
+    let task_id = task.id.clone();
+    crate::runner::engine::dispatcher::helpers::modify_config(path, move |cfg| {
+        if let Some(saved_task) = cfg.tasks.iter_mut().find(|saved| saved.id == task_id) {
+            saved_task.last_run_at = now.to_rfc3339();
+            if !is_manual {
+                if !saved_task.schedules.is_empty() {
+                    for schedule in &mut saved_task.schedules {
+                        if schedule.due_now(now) {
+                            advance_schedule(schedule, now, policy.min_task_interval_seconds);
+                        }
+                    }
+                } else {
+                    update_next_run(saved_task, now, policy.min_task_interval_seconds);
+                }
+            }
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Task '{}' not found after queue admission", task_id))
+        }
+    })
+    .await?;
+
     Ok(())
 }
 
