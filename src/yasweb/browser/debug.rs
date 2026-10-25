@@ -119,7 +119,7 @@ mod tests {
 
     #[test]
     fn snapshot_filename_components_cannot_escape_debug_directory() {
-        assert_eq!(sanitize_filename("../../report\page"), "______report_page");
+        assert_eq!(sanitize_filename("../../report\\page"), "______report_page");
         assert_eq!(sanitize_filename("After login"), "After_login");
         assert_eq!(sanitize_filename(""), "page");
     }
