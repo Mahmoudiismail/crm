@@ -12,6 +12,10 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tracing::{error, info, warn};
 
+async fn load_runner_config(handle: &RunnerHandle) -> Result<RunnerConfig> {
+    crate::runner::engine::dispatcher::helpers::load_config(&handle.runner_config_path).await
+}
+
 fn task_config_matches_readback(expected: &RunnerTask, saved: &RunnerTask) -> bool {
     fn comparable_task(task: &RunnerTask) -> Option<serde_json::Value> {
         let mut value = serde_json::to_value(task).ok()?;
@@ -20,7 +24,10 @@ fn task_config_matches_readback(expected: &RunnerTask, saved: &RunnerTask) -> bo
         object.remove("last_status");
         object.remove("next_run_at");
 
-        if let Some(schedules) = object.get_mut("schedules").and_then(serde_json::Value::as_array_mut) {
+        if let Some(schedules) = object
+            .get_mut("schedules")
+            .and_then(serde_json::Value::as_array_mut)
+        {
             for schedule in schedules {
                 if let Some(schedule) = schedule.as_object_mut() {
                     schedule.remove("next_run_at");
@@ -38,7 +45,7 @@ pub(crate) async fn handle_dashboard(
     handle: &RunnerHandle,
     query: &HashMap<String, String>,
 ) -> Result<(u16, &'static str, String)> {
-    let cfg = crate::runner::engine::dispatcher::helpers::load_config(&handle.runner_config_path).await?;
+    let cfg = load_runner_config(handle).await?;
     let status = handle.status.lock().await.clone();
     Ok((
         200,
@@ -56,7 +63,7 @@ pub(crate) async fn handle_status_api(
 }
 
 pub(crate) async fn handle_tasks_api(handle: &RunnerHandle) -> Result<(u16, &'static str, String)> {
-    let cfg = crate::runner::engine::dispatcher::helpers::load_config(&handle.runner_config_path).await?;
+    let cfg = load_runner_config(handle).await?;
     let body = serde_json::to_string_pretty(&cfg.tasks)?;
     Ok((200, "application/json", body))
 }
@@ -64,7 +71,7 @@ pub(crate) async fn handle_tasks_api(handle: &RunnerHandle) -> Result<(u16, &'st
 pub(crate) async fn handle_new_task_page(
     handle: &RunnerHandle,
 ) -> Result<(u16, &'static str, String)> {
-    let cfg = crate::runner::engine::dispatcher::helpers::load_config(&handle.runner_config_path).await?;
+    let cfg = load_runner_config(handle).await?;
     let html = render_task_form(
         &cfg.working_hours_profiles,
         "Create Task",
@@ -80,7 +87,7 @@ pub(crate) async fn handle_edit_task_page(
     handle: &RunnerHandle,
     task_id: &str,
 ) -> Result<(u16, &'static str, String)> {
-    let cfg = crate::runner::engine::dispatcher::helpers::load_config(&handle.runner_config_path).await?;
+    let cfg = load_runner_config(handle).await?;
     if let Some(task) = cfg.tasks.iter().find(|t| t.id == task_id) {
         let action = format!("/update/{}", escape_html(task_id));
         let html = render_task_form(
@@ -104,7 +111,7 @@ pub(crate) async fn handle_create_task(
     handle: &RunnerHandle,
     values: &HashMap<String, String>,
 ) -> Result<(u16, &'static str, String)> {
-    let cfg = crate::runner::engine::dispatcher::helpers::load_config(&handle.runner_config_path).await?;
+    let cfg = load_runner_config(handle).await?;
     let task = build_task_from_values(values, None, &cfg.working_hours_profiles)?;
 
     create_task(&handle.runner_config_path, task).await?;
@@ -120,13 +127,14 @@ pub(crate) async fn handle_update_task(
     task_id: &str,
     values: &HashMap<String, String>,
 ) -> Result<(u16, &'static str, String)> {
-    let cfg = crate::runner::engine::dispatcher::helpers::load_config(&handle.runner_config_path).await?;
+    let cfg = load_runner_config(handle).await?;
     let task = build_task_from_values(
         values,
         Some(task_id.to_string()),
         &cfg.working_hours_profiles,
     )?;
-    let expected_task = task.clone();
+    let mut expected_task = task.clone();
+    crate::runner::config::normalize_and_validate_task(&mut expected_task, &cfg)?;
 
     let mut submitted_fields: Vec<&str> = values.keys().map(String::as_str).collect();
     submitted_fields.sort_unstable();
@@ -143,7 +151,7 @@ pub(crate) async fn handle_update_task(
 
     update_task(&handle.runner_config_path, task_id, task).await?;
 
-    let saved_cfg = match crate::runner::engine::dispatcher::helpers::load_config(&handle.runner_config_path).await {
+    let saved_cfg = match load_runner_config(handle).await {
         Ok(cfg) => cfg,
         Err(error) => {
             error!(
@@ -292,7 +300,7 @@ pub(crate) async fn handle_enable_task(
 }
 
 pub(crate) async fn handle_wh_page(handle: &RunnerHandle) -> Result<(u16, &'static str, String)> {
-    let cfg = crate::runner::engine::dispatcher::helpers::load_config(&handle.runner_config_path).await?;
+    let cfg = load_runner_config(handle).await?;
     Ok((
         200,
         "text/html; charset=utf-8",
@@ -310,7 +318,7 @@ pub(crate) async fn handle_wh_edit_page(
     handle: &RunnerHandle,
     id: &str,
 ) -> Result<(u16, &'static str, String)> {
-    let cfg = crate::runner::engine::dispatcher::helpers::load_config(&handle.runner_config_path).await?;
+    let cfg = load_runner_config(handle).await?;
     if let Some(profile) = cfg.working_hours_profiles.iter().find(|p| p.id == id) {
         Ok((
             200,
@@ -488,7 +496,7 @@ pub(crate) async fn handle_wh_delete(
 }
 
 pub(crate) async fn handle_apps_page(handle: &RunnerHandle) -> Result<(u16, &'static str, String)> {
-    let cfg = crate::runner::engine::dispatcher::helpers::load_config(&handle.runner_config_path).await?;
+    let cfg = load_runner_config(handle).await?;
     Ok((
         200,
         "text/html; charset=utf-8",
@@ -500,7 +508,7 @@ pub(crate) async fn handle_app_edit_page(
     handle: &RunnerHandle,
     app_id: &str,
 ) -> Result<(u16, &'static str, String)> {
-    let cfg = crate::runner::engine::dispatcher::helpers::load_config(&handle.runner_config_path).await?;
+    let cfg = load_runner_config(handle).await?;
     if let Some(app) = cfg.registered_apps.iter().find(|a| a.id == app_id) {
         return Ok((200, "text/html; charset=utf-8", render_app_edit_page(app)));
     }
@@ -675,7 +683,7 @@ pub(crate) async fn handle_apps_delete(
 pub(crate) async fn handle_api_apps_list(
     handle: &RunnerHandle,
 ) -> Result<(u16, &'static str, String)> {
-    let cfg = crate::runner::engine::dispatcher::helpers::load_config(&handle.runner_config_path).await?;
+    let cfg = load_runner_config(handle).await?;
     let body = serde_json::to_string(&cfg.registered_apps)?;
     Ok((200, "application/json", body))
 }
@@ -684,7 +692,7 @@ pub(crate) async fn handle_api_task_preview(
     handle: &RunnerHandle,
     values: &HashMap<String, String>,
 ) -> Result<(u16, &'static str, String)> {
-    let cfg = match crate::runner::engine::dispatcher::helpers::load_config(&handle.runner_config_path).await {
+    let cfg = match load_runner_config(handle).await {
         Ok(cfg) => cfg,
         Err(error) => {
             let body = serde_json::json!({
@@ -785,7 +793,7 @@ pub(crate) async fn handle_api_apps_manifest(
     handle: &RunnerHandle,
     app_id: &str,
 ) -> Result<(u16, &'static str, String)> {
-    let cfg = crate::runner::engine::dispatcher::helpers::load_config(&handle.runner_config_path).await?;
+    let cfg = load_runner_config(handle).await?;
     if let Some(app) = cfg.registered_apps.iter().find(|a| a.id == app_id) {
         if app.executable_path.is_empty() {
             return Ok((
