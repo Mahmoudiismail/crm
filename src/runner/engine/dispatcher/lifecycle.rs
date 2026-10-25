@@ -237,8 +237,14 @@ pub fn start_scheduler(runner_config_path: String) -> RunnerHandle {
                                         task_id: task.id.clone(),
                                         is_manual: false,
                                     }).await {
-                                        Ok(()) => info!("Cron schedule triggered for task: {}", task.id),
-                                        Err(error) => error!("Failed to dispatch scheduled task {}: {}", task.id, error),
+                                        Ok(()) => {
+                                            info!("Cron schedule triggered for task: {}", task.id)
+                                        }
+                                        Err(error) => error!(
+                                            "Failed to dispatch scheduled task {}: {}",
+                                            task.id,
+                                            error
+                                        ),
                                     }
                                     break;
                                 }

@@ -38,7 +38,10 @@ fn task_config_matches_readback(expected: &RunnerTask, saved: &RunnerTask) -> bo
         Some(value)
     }
 
-    comparable_task(expected) == comparable_task(saved)
+    match (comparable_task(expected), comparable_task(saved)) {
+        (Some(expected), Some(saved)) => expected == saved,
+        _ => false,
+    }
 }
 
 pub(crate) async fn handle_dashboard(
