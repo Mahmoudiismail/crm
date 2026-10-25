@@ -26,7 +26,15 @@ where
     let res: Result<T> = tokio::task::spawn_blocking(move || {
         let mut cfg = RunnerConfig::load(&path_str)?;
         let r = f(&mut cfg)?;
+        let expected = serde_json::to_value(&cfg)?;
         cfg.save(&path_str_save)?;
+
+        let saved = RunnerConfig::load(&path_str_save)?;
+        let actual = serde_json::to_value(saved)?;
+        if actual != expected {
+            anyhow::bail!("Runner config read-back mismatch after save: {}", path_str_save);
+        }
+
         Ok(r)
     })
     .await
