@@ -6,12 +6,7 @@ use tracing::{debug, info, warn};
 
 /// Persists page HTML only when the existing TRACE log level is enabled.
 /// Saved pages can contain session data and customer information.
-pub fn save_html_state(
-    tab: &Arc<Tab>,
-    active_report_name: &str,
-    step_num: u32,
-    step_name: &str,
-) {
+pub fn save_html_state(tab: &Arc<Tab>, active_report_name: &str, step_num: u32, step_name: &str) {
     if !tracing::enabled!(tracing::Level::TRACE) {
         debug!(
             "Skipping HTML snapshot for '{}' because TRACE logging is disabled",
@@ -36,12 +31,7 @@ pub fn save_failure_diagnostics(tab: &Arc<Tab>, step_name: &str) {
     persist_html(tab, "failure", None, step_name);
 }
 
-fn persist_html(
-    tab: &Arc<Tab>,
-    report_name: &str,
-    step_num: Option<u32>,
-    step_name: &str,
-) {
+fn persist_html(tab: &Arc<Tab>, report_name: &str, step_num: Option<u32>, step_name: &str) {
     let html = match tab.get_content() {
         Ok(html) => html,
         Err(error) => {

@@ -23,7 +23,11 @@ fn username_matches(displayed: &str, configured: &str) -> bool {
     {
         let normalize_id = |value: &str| {
             let normalized = value.trim_start_matches('0');
-            if normalized.is_empty() { "0" } else { normalized }
+            if normalized.is_empty() {
+                "0"
+            } else {
+                normalized
+            }
         };
         normalize_id(displayed) == normalize_id(configured)
     } else {
