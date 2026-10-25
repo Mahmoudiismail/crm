@@ -31,6 +31,13 @@ pub(crate) async fn mod_handle_command(
         RunnerCommand::RunAllNow { is_manual } => {
             run_all_tasks_now(path, _status, exec_tx, is_manual).await
         }
+        RunnerCommand::RunAllNowWithReply { is_manual, reply } => {
+            let result = run_all_tasks_now(path, _status, exec_tx, is_manual)
+                .await
+                .map_err(|error| format!("{:#}", error));
+            let _ = reply.send(result);
+            Ok(())
+        }
         RunnerCommand::RunTaskNow { task_id, is_manual } => {
             run_task_by_id(path, &task_id, _status, exec_tx, is_manual).await
         }

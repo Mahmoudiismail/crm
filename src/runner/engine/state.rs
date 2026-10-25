@@ -7,6 +7,10 @@ pub enum RunnerCommand {
     RunAllNow {
         is_manual: bool,
     },
+    RunAllNowWithReply {
+        is_manual: bool,
+        reply: tokio::sync::oneshot::Sender<Result<(), String>>,
+    },
     RunTaskNow {
         task_id: String,
         is_manual: bool,

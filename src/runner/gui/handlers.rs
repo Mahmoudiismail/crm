@@ -526,15 +526,40 @@ pub(crate) async fn handle_app_edit_page(
 }
 
 pub(crate) async fn handle_run_all(handle: &RunnerHandle) -> Result<(u16, &'static str, String)> {
-    handle
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    if handle
         .command_tx
-        .send(RunnerCommand::RunAllNow { is_manual: true })
-        .await?;
-    Ok((
-        200,
-        "text/html; charset=utf-8",
-        render_redirect_to_dashboard("Run-all triggered"),
-    ))
+        .send(RunnerCommand::RunAllNowWithReply {
+            is_manual: true,
+            reply: tx,
+        })
+        .await
+        .is_err()
+    {
+        return Ok((
+            500,
+            "text/html; charset=utf-8",
+            render_error_page("Error", "Scheduler channel closed."),
+        ));
+    }
+
+    match rx.await {
+        Ok(Ok(())) => Ok((
+            200,
+            "text/html; charset=utf-8",
+            render_redirect_to_dashboard("Run-all triggered"),
+        )),
+        Ok(Err(error)) => Ok((
+            500,
+            "text/html; charset=utf-8",
+            render_error_page("Run-all failed", &error),
+        )),
+        Err(_) => Ok((
+            500,
+            "text/html; charset=utf-8",
+            render_error_page("Error", "Scheduler did not confirm the run-all request."),
+        )),
+    }
 }
 
 pub(crate) async fn handle_apps_create(
