@@ -194,8 +194,7 @@ pub(crate) async fn handle_update_task(
             "text/html; charset=utf-8",
             render_error_page(
                 "Save verification failed",
-                "The saved task settings did not match the submitted settings. \
-                 Reload the task and try again.",
+                "Saved settings did not match. Reload the task and try again.",
             ),
         ));
     }
