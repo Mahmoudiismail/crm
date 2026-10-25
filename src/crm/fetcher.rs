@@ -999,8 +999,8 @@ async fn fetch_with_signed_url_split(
     let mut completed = Vec::new();
     let mut failures = Vec::new();
 
-    // Run at most three initial ranges concurrently. Keep attempting every range,
-    // then report all failed ranges together rather than returning partial results.
+    // Collect the range result before returning so recursive split failures retain
+    // their date-range context.
     let range_results =
         futures_util::stream::iter(ranges.into_iter().map(|(range_from, range_to)| {
             let client = client.clone();
