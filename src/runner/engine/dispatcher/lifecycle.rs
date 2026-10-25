@@ -321,7 +321,7 @@ pub fn start_scheduler(runner_config_path: String) -> RunnerHandle {
 mod tests_queue {
     use super::*;
     use crate::runner::config::{Repetition, TaskSchedule};
-    use crate::runner::engine::dispatcher::run_task_by_id;
+    use crate::runner::engine::dispatcher::run_task_by_id_confirmed;
     use tempfile::tempdir;
     use tokio::sync::mpsc;
 
@@ -439,7 +439,7 @@ mod tests_queue {
 
         let h1 = tokio::spawn(async move {
             barrier1.wait().await;
-            run_task_by_id(&path1, "race_task", &status1, &exec_tx1, true).await
+            run_task_by_id_confirmed(&path1, "race_task", &exec_tx1, true).await
         });
 
         let path2 = config_path.clone();
@@ -449,12 +449,17 @@ mod tests_queue {
 
         let h2 = tokio::spawn(async move {
             barrier2.wait().await;
-            run_task_by_id(&path2, "race_task", &status2, &exec_tx2, true).await
+            run_task_by_id_confirmed(&path2, "race_task", &exec_tx2, true).await
         });
 
         let (r1, r2) = tokio::join!(h1, h2);
-        assert!(r1.unwrap().is_ok());
-        assert!(r2.unwrap().is_ok());
+        let r1 = r1.unwrap();
+        let r2 = r2.unwrap();
+        assert_ne!(
+            r1.is_ok(),
+            r2.is_ok(),
+            "Exactly one concurrent request should be admitted"
+        );
 
         // Keep the first process alive long enough for both concurrent admission
         // requests to reach the execution manager, then verify actual executions.
