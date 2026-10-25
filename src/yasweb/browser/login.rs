@@ -7,12 +7,28 @@ use tracing::{error, info};
 use crate::yasweb::browser::debug;
 use crate::yasweb::config::YaswebConfig;
 
-/// Compare the portal's displayed account name with the configured username.
+/// Compare the portal's displayed account identifier with the configured username.
 ///
-/// Trim surrounding whitespace and ignore case differences, but require an exact
-/// match so a different username containing the configured name is rejected.
+/// Trim surrounding whitespace and ignore case for textual usernames. Numeric IDs
+/// are compared without leading zeros because the portal may pad them to a fixed width.
 fn username_matches(displayed: &str, configured: &str) -> bool {
-    !configured.trim().is_empty() && displayed.trim().eq_ignore_ascii_case(configured.trim())
+    let displayed = displayed.trim();
+    let configured = configured.trim();
+    if displayed.is_empty() || configured.is_empty() {
+        return false;
+    }
+
+    if displayed.bytes().all(|byte| byte.is_ascii_digit())
+        && configured.bytes().all(|byte| byte.is_ascii_digit())
+    {
+        let normalize_id = |value: &str| {
+            let normalized = value.trim_start_matches('0');
+            if normalized.is_empty() { "0" } else { normalized }
+        };
+        normalize_id(displayed) == normalize_id(configured)
+    } else {
+        displayed.eq_ignore_ascii_case(configured)
+    }
 }
 
 /// Automates the login flow and waits for the dashboard to appear.
@@ -198,6 +214,19 @@ mod tests {
     #[test]
     fn rejects_username_that_only_contains_configured_username() {
         assert!(!username_matches("other-mahmoud", "mahmoud"));
+    }
+
+    #[test]
+    fn accepts_numeric_username_with_leading_zeros() {
+        assert!(username_matches("00003245", "3245"));
+        assert!(username_matches("3245", "00003245"));
+        assert!(username_matches("0000", "0"));
+    }
+
+    #[test]
+    fn rejects_different_numeric_usernames() {
+        assert!(!username_matches("00003246", "3245"));
+        assert!(!username_matches("", "0"));
     }
 
     #[test]
