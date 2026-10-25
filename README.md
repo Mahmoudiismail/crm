@@ -16,6 +16,8 @@ The system consists of four main binaries:
 
 For a detailed architectural breakdown, see [`md/ARCHITECTURE.md`](./md/ARCHITECTURE.md).
 
+For the Yasweb report automation stages, selectors, frame handling, filters, export, and troubleshooting, see [`docs/yasweb-report-automation.md`](./docs/yasweb-report-automation.md).
+
 ## 🚀 Quick Start
 
 ### Prerequisites
