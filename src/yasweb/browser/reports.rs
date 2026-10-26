@@ -158,11 +158,9 @@ pub fn navigate_and_run_report(
                         let mis_wait_started = Instant::now();
                         info!("YASWEB STAGE START: wait_for_mis_reports timeout_seconds=30");
                         let wait_js = generate_mis_reports_wait_js(30);
-                        if let Err(first_error) = evaluate_report_frame_step(
-                            tab,
-                            &wait_js,
-                            "Wait for MIS Reports",
-                        ) {
+                        if let Err(first_error) =
+                            evaluate_report_frame_step(tab, &wait_js, "Wait for MIS Reports")
+                        {
                             error!(
                                 "YASWEB STAGE RETRY: wait_for_mis_reports initial attempt failed elapsed_ms={} error={:#}",
                                 mis_wait_started.elapsed().as_millis(),
@@ -272,11 +270,7 @@ pub fn navigate_and_run_report(
                         );
                         *step_num += 1;
                         info!("Selecting Report Type: {}", active_report_type);
-                        evaluate_report_frame_step(
-                            tab,
-                            &step1_js,
-                            "Step 1 (Report Type)",
-                        )?;
+                        evaluate_report_frame_step(tab, &step1_js, "Step 1 (Report Type)")?;
                         debug::save_html_state(
                             tab,
                             active_report_name,
@@ -401,11 +395,7 @@ pub fn navigate_and_run_report(
                         );
 
                         info!("Searching & Selecting Report: {}", active_report_name);
-                        evaluate_report_frame_step(
-                            tab,
-                            &step2_js,
-                            "Step 2 (Select Report)",
-                        )?;
+                        evaluate_report_frame_step(tab, &step2_js, "Step 2 (Select Report)")?;
                         debug::save_html_state(
                             tab,
                             active_report_name,
@@ -656,11 +646,7 @@ pub fn navigate_and_run_report(
                             step5_search_js.replace("{}", &timeout_minutes.to_string());
 
                         info!("Clicking Search...");
-                        evaluate_report_frame_step(
-                            tab,
-                            &step5_search_js,
-                            "Step 5 (Search Click)",
-                        )?;
+                        evaluate_report_frame_step(tab, &step5_search_js, "Step 5 (Search Click)")?;
 
                         debug::save_html_state(
                             tab,
@@ -773,32 +759,65 @@ pub fn navigate_and_run_report(
 
 /// Runs a report automation step in the embedded report frame's own CDP execution context.
 /// The report UI is cross-origin from the parent page, so parent-page JavaScript cannot read its DOM.
-fn evaluate_report_frame_step(tab: &Arc<Tab>, js_code: &str, step_name: &str) -> Result<serde_json::Value> {
-    if step_name.starts_with("Wait for MIS Reports") && !tab.get_url().contains("/home/mis-report/module/") {
-        anyhow::bail!("MIS navigation route was not reached before report-frame readiness check: {}", tab.get_url());
+fn evaluate_report_frame_step(
+    tab: &Arc<Tab>,
+    js_code: &str,
+    step_name: &str,
+) -> Result<serde_json::Value> {
+    if step_name.starts_with("Wait for MIS Reports")
+        && !tab.get_url().contains("/home/mis-report/module/")
+    {
+        anyhow::bail!(
+            "MIS navigation route was not reached before report-frame readiness check: {}",
+            tab.get_url()
+        );
     }
 
     let started = Instant::now();
-    let iframe_src = tab.evaluate("document.querySelector('iframe')?.src || ''", true)
-        .ok().and_then(|result| result.value).and_then(|value| value.as_str().map(str::to_owned)).unwrap_or_default();
+    let iframe_src = tab
+        .evaluate("document.querySelector('iframe')?.src || ''", true)
+        .ok()
+        .and_then(|result| result.value)
+        .and_then(|value| value.as_str().map(str::to_owned))
+        .unwrap_or_default();
     let deadline = Instant::now() + Duration::from_secs(10);
     let mut last_frame_url = String::new();
     let execution_context_id = loop {
-        let tree = tab.call_method(Page::GetFrameTree(None)).context("Failed to inspect Chrome frame tree for Yasweb report iframe")?;
+        let tree = tab
+            .call_method(Page::GetFrameTree(None))
+            .context("Failed to inspect Chrome frame tree for Yasweb report iframe")?;
         let root_origin = tree.frame_tree.frame.security_origin.clone();
         let mut frames = Vec::new();
         collect_child_frames(&tree.frame_tree, &mut frames);
-        let frame = frames.iter().find(|frame| !iframe_src.is_empty() && frame.url == iframe_src)
-            .or_else(|| frames.iter().find(|frame| !iframe_src.is_empty() && iframe_src.starts_with(&frame.url)))
-            .or_else(|| frames.iter().find(|frame| frame.security_origin != root_origin && !frame.url.is_empty()));
+        let frame = frames
+            .iter()
+            .find(|frame| !iframe_src.is_empty() && frame.url == iframe_src)
+            .or_else(|| {
+                frames
+                    .iter()
+                    .find(|frame| !iframe_src.is_empty() && iframe_src.starts_with(&frame.url))
+            })
+            .or_else(|| {
+                frames
+                    .iter()
+                    .find(|frame| frame.security_origin != root_origin && !frame.url.is_empty())
+            });
         if let Some(frame) = frame {
             last_frame_url = frame.url.clone();
             match tab.call_method(Page::CreateIsolatedWorld {
-                frame_id: frame.id.clone(), world_name: Some("crm-yasweb-report".to_string()), grant_univeral_access: Some(false),
+                frame_id: frame.id.clone(),
+                world_name: Some("crm-yasweb-report".to_string()),
+                grant_univeral_access: Some(false),
             }) {
                 Ok(world) => break world.execution_context_id,
-                Err(error) if Instant::now() < deadline => tracing::debug!("Report frame context not ready yet (url={}): {}", frame.url, error),
-                Err(error) => return Err(error).context("Failed to create report-frame execution context"),
+                Err(error) if Instant::now() < deadline => tracing::debug!(
+                    "Report frame context not ready yet (url={}): {}",
+                    frame.url,
+                    error
+                ),
+                Err(error) => {
+                    return Err(error).context("Failed to create report-frame execution context")
+                }
             }
         }
         if Instant::now() >= deadline {
@@ -806,13 +825,21 @@ fn evaluate_report_frame_step(tab: &Arc<Tab>, js_code: &str, step_name: &str) ->
         }
         std::thread::sleep(Duration::from_millis(200));
     };
-    info!("YASWEB report-frame context ready: stage='{}' frame_url='{}' elapsed_ms={}", step_name, last_frame_url, started.elapsed().as_millis());
+    info!(
+        "YASWEB report-frame context ready: stage='{}' frame_url='{}' elapsed_ms={}",
+        step_name,
+        last_frame_url,
+        started.elapsed().as_millis()
+    );
     javascript::evaluate_automation_step_in_context(tab, js_code, step_name, execution_context_id)
 }
 
 fn collect_child_frames<'a>(tree: &'a Page::FrameTree, frames: &mut Vec<&'a Page::Frame>) {
     if let Some(children) = &tree.child_frames {
-        for child in children { frames.push(&child.frame); collect_child_frames(child, frames); }
+        for child in children {
+            frames.push(&child.frame);
+            collect_child_frames(child, frames);
+        }
     }
 }
 

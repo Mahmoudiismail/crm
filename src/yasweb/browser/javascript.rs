@@ -30,40 +30,69 @@ pub fn evaluate_automation_step_in_context(
     } else {
         js_code.to_owned()
     };
-    info!("AUTOMATION STEP START: {} (context=report-frame javascript_bytes={})", step_name, js_code.len());
+    info!(
+        "AUTOMATION STEP START: {} (context=report-frame javascript_bytes={})",
+        step_name,
+        js_code.len()
+    );
 
-    let response = tab.call_method(headless_chrome::protocol::cdp::Runtime::Evaluate {
-        expression: script,
-        object_group: None,
-        include_command_line_api: None,
-        silent: None,
-        context_id: Some(context_id),
-        return_by_value: Some(true),
-        generate_preview: None,
-        user_gesture: Some(true),
-        await_promise: Some(true),
-        throw_on_side_effect: None,
-        timeout: None,
-        disable_breaks: None,
-        repl_mode: None,
-        allow_unsafe_eval_blocked_by_csp: None,
-        unique_context_id: None,
-        serialization_options: None,
-    }).context(format!("Automation {} failed to evaluate in report-frame context", step_name))?;
+    let response = tab
+        .call_method(headless_chrome::protocol::cdp::Runtime::Evaluate {
+            expression: script,
+            object_group: None,
+            include_command_line_api: None,
+            silent: None,
+            context_id: Some(context_id),
+            return_by_value: Some(true),
+            generate_preview: None,
+            user_gesture: Some(true),
+            await_promise: Some(true),
+            throw_on_side_effect: None,
+            timeout: None,
+            disable_breaks: None,
+            repl_mode: None,
+            allow_unsafe_eval_blocked_by_csp: None,
+            unique_context_id: None,
+            serialization_options: None,
+        })
+        .context(format!(
+            "Automation {} failed to evaluate in report-frame context",
+            step_name
+        ))?;
 
     if let Some(exception) = response.exception_details {
         let message = exception.text;
-        error!("AUTOMATION STEP END: {} status=FRAME_EVALUATION_ERROR elapsed_ms={} error={}", step_name, started.elapsed().as_millis(), message);
+        error!(
+            "AUTOMATION STEP END: {} status=FRAME_EVALUATION_ERROR elapsed_ms={} error={}",
+            step_name,
+            started.elapsed().as_millis(),
+            message
+        );
         crate::yasweb::browser::debug::save_failure_diagnostics(tab, step_name);
-        anyhow::bail!("Automation {} report-frame JavaScript exception: {}", step_name, message);
+        anyhow::bail!(
+            "Automation {} report-frame JavaScript exception: {}",
+            step_name,
+            message
+        );
     }
 
-    let raw = response.result.value
+    let raw = response
+        .result
+        .value
         .and_then(|value| value.as_str().map(str::to_owned))
-        .ok_or_else(|| anyhow::anyhow!("Automation {} returned no result string from report frame", step_name))?;
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "Automation {} returned no result string from report frame",
+                step_name
+            )
+        })?;
     match parse_automation_result(&raw, step_name) {
         Ok(result) => {
-            info!("AUTOMATION STEP END: {} status=SUCCESS context=report-frame elapsed_ms={}", step_name, started.elapsed().as_millis());
+            info!(
+                "AUTOMATION STEP END: {} status=SUCCESS context=report-frame elapsed_ms={}",
+                step_name,
+                started.elapsed().as_millis()
+            );
             Ok(result)
         }
         Err(error) => {

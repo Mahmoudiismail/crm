@@ -180,7 +180,10 @@ pub(crate) async fn handle_update_task(
         return Ok((
             500,
             "text/html; charset=utf-8",
-            render_error_page("Save verification failed", "The task was missing after saving."),
+            render_error_page(
+                "Save verification failed",
+                "The task was missing after saving.",
+            ),
         ));
     };
 

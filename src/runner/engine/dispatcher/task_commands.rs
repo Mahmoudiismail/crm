@@ -149,7 +149,10 @@ pub async fn run_all_tasks_now(
                 }
                 Ok(())
             } else {
-                Err(anyhow::anyhow!("Task '{}' not found after queue admission", task_id))
+                Err(anyhow::anyhow!(
+                    "Task '{}' not found after queue admission",
+                    task_id
+                ))
             }
         })
         .await?;
@@ -286,7 +289,10 @@ pub async fn run_task_by_id_confirmed(
             }
             Ok(())
         } else {
-            Err(anyhow::anyhow!("Task '{}' not found after queue admission", task_id))
+            Err(anyhow::anyhow!(
+                "Task '{}' not found after queue admission",
+                task_id
+            ))
         }
     })
     .await?;

@@ -18,7 +18,9 @@ use app_commands::{create_registered_app, delete_registered_app, update_register
 use profile_commands::{
     create_working_hours_profile, delete_working_hours_profile, update_working_hours_profile,
 };
-use task_commands::{run_all_tasks_now, run_task_by_id, run_task_by_id_confirmed, set_task_enabled};
+use task_commands::{
+    run_all_tasks_now, run_task_by_id, run_task_by_id_confirmed, set_task_enabled,
+};
 
 /// Internal route for RunnerCommand parsing
 pub(crate) async fn mod_handle_command(
