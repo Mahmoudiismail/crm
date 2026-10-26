@@ -8,7 +8,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::{Instant, SystemTime};
 use tokio::fs;
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, error, info, trace};
 
 use crate::crm::config::AppConfig;
 
