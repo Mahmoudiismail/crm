@@ -47,17 +47,20 @@ fn test_generate_mis_reports_wait_js_normal_timeout() {
     assert!(js
         .trim_start()
         .starts_with("return await (async function(timeoutSeconds)"));
-    assert!(js.contains("frame.contentDocument"));
+    // The script executes in the report-frame context; it must not traverse
+    // iframe documents from the parent page.
+    assert!(!js.contains("frame.contentDocument"));
+    assert!(!js.contains("contentWindow.document"));
+    assert!(js.contains("Waiting inside the report-frame execution context"));
     assert!(js.contains("function isVisible(element)"));
     assert!(js.contains("element.getClientRects()"));
-    assert!(js.contains(r"const routePattern = /\/home\/mis-report\/module\//i;"));
     assert!(js.contains("input[formcontrolname=\"searchInput\"]"));
     assert!(js.contains("input[placeholder=\"Search\"]"));
     assert!(js.contains("Standard Report"));
     assert!(js.contains("Report Manager"));
     assert!(js.contains("searchVisible"));
     assert!(js.contains("reportUiReady"));
-    assert!(js.contains("MIS readiness timeout diagnostics"));
+    assert!(js.contains("Report-frame readiness timeout diagnostics"));
     assert!(!js.contains("element.offsetParent !== null"));
     assert!(js.contains("#loader_svg, .loading-screen-wrapper, mat-progress-bar, .dx-loadpanel"));
 }

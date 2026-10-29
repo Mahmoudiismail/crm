@@ -12,11 +12,43 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tracing::{error, info, warn};
 
+async fn load_runner_config(handle: &RunnerHandle) -> Result<RunnerConfig> {
+    crate::runner::engine::dispatcher::helpers::load_config(&handle.runner_config_path).await
+}
+
+fn task_config_matches_readback(expected: &RunnerTask, saved: &RunnerTask) -> bool {
+    fn comparable_task(task: &RunnerTask) -> Option<serde_json::Value> {
+        let mut value = serde_json::to_value(task).ok()?;
+        let object = value.as_object_mut()?;
+        object.remove("last_run_at");
+        object.remove("last_status");
+        object.remove("next_run_at");
+
+        if let Some(schedules) = object
+            .get_mut("schedules")
+            .and_then(serde_json::Value::as_array_mut)
+        {
+            for schedule in schedules {
+                if let Some(schedule) = schedule.as_object_mut() {
+                    schedule.remove("next_run_at");
+                }
+            }
+        }
+
+        Some(value)
+    }
+
+    match (comparable_task(expected), comparable_task(saved)) {
+        (Some(expected), Some(saved)) => expected == saved,
+        _ => false,
+    }
+}
+
 pub(crate) async fn handle_dashboard(
     handle: &RunnerHandle,
     query: &HashMap<String, String>,
 ) -> Result<(u16, &'static str, String)> {
-    let cfg = RunnerConfig::load(&handle.runner_config_path)?;
+    let cfg = load_runner_config(handle).await?;
     let status = handle.status.lock().await.clone();
     Ok((
         200,
@@ -34,7 +66,7 @@ pub(crate) async fn handle_status_api(
 }
 
 pub(crate) async fn handle_tasks_api(handle: &RunnerHandle) -> Result<(u16, &'static str, String)> {
-    let cfg = RunnerConfig::load(&handle.runner_config_path)?;
+    let cfg = load_runner_config(handle).await?;
     let body = serde_json::to_string_pretty(&cfg.tasks)?;
     Ok((200, "application/json", body))
 }
@@ -42,7 +74,7 @@ pub(crate) async fn handle_tasks_api(handle: &RunnerHandle) -> Result<(u16, &'st
 pub(crate) async fn handle_new_task_page(
     handle: &RunnerHandle,
 ) -> Result<(u16, &'static str, String)> {
-    let cfg = RunnerConfig::load(&handle.runner_config_path)?;
+    let cfg = load_runner_config(handle).await?;
     let html = render_task_form(
         &cfg.working_hours_profiles,
         "Create Task",
@@ -58,7 +90,7 @@ pub(crate) async fn handle_edit_task_page(
     handle: &RunnerHandle,
     task_id: &str,
 ) -> Result<(u16, &'static str, String)> {
-    let cfg = RunnerConfig::load(&handle.runner_config_path)?;
+    let cfg = load_runner_config(handle).await?;
     if let Some(task) = cfg.tasks.iter().find(|t| t.id == task_id) {
         let action = format!("/update/{}", escape_html(task_id));
         let html = render_task_form(
@@ -82,7 +114,7 @@ pub(crate) async fn handle_create_task(
     handle: &RunnerHandle,
     values: &HashMap<String, String>,
 ) -> Result<(u16, &'static str, String)> {
-    let cfg = RunnerConfig::load(&handle.runner_config_path)?;
+    let cfg = load_runner_config(handle).await?;
     let task = build_task_from_values(values, None, &cfg.working_hours_profiles)?;
 
     create_task(&handle.runner_config_path, task).await?;
@@ -98,80 +130,83 @@ pub(crate) async fn handle_update_task(
     task_id: &str,
     values: &HashMap<String, String>,
 ) -> Result<(u16, &'static str, String)> {
-    let cfg = RunnerConfig::load(&handle.runner_config_path)?;
+    let cfg = load_runner_config(handle).await?;
     let task = build_task_from_values(
         values,
         Some(task_id.to_string()),
         &cfg.working_hours_profiles,
     )?;
+    let mut expected_task = task.clone();
+    crate::runner::config::normalize_and_validate_task(&mut expected_task, &cfg)?;
 
-    let expected = (
-        task.name.clone(),
-        task.enabled,
-        task.timeout_seconds,
-        task.schedules.len(),
-        task.steps.len(),
-        task.post_run_steps.len(),
-    );
     let mut submitted_fields: Vec<&str> = values.keys().map(String::as_str).collect();
     submitted_fields.sort_unstable();
     info!(
         task_id = %task_id,
         submitted_fields = ?submitted_fields,
-        expected_enabled = expected.1,
-        expected_timeout_seconds = expected.2,
-        expected_schedule_count = expected.3,
-        expected_step_count = expected.4,
-        expected_post_run_step_count = expected.5,
+        expected_enabled = task.enabled,
+        expected_timeout_seconds = task.timeout_seconds,
+        expected_schedule_count = task.schedules.len(),
+        expected_step_count = task.steps.len(),
+        expected_post_run_step_count = task.post_run_steps.len(),
         "Task update validated; saving configuration"
     );
 
     update_task(&handle.runner_config_path, task_id, task).await?;
 
-    match RunnerConfig::load(&handle.runner_config_path) {
-        Ok(saved_cfg) => match saved_cfg.tasks.iter().find(|saved| saved.id == task_id) {
-            Some(saved) => {
-                let matches = saved.name == expected.0
-                    && saved.enabled == expected.1
-                    && saved.timeout_seconds == expected.2
-                    && saved.schedules.len() == expected.3
-                    && saved.steps.len() == expected.4
-                    && saved.post_run_steps.len() == expected.5;
-                if matches {
-                    info!(
-                    task_id = %task_id,
-                    readback_matches_summary = matches,
-                    readback_enabled = saved.enabled,
-                    readback_timeout_seconds = saved.timeout_seconds,
-                    readback_schedule_count = saved.schedules.len(),
-                    readback_step_count = saved.steps.len(),
-                    readback_post_run_step_count = saved.post_run_steps.len(),
-                    "Task configuration read-back completed"
-                    );
-                } else {
-                    warn!(
-                    task_id = %task_id,
-                    readback_matches_summary = matches,
-                    readback_enabled = saved.enabled,
-                    readback_timeout_seconds = saved.timeout_seconds,
-                    readback_schedule_count = saved.schedules.len(),
-                    readback_step_count = saved.steps.len(),
-                    readback_post_run_step_count = saved.post_run_steps.len(),
-                    "Task configuration read-back completed"
-                    );
-                }
-            }
-            None => error!(
+    let saved_cfg = match load_runner_config(handle).await {
+        Ok(cfg) => cfg,
+        Err(error) => {
+            error!(
                 task_id = %task_id,
-                "Task configuration missing after successful update"
-            ),
-        },
-        Err(error) => error!(
+                error = %error,
+                "Failed to read back task configuration after update"
+            );
+            return Ok((
+                500,
+                "text/html; charset=utf-8",
+                render_error_page(
+                    "Save verification failed",
+                    "Could not reload the saved task configuration.",
+                ),
+            ));
+        }
+    };
+    let Some(saved_task) = saved_cfg.tasks.iter().find(|saved| saved.id == task_id) else {
+        error!(
             task_id = %task_id,
-            error = %error,
-            "Failed to read back task configuration after update"
-        ),
+            "Task configuration missing after successful update"
+        );
+        return Ok((
+            500,
+            "text/html; charset=utf-8",
+            render_error_page(
+                "Save verification failed",
+                "The task was missing after saving.",
+            ),
+        ));
+    };
+
+    if !task_config_matches_readback(&expected_task, saved_task) {
+        error!(
+            task_id = %task_id,
+            "Saved task configuration does not match the submitted editable fields"
+        );
+        return Ok((
+            500,
+            "text/html; charset=utf-8",
+            render_error_page(
+                "Save verification failed",
+                "Saved settings did not match. Reload the task and try again.",
+            ),
+        ));
     }
+
+    info!(
+        task_id = %task_id,
+        readback_matches_editable_fields = true,
+        "Task configuration read-back completed"
+    );
 
     Ok((
         200,
@@ -196,18 +231,41 @@ pub(crate) async fn handle_run_task(
     handle: &RunnerHandle,
     task_id: &str,
 ) -> Result<(u16, &'static str, String)> {
-    let _ = handle
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    if handle
         .command_tx
-        .send(RunnerCommand::RunTaskNow {
+        .send(RunnerCommand::RunTaskNowWithReply {
             task_id: task_id.to_string(),
             is_manual: true,
+            reply: tx,
         })
-        .await;
-    Ok((
-        200,
-        "text/html; charset=utf-8",
-        render_redirect_to_dashboard(&format!("Triggered task {}", escape_html(task_id))),
-    ))
+        .await
+        .is_err()
+    {
+        return Ok((
+            500,
+            "text/html; charset=utf-8",
+            render_error_page("Error", "Scheduler channel closed."),
+        ));
+    }
+
+    match rx.await {
+        Ok(Ok(())) => Ok((
+            200,
+            "text/html; charset=utf-8",
+            render_redirect_to_dashboard(&format!("Triggered task {}", escape_html(task_id))),
+        )),
+        Ok(Err(error)) => Ok((
+            409,
+            "text/html; charset=utf-8",
+            render_error_page("Task not triggered", &error),
+        )),
+        Err(_) => Ok((
+            500,
+            "text/html; charset=utf-8",
+            render_error_page("Error", "Scheduler did not confirm the task request."),
+        )),
+    }
 }
 
 pub(crate) async fn handle_enable_task(
@@ -251,7 +309,7 @@ pub(crate) async fn handle_enable_task(
 }
 
 pub(crate) async fn handle_wh_page(handle: &RunnerHandle) -> Result<(u16, &'static str, String)> {
-    let cfg = RunnerConfig::load(&handle.runner_config_path)?;
+    let cfg = load_runner_config(handle).await?;
     Ok((
         200,
         "text/html; charset=utf-8",
@@ -269,7 +327,7 @@ pub(crate) async fn handle_wh_edit_page(
     handle: &RunnerHandle,
     id: &str,
 ) -> Result<(u16, &'static str, String)> {
-    let cfg = RunnerConfig::load(&handle.runner_config_path)?;
+    let cfg = load_runner_config(handle).await?;
     if let Some(profile) = cfg.working_hours_profiles.iter().find(|p| p.id == id) {
         Ok((
             200,
@@ -447,7 +505,7 @@ pub(crate) async fn handle_wh_delete(
 }
 
 pub(crate) async fn handle_apps_page(handle: &RunnerHandle) -> Result<(u16, &'static str, String)> {
-    let cfg = RunnerConfig::load(&handle.runner_config_path)?;
+    let cfg = load_runner_config(handle).await?;
     Ok((
         200,
         "text/html; charset=utf-8",
@@ -459,7 +517,7 @@ pub(crate) async fn handle_app_edit_page(
     handle: &RunnerHandle,
     app_id: &str,
 ) -> Result<(u16, &'static str, String)> {
-    let cfg = RunnerConfig::load(&handle.runner_config_path)?;
+    let cfg = load_runner_config(handle).await?;
     if let Some(app) = cfg.registered_apps.iter().find(|a| a.id == app_id) {
         return Ok((200, "text/html; charset=utf-8", render_app_edit_page(app)));
     }
@@ -471,15 +529,40 @@ pub(crate) async fn handle_app_edit_page(
 }
 
 pub(crate) async fn handle_run_all(handle: &RunnerHandle) -> Result<(u16, &'static str, String)> {
-    handle
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    if handle
         .command_tx
-        .send(RunnerCommand::RunAllNow { is_manual: true })
-        .await?;
-    Ok((
-        200,
-        "text/html; charset=utf-8",
-        render_redirect_to_dashboard("Run-all triggered"),
-    ))
+        .send(RunnerCommand::RunAllNowWithReply {
+            is_manual: true,
+            reply: tx,
+        })
+        .await
+        .is_err()
+    {
+        return Ok((
+            500,
+            "text/html; charset=utf-8",
+            render_error_page("Error", "Scheduler channel closed."),
+        ));
+    }
+
+    match rx.await {
+        Ok(Ok(())) => Ok((
+            200,
+            "text/html; charset=utf-8",
+            render_redirect_to_dashboard("Run-all triggered"),
+        )),
+        Ok(Err(error)) => Ok((
+            500,
+            "text/html; charset=utf-8",
+            render_error_page("Run-all failed", &error),
+        )),
+        Err(_) => Ok((
+            500,
+            "text/html; charset=utf-8",
+            render_error_page("Error", "Scheduler did not confirm the run-all request."),
+        )),
+    }
 }
 
 pub(crate) async fn handle_apps_create(
@@ -634,7 +717,7 @@ pub(crate) async fn handle_apps_delete(
 pub(crate) async fn handle_api_apps_list(
     handle: &RunnerHandle,
 ) -> Result<(u16, &'static str, String)> {
-    let cfg = RunnerConfig::load(&handle.runner_config_path)?;
+    let cfg = load_runner_config(handle).await?;
     let body = serde_json::to_string(&cfg.registered_apps)?;
     Ok((200, "application/json", body))
 }
@@ -643,7 +726,7 @@ pub(crate) async fn handle_api_task_preview(
     handle: &RunnerHandle,
     values: &HashMap<String, String>,
 ) -> Result<(u16, &'static str, String)> {
-    let cfg = match RunnerConfig::load(&handle.runner_config_path) {
+    let cfg = match load_runner_config(handle).await {
         Ok(cfg) => cfg,
         Err(error) => {
             let body = serde_json::json!({
@@ -744,7 +827,7 @@ pub(crate) async fn handle_api_apps_manifest(
     handle: &RunnerHandle,
     app_id: &str,
 ) -> Result<(u16, &'static str, String)> {
-    let cfg = RunnerConfig::load(&handle.runner_config_path)?;
+    let cfg = load_runner_config(handle).await?;
     if let Some(app) = cfg.registered_apps.iter().find(|a| a.id == app_id) {
         if app.executable_path.is_empty() {
             return Ok((

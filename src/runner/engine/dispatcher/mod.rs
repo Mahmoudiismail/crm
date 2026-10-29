@@ -18,7 +18,9 @@ use app_commands::{create_registered_app, delete_registered_app, update_register
 use profile_commands::{
     create_working_hours_profile, delete_working_hours_profile, update_working_hours_profile,
 };
-use task_commands::{run_all_tasks_now, run_task_by_id, set_task_enabled};
+use task_commands::{
+    run_all_tasks_now, run_task_by_id, run_task_by_id_confirmed, set_task_enabled,
+};
 
 /// Internal route for RunnerCommand parsing
 pub(crate) async fn mod_handle_command(
@@ -31,8 +33,26 @@ pub(crate) async fn mod_handle_command(
         RunnerCommand::RunAllNow { is_manual } => {
             run_all_tasks_now(path, _status, exec_tx, is_manual).await
         }
+        RunnerCommand::RunAllNowWithReply { is_manual, reply } => {
+            let result = run_all_tasks_now(path, _status, exec_tx, is_manual)
+                .await
+                .map_err(|error| format!("{:#}", error));
+            let _ = reply.send(result);
+            Ok(())
+        }
         RunnerCommand::RunTaskNow { task_id, is_manual } => {
             run_task_by_id(path, &task_id, _status, exec_tx, is_manual).await
+        }
+        RunnerCommand::RunTaskNowWithReply {
+            task_id,
+            is_manual,
+            reply,
+        } => {
+            let result = run_task_by_id_confirmed(path, &task_id, exec_tx, is_manual)
+                .await
+                .map_err(|error| format!("{:#}", error));
+            let _ = reply.send(result);
+            Ok(())
         }
         RunnerCommand::SetTaskEnabled {
             task_id,

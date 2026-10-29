@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use headless_chrome::protocol::cdp::Page;
 use headless_chrome::Tab;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -157,11 +158,9 @@ pub fn navigate_and_run_report(
                         let mis_wait_started = Instant::now();
                         info!("YASWEB STAGE START: wait_for_mis_reports timeout_seconds=30");
                         let wait_js = generate_mis_reports_wait_js(30);
-                        if let Err(first_error) = javascript::evaluate_automation_step(
-                            tab,
-                            &wait_js,
-                            "Wait for MIS Reports",
-                        ) {
+                        if let Err(first_error) =
+                            evaluate_report_frame_step(tab, &wait_js, "Wait for MIS Reports")
+                        {
                             error!(
                                 "YASWEB STAGE RETRY: wait_for_mis_reports initial attempt failed elapsed_ms={} error={:#}",
                                 mis_wait_started.elapsed().as_millis(),
@@ -173,7 +172,7 @@ pub fn navigate_and_run_report(
                             match retry_mis_navigation(tab) {
                                 Ok(true) => {
                                     info!("MIS route was not reached; retried the MIS module click once.");
-                                    if let Err(retry_error) = javascript::evaluate_automation_step(
+                                    if let Err(retry_error) = evaluate_report_frame_step(
                                         tab,
                                         &wait_js,
                                         "Wait for MIS Reports (retry)",
@@ -194,7 +193,7 @@ pub fn navigate_and_run_report(
                                     // The route was reached, so this was likely a slow embedded UI.
                                     // Retry the readiness wait without clicking navigation again.
                                     info!("MIS route already reached; retrying readiness wait once without another navigation click.");
-                                    if let Err(retry_error) = javascript::evaluate_automation_step(
+                                    if let Err(retry_error) = evaluate_report_frame_step(
                                         tab,
                                         &wait_js,
                                         "Wait for MIS Reports (readiness retry)",
@@ -271,11 +270,7 @@ pub fn navigate_and_run_report(
                         );
                         *step_num += 1;
                         info!("Selecting Report Type: {}", active_report_type);
-                        javascript::evaluate_automation_step(
-                            tab,
-                            &step1_js,
-                            "Step 1 (Report Type)",
-                        )?;
+                        evaluate_report_frame_step(tab, &step1_js, "Step 1 (Report Type)")?;
                         debug::save_html_state(
                             tab,
                             active_report_name,
@@ -294,9 +289,7 @@ pub fn navigate_and_run_report(
                                         (async function(reportType, reportName, timeoutMinutes) {{
                                             function sleep(ms) {{ return new Promise(r => setTimeout(r, ms)); }}
                                             let logs = [];
-                                            let iframe = document.querySelector('iframe');
-                                            if (!iframe) return JSON.stringify({{ status: "ERROR", msg: "No iframe found.", logs }});
-                                            let doc = iframe.contentWindow.document;
+                                            let doc = document;
 
                                             logs.push("Waiting for loader to disappear before typing...");
                                             for(let i=0; i<30; i++) {{
@@ -402,11 +395,7 @@ pub fn navigate_and_run_report(
                         );
 
                         info!("Searching & Selecting Report: {}", active_report_name);
-                        javascript::evaluate_automation_step(
-                            tab,
-                            &step2_js,
-                            "Step 2 (Select Report)",
-                        )?;
+                        evaluate_report_frame_step(tab, &step2_js, "Step 2 (Select Report)")?;
                         debug::save_html_state(
                             tab,
                             active_report_name,
@@ -422,7 +411,7 @@ pub fn navigate_and_run_report(
                                         (async function(reportName) {{
                                             function sleep(ms) {{ return new Promise(r => setTimeout(r, ms)); }}
                                             let logs = [];
-                                            let doc = document.querySelector('iframe').contentWindow.document;
+                                            let doc = document;
                                             let reportBound = false;
                                             logs.push("Waiting for report binding...");
                                             for (let i = 0; i < 30; i++) {{
@@ -452,7 +441,7 @@ pub fn navigate_and_run_report(
                         );
 
                         info!("Waiting for Report Binding...");
-                        javascript::evaluate_automation_step(tab, &step3_js, "Step 3 (Binding)")?;
+                        evaluate_report_frame_step(tab, &step3_js, "Step 3 (Binding)")?;
                         debug::save_html_state(
                             tab,
                             active_report_name,
@@ -468,8 +457,7 @@ pub fn navigate_and_run_report(
                                         (async function(filters, timeoutMinutes) {{
                                             function sleep(ms) {{ return new Promise(r => setTimeout(r, ms)); }}
                                             let logs = [];
-                                            let iframe = document.querySelector('iframe');
-                                            let doc = iframe.contentWindow.document;
+                                            let doc = document;
 
                                             logs.push("Waiting for loader to disappear...");
                                             let loaderGone = false;
@@ -506,6 +494,7 @@ pub fn navigate_and_run_report(
 
                                             let labels = doc.querySelectorAll('mat-label');
                                             let discoveredFilters = [];
+                                            let failedFilters = [];
                                             for (let lbl of labels) {{
                                                 if (lbl.innerText) {{ discoveredFilters.push(lbl.innerText.trim()); }}
                                             }}
@@ -538,7 +527,7 @@ pub fn navigate_and_run_report(
                                                                     }}
                                                                     await simulateTyping(input, v);
                                                                     logs.push("Typed into INPUT for " + key);
-                                                                    filterFilled = true;
+                                                                    filterFilled = optionFound;
                                                                     break;
                                                                 }} else if (input.tagName === 'MAT-SELECT') {{
                                                                     input.click();
@@ -575,7 +564,13 @@ pub fn navigate_and_run_report(
                                                         }}
                                                     }}
                                                 }}
-                                                if (!filterFilled) logs.push("Failed to fill filter: " + key);
+                                                if (!filterFilled) {{
+                                                    logs.push("Failed to fill filter: " + key);
+                                                    failedFilters.push(key);
+                                                }}
+                                            }}
+                                            if (failedFilters.length > 0) {{
+                                                return JSON.stringify({{ status: "ERROR", msg: "One or more requested filters could not be applied: " + failedFilters.join(", "), failed_filters: failedFilters, discovered_filters: discoveredFilters, logs }});
                                             }}
                                             return JSON.stringify({{ status: "SUCCESS", discovered_filters: discoveredFilters, logs }});
                                         }})({});
@@ -584,7 +579,7 @@ pub fn navigate_and_run_report(
                         );
 
                         info!("Applying Filters...");
-                        let step4_res = javascript::evaluate_automation_step(
+                        let step4_res = evaluate_report_frame_step(
                             tab,
                             &step4_fill_js,
                             "Step 4 (Fill Filters)",
@@ -614,7 +609,7 @@ pub fn navigate_and_run_report(
                                         (async function(timeoutMinutes) {
                                             function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
                                             let logs = [];
-                                            let doc = document.querySelector('iframe').contentWindow.document;
+                                            let doc = document;
 
                                             logs.push("Waiting for Search button to appear...");
                                             let clickedSearch = false;
@@ -651,11 +646,7 @@ pub fn navigate_and_run_report(
                             step5_search_js.replace("{}", &timeout_minutes.to_string());
 
                         info!("Clicking Search...");
-                        javascript::evaluate_automation_step(
-                            tab,
-                            &step5_search_js,
-                            "Step 5 (Search Click)",
-                        )?;
+                        evaluate_report_frame_step(tab, &step5_search_js, "Step 5 (Search Click)")?;
 
                         debug::save_html_state(
                             tab,
@@ -670,7 +661,7 @@ pub fn navigate_and_run_report(
                         let step6_export_js = generate_step6_js(timeout_minutes);
 
                         info!("Waiting for generation & clicking Export...");
-                        javascript::evaluate_automation_step(
+                        evaluate_report_frame_step(
                             tab,
                             &step6_export_js,
                             "Step 6 (Wait & Export)",
@@ -689,7 +680,7 @@ pub fn navigate_and_run_report(
                         let step7_xlsx_js = r#"
                                         (async function(timeoutMinutes) {
                                             function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-                                            let doc = document.querySelector('iframe').contentWindow.document;
+                                            let doc = document;
                                             let mainDoc = document;
                                             let logs = [];
                                             let xlsxOption = null;
@@ -737,7 +728,7 @@ pub fn navigate_and_run_report(
                             step7_xlsx_js.replace("{}", &timeout_minutes.to_string());
 
                         info!("Clicking XLSX...");
-                        javascript::evaluate_automation_step(tab, &step7_xlsx_js, "Step 7 (XLSX)")?;
+                        evaluate_report_frame_step(tab, &step7_xlsx_js, "Step 7 (XLSX)")?;
                         info!("JS Automation Sequence Completed Successfully!");
 
                         debug::save_html_state(
@@ -766,6 +757,92 @@ pub fn navigate_and_run_report(
     Ok(discovered_filters)
 }
 
+/// Runs a report automation step in the embedded report frame's own CDP execution context.
+/// The report UI is cross-origin from the parent page, so parent-page JavaScript cannot read its DOM.
+fn evaluate_report_frame_step(
+    tab: &Arc<Tab>,
+    js_code: &str,
+    step_name: &str,
+) -> Result<serde_json::Value> {
+    if step_name.starts_with("Wait for MIS Reports")
+        && !tab.get_url().contains("/home/mis-report/module/")
+    {
+        anyhow::bail!(
+            "MIS navigation route was not reached before report-frame readiness check: {}",
+            tab.get_url()
+        );
+    }
+
+    let started = Instant::now();
+    let iframe_src = tab
+        .evaluate("document.querySelector('iframe')?.src || ''", true)
+        .ok()
+        .and_then(|result| result.value)
+        .and_then(|value| value.as_str().map(str::to_owned))
+        .unwrap_or_default();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let mut last_frame_url = String::new();
+    let execution_context_id = loop {
+        let tree = tab
+            .call_method(Page::GetFrameTree(None))
+            .context("Failed to inspect Chrome frame tree for Yasweb report iframe")?;
+        let root_origin = tree.frame_tree.frame.security_origin.clone();
+        let mut frames = Vec::new();
+        collect_child_frames(&tree.frame_tree, &mut frames);
+        let frame = frames
+            .iter()
+            .find(|frame| !iframe_src.is_empty() && frame.url == iframe_src)
+            .or_else(|| {
+                frames
+                    .iter()
+                    .find(|frame| !iframe_src.is_empty() && iframe_src.starts_with(&frame.url))
+            })
+            .or_else(|| {
+                frames
+                    .iter()
+                    .find(|frame| frame.security_origin != root_origin && !frame.url.is_empty())
+            });
+        if let Some(frame) = frame {
+            last_frame_url = frame.url.clone();
+            match tab.call_method(Page::CreateIsolatedWorld {
+                frame_id: frame.id.clone(),
+                world_name: Some("crm-yasweb-report".to_string()),
+                grant_univeral_access: Some(false),
+            }) {
+                Ok(world) => break world.execution_context_id,
+                Err(error) if Instant::now() < deadline => tracing::debug!(
+                    "Report frame context not ready yet (url={}): {}",
+                    frame.url,
+                    error
+                ),
+                Err(error) => {
+                    return Err(error).context("Failed to create report-frame execution context")
+                }
+            }
+        }
+        if Instant::now() >= deadline {
+            anyhow::bail!("Could not locate embedded Yasweb report frame within 10 seconds (iframe_src='{}', last_frame_url='{}')", iframe_src, last_frame_url);
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    };
+    info!(
+        "YASWEB report-frame context ready: stage='{}' frame_url='{}' elapsed_ms={}",
+        step_name,
+        last_frame_url,
+        started.elapsed().as_millis()
+    );
+    javascript::evaluate_automation_step_in_context(tab, js_code, step_name, execution_context_id)
+}
+
+fn collect_child_frames<'a>(tree: &'a Page::FrameTree, frames: &mut Vec<&'a Page::Frame>) {
+    if let Some(children) = &tree.child_frames {
+        for child in children {
+            frames.push(&child.frame);
+            collect_child_frames(child, frames);
+        }
+    }
+}
+
 fn generate_step1_js(report_type: &str) -> String {
     // Avoid repeatedly serializing the full iframe markup or running broad XPath queries.
     // The report page can contain a large Angular DOM, so inspect only the relevant controls.
@@ -773,17 +850,7 @@ fn generate_step1_js(report_type: &str) -> String {
         (async function(reportType) {
             function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
             const logs = [];
-            const iframe = document.querySelector('iframe');
-            if (!iframe || !iframe.contentWindow) {
-                return JSON.stringify({ status: "ERROR", msg: "No iframe found.", logs });
-            }
-
-            let doc;
-            try {
-                doc = iframe.contentWindow.document;
-            } catch (error) {
-                return JSON.stringify({ status: "ERROR", msg: "Cannot access report iframe: " + error.message, logs });
-            }
+            const doc = document;
 
             const normalize = value => (value || "").replace(/\s+/g, " ").trim().toLowerCase();
             const target = normalize(reportType);
@@ -862,12 +929,7 @@ pub fn generate_step6_js(timeout_minutes: u64) -> String {
             const pollMs = 1000;
 
             function getReportDocument() {{
-                const iframe = document.querySelector('iframe');
-                try {{
-                    return iframe && iframe.contentWindow ? iframe.contentWindow.document : null;
-                }} catch (_) {{
-                    return null;
-                }}
+                return document;
             }}
 
             function isVisible(element) {{
@@ -1051,117 +1113,48 @@ pub fn generate_mis_reports_wait_js(timeout_seconds: u64) -> String {
             function sleep(ms) {{ return new Promise(resolve => setTimeout(resolve, ms)); }}
             const logs = [];
             const deadline = Date.now() + timeoutSeconds * 1000;
-            const routePattern = /\/home\/mis-report\/module\//i;
             const typeNames = ["Standard Report", "Report Manager"];
 
-            function getDocuments() {{
-                const entries = [{{ doc: document, url: document.location.href, frame: false }}];
-                for (const frame of Array.from(document.querySelectorAll("iframe"))) {{
-                    try {{
-                        const frameDocument = frame.contentDocument || (frame.contentWindow && frame.contentWindow.document);
-                        if (frameDocument) {{
-                            entries.push({{ doc: frameDocument, url: frameDocument.location.href, frame: true }});
-                        }}
-                    }} catch (error) {{
-                        logs.push("Cannot inspect iframe: " + (frame.src || "unknown src") + " (" + error.message + ")");
-                    }}
-                }}
-                return entries;
-            }}
-
-            function normalize(value) {{
-                return (value || "").replace(/\s+/g, " ").trim().toLowerCase();
-            }}
-
+            function normalize(value) {{ return (value || "").replace(/\s+/g, " ").trim().toLowerCase(); }}
             function isVisible(element) {{
                 if (!element) return false;
-                const doc = element.ownerDocument;
-                const view = doc && doc.defaultView;
+                const view = element.ownerDocument && element.ownerDocument.defaultView;
                 if (!view) return false;
                 for (let current = element; current && current.nodeType === 1; current = current.parentElement) {{
                     const style = view.getComputedStyle(current);
-                    if (style.display === "none" || style.visibility === "hidden" ||
-                        style.visibility === "collapse" || Number(style.opacity) === 0) return false;
+                    if (style.display === "none" || style.visibility === "hidden" || style.visibility === "collapse" || Number(style.opacity) === 0) return false;
                 }}
                 return Array.from(element.getClientRects()).some(rect => rect.width > 0 && rect.height > 0);
             }}
-
-            function visibleLoaderUrls(entries) {{
-                const selector = "#loader_svg, .loading-screen-wrapper, mat-progress-bar, .dx-loadpanel";
-                return entries.filter(entry =>
-                    Array.from(entry.doc.querySelectorAll(selector)).some(isVisible)
-                ).map(entry => entry.url);
-            }}
-
-            function findTypeControl(doc, typeName) {{
+            function findTypeControl(typeName) {{
                 const target = normalize(typeName);
-                const controls = Array.from(doc.querySelectorAll(
-                    'mat-radio-button, [role="radio"], input[type="radio"], label, button'
-                ));
-                return controls.find(element => {{
-                    if (!isVisible(element)) return false;
-                    const text = normalize(element.textContent || element.getAttribute("aria-label") || element.value);
-                    return text === target || text.includes(target);
-                }}) || null;
+                return Array.from(document.querySelectorAll('mat-radio-button, [role="radio"], input[type="radio"], label, button'))
+                    .find(element => isVisible(element) && normalize(element.textContent || element.getAttribute("aria-label") || element.value).includes(target)) || null;
             }}
-
             function inspect() {{
-                const entries = getDocuments();
-                const routeEntry = entries.find(entry => routePattern.test(entry.url));
-                const loaders = visibleLoaderUrls(entries);
-                const reportFrame = entries.find(entry => entry.frame &&
-                    typeNames.every(name => findTypeControl(entry.doc, name)));
-                const reportEntry = reportFrame || entries.find(entry =>
-                    typeNames.every(name => findTypeControl(entry.doc, name)));
-                const typeControls = reportEntry
-                    ? typeNames.map(name => ({{ name, visible: !!findTypeControl(reportEntry.doc, name) }}))
-                    : typeNames.map(name => ({{ name, visible: false }}));
-                const searchInput = reportEntry && reportEntry.doc.querySelector(
-                    'input[formcontrolname="searchInput"], input[placeholder="Search"], input[aria-label*="Search" i]'
-                );
-                const reportUiReady = !!reportEntry &&
-                    typeControls.every(item => item.visible) &&
-                    isVisible(searchInput) &&
-                    !loaders.includes(reportEntry.url);
-                const candidate = {{
-                    routeUrl: routeEntry ? routeEntry.url : null,
-                    inspectedDocuments: entries.map(entry => ({{ url: entry.url, frame: entry.frame }})),
-                    reportDocumentUrl: reportEntry ? reportEntry.url : null,
-                    reportTypes: typeControls,
-                    searchVisible: !!searchInput && isVisible(searchInput),
-                    visibleLoaderUrls: loaders,
-                    routeReached: !!routeEntry,
-                    reportUiReady
-                }};
-                return {{ ready: !!routeEntry && reportUiReady, candidate }};
+                const reportTypes = typeNames.map(name => ({{ name, visible: !!findTypeControl(name) }}));
+                const searchInput = document.querySelector('input[formcontrolname="searchInput"], input[placeholder="Search"], input[aria-label*="Search" i]');
+                const loaderSelector = "#loader_svg, .loading-screen-wrapper, mat-progress-bar, .dx-loadpanel";
+                const visibleLoaders = Array.from(document.querySelectorAll(loaderSelector)).filter(isVisible).map(element => ({{
+                    selector: loaderSelector,
+                    tag: element.tagName,
+                    className: typeof element.className === "string" ? element.className : ""
+                }}));
+                return {{ frameUrl: location.href, documentReadyState: document.readyState, reportTypes,
+                    searchVisible: isVisible(searchInput), visibleLoaders,
+                    reportUiReady: reportTypes.every(item => item.visible) && isVisible(searchInput) && visibleLoaders.length === 0 }};
             }}
-
-            logs.push("Waiting for MIS route and the embedded report selector (Standard Report / Report Manager) plus Search...");
+            logs.push("Waiting inside the report-frame execution context for visible report-type controls and Search...");
+            let lastState = "";
             while (Date.now() <= deadline) {{
-                try {{
-                    const result = inspect();
-                    if (result.ready) {{
-                        logs.push("MIS report selector ready: " + JSON.stringify(result.candidate));
-                        return JSON.stringify({{ status: "SUCCESS", logs }});
-                    }}
-                }} catch (error) {{
-                    logs.push("Transient MIS readiness inspection error: " + error.message);
-                }}
-                await sleep(200);
+                const state = inspect();
+                const serialized = JSON.stringify(state);
+                if (serialized !== lastState) {{ logs.push("Report-frame readiness state: " + serialized); lastState = serialized; }}
+                if (state.reportUiReady) return JSON.stringify({{ status: "SUCCESS", logs }});
+                await sleep(250);
             }}
-
-            let finalState;
-            try {{
-                finalState = inspect();
-            }} catch (error) {{
-                finalState = {{ candidate: {{ inspectionError: error.message }} }};
-            }}
-            logs.push("MIS readiness timeout diagnostics: " + JSON.stringify(finalState.candidate));
-            return JSON.stringify({{
-                status: "ERROR",
-                msg: "MIS route or embedded report selector was not ready: expected visible Standard Report, Report Manager, and Search controls",
-                logs
-            }});
+            return JSON.stringify({{ status: "ERROR", msg: "Report frame did not expose visible Standard Report, Report Manager, and Search controls before timeout",
+                logs: logs.concat(["Report-frame readiness timeout diagnostics: " + JSON.stringify(inspect())]) }});
         }})({});
         "##,
         timeout_seconds
@@ -1200,11 +1193,11 @@ mod mis_reports_wait_tests {
     #[test]
     fn wait_script_checks_accessible_iframes_and_reports_diagnostics() {
         let js = generate_mis_reports_wait_js(30);
-        assert!(js.contains("frame.contentDocument"));
-        assert!(js.contains("Waiting for MIS route and the embedded report selector"));
-        assert!(js.contains("MIS readiness timeout diagnostics"));
-        assert!(js.contains("visibleLoaderUrls"));
-        assert!(js.contains("routeReached"));
+        assert!(!js.contains("contentWindow.document"));
+        assert!(js.contains("Waiting inside the report-frame execution context"));
+        assert!(js.contains("Report-frame readiness timeout diagnostics"));
+        assert!(js.contains("visibleLoaders"));
+
         assert!(js.contains("reportUiReady"));
         assert!(js.contains("reportTypes"));
         assert!(js.contains("status: \"SUCCESS\""));

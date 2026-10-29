@@ -7,9 +7,18 @@ pub enum RunnerCommand {
     RunAllNow {
         is_manual: bool,
     },
+    RunAllNowWithReply {
+        is_manual: bool,
+        reply: tokio::sync::oneshot::Sender<Result<(), String>>,
+    },
     RunTaskNow {
         task_id: String,
         is_manual: bool,
+    },
+    RunTaskNowWithReply {
+        task_id: String,
+        is_manual: bool,
+        reply: tokio::sync::oneshot::Sender<Result<(), String>>,
     },
     SetTaskEnabled {
         task_id: String,
@@ -69,6 +78,12 @@ pub enum ExecutionManagerCommand {
         task: Box<crate::runner::config::RunnerTask>,
         policy: ExecutionPolicy,
         scheduled_at: chrono::DateTime<chrono::Utc>,
+    },
+    QueueTaskWithReply {
+        task: Box<crate::runner::config::RunnerTask>,
+        policy: ExecutionPolicy,
+        scheduled_at: chrono::DateTime<chrono::Utc>,
+        reply: tokio::sync::oneshot::Sender<Result<(), String>>,
     },
     TaskFinished {
         task_id: String,

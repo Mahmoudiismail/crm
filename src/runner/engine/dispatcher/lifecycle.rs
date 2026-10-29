@@ -51,6 +51,36 @@ pub fn spawn_execution_manager(
                         queued_tasks.push_back((task, policy, scheduled_at));
                     }
                 }
+                ExecutionManagerCommand::QueueTaskWithReply {
+                    task,
+                    policy,
+                    scheduled_at,
+                    reply,
+                } => {
+                    let task_id = task.id.clone();
+                    let mut st = status.lock().await;
+                    let is_queued = queued_tasks.iter().any(|(t, _, _)| t.id == task_id);
+                    let is_running = running_tasks.iter().any(|(t, _)| t.id == task_id);
+
+                    if is_queued || is_running {
+                        tracing::warn!(
+                            "Task '{}' is already running or queued; rejecting duplicate request",
+                            task_id
+                        );
+                        drop(st);
+                        let _ = reply.send(Err(format!(
+                            "Task '{}' is already running or queued",
+                            task_id
+                        )));
+                    } else {
+                        if !st.queued_task_ids.contains(&task_id) {
+                            st.queued_task_ids.push(task_id);
+                        }
+                        queued_tasks.push_back((task, policy, scheduled_at));
+                        drop(st);
+                        let _ = reply.send(Ok(()));
+                    }
+                }
                 ExecutionManagerCommand::TaskFinished {
                     task_id,
                     last_status,
@@ -233,11 +263,19 @@ pub fn start_scheduler(runner_config_path: String) -> RunnerHandle {
                             }
                             for schedule in &task.schedules {
                                 if schedule_is_due(schedule, now) {
-                                    info!("Cron schedule triggered for task: {}", task.id);
-                                    let _ = tx_clone.send(RunnerCommand::RunTaskNow {
+                                    match tx_clone.send(RunnerCommand::RunTaskNow {
                                         task_id: task.id.clone(),
                                         is_manual: false,
-                                    }).await;
+                                    }).await {
+                                        Ok(()) => {
+                                            info!("Cron schedule triggered for task: {}", task.id)
+                                        }
+                                        Err(error) => error!(
+                                            "Failed to dispatch scheduled task {}: {}",
+                                            task.id,
+                                            error
+                                        ),
+                                    }
                                     break;
                                 }
                             }
@@ -283,7 +321,7 @@ pub fn start_scheduler(runner_config_path: String) -> RunnerHandle {
 mod tests_queue {
     use super::*;
     use crate::runner::config::{Repetition, TaskSchedule};
-    use crate::runner::engine::dispatcher::run_task_by_id;
+    use crate::runner::engine::dispatcher::run_task_by_id_confirmed;
     use tempfile::tempdir;
     use tokio::sync::mpsc;
 
@@ -395,28 +433,31 @@ mod tests_queue {
         let barrier = Arc::new(tokio::sync::Barrier::new(2));
 
         let path1 = config_path.clone();
-        let status1 = status.clone();
         let exec_tx1 = exec_tx.clone();
         let barrier1 = barrier.clone();
 
         let h1 = tokio::spawn(async move {
             barrier1.wait().await;
-            run_task_by_id(&path1, "race_task", &status1, &exec_tx1, true).await
+            run_task_by_id_confirmed(&path1, "race_task", &exec_tx1, true).await
         });
 
         let path2 = config_path.clone();
-        let status2 = status.clone();
         let exec_tx2 = exec_tx.clone();
         let barrier2 = barrier.clone();
 
         let h2 = tokio::spawn(async move {
             barrier2.wait().await;
-            run_task_by_id(&path2, "race_task", &status2, &exec_tx2, true).await
+            run_task_by_id_confirmed(&path2, "race_task", &exec_tx2, true).await
         });
 
         let (r1, r2) = tokio::join!(h1, h2);
-        assert!(r1.unwrap().is_ok());
-        assert!(r2.unwrap().is_ok());
+        let r1 = r1.unwrap();
+        let r2 = r2.unwrap();
+        assert_ne!(
+            r1.is_ok(),
+            r2.is_ok(),
+            "Exactly one concurrent request should be admitted"
+        );
 
         // Keep the first process alive long enough for both concurrent admission
         // requests to reach the execution manager, then verify actual executions.
