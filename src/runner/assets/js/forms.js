@@ -995,6 +995,14 @@
     dynamicInputs.dataset.manifestLoaded = "false";
     dynamicInputs.innerHTML =
       '<div class="text-sm text-gray-500">Loading manifest...</div>';
+    const loadingAction = dynamicInputs.closest(".action-editor");
+    for (const selector of [".app-periodization-container", ".app-preview-box"]) {
+      const element = loadingAction?.querySelector(selector);
+      if (element) {
+        element.classList.add("hidden");
+        element.style.display = "none";
+      }
+    }
     try {
       const manifest = await window.api.fetchAppManifest(appId);
       if (!manifest || !manifest.arguments || manifest.arguments.length === 0) {
