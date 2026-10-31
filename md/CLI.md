@@ -4,18 +4,18 @@ This document describes the command-line options declared by the current binary 
 
 ## Runner
 
-\`\`\`powershell
+```powershell
 runner.exe [--config <PATH>]
-\`\`\`
+```
 
 - --config PATH selects Runner's JSON configuration. Relative paths are resolved from the executable directory; absolute paths are used unchanged.
 - --manifest is a hidden integration option that prints Runner's AppManifest and exits.
 
 ## CRM
 
-\`\`\`powershell
+```powershell
 crm.exe [--report <REPORTS>] [--config <PATH>] [--start-date <DATE>] [--end-date <DATE>] [--custom-download-folder <PATH>]
-\`\`\`
+```
 
 - --report REPORTS accepts comma-separated report names and defaults to tickets.
 - --config PATH selects the CRM configuration file.
@@ -25,9 +25,9 @@ crm.exe [--report <REPORTS>] [--config <PATH>] [--start-date <DATE>] [--end-date
 
 ## Yasweb
 
-\`\`\`powershell
+```powershell
 yasweb.exe --name <REPORT[,REPORT...]> [OPTIONS]
-\`\`\`
+```
 
 - --name selects one or more configured report names.
 - --type selects the report type when applicable.
@@ -41,9 +41,9 @@ yasweb.exe --name <REPORT[,REPORT...]> [OPTIONS]
 
 ## Tasker
 
-\`\`\`powershell
+```powershell
 tasker.exe [--config <PATH>] [--task <INDEX>] [--only-call-center] [--send-exceptions] [--start-date <DATE>]
-\`\`\`
+```
 
 - --config PATH selects tasker_config.json. Relative paths are resolved from the executable directory.
 - A legacy positional config path is still accepted and is interpreted relative to the current working directory.
@@ -57,9 +57,9 @@ Tasker executes configured tasks in order and returns a non-zero result when a c
 
 ## CRM Updater
 
-\`\`\`powershell
+```powershell
 crm_updater.exe [--config <PATH>] [--update-only] [--logs-only]
-\`\`\`
+```
 
 - --config PATH selects updater_config.json. Relative paths are resolved from the executable directory.
 - --update-only runs only the update pipeline.
