@@ -19,7 +19,7 @@ pub fn load_team_mappings(
     for result in map_rdr.deserialize::<TeamMapping>() {
         match result {
             Ok(mapping) => {
-                tracing::trace!("Loaded team mapping: {:?}", mapping);
+                tracing::trace!("Loaded team mapping for team '{}'. Recipient details omitted.", mapping.team_name);
                 team_maps.insert(mapping.team_name.trim().to_lowercase(), mapping);
             }
             Err(e) => {
