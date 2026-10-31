@@ -1,6 +1,6 @@
 # CRM Updater
 
-`crm_updater` is a standalone binary in the CRM tool workspace designed to automate application updates and move reports, logs, and diagnostics into local collections.
+`crm_updater` is a standalone binary in the CRM Tool Cargo package designed to automate application updates and move reports, logs, and diagnostics into local collections.
 
 ## Features
 
