@@ -6,9 +6,9 @@ use anyhow::{Context, Result};
 use chrono::{Datelike, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime};
 pub use reader::*;
 
+mod leads;
 mod processing;
 mod writer;
-mod leads;
 
 use std::collections::{HashMap, VecDeque};
 use tracing::{error, info, warn};

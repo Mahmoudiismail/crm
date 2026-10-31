@@ -18,8 +18,7 @@ pub fn generate_lead_result(
     minutes_ago: i64,
     assignee_map: &HashMap<String, UserInfo>,
 ) -> Result<Option<PathBuf>> {
-    let lookback_minutes =
-        u64::try_from(minutes_ago).context("minutes_ago cannot be negative")?;
+    let lookback_minutes = u64::try_from(minutes_ago).context("minutes_ago cannot be negative")?;
     let lookback_seconds = lookback_minutes
         .checked_mul(60)
         .context("minutes_ago is too large")?;
@@ -28,7 +27,10 @@ pub fn generate_lead_result(
         .unwrap_or(SystemTime::UNIX_EPOCH);
 
     let mut target_files = Vec::new();
-    for entry in WalkDir::new(download_dir).into_iter().filter_map(|entry| entry.ok()) {
+    for entry in WalkDir::new(download_dir)
+        .into_iter()
+        .filter_map(|entry| entry.ok())
+    {
         let path = entry.path();
         if !path.is_file() {
             continue;
@@ -87,7 +89,8 @@ pub fn generate_lead_result(
         if let Some(expected) = &expected_headers {
             let same_layout = expected.len() == headers.len()
                 && expected.iter().zip(headers.iter()).all(|(left, right)| {
-                    left.trim().trim_start_matches('\u{feff}')
+                    left.trim()
+                        .trim_start_matches('\u{feff}')
                         .eq_ignore_ascii_case(right.trim().trim_start_matches('\u{feff}'))
                 });
             if !same_layout {
@@ -119,9 +122,8 @@ pub fn generate_lead_result(
         }
 
         for result in reader.records() {
-            let record = result.with_context(|| {
-                format!("Failed to parse lead report {}", file_path.display())
-            })?;
+            let record = result
+                .with_context(|| format!("Failed to parse lead report {}", file_path.display()))?;
             let lead_id = lead_id_idx
                 .and_then(|index| record.get(index))
                 .unwrap_or("")

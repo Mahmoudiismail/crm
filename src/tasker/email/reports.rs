@@ -65,16 +65,8 @@ pub fn generate_leads_report(
             continue;
         }
 
-        let branch = record
-            .get(branch_idx)
-            .unwrap_or("")
-            .trim()
-            .to_lowercase();
-        let status = record
-            .get(status_idx)
-            .unwrap_or("")
-            .trim()
-            .to_lowercase();
+        let branch = record.get(branch_idx).unwrap_or("").trim().to_lowercase();
+        let status = record.get(status_idx).unwrap_or("").trim().to_lowercase();
         if excluded_branches.contains(&branch) || (status != "new" && status != "follow-up") {
             continue;
         }
