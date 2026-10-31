@@ -1,5 +1,11 @@
 # Runner Application GUI
 
+## CLI Configuration
+
+Runner accepts `--config <PATH>` to select its configuration file instead of the default `runner_config.json`. Relative paths are resolved from the executable directory; absolute paths are used unchanged. The selected file is used consistently by startup validation, scheduling, and the GUI.
+
+Runner writes a redacted configuration snapshot into `runner.log` at startup. If `runner.log` is moved or deleted while Runner is running, the next log event recreates it and writes the snapshot again. Sensitive values whose keys indicate passwords, tokens, secrets, credentials, authorization, or API keys are redacted.
+
 The Runner GUI provides an interface to configure tasks, applications, and pipelines. It is accessible via HTTP according to `gui_host` and `gui_port` inside `runner_config.json`.
 
 ## Multiple Steps and Execution Modes
