@@ -16,9 +16,14 @@ pub fn generate_leads_report(
         .map(|s| s.trim().to_lowercase())
         .collect();
 
+    let lookback_minutes = u64::try_from(minutes_ago)
+        .context("minutes_ago cannot be negative")?;
+    let lookback_seconds = lookback_minutes
+        .checked_mul(60)
+        .context("minutes_ago is too large")?;
     let now = std::time::SystemTime::now();
     let threshold = now
-        .checked_sub(std::time::Duration::from_secs((minutes_ago * 60) as u64))
+        .checked_sub(std::time::Duration::from_secs(lookback_seconds))
         .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
 
     let mut target_files = Vec::new();
@@ -221,6 +226,14 @@ mod tests {
     use std::fs::File;
     use std::io::Write;
     use tempfile::tempdir;
+
+    #[test]
+    fn negative_lookback_is_rejected() {
+        let dir = tempdir().unwrap();
+        let error = generate_leads_report(dir.path().to_str().unwrap(), -1, &[])
+            .unwrap_err();
+        assert!(error.to_string().contains("minutes_ago cannot be negative"));
+    }
 
     #[test]
     fn test_call_center_leads_attachment_logic() {
