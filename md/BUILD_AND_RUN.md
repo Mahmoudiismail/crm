@@ -11,14 +11,14 @@
 
 The repository is one Cargo package (crm_tool) with explicit binary targets; it is not a multi-package workspace. It declares five executables:
 
-\`\`\`bash
+```bash
 cargo build --release
 cargo build --release --bin runner
 cargo build --release --bin crm
 cargo build --release --bin yasweb
 cargo build --release --bin tasker
 cargo build --release --bin crm_updater
-\`\`\`
+```
 
 Binaries are placed in target/release/.
 
@@ -26,9 +26,9 @@ Binaries are placed in target/release/.
 
 Run Runner to start the scheduler and local GUI:
 
-\`\`\`powershell
+```powershell
 .\\target\\release\\runner.exe
-\`\`\`
+```
 
 The default GUI address is http://127.0.0.1:8787; the configured host and port are read from runner_config.json. Runner is a system-tray application on Windows and runs headless with Ctrl+C shutdown on non-Windows platforms.
 
@@ -38,13 +38,13 @@ Workers may also be invoked directly. See [CLI Reference](./CLI.md) and [Configu
 
 Runner can register supported applications dynamically. It invokes their hidden --manifest option to retrieve the argument schema:
 
-\`\`\`powershell
+```powershell
 crm.exe --manifest
 yasweb.exe --manifest
 tasker.exe --manifest
 crm_updater.exe --manifest
 runner.exe --manifest
-\`\`\`
+```
 
 The manifest is JSON written to stdout; the process exits after printing it. See [Manifest Schema](./MANIFEST_SCHEMA.md).
 
@@ -52,11 +52,11 @@ The manifest is JSON written to stdout; the process exits after printing it. See
 
 Use the core Rust checks run by the Test workflow:
 
-\`\`\`bash
+```bash
 cargo fmt -- --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-targets --all-features
-\`\`\`
+```
 
 The workflow additionally checks JavaScript syntax, parses PowerShell source files, and runs cargo audit and cargo deny check advisories.
 
@@ -72,8 +72,8 @@ The Test workflow's format job can commit Rust formatting changes to the branch 
 
 For the GNU Windows target (not the primary MSVC release target), install the target and linker:
 
-\`\`\`bash
+```bash
 rustup target add x86_64-pc-windows-gnu
 sudo apt-get install mingw-w64
 cargo build --target x86_64-pc-windows-gnu --release
-\`\`\`
+```
