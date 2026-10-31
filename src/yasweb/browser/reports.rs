@@ -47,7 +47,7 @@ use crate::yasweb::config::DiscoveredReportFilters;
 ///
 /// # Returns
 ///
-/// The labels of the filters discovered in the report form.
+/// The filter labels and dropdown options discovered in the report form.
 pub fn navigate_and_run_report(
     tab: &Arc<Tab>,
     active_report_name: &str,
