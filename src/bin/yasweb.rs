@@ -50,8 +50,9 @@ fn get_manifest(config_path: Option<PathBuf>) -> AppManifest {
         String,
         std::collections::HashMap<String, String>,
     > = std::collections::HashMap::new();
-    // Use dropdowns only when all reports sharing a filter have identical options.
-    let mut filter_options: std::collections::HashMap<String, Option<Vec<String>>> =
+    // Merge known options for shared filters; reports without cached options must
+    // not erase dropdown choices discovered from another report.
+    let mut filter_options: std::collections::HashMap<String, Vec<String>> =
         std::collections::HashMap::new();
 
     if let Some(path) = config_path.clone() {
@@ -92,13 +93,11 @@ fn get_manifest(config_path: Option<PathBuf>) -> AppManifest {
                                     .collect::<Vec<_>>()
                             })
                             .filter(|values| !values.is_empty());
-                        match filter_options.entry(filter_key.clone()) {
-                            std::collections::hash_map::Entry::Vacant(entry) => {
-                                entry.insert(options);
-                            }
-                            std::collections::hash_map::Entry::Occupied(mut entry) => {
-                                if entry.get().as_ref() != options.as_ref() {
-                                    entry.insert(None);
+                        if let Some(options) = options {
+                            let cached = filter_options.entry(filter_key.clone()).or_default();
+                            for option in options {
+                                if !cached.contains(&option) {
+                                    cached.push(option);
                                 }
                             }
                         }
@@ -118,6 +117,16 @@ fn get_manifest(config_path: Option<PathBuf>) -> AppManifest {
                 }
             }
         }
+    }
+
+    report_names.sort();
+    for options in filter_options.values_mut() {
+        options.sort();
+        options.dedup();
+    }
+    for dependencies in filter_dependencies.values_mut() {
+        dependencies.sort();
+        dependencies.dedup();
     }
 
     let arg_name = AppArg::new(
@@ -173,7 +182,7 @@ fn get_manifest(config_path: Option<PathBuf>) -> AppManifest {
             None
         };
 
-        let options = filter_options.remove(&f_name).flatten().unwrap_or_default();
+        let options = filter_options.remove(&f_name).unwrap_or_default();
         let arg_type = if options.is_empty() {
             ArgType::String
         } else {
@@ -194,6 +203,60 @@ fn get_manifest(config_path: Option<PathBuf>) -> AppManifest {
         description: "Executes headless browser automation for web reporting.".to_string(),
         arguments,
     }
+}
+
+fn normalize_filter_cli_args(args: Vec<String>) -> Result<Vec<String>> {
+    let mut normalized = Vec::with_capacity(args.len());
+    let mut filters = HashMap::new();
+    let mut has_filters = false;
+    let mut args = args.into_iter();
+
+    if let Some(program) = args.next() {
+        normalized.push(program);
+    }
+
+    while let Some(argument) = args.next() {
+        if argument == "--filters" {
+            let value = args
+                .next()
+                .context("--filters requires a JSON object value")?;
+            let parsed: HashMap<String, String> =
+                serde_json::from_str(&value).context("Failed to parse filters JSON")?;
+            filters.extend(parsed);
+            has_filters = true;
+        } else if let Some(value) = argument.strip_prefix("--filters=") {
+            let parsed: HashMap<String, String> =
+                serde_json::from_str(value).context("Failed to parse filters JSON")?;
+            filters.extend(parsed);
+            has_filters = true;
+        } else if let Some(filter_key) = argument.strip_prefix("--filter-") {
+            let (filter_key, value) = if let Some((key, value)) = filter_key.split_once('=') {
+                (key, value.to_string())
+            } else {
+                let value = args
+                    .next()
+                    .with_context(|| format!("{} requires a value", argument))?;
+                (filter_key, value)
+            };
+
+            if filter_key.trim().is_empty() {
+                anyhow::bail!("Filter argument name cannot be empty");
+            }
+            filters.insert(filter_key.to_string(), value);
+            has_filters = true;
+        } else {
+            normalized.push(argument);
+        }
+    }
+
+    if has_filters {
+        normalized.push("--filters".to_string());
+        normalized.push(
+            serde_json::to_string(&filters).context("Failed to serialize filter arguments")?,
+        );
+    }
+
+    Ok(normalized)
 }
 
 fn normalize_filter_key(value: &str) -> String {
@@ -493,7 +556,7 @@ async fn main() -> Result<()> {
         }
     }
 
-    let options = YaswebCliOptions::parse();
+    let options = YaswebCliOptions::try_parse_from(normalize_filter_cli_args(args)?)?;
     // Accepted for compatibility with stored arguments; Runner owns date-range scheduling.
     let _legacy_monthly = options.monthly;
 
@@ -1059,7 +1122,7 @@ mod tests_yasweb_finalization {
     }
 
     #[test]
-    fn manifest_uses_free_text_when_reports_have_conflicting_filter_options() {
+    fn manifest_merges_filter_options_across_reports() {
         let root = tempfile::tempdir().unwrap();
         let config_path = root.path().join("yasweb_config.json");
         let make_report = |options: Vec<String>| ReportConfig {
@@ -1093,8 +1156,108 @@ mod tests_yasweb_finalization {
             .iter()
             .find(|argument| argument.name == "--filter-Hospital")
             .expect("Hospital filter should be exposed");
-        assert_eq!(hospital.arg_type, crm_tool::manifest::ArgType::String);
-        assert!(hospital.options.is_none());
+        assert_eq!(hospital.arg_type, crm_tool::manifest::ArgType::List);
+        assert_eq!(
+            hospital.options.as_ref().unwrap(),
+            &vec![
+                "Cairo".to_string(),
+                "Fakeeh".to_string(),
+                "Jeddah".to_string(),
+                "Neom".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn manifest_keeps_dropdown_options_when_another_report_has_no_cache() {
+        let root = tempfile::tempdir().unwrap();
+        let config_path = root.path().join("yasweb_config.json");
+        let config = YaswebConfig {
+            url: "https://example.test".to_string(),
+            username: "test".to_string(),
+            reports: HashMap::from([
+                (
+                    "Appointments".to_string(),
+                    ReportConfig {
+                        report_type: "Report Manager".to_string(),
+                        filters: HashMap::from([("Hospital".to_string(), String::new())]),
+                        filter_options: HashMap::from([(
+                            "Hospital".to_string(),
+                            vec!["Fakeeh".to_string(), "Neom".to_string()],
+                        )]),
+                        start_date_key: None,
+                        end_date_key: None,
+                        download_path: None,
+                    },
+                ),
+                (
+                    "Admissions".to_string(),
+                    ReportConfig {
+                        report_type: "Report Manager".to_string(),
+                        filters: HashMap::from([("Hospital".to_string(), String::new())]),
+                        filter_options: HashMap::new(),
+                        start_date_key: None,
+                        end_date_key: None,
+                        download_path: None,
+                    },
+                ),
+            ]),
+            ..YaswebConfig::default()
+        };
+        std::fs::write(&config_path, serde_json::to_string_pretty(&config).unwrap()).unwrap();
+
+        let manifest = get_manifest(Some(config_path));
+        let hospital = manifest
+            .arguments
+            .iter()
+            .find(|argument| argument.name == "--filter-Hospital")
+            .unwrap();
+
+        assert_eq!(hospital.arg_type, crm_tool::manifest::ArgType::List);
+        assert_eq!(
+            hospital.options.as_ref().unwrap(),
+            &vec!["Fakeeh".to_string(), "Neom".to_string()]
+        );
+    }
+
+    #[test]
+    fn dynamic_filter_flags_are_normalized_to_the_supported_filters_json_argument() {
+        let args = normalize_filter_cli_args(vec![
+            "yasweb".to_string(),
+            "--name".to_string(),
+            "OPD".to_string(),
+            "--filter-Hospital".to_string(),
+            "Fakeeh".to_string(),
+            "--filter-Region=Jeddah".to_string(),
+            "--start-date".to_string(),
+            "2026-10-31".to_string(),
+        ])
+        .unwrap();
+        let parsed = YaswebCliOptions::try_parse_from(args).unwrap();
+
+        let filters: HashMap<String, String> =
+            serde_json::from_str(parsed.filters.as_deref().unwrap()).unwrap();
+        assert_eq!(filters.get("Hospital").map(String::as_str), Some("Fakeeh"));
+        assert_eq!(filters.get("Region").map(String::as_str), Some("Jeddah"));
+        assert_eq!(parsed.start_date.as_deref(), Some("2026-10-31"));
+    }
+
+    #[test]
+    fn dynamic_filter_flags_merge_with_legacy_filters_json() {
+        let args = normalize_filter_cli_args(vec![
+            "yasweb".to_string(),
+            "--filters".to_string(),
+            r#"{"Region":"Jeddah"}"#.to_string(),
+            "--filter-Hospital".to_string(),
+            "Fakeeh".to_string(),
+        ])
+        .unwrap();
+        let parsed = YaswebCliOptions::try_parse_from(args).unwrap();
+        let filters: HashMap<String, String> =
+            serde_json::from_str(parsed.filters.as_deref().unwrap()).unwrap();
+
+        assert_eq!(filters.get("Region").map(String::as_str), Some("Jeddah"));
+        assert_eq!(filters.get("Hospital").map(String::as_str), Some("Fakeeh"));
     }
 
     #[tokio::test]
