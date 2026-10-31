@@ -319,9 +319,15 @@ fn post_origin_is_allowed(headers: &[u8]) -> bool {
         return false;
     };
     let host_lower = host.to_ascii_lowercase();
-    let is_loopback_host = host_lower.starts_with("127.0.0.1:")
-        || host_lower.starts_with("localhost:")
-        || host_lower.starts_with("[::1]:");
+    let (host_name, port) = if let Some(port) = host_lower.strip_prefix("[::1]:") {
+        ("::1", port)
+    } else if let Some((host_name, port)) = host_lower.rsplit_once(':') {
+        (host_name, port)
+    } else {
+        return false;
+    };
+    let is_loopback_host = matches!(host_name, "127.0.0.1" | "localhost" | "::1")
+        && port.parse::<u16>().is_ok();
     is_loopback_host && origin.eq_ignore_ascii_case(&format!("http://{host}"))
 }
 
