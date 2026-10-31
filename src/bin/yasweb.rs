@@ -324,6 +324,7 @@ pub fn finalize_download(
     let lock_path = final_out_dir.join(".yasweb-finalize.lock");
     let output_lock = std::fs::OpenOptions::new()
         .create(true)
+        .truncate(false)
         .read(true)
         .write(true)
         .open(&lock_path)
@@ -1061,8 +1062,17 @@ mod tests_yasweb_finalization {
         let output_files = std::fs::read_dir(&dst_dir)
             .unwrap()
             .map(|entry| entry.unwrap().path())
+            .filter(|path| {
+                path.extension()
+                    .and_then(|ext| ext.to_str())
+                    .is_some_and(|ext| {
+                        ext.eq_ignore_ascii_case("xlsx")
+                            || ext.eq_ignore_ascii_case("xls")
+                            || ext.eq_ignore_ascii_case("csv")
+                    })
+            })
             .collect::<Vec<_>>();
-        assert_eq!(output_files.len(), 1, "expected exactly one output file");
+        assert_eq!(output_files.len(), 1, "expected exactly one report file");
         assert_eq!(output_files[0].parent(), Some(dst_dir.as_path()));
         assert_ne!(
             output_files[0].file_name().and_then(|name| name.to_str()),
