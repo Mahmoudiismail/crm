@@ -16,6 +16,10 @@ The release workflow resolves `main` once in its prepare job and passes that exa
 ### RustSec audit
 See `md/DEPENDENCY_AUDIT.md` for the October 2026 review. The lockfile dependency path was updated from `wayland-scanner 0.31.10` to `0.31.11` so it can resolve `quick-xml >=0.41.0`; this edit still requires `cargo check --locked`, `cargo audit`, and `cargo deny` verification. Do not treat `deny.toml` ignores as proof that an advisory is not applicable.
 
+### Runner log recovery
+
+Runner writes a redacted snapshot of its selected configuration into `runner.log` whenever the log file is opened. If the file is moved or deleted while the process is running, the next log write recreates `runner.log` and includes the snapshot again. The moved log remains available at its new location; Runner does not attempt to move or delete archived copies.
+
 ## Managing the Runner
 
 The `runner` application sits in the system tray (on Windows) and exposes a web GUI at `http://127.0.0.1:8787`.
