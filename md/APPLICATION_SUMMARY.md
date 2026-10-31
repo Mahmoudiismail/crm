@@ -1,49 +1,35 @@
-# Summary of Capabilities
+# Application Summary
 
-The system is a collection of Rust binaries designed to:
-- Act as a local GUI runner orchestrator.
-- Automate HTTP fetch requests dynamically to bypass token challenges (CRM).
-- Extract filtered CSV exports via Selenium-style Headless Chrome DOM manipulations (Yasweb).
-- Validate, filter, merge, and pivot heavily-structured CSV data files.
-- Interact with COM objects natively to transmit reports effectively via internal channels using Outlook, injecting directly manipulated HTML tables.
-- Actively manipulate COM instances of Excel to refresh sophisticated internal OLAP/Power Query Data Models directly connected to extracted CSVs, and interact robustly with Native and OLAP Pivot Slicers dynamically prior to extracting tabular results back into the system via dynamically constructed PowerShell scripts (CRM Open Sohail).
+The CRM Tool repository is one Rust package with five executable targets: runner, crm, yasweb, tasker, and crm_updater.
 
-# Core Runner Engine Details
+## Capabilities
 
-- Run a `runner` layer for scheduling and task execution.
-- Auto-generate GUI arguments by invoking worker binaries dynamically with `--manifest` to resolve `AppManifest` definitions natively.
-- GUI forms automatically generate correct dynamic fields, variables, checkboxes, and multi-selection structures.
-- Support deep persistence layer auto-healing via `merge_json` handling nested array atomicity explicitly.
-- Centralize all configurations securely without hardcoded credentials.
-- Task execution operates on a deterministic pipeline engine (Sequential/Parallel TaskSteps supporting multiple actions). Schedules support legacy `repetition`/`frequency_seconds` fields and the newer multi-schedule `schedules` list.
-- Run concurrent local web servers supporting HTML templates, REST APIs, and embedded frontend functionality.
-- Atomic run guard prevents overlapping task execution.
+- Schedule and orchestrate local applications through Runner's GUI, scheduler, execution queue and multi-step pipelines.
+- Authenticate to the CRM service and download ticket, call, lead and user exports.
+- Automate configured Yasweb/MIS reports through headless Chrome.
+- Enrich and transform CSV reports, refresh Excel dashboards, split workbooks, and create Outlook messages through Tasker.
+- Collect local logs/reports and apply staged executable updates through CRM Updater.
 
-# Worker Details
+## Binary responsibilities
 
-1. Automatically parse authentication payloads, sign parameters cryptographically (SRP), bypass Cloudflare WAF, and download required payload links robustly.
-2. Provide comprehensive automated CLI reporting tools exposing standard inputs (`--report tickets,calls`, `--start-date`).
-3. Leverage multi-threaded concurrent async streams using `tokio::join!` strictly isolated boundaries for high-performance concurrent data downloads, API fetching, and headless browser instance scraping.
-4. Auto-chunk date ranges recursively on file-size exceptions.
-5. Inject and extract Javascript dynamically for bypassing UI restrictions (Yasweb).
-6. Provide deep CSV integration testing structures, dynamically parsing context frames directly to stdouts on failures via centralized generic tools.
-7. Support highly variable configurations allowing custom routing per-category/branch exceptions and robust string/path handling logic dynamically resolving relative dependencies to execution boundaries.
-8. Inject data via COM strictly preventing Excel exceptions (`0x800A03EC`) via native property disablements natively embedded within scripts.
-9. Support deep PowerShell integration via custom string parsing scripts bridging multi-type boundaries (double-parsing fallback arrays natively mapped via Rust structures).
-10. Send rich HTML outputs safely bypassing maximum file size barriers.
-11. Support dynamic variables universally mapped to Date inputs allowing recursive logic calculations cleanly across all binary ecosystems (`today`, `yesterday`, `tomorrow`, `eomonth`). Absolute date variables (`today`, `yesterday`, `tomorrow`) strictly derive from the local system date and unequivocally ignore any provided configuration `base_date`, whereas relative variables (like `eomonth`) resolve against the `base_date`.
-12. Populate filter dates dynamically mapped to `start_date_key` and `end_date_key` from each Runner-scheduled YASWEB invocation.
+| Binary | Primary role | Configuration |
+|---|---|---|
+| runner | Scheduler, local GUI, system tray and task pipelines | runner_config.json |
+| crm | CRM API fetcher and report downloader | config.json |
+| yasweb | Browser-based report extraction | yasweb_config.json |
+| tasker | CSV, Excel and email task processing | tasker_config.json |
+| crm_updater | Local collection and executable replacement | updater_config.json |
 
-## Executables
-- `crm`: Fetches logs and API payloads via CLI arguments.
-- `runner`: Exposes the HTTP dashboard and pipeline engine.
-- `tasker`: Parses CSV structures, manipulates DOM arrays, communicates to Excel COM systems, and issues Emails dynamically.
-- `yasweb`: Performs concurrent Headless Chrome report operations with a global operation limit configured by `yasweb_config.json` (`concurrency`, default 6; `0` means unlimited); Runner supplies each invocation's date range.
+## Runner execution model
 
-## Common paths
-- `tasker_config.json` for tasker rules logic.
-- `yasweb_config.json` for DOM mapping.
-- `runner_config.json` for pipeline persistence.
-- `teams.csv`, `users.csv` for structural mapping tasks.
-- `runner.log` for runner executable.
-- `logs/<task_name>/YYYYMMDD_HHMMSS_<task_name>_<task_id>.log` for detailed per-task execution logs.
+Runner evaluates configured schedules and dispatches task pipelines. A pipeline contains ordered steps; each step runs its actions sequentially or in parallel. Post-run steps execute only after the main pipeline succeeds. The execution manager coordinates queued/running task admission, and application locks prevent overlapping use of non-concurrent applications.
+
+External applications can expose an AppManifest so Runner can generate argument forms from the application's declared CLI contract. Date controls and date argument injection are conditional on supported manifest arguments.
+
+## Tasker lead result
+
+For CSV Analysis, Tasker writes the ticket result to the configured output_file. If recent lead report exports are available, it separately writes lead_result.csv beside that ticket result. The lead's team is looked up from Assignee in the configured users mapping. Missing or unknown assignees remain unassigned. The Call Center attachment is filtered to Call Center team leads with status New or Follow-up and excludes configured branches; other teams remain in lead_result.csv.
+
+## Documentation map
+
+Start at [md/README.md](./README.md). See [Architecture](./ARCHITECTURE.md), [Configuration](./CONFIG.md), [CLI](./CLI.md), [Runner](./RUNNER.md), [Tasker](./TASKER.md), [CRM Updater](./CRM_UPDATER.md), and [Operations](./OPERATIONS.md).
