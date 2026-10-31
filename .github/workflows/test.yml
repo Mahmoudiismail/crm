@@ -147,7 +147,6 @@ jobs:
   test:
     name: Test Suite
     needs: [format, clippy]
-    if: always() && needs.format.result == 'success'
     runs-on: windows-latest
 
     steps:
