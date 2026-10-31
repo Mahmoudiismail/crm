@@ -30,13 +30,13 @@ pub fn run(config: &DepartmentSplitConfig) -> Result<()> {
 
     // 1. Build mapping from Chair.xlsx
     let mut mapping: HashMap<String, String> = HashMap::new();
-    let chair_path = Path::new(&config.chair_file);
+    let chair_path = crate::tasker::csv_task::resolve_relative_to_exe_dir(&config.chair_file);
     if !chair_path.exists() {
         anyhow::bail!("Chair mapping file not found at: {:?}", chair_path);
     }
 
     let mut excel: Xlsx<_> =
-        open_workbook(&config.chair_file).context("Failed to open Chair.xlsx")?;
+        open_workbook(&chair_path).context("Failed to open Chair.xlsx")?;
     let sheet_names = excel.sheet_names().to_owned();
     if sheet_names.is_empty() {
         anyhow::bail!("No sheets found in Chair.xlsx");
@@ -65,7 +65,7 @@ pub fn run(config: &DepartmentSplitConfig) -> Result<()> {
 
     info!("Loaded {} department mappings.", mapping.len());
 
-    let dashboard_path = PathBuf::from(&config.dashboard_file)
+    let dashboard_path = crate::tasker::csv_task::resolve_relative_to_exe_dir(&config.dashboard_file)
         .canonicalize()
         .context("Failed to canonicalize dashboard_file path")?;
 
@@ -76,7 +76,7 @@ pub fn run(config: &DepartmentSplitConfig) -> Result<()> {
         path_str.strip_prefix(r"\?\").unwrap_or(path_str)
     };
 
-    let out_dir = PathBuf::from(&config.output_dir);
+    let out_dir = crate::tasker::csv_task::resolve_relative_to_exe_dir(&config.output_dir);
     if !out_dir.exists() {
         std::fs::create_dir_all(&out_dir).context("Failed to create output directory")?;
     }
