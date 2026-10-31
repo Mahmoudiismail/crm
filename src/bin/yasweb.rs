@@ -583,7 +583,8 @@ async fn main() -> Result<()> {
         let report_names = active_report_names.clone();
         let report_type = active_report_type_global.clone();
         let filters = active_filters_global.clone();
-        let runtime_config = config.clone();
+        let runtime_reports = config.reports.clone();
+        let finalize_date_formats = config_updated;
         tokio::task::spawn_blocking(move || -> Result<()> {
             let lock_path = config_lock_path(&path);
             let config_lock = std::fs::OpenOptions::new()
@@ -601,32 +602,49 @@ async fn main() -> Result<()> {
                 .with_context(|| format!("Refusing to overwrite invalid Yasweb config {:?}", path))?;
             for report_name in report_names {
                 if !report_type.is_empty() || !filters.is_empty() {
-                    let existing = latest.reports.get(&report_name);
-                    let report_conf = ReportConfig {
-                        report_type: if report_type.is_empty() {
-                            existing.map(|report| report.report_type.clone()).unwrap_or_default()
-                        } else { report_type.clone() },
-                        filters: if filters.is_empty() {
-                            existing.map(|report| report.filters.clone()).unwrap_or_default()
-                        } else { filters.clone() },
-                        filter_options: existing.map(|report| report.filter_options.clone()).unwrap_or_default(),
-                        start_date_key: existing.and_then(|report| report.start_date_key.clone()),
-                        end_date_key: existing.and_then(|report| report.end_date_key.clone()),
-                        download_path: existing.and_then(|report| report.download_path.clone()),
-                    };
-                    latest.reports.insert(report_name, report_conf);
+                    if let Some(existing) = latest.reports.get_mut(&report_name) {
+                        if !report_type.is_empty() {
+                            existing.report_type = report_type.clone();
+                        }
+                        if !filters.is_empty() {
+                            existing.filters = filters.clone();
+                        }
+                    } else if let Some(mut report) = runtime_reports.get(&report_name).cloned() {
+                        if !report_type.is_empty() {
+                            report.report_type = report_type.clone();
+                        }
+                        if !filters.is_empty() {
+                            report.filters = filters.clone();
+                        }
+                        latest.reports.insert(report_name, report);
+                    }
                 }
             }
-            latest.url = runtime_config.url;
-            latest.username = runtime_config.username;
-            latest.password = runtime_config.password;
-            latest.headless = runtime_config.headless;
-            latest.keep_open = runtime_config.keep_open;
-            latest.timeout_minutes = runtime_config.timeout_minutes;
-            latest.concurrency = runtime_config.concurrency;
-            latest.log_stdout_level = runtime_config.log_stdout_level;
-            latest.log_file_level = runtime_config.log_file_level;
-            latest.download_path = runtime_config.download_path;
+
+            // Persist only runtime-derived empty-format healing. Keep any newer
+            // keys/options/global settings written by another process intact.
+            if finalize_date_formats {
+                for (name, runtime_report) in &runtime_reports {
+                    if let Some(latest_report) = latest.reports.get_mut(name) {
+                        if let (Some(current), Some(runtime)) = (
+                            latest_report.start_date_key.as_mut(),
+                            runtime_report.start_date_key.as_ref(),
+                        ) {
+                            if current.format.is_empty() {
+                                current.format = runtime.format.clone();
+                            }
+                        }
+                        if let (Some(current), Some(runtime)) = (
+                            latest_report.end_date_key.as_mut(),
+                            runtime_report.end_date_key.as_ref(),
+                        ) {
+                            if current.format.is_empty() {
+                                current.format = runtime.format.clone();
+                            }
+                        }
+                    }
+                }
+            }
             let serialized = serde_json::to_string_pretty(&latest)
                 .context("Failed to serialize updated Yasweb config")?;
             crm_tool::utils::atomic_write(&path, &serialized)
