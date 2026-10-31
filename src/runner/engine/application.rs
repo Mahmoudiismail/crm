@@ -136,6 +136,12 @@ pub async fn supports_periodization(
     app: &RegisteredApp,
     spec: &crate::runner::config::ExternalAppSpec,
 ) -> bool {
+    if spec.args.values().any(|value| {
+        value.contains("{start_date}") || value.contains("{end_date}")
+    }) {
+        return true;
+    }
+
     let (discovered_start, discovered_end, manifest) = discover_date_args(logger, app).await;
     let start = spec
         .start_date_arg
