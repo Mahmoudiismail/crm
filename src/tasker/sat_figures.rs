@@ -92,13 +92,24 @@ pub fn run(
     let totals = crate::tasker::opd_task::data_extraction::extract_slot_totals(&latest, &filters)
         .with_context(|| format!("Failed to calculate Sat Figures from {:?}", latest))?;
 
-    if totals.total_slots == 0 {
+    if totals.total_slots <= 0 {
         anyhow::bail!(
-            "Sat Figures total slot count is zero; cannot calculate occupancy percentage"
+            "Sat Figures total slot count must be positive; got {}",
+            totals.total_slots
         );
     }
-
-    let vacant_slots = totals.total_slots - totals.slots_booked;
+    if totals.slots_booked < 0 {
+        anyhow::bail!(
+            "Sat Figures booked slot count cannot be negative; got {}",
+            totals.slots_booked
+        );
+    }
+    let vacant_slots = totals.total_slots.checked_sub(totals.slots_booked)
+        .filter(|vacant| *vacant >= 0)
+        .with_context(|| format!(
+            "Sat Figures booked slots ({}) exceed total slots ({})",
+            totals.slots_booked, totals.total_slots
+        ))?;
     let percentage = totals.slots_booked as f64 / totals.total_slots as f64;
     let output_path = resolve(&config.output_file);
     if let Some(parent) = output_path.parent().filter(|p| !p.as_os_str().is_empty()) {
