@@ -514,6 +514,7 @@ pub fn navigate_and_run_report(
                                                 if (!control) return [];
                                                 if (control.tagName === 'SELECT') {{
                                                     return Array.from(control.options)
+                                                        .filter(option => !option.disabled)
                                                         .map(option => (option.textContent || '').trim())
                                                         .filter(Boolean);
                                                 }}
@@ -529,6 +530,7 @@ pub fn navigate_and_run_report(
                                                     await sleep(100);
                                                 }}
                                                 const values = optionElements
+                                                    .filter(option => option.getAttribute('aria-disabled') !== 'true' && !option.classList.contains('mat-option-disabled'))
                                                     .map(option => (option.innerText || option.textContent || '').replace(/\s+/g, ' ').trim())
                                                     .filter(Boolean);
                                                 const backdrop = doc.querySelector('.cdk-overlay-backdrop');
@@ -584,10 +586,17 @@ pub fn navigate_and_run_report(
                                                                 break;
                                                             }} else if (input.tagName === 'MAT-SELECT' || input.getAttribute('role') === 'combobox') {{
                                                                 input.click();
-                                                                await sleep(300);
-                                                                const overlay = doc.querySelector('.cdk-overlay-container') || doc;
-                                                                const options = Array.from(overlay.querySelectorAll('mat-option, [role="option"]'));
-                                                                const selectedOption = options.find(option => normalize(option.innerText || option.textContent).includes(normalize(value)));
+                                                                const optionDeadline = Date.now() + 2500;
+                                                                let options = [];
+                                                                while (Date.now() < optionDeadline) {{
+                                                                    const overlay = doc.querySelector('.cdk-overlay-container') || doc;
+                                                                    options = Array.from(overlay.querySelectorAll('mat-option, [role="option"]'));
+                                                                    if (options.length > 0) break;
+                                                                    await sleep(100);
+                                                                }}
+                                                                const exactOption = options.find(option => normalize(option.innerText || option.textContent) === normalize(value));
+                                                                const partialMatches = options.filter(option => normalize(option.innerText || option.textContent).includes(normalize(value)));
+                                                                const selectedOption = exactOption || (partialMatches.length === 1 ? partialMatches[0] : null);
                                                                 if (selectedOption) {{
                                                                     selectedOption.click();
                                                                     logs.push("Selected dropdown option for " + key);
