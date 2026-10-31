@@ -16,7 +16,7 @@ struct Args {
 
     #[arg(
         long,
-        help = "Move reports, logs, and diagnostics into collected_logs without compression"
+        help = "Create a verified diagnostic ZIP in collected_logs and remove archived source files"
     )]
     logs_only: bool,
 

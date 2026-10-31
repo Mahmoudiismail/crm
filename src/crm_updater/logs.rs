@@ -1,9 +1,12 @@
 use crate::crm_updater::config::UpdaterConfig;
 use anyhow::{Context, Result};
 use std::collections::HashSet;
-use std::fs;
+use std::fs::{self, File};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use tracing::{info, warn};
+use zip::write::SimpleFileOptions;
+use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
 struct CollectedFile {
     path: PathBuf,
@@ -11,7 +14,7 @@ struct CollectedFile {
 }
 
 pub fn process_and_collect_logs(config: &UpdaterConfig) -> Result<()> {
-    info!("Starting local report and log collection.");
+    info!("Starting diagnostic log archive collection.");
 
     let exe_dir = crate::utils::executable_dir()
         .context("Could not determine executable directory for collection")?;
@@ -24,100 +27,125 @@ pub fn process_and_collect_logs(config: &UpdaterConfig) -> Result<()> {
 
     let files = collect_files(&exe_dir, &logs_dir);
     if files.is_empty() {
-        info!("No report, log, or diagnostic files found. Nothing to move.");
+        info!("No Runner/Yasweb log or diagnostic files found. Nothing to archive.");
         return Ok(());
     }
 
     let collection_root = exe_dir.join("collected_logs");
-    fs::create_dir_all(&collection_root)?;
-    // A new folder per run prevents name collisions and keeps earlier collections intact.
+    fs::create_dir_all(&collection_root)
+        .with_context(|| format!("Could not create {}", collection_root.display()))?;
     let run_stamp = chrono::Local::now().format("%Y%m%d_%H%M%S").to_string();
-    let mut run_dir = collection_root.join(format!("collection_{}", run_stamp));
+    let mut archive_path = collection_root.join(format!("diagnostics_{}.zip", run_stamp));
     let mut suffix = 1;
-    while run_dir.exists() {
-        run_dir = collection_root.join(format!("collection_{}_{}", run_stamp, suffix));
+    while archive_path.exists() {
+        archive_path = collection_root.join(format!("diagnostics_{}_{}.zip", run_stamp, suffix));
         suffix += 1;
     }
-    fs::create_dir_all(&run_dir)?;
+    let temp_path = archive_path.with_extension("zip.tmp");
 
-    let mut moved = 0usize;
+    create_verified_archive(&files, &temp_path).with_context(|| {
+        format!(
+            "Failed to create diagnostic archive {}",
+            archive_path.display()
+        )
+    })?;
+    fs::rename(&temp_path, &archive_path)
+        .with_context(|| format!("Could not finalize archive {}", archive_path.display()))?;
+
+    let archive_size = fs::metadata(&archive_path)?.len();
+    info!(
+        "Diagnostic ZIP created and verified: path={}, files={}, size_bytes={}",
+        archive_path.display(),
+        files.len(),
+        archive_size
+    );
+
+    let mut removed = 0usize;
     let mut failed = 0usize;
     for file in &files {
-        let destination = run_dir.join(&file.relative_path);
-        if let Some(parent) = destination.parent() {
-            if let Err(error) = fs::create_dir_all(parent) {
-                warn!(
-                    "Could not create destination directory {}: {}",
-                    parent.display(),
-                    error
-                );
-                failed += 1;
-                continue;
-            }
-        }
-
-        match move_file(&file.path, &destination) {
-            Ok(()) => {
-                info!(
-                    "Moved '{}' to '{}'.",
-                    file.path.display(),
-                    destination.display()
-                );
-                moved += 1;
-            }
+        match fs::remove_file(&file.path) {
+            Ok(()) => removed += 1,
             Err(error) => {
+                failed += 1;
                 warn!(
-                    "Could not move '{}' to '{}': {}",
+                    "Archive is safe, but original file could not be removed: path={}, error={}",
                     file.path.display(),
-                    destination.display(),
                     error
                 );
-                failed += 1;
             }
         }
     }
 
     info!(
-        "Local collection finished: moved {} file(s), {} failed. Collection directory: {}",
-        moved,
-        failed,
-        run_dir.display()
+        "Diagnostic archive collection finished: archived={}, originals_removed={}, originals_retained={}, archive={}",
+        files.len(), removed, failed, archive_path.display()
     );
     if failed > 0 {
         anyhow::bail!(
-            "Collection incomplete: moved {} file(s), {} failed; see warnings above",
-            moved,
+            "Diagnostic ZIP was created and verified at {}, but {} original file(s) could not be removed",
+            archive_path.display(),
             failed
         );
     }
     Ok(())
 }
 
-fn move_file(source: &Path, destination: &Path) -> Result<()> {
-    match fs::rename(source, destination) {
-        Ok(()) => Ok(()),
-        Err(rename_error) => {
-            // Rename can fail when source and destination are on different volumes.
-            fs::copy(source, destination).with_context(|| {
-                format!("rename failed ({rename_error}); copy fallback also failed")
-            })?;
-            fs::remove_file(source).with_context(|| {
-                format!(
-                    "copied to {} but could not remove original {}",
-                    destination.display(),
-                    source.display()
-                )
-            })?;
-            Ok(())
+fn create_verified_archive(files: &[CollectedFile], temp_path: &Path) -> Result<()> {
+    let output = File::create(temp_path)
+        .with_context(|| format!("Could not create temporary archive {}", temp_path.display()))?;
+    let mut writer = ZipWriter::new(output);
+    let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+
+    for file in files {
+        let archive_name = file.relative_path.to_string_lossy().replace('\\', "/");
+        let mut input = File::open(&file.path)
+            .with_context(|| format!("Could not open {}", file.path.display()))?;
+        writer
+            .start_file(&archive_name, options)
+            .with_context(|| format!("Could not add {} to ZIP", archive_name))?;
+        std::io::copy(&mut input, &mut writer)
+            .with_context(|| format!("Could not write {} to ZIP", archive_name))?;
+    }
+
+    let output = writer.finish().context("Could not finish diagnostic ZIP")?;
+    output
+        .sync_all()
+        .context("Could not flush diagnostic ZIP")?;
+
+    let input = File::open(temp_path)?;
+    let mut archive = ZipArchive::new(input).context("Created diagnostic ZIP is invalid")?;
+    if archive.len() != files.len() {
+        anyhow::bail!(
+            "Diagnostic ZIP entry count mismatch: expected {}, found {}",
+            files.len(),
+            archive.len()
+        );
+    }
+
+    for file in files {
+        let archive_name = file.relative_path.to_string_lossy().replace('\\', "/");
+        let mut entry = archive
+            .by_name(&archive_name)
+            .with_context(|| format!("Verified ZIP is missing {}", archive_name))?;
+        let mut archived_bytes = Vec::new();
+        entry
+            .read_to_end(&mut archived_bytes)
+            .with_context(|| format!("Could not read {} from verified ZIP", archive_name))?;
+        let source_bytes = fs::read(&file.path)
+            .with_context(|| format!("Could not re-read source {}", file.path.display()))?;
+        if archived_bytes != source_bytes {
+            anyhow::bail!("ZIP content verification failed for {}", archive_name);
         }
     }
+
+    Ok(())
 }
 
 fn collect_files(exe_dir: &Path, logs_dir: &Path) -> Vec<CollectedFile> {
     let mut files = Vec::new();
     let mut seen = HashSet::new();
 
-    // Application-level logs beside the updater.
+    // Root-level application logs, including yasweb.log and timestamped task logs.
     if let Ok(entries) = fs::read_dir(exe_dir) {
         for entry in entries.flatten() {
             let path = entry.path();
@@ -132,7 +160,7 @@ fn collect_files(exe_dir: &Path, logs_dir: &Path) -> Vec<CollectedFile> {
         }
     }
 
-    // Per-task logs under runner_logs_dir.
+    // Runner task logs retain their relative directory structure under logs/.
     if logs_dir.is_dir() {
         let prefix = logs_dir
             .file_name()
@@ -147,14 +175,18 @@ fn collect_files(exe_dir: &Path, logs_dir: &Path) -> Vec<CollectedFile> {
                 continue;
             }
             let relative = path.strip_prefix(logs_dir).unwrap_or(path);
-            let destination = PathBuf::from(prefix).join(relative);
-            add_file(&mut files, &mut seen, path.to_path_buf(), destination);
+            add_file(
+                &mut files,
+                &mut seen,
+                path.to_path_buf(),
+                PathBuf::from(prefix).join(relative),
+            );
         }
     } else {
         warn!("Configured Runner logs directory is missing; no task logs were collected.");
     }
 
-    // Yasweb HTML/JSON diagnostics are collected without touching its sent subfolder.
+    // Include HTML/JSON browser diagnostics, but never config files or sent artifacts.
     let diagnostics_dir = exe_dir.join("debug_html");
     if diagnostics_dir.is_dir() {
         for entry in walkdir::WalkDir::new(&diagnostics_dir)
@@ -165,6 +197,11 @@ fn collect_files(exe_dir: &Path, logs_dir: &Path) -> Vec<CollectedFile> {
             if !path.is_file()
                 || !has_extension(path, &["html", "json"])
                 || path.starts_with(diagnostics_dir.join("sent"))
+                || path.file_name().is_some_and(|name| {
+                    name.to_string_lossy()
+                        .to_ascii_lowercase()
+                        .contains("config")
+                })
             {
                 continue;
             }
@@ -178,50 +215,7 @@ fn collect_files(exe_dir: &Path, logs_dir: &Path) -> Vec<CollectedFile> {
         }
     }
 
-    // Reports are written to Downloads folders belonging to the CRM/Yasweb/Tasker apps.
-    // Search the common application root, but move only report file types, never executables/configs.
-    let search_root = exe_dir.parent().unwrap_or(exe_dir);
-    if search_root.is_dir() {
-        for entry in walkdir::WalkDir::new(search_root)
-            .min_depth(1)
-            .max_depth(6)
-            .into_iter()
-            .filter_map(|entry| entry.ok())
-        {
-            let path = entry.path();
-            if !entry.file_type().is_dir()
-                || !path
-                    .file_name()
-                    .is_some_and(|name| name.to_string_lossy().eq_ignore_ascii_case("downloads"))
-            {
-                continue;
-            }
-
-            for report_entry in walkdir::WalkDir::new(path)
-                .into_iter()
-                .filter_map(|entry| entry.ok())
-            {
-                let report_path = report_entry.path();
-                if !report_entry.file_type().is_file()
-                    || !has_extension(
-                        report_path,
-                        &["csv", "xls", "xlsx", "xlsm", "pdf", "html", "htm", "json"],
-                    )
-                {
-                    continue;
-                }
-
-                let relative = report_path.strip_prefix(search_root).unwrap_or(report_path);
-                add_file(
-                    &mut files,
-                    &mut seen,
-                    report_path.to_path_buf(),
-                    relative.to_path_buf(),
-                );
-            }
-        }
-    }
-
+    files.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
     files
 }
 
@@ -234,7 +228,7 @@ fn add_file(
     let identity = path.canonicalize().unwrap_or_else(|_| path.clone());
     if seen.insert(identity) {
         if let Err(error) = fs::metadata(&path) {
-            tracing::warn!(
+            warn!(
                 "Skipping unreadable collection candidate {}: {}",
                 path.display(),
                 error
@@ -263,54 +257,65 @@ mod tests {
     use super::*;
 
     #[test]
-    fn collects_reports_logs_and_diagnostics_without_name_collisions() {
+    fn archive_preserves_layout_and_removes_sources_only_after_verification() {
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path();
-        let exe_dir = root.join("Updater");
-        let logs_dir = root.join("logs");
-        let task_dir = logs_dir.join("TaskA");
-        let diagnostics_dir = exe_dir.join("debug_html");
-        let reports_dir = root.join("crm_windows").join("Downloads");
-        fs::create_dir_all(&exe_dir).unwrap();
-        fs::create_dir_all(&task_dir).unwrap();
-        fs::create_dir_all(&diagnostics_dir).unwrap();
-        fs::create_dir_all(&reports_dir).unwrap();
-        fs::write(exe_dir.join("crm_updater.log"), "updater log").unwrap();
-        fs::write(task_dir.join("same.log"), "task log").unwrap();
-        fs::write(diagnostics_dir.join("failure.json"), "{}").unwrap();
-        fs::write(reports_dir.join("report.csv"), "a,b").unwrap();
-        fs::write(reports_dir.join("ignore.exe"), "not a report").unwrap();
+        let task_log = root.join("20261031_task.log");
+        let yasweb_log = root.join("yasweb.log");
+        let html_dir = root.join("debug_html");
+        fs::create_dir_all(&html_dir).unwrap();
+        let html = html_dir.join("snapshot.html");
+        fs::write(&task_log, "runner task log").unwrap();
+        fs::write(&yasweb_log, "yasweb log").unwrap();
+        fs::write(&html, "<html>diagnostic</html>").unwrap();
 
-        let files = collect_files(&exe_dir, &logs_dir);
+        let files = vec![
+            CollectedFile {
+                path: task_log.clone(),
+                relative_path: PathBuf::from("20261031_task.log"),
+            },
+            CollectedFile {
+                path: yasweb_log.clone(),
+                relative_path: PathBuf::from("yasweb.log"),
+            },
+            CollectedFile {
+                path: html.clone(),
+                relative_path: PathBuf::from("debug_html/snapshot.html"),
+            },
+        ];
+        let archive = root.join("diagnostics.zip");
+        create_verified_archive(&files, &archive).unwrap();
+
+        let mut zip = ZipArchive::new(File::open(&archive).unwrap()).unwrap();
+        assert!(zip.by_name("20261031_task.log").is_ok());
+        assert!(zip.by_name("yasweb.log").is_ok());
+        assert!(zip.by_name("debug_html/snapshot.html").is_ok());
+        assert!(task_log.exists() && yasweb_log.exists() && html.exists());
+    }
+
+    #[test]
+    fn collection_excludes_config_files_and_sent_diagnostics() {
+        let temp = tempfile::tempdir().unwrap();
+        let exe = temp.path().join("Updater");
+        let logs = exe.join("logs");
+        let diagnostics = exe.join("debug_html");
+        fs::create_dir_all(&logs).unwrap();
+        fs::create_dir_all(diagnostics.join("sent")).unwrap();
+        fs::write(exe.join("yasweb.log"), "").unwrap();
+        fs::write(exe.join("yasweb_config.json"), "{}").unwrap();
+        fs::write(diagnostics.join("failure.html"), "<html/>").unwrap();
+        fs::write(diagnostics.join("config_snapshot.json"), "{}").unwrap();
+        fs::write(diagnostics.join("sent").join("sent.html"), "<html/>").unwrap();
+
+        let files = collect_files(&exe, &logs);
         let names: HashSet<_> = files
             .iter()
             .map(|file| file.relative_path.clone())
             .collect();
-        assert!(names.contains(&PathBuf::from("crm_updater.log")));
-        assert!(names.contains(&PathBuf::from("logs").join("TaskA").join("same.log")));
-        assert!(names.contains(&PathBuf::from("debug_html").join("failure.json")));
-        assert!(names.contains(
-            &PathBuf::from("crm_windows")
-                .join("Downloads")
-                .join("report.csv")
-        ));
-        assert!(!names.contains(
-            &PathBuf::from("crm_windows")
-                .join("Downloads")
-                .join("ignore.exe")
-        ));
-        assert_eq!(files.len(), 4);
-    }
-
-    #[test]
-    fn move_file_removes_source_and_preserves_contents() {
-        let temp = tempfile::tempdir().unwrap();
-        let source = temp.path().join("report.csv");
-        let destination = temp.path().join("collected_logs").join("report.csv");
-        fs::write(&source, "report contents").unwrap();
-        fs::create_dir_all(destination.parent().unwrap()).unwrap();
-        move_file(&source, &destination).unwrap();
-        assert!(!source.exists());
-        assert_eq!(fs::read_to_string(destination).unwrap(), "report contents");
+        assert!(names.contains(&PathBuf::from("yasweb.log")));
+        assert!(names.contains(&PathBuf::from("debug_html/failure.html")));
+        assert!(!names.contains(&PathBuf::from("yasweb_config.json")));
+        assert!(!names.contains(&PathBuf::from("debug_html/config_snapshot.json")));
+        assert!(!names.contains(&PathBuf::from("debug_html/sent/sent.html")));
     }
 }
