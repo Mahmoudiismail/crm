@@ -41,3 +41,17 @@ Each report execution uses its own Chrome tab. Tab creation is serialized and re
 Yasweb sanitizes report-name and date-derived filename components before creating temporary download folders, Chrome profile folders, or final report filenames. Path separators, control characters, and Windows-invalid filename characters are replaced, and traversal sequences are neutralized. The temporary download directory is created with checked async filesystem I/O; final report moves/copies run in `spawn_blocking` so large files do not block Tokio's async executor.
 
 When concurrent reports discover new filter names, their configuration updates are serialized within the Yasweb process. Each update reloads and validates the current JSON while holding the update lock, adds only missing filters, and writes atomically. If the config cannot be read or parsed, Yasweb logs a warning and preserves the existing file rather than replacing it with a stale in-memory copy. This lock coordinates report tasks in one Yasweb process; it is not a cross-process file lock.
+
+
+## MIS SPA navigation and report-frame readiness
+
+Clicking the MIS module starts an Angular client-side route transition; it does
+not guarantee that the parent tab URL changes synchronously. The browser flow
+must wait up to 30 seconds for `/home/mis-report/module/` before inspecting the
+frame tree. Do not re-click MIS while this route wait is still active. Only
+after the route is reached should the automation discover the current iframe,
+create a fresh CDP execution context, and run the report-frame readiness check.
+If the route does not appear within the bounded wait, return a diagnostic error
+including the last observed URL; the existing one-time navigation recovery may
+then run. See `md/yasweb-spa-race-condition.md` for the failure history and
+regression coverage.
