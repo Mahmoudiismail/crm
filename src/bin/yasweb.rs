@@ -176,6 +176,15 @@ fn get_manifest(config_path: Option<PathBuf>) -> AppManifest {
     }
 }
 
+fn normalize_filter_key(value: &str) -> String {
+    value
+        .replace('_', " ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
+}
+
 fn sanitize_filename_component(value: &str) -> String {
     let mut sanitized = String::with_capacity(value.len());
     for ch in value.chars() {
@@ -225,13 +234,25 @@ async fn persist_discovered_filters(
 
     let mut updated_filters = false;
     for filter in discovered_filters.names {
-        if let std::collections::hash_map::Entry::Vacant(entry) = report.filters.entry(filter) {
+        let filter_key = report
+            .filters
+            .keys()
+            .find(|existing| normalize_filter_key(existing) == normalize_filter_key(&filter))
+            .cloned()
+            .unwrap_or(filter);
+        if let std::collections::hash_map::Entry::Vacant(entry) = report.filters.entry(filter_key) {
             entry.insert(String::new());
             updated_filters = true;
         }
     }
     for (filter, options) in discovered_filters.options {
-        let cached = report.filter_options.entry(filter).or_default();
+        let filter_key = report
+            .filters
+            .keys()
+            .find(|existing| normalize_filter_key(existing) == normalize_filter_key(&filter))
+            .cloned()
+            .unwrap_or(filter);
+        let cached = report.filter_options.entry(filter_key).or_default();
         for option in options {
             if !option.trim().is_empty() && !cached.contains(&option) {
                 cached.push(option);
@@ -871,7 +892,18 @@ mod tests_yasweb_finalization {
         let lock = Arc::new(AsyncMutex::new(()));
 
         let (first, second) = tokio::join!(
-            persist_discovered_filters(&config_path, "first", DiscoveredReportFilters { names: vec!["filter_a".to_string()], options: HashMap::new() }, &lock),
+            persist_discovered_filters(
+                &config_path,
+                "first",
+                DiscoveredReportFilters {
+                    names: vec!["filter_a".to_string(), "Hospital".to_string()],
+                    options: HashMap::from([(
+                        "Hospital".to_string(),
+                        vec!["Fakeeh".to_string(), "Neom".to_string()],
+                    )]),
+                },
+                &lock,
+            ),
             persist_discovered_filters(&config_path, "second", DiscoveredReportFilters { names: vec!["filter_b".to_string()], options: HashMap::new() }, &lock),
         );
         first.unwrap();
@@ -880,6 +912,11 @@ mod tests_yasweb_finalization {
         let saved: YaswebConfig =
             serde_json::from_str(&std::fs::read_to_string(&config_path).unwrap()).unwrap();
         assert!(saved.reports["first"].filters.contains_key("filter_a"));
+        assert!(saved.reports["first"].filters.contains_key("Hospital"));
+        assert_eq!(
+            saved.reports["first"].filter_options["Hospital"],
+            vec!["Fakeeh".to_string(), "Neom".to_string()]
+        );
         assert!(saved.reports["second"].filters.contains_key("filter_b"));
     }
 
