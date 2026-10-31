@@ -175,6 +175,10 @@ fn collect_frame_resources(
     value: &serde_json::Value,
     frames: &mut Vec<(usize, String, String)>,
 ) {
+    if let Some(frame_tree) = value.get("frameTree") {
+        collect_frame_resources(frame_tree, frames);
+        return;
+    }
     if let Some(frame) = value.get("frame") {
         let frame_id = frame.get("id").and_then(serde_json::Value::as_str);
         let frame_url = frame.get("url").and_then(serde_json::Value::as_str);
