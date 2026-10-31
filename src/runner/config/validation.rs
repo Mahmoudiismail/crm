@@ -261,13 +261,21 @@ fn normalize_and_validate_schedules(
                         format!("Invalid monthly time '{}'. Use HH:MM", at_time)
                     })?;
                 }
-                // Compute next_run_at
-                *next_run_at = next_monthly_run_after(
-                    *day_of_month,
-                    at_time,
-                    chrono::Utc::now(),
-                    working_hours.as_ref(),
-                )?;
+                *next_run_at = next_run_at.trim().to_string();
+                if next_run_at.is_empty() {
+                    *next_run_at = next_monthly_run_after(
+                        *day_of_month,
+                        at_time,
+                        chrono::Utc::now(),
+                        working_hours.as_ref(),
+                    )?;
+                } else {
+                    // Preserve due/overdue occurrences; the scheduler advances them
+                    // only after the corresponding run has been handled.
+                    parse_rfc3339_utc(next_run_at).with_context(|| {
+                        format!("Invalid monthly next_run_at '{}'. Use RFC3339", next_run_at)
+                    })?;
+                }
             }
         }
     }
@@ -277,7 +285,74 @@ fn normalize_and_validate_schedules(
 
 #[cfg(test)]
 mod tests {
-    use super::validate_weekday;
+    use super::{normalize_and_validate_schedules, validate_weekday};
+    use crate::runner::config::{Repetition, RunnerTask, TaskSchedule};
+
+    #[test]
+    fn monthly_normalization_preserves_due_and_overdue_occurrences() {
+        let stored = "2020-01-15T09:00:00Z".to_string();
+        let mut task = RunnerTask {
+            id: "monthly-test".to_string(),
+            name: "Monthly test".to_string(),
+            enabled: true,
+            repetition: Repetition::Repeat,
+            frequency_seconds: 0,
+            next_run_at: String::new(),
+            schedules: vec![TaskSchedule::Monthly {
+                enabled: true,
+                day_of_month: 15,
+                at_time: "09:00".to_string(),
+                next_run_at: stored.clone(),
+                working_hours: None,
+                working_hours_profile_id: None,
+            }],
+            steps: vec![],
+            post_run_steps: vec![],
+            last_run_at: String::new(),
+            last_status: String::new(),
+            timeout_seconds: 0,
+        };
+
+        normalize_and_validate_schedules(&mut task, 60).unwrap();
+        match &task.schedules[0] {
+            TaskSchedule::Monthly { next_run_at, .. } => assert_eq!(next_run_at, &stored),
+            _ => panic!("Expected monthly schedule"),
+        }
+    }
+
+    #[test]
+    fn monthly_normalization_initializes_missing_occurrence() {
+        let mut task = RunnerTask {
+            id: "monthly-init".to_string(),
+            name: "Monthly init".to_string(),
+            enabled: true,
+            repetition: Repetition::Repeat,
+            frequency_seconds: 0,
+            next_run_at: String::new(),
+            schedules: vec![TaskSchedule::Monthly {
+                enabled: true,
+                day_of_month: 15,
+                at_time: "09:00".to_string(),
+                next_run_at: String::new(),
+                working_hours: None,
+                working_hours_profile_id: None,
+            }],
+            steps: vec![],
+            post_run_steps: vec![],
+            last_run_at: String::new(),
+            last_status: String::new(),
+            timeout_seconds: 0,
+        };
+
+        normalize_and_validate_schedules(&mut task, 60).unwrap();
+        match &task.schedules[0] {
+            TaskSchedule::Monthly { next_run_at, .. } => {
+                assert!(!next_run_at.is_empty());
+                assert!(crate::runner::config::schedule::parse_rfc3339_utc(next_run_at).is_ok());
+            }
+            _ => panic!("Expected monthly schedule"),
+        }
+    }
 
     #[test]
     fn validates_weekday_even_when_next_run_is_preconfigured() {

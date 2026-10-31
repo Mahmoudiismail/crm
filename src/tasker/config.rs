@@ -12,6 +12,21 @@ pub struct TaskerConfig {
 
 impl TaskerConfig {
     pub fn validate(&self) -> anyhow::Result<()> {
+        for (index, task) in self.tasks.iter().enumerate() {
+            let minutes_ago = match task {
+                TaskConfig::CsvAnalysis(config) => Some(config.minutes_ago),
+                TaskConfig::DashboardUpdater(config) => Some(config.minutes_ago),
+                TaskConfig::CrmOpenSohail(config) => Some(config.dashboard_config.minutes_ago),
+                _ => None,
+            };
+            if let Some(minutes) = minutes_ago.filter(|minutes| *minutes < 0) {
+                anyhow::bail!(
+                    "Task at index {} has negative minutes_ago ({}); the value must be zero or greater",
+                    index,
+                    minutes
+                );
+            }
+        }
         Ok(())
     }
 }
@@ -292,6 +307,23 @@ mod tests {
             }
             _ => panic!("Expected CsvAnalysis task"),
         }
+    }
+
+    #[test]
+    fn validation_rejects_negative_minutes_ago_but_accepts_legacy_nonnegative_values() {
+        let valid: TaskerConfig = serde_json::from_str(
+            r#"{"tasks":[{"type":"csv_analysis","download_path":"./downloads","users_file":"./users.csv","assignment_settings_file":"./assignments.csv","minutes_ago":0,"output_file":"./out.csv"}]}"#,
+        ).unwrap();
+        assert!(valid.validate().is_ok());
+
+        let invalid: TaskerConfig = serde_json::from_str(
+            r#"{"tasks":[{"type":"csv_analysis","download_path":"./downloads","users_file":"./users.csv","assignment_settings_file":"./assignments.csv","minutes_ago":-1,"output_file":"./out.csv"}]}"#,
+        ).unwrap();
+        assert!(invalid
+            .validate()
+            .unwrap_err()
+            .to_string()
+            .contains("negative minutes_ago"));
     }
 
     #[test]

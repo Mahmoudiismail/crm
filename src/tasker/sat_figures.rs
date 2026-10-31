@@ -10,6 +10,30 @@ fn resolve(path: &str) -> PathBuf {
     crate::tasker::csv_task::resolve_relative_to_exe_dir(path)
 }
 
+fn calculate_vacant_slots(total_slots: i64, slots_booked: i64) -> Result<i64> {
+    if total_slots <= 0 {
+        anyhow::bail!(
+            "Sat Figures total slot count must be positive; got {}",
+            total_slots
+        );
+    }
+    if slots_booked < 0 {
+        anyhow::bail!(
+            "Sat Figures booked slot count cannot be negative; got {}",
+            slots_booked
+        );
+    }
+    total_slots
+        .checked_sub(slots_booked)
+        .filter(|vacant| *vacant >= 0)
+        .with_context(|| {
+            format!(
+                "Sat Figures booked slots ({}) exceed total slots ({})",
+                slots_booked, total_slots
+            )
+        })
+}
+
 fn is_source_report(path: &std::path::Path) -> bool {
     let name = path
         .file_name()
@@ -92,13 +116,7 @@ pub fn run(
     let totals = crate::tasker::opd_task::data_extraction::extract_slot_totals(&latest, &filters)
         .with_context(|| format!("Failed to calculate Sat Figures from {:?}", latest))?;
 
-    if totals.total_slots == 0 {
-        anyhow::bail!(
-            "Sat Figures total slot count is zero; cannot calculate occupancy percentage"
-        );
-    }
-
-    let vacant_slots = totals.total_slots - totals.slots_booked;
+    let vacant_slots = calculate_vacant_slots(totals.total_slots, totals.slots_booked)?;
     let percentage = totals.slots_booked as f64 / totals.total_slots as f64;
     let output_path = resolve(&config.output_file);
     if let Some(parent) = output_path.parent().filter(|p| !p.as_os_str().is_empty()) {
@@ -168,6 +186,15 @@ pub fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn vacant_slot_calculation_rejects_invalid_totals() {
+        assert_eq!(calculate_vacant_slots(100, 75).unwrap(), 25);
+        assert!(calculate_vacant_slots(0, 0).is_err());
+        assert!(calculate_vacant_slots(-1, 0).is_err());
+        assert!(calculate_vacant_slots(100, -1).is_err());
+        assert!(calculate_vacant_slots(100, 101).is_err());
+    }
 
     #[test]
     fn source_report_filter_matches_only_expected_prefix_and_extensions() {

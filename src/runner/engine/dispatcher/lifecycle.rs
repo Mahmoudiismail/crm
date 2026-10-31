@@ -280,10 +280,7 @@ pub fn start_scheduler(runner_config_path: String) -> RunnerHandle {
                                 }
                             }
                         }
-                    }
 
-                    if let Ok(cfg) = crate::runner::engine::dispatcher::helpers::load_config(&config_path_loop).await {
-                        let now = Utc::now();
                         if now.signed_duration_since(last_cleanup).num_hours() >= 24 {
                             info!("Triggering daily log cleanup...");
                             let retention = cfg.log_retention_days;

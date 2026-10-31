@@ -5,6 +5,7 @@ pub fn status_reason_phrase(code: u16) -> &'static str {
     match code {
         200 => "OK",
         400 => "Bad Request",
+        403 => "Forbidden",
         404 => "Not Found",
         405 => "Method Not Allowed",
         408 => "Request Timeout",
@@ -219,6 +220,15 @@ pub(crate) async fn read_http_request(
     if let Some((pos, delim_len)) = header_end {
         let headers_slice = &buf[..pos];
         let req_str = String::from_utf8_lossy(headers_slice);
+        let request_method = req_str
+            .lines()
+            .next()
+            .and_then(|line| line.split_whitespace().next())
+            .unwrap_or_default();
+        if request_method.eq_ignore_ascii_case("POST") && !post_origin_is_allowed(headers_slice) {
+            let _ = send_error(socket, 403, "Cross-origin POST requests are not allowed").await;
+            return Ok(None);
+        }
 
         if req_str.lines().any(|l| {
             let mut parts = l.splitn(2, ':');
@@ -286,6 +296,41 @@ pub(crate) async fn read_http_request(
     Ok(None)
 }
 
+fn post_origin_is_allowed(headers: &[u8]) -> bool {
+    let headers = String::from_utf8_lossy(headers);
+    let mut host = None;
+    let mut origin = None;
+    for line in headers.lines().skip(1) {
+        let Some((name, value)) = line.split_once(':') else {
+            continue;
+        };
+        if name.trim().eq_ignore_ascii_case("host") {
+            host = Some(value.trim());
+        } else if name.trim().eq_ignore_ascii_case("origin") {
+            origin = Some(value.trim());
+        }
+    }
+
+    let Some(origin) = origin else {
+        // Non-browser clients (CLI/scripts) commonly omit Origin.
+        return true;
+    };
+    let Some(host) = host else {
+        return false;
+    };
+    let host_lower = host.to_ascii_lowercase();
+    let (host_name, port) = if let Some(port) = host_lower.strip_prefix("[::1]:") {
+        ("::1", port)
+    } else if let Some((host_name, port)) = host_lower.rsplit_once(':') {
+        (host_name, port)
+    } else {
+        return false;
+    };
+    let is_loopback_host =
+        matches!(host_name, "127.0.0.1" | "localhost" | "::1") && port.parse::<u16>().is_ok();
+    is_loopback_host && origin.eq_ignore_ascii_case(&format!("http://{host}"))
+}
+
 pub(crate) fn header_content_length(bytes: &[u8]) -> Option<usize> {
     let req = String::from_utf8_lossy(bytes);
     req.lines().find_map(|line| {
@@ -334,6 +379,28 @@ mod tests {
         assert_eq!(status_reason_phrase(413), "Payload Too Large");
         assert_eq!(status_reason_phrase(500), "Internal Server Error");
         assert_eq!(status_reason_phrase(999), "Unknown Error");
+    }
+
+    #[test]
+    fn post_origin_validation_allows_same_origin_and_cli_but_rejects_cross_origin() {
+        assert!(post_origin_is_allowed(
+            b"POST /create HTTP/1.1\r\nHost: 127.0.0.1:8787\r\nOrigin: http://127.0.0.1:8787\r\n"
+        ));
+        assert!(post_origin_is_allowed(
+            b"POST /create HTTP/1.1\r\nHost: 127.0.0.1:8787\r\n"
+        ));
+        assert!(!post_origin_is_allowed(
+            b"POST /create HTTP/1.1\r\nHost: 127.0.0.1:8787\r\nOrigin: http://evil.example\r\n"
+        ));
+        assert!(!post_origin_is_allowed(
+            b"POST /create HTTP/1.1\r\nHost: evil.example\r\nOrigin: http://evil.example\r\n"
+        ));
+        assert!(!post_origin_is_allowed(
+            b"POST /create HTTP/1.1\r\nHost: 127.0.0.1:8787.evil.example\r\nOrigin: http://127.0.0.1:8787.evil.example\r\n"
+        ));
+        assert!(!post_origin_is_allowed(
+            b"POST /create HTTP/1.1\r\nOrigin: null\r\n"
+        ));
     }
 
     #[test]
