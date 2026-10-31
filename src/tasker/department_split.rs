@@ -3,7 +3,7 @@ use anyhow::{Context, Result};
 use calamine::{open_workbook, DataType, Reader, Xlsx};
 use std::collections::HashMap;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tracing::info;
 
 fn write_mapping_temp_file(mapping: &HashMap<String, String>) -> Result<PathBuf> {
