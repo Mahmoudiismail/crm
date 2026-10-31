@@ -21,13 +21,14 @@ If found, it:
 - Gracefully exits itself to allow the PowerShell script to perform the self-update, ensuring update logging continues robustly.
 
 ### 2. Local Reports, Logs, and Diagnostics Collection
-The `--logs-only` option moves files locally into a timestamped subfolder under `collected_logs`. It does not send email or create ZIP archives.
+The `--logs-only` option creates a timestamped diagnostic ZIP under `collected_logs`. It does not send email or generate business reports.
 
-- Moves application-level `.log` files beside the updater and per-task `.log` files under `runner_logs_dir`.
-- Moves Yasweb HTML/JSON diagnostics from `debug_html`, excluding the `sent` subfolder.
-- Searches application `Downloads` folders and moves report files with `.csv`, `.xls`, `.xlsx`, `.xlsm`, and `.pdf` extensions.
-- Preserves relative folder paths within each collection and creates a new timestamped folder on every run so earlier collections remain intact.
-- Moves rather than copies files. If a move crosses volumes, it falls back to copy followed by deleting the original. If any file cannot be moved, the pipeline reports failure rather than claiming complete success.
+- Includes application-level `.log` files beside the updater and per-task `.log` files under `runner_logs_dir`.
+- Includes Yasweb HTML/JSON browser diagnostics from `debug_html`, excluding the `sent` subfolder and files whose names identify them as configuration.
+- Preserves relative paths inside the ZIP (for example, root-level task logs and `debug_html/<snapshot>.html`). It does not collect report files from Downloads or generate OPD reports.
+- Does not include standalone application configuration files; configuration already represented in Runner runtime logs is not duplicated, and credentials are not packaged as diagnostic data.
+- Writes a temporary ZIP, reopens it, checks the entry count and compares every archived file byte-for-byte with its source. Only after verification does it finalize the ZIP and remove the original files.
+- If ZIP creation or verification fails, source files remain untouched. If cleanup fails after verification, the valid ZIP is retained and the updater reports which originals could not be removed.
 
 ### 3. Update Pipeline
 When an update ZIP is found in Outlook Drafts, the updater extracts it into `downloads` and validates that every file in `file_replacement_map` is present before launching the detached replacement script.
@@ -78,7 +79,7 @@ By default, executing `crm_updater` runs the local collection pipeline first, fo
 Granular execution can be triggered using the following CLI flags:
 
 - `--update-only`: Executes **only** the application update pipeline.
-- `--logs-only`: Executes **only** local report/log collection without compression.
+- `--logs-only`: Executes **only** diagnostic ZIP collection and verified source cleanup.
 - `--config <PATH>`: Selects the updater configuration file.
 
 Example:
