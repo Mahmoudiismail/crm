@@ -55,3 +55,24 @@ If the route does not appear within the bounded wait, return a diagnostic error
 including the last observed URL; the existing one-time navigation recovery may
 then run. See `md/yasweb-spa-race-condition.md` for the failure history and
 regression coverage.
+
+
+## Runner filter argument compatibility
+
+Runner builds external-app command lines from the arguments declared by the
+Yasweb manifest. The manifest exposes dynamic `--filter-<key>` arguments so
+Runner can render report-specific controls and cached dropdown options. The
+Yasweb CLI accepts these dynamic flags at its process boundary and converts
+them into the existing `--filters <JSON>` representation before Clap parsing.
+The legacy `--filters` JSON argument remains supported and is merged with
+dynamic flags; an explicitly supplied dynamic flag takes precedence for the
+same key.
+
+Filter option caches are aggregated across reports by filter key. Reports
+without cached options do not erase options already known for another report.
+The Runner form evaluates `depends_on` against every selected `--name`
+checkbox, and optional dropdowns start with an empty selection. Do not add
+report titles or placeholder labels to a filter's option list: options must be
+actual values accepted by the corresponding MIS filter. If the live report
+does not expose its option values in the available DOM snapshot, discover them
+from the rendered filter control during a live run before editing the config.
