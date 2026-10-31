@@ -43,8 +43,12 @@ pub fn process_and_collect_logs(config: &UpdaterConfig) -> Result<()> {
     }
     let temp_path = archive_path.with_extension("zip.tmp");
 
-    create_verified_archive(&files, &temp_path)
-        .with_context(|| format!("Failed to create diagnostic archive {}", archive_path.display()))?;
+    create_verified_archive(&files, &temp_path).with_context(|| {
+        format!(
+            "Failed to create diagnostic archive {}",
+            archive_path.display()
+        )
+    })?;
     fs::rename(&temp_path, &archive_path)
         .with_context(|| format!("Could not finalize archive {}", archive_path.display()))?;
 
@@ -104,7 +108,9 @@ fn create_verified_archive(files: &[CollectedFile], temp_path: &Path) -> Result<
     }
 
     let output = writer.finish().context("Could not finish diagnostic ZIP")?;
-    output.sync_all().context("Could not flush diagnostic ZIP")?;
+    output
+        .sync_all()
+        .context("Could not flush diagnostic ZIP")?;
 
     let input = File::open(temp_path)?;
     let mut archive = ZipArchive::new(input).context("Created diagnostic ZIP is invalid")?;
@@ -192,7 +198,9 @@ fn collect_files(exe_dir: &Path, logs_dir: &Path) -> Vec<CollectedFile> {
                 || !has_extension(path, &["html", "json"])
                 || path.starts_with(diagnostics_dir.join("sent"))
                 || path.file_name().is_some_and(|name| {
-                    name.to_string_lossy().to_ascii_lowercase().contains("config")
+                    name.to_string_lossy()
+                        .to_ascii_lowercase()
+                        .contains("config")
                 })
             {
                 continue;
@@ -220,10 +228,17 @@ fn add_file(
     let identity = path.canonicalize().unwrap_or_else(|_| path.clone());
     if seen.insert(identity) {
         if let Err(error) = fs::metadata(&path) {
-            warn!("Skipping unreadable collection candidate {}: {}", path.display(), error);
+            warn!(
+                "Skipping unreadable collection candidate {}: {}",
+                path.display(),
+                error
+            );
             return;
         }
-        files.push(CollectedFile { path, relative_path });
+        files.push(CollectedFile {
+            path,
+            relative_path,
+        });
     }
 }
 
@@ -231,7 +246,9 @@ fn has_extension(path: &Path, extensions: &[&str]) -> bool {
     path.extension()
         .and_then(|extension| extension.to_str())
         .is_some_and(|extension| {
-            extensions.iter().any(|expected| extension.eq_ignore_ascii_case(expected))
+            extensions
+                .iter()
+                .any(|expected| extension.eq_ignore_ascii_case(expected))
         })
 }
 
@@ -253,9 +270,18 @@ mod tests {
         fs::write(&html, "<html>diagnostic</html>").unwrap();
 
         let files = vec![
-            CollectedFile { path: task_log.clone(), relative_path: PathBuf::from("20261031_task.log") },
-            CollectedFile { path: yasweb_log.clone(), relative_path: PathBuf::from("yasweb.log") },
-            CollectedFile { path: html.clone(), relative_path: PathBuf::from("debug_html/snapshot.html") },
+            CollectedFile {
+                path: task_log.clone(),
+                relative_path: PathBuf::from("20261031_task.log"),
+            },
+            CollectedFile {
+                path: yasweb_log.clone(),
+                relative_path: PathBuf::from("yasweb.log"),
+            },
+            CollectedFile {
+                path: html.clone(),
+                relative_path: PathBuf::from("debug_html/snapshot.html"),
+            },
         ];
         let archive = root.join("diagnostics.zip");
         create_verified_archive(&files, &archive).unwrap();
@@ -282,7 +308,10 @@ mod tests {
         fs::write(diagnostics.join("sent").join("sent.html"), "<html/>").unwrap();
 
         let files = collect_files(&exe, &logs);
-        let names: HashSet<_> = files.iter().map(|file| file.relative_path.clone()).collect();
+        let names: HashSet<_> = files
+            .iter()
+            .map(|file| file.relative_path.clone())
+            .collect();
         assert!(names.contains(&PathBuf::from("yasweb.log")));
         assert!(names.contains(&PathBuf::from("debug_html/failure.html")));
         assert!(!names.contains(&PathBuf::from("yasweb_config.json")));
