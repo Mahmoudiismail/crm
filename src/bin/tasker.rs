@@ -31,17 +31,30 @@ pub struct TaskerCliOptions {
     pub legacy_config: Option<String>,
 }
 
+fn resolve_config_path(options: &TaskerCliOptions) -> Result<PathBuf> {
+    if let Some(path) = options.config.as_deref().or(options.legacy_config.as_deref()) {
+        return Ok(PathBuf::from(path));
+    }
+    Ok(executable_dir()?.join("tasker_config.json"))
+}
+
+fn read_log_levels(config_path: &std::path::Path) -> (String, String) {
+    if let Ok(raw) = std::fs::read_to_string(config_path) {
+        if let Ok(config) = serde_json::from_str::<TaskerConfig>(&raw) {
+            return (config.log_stdout_level, config.log_file_level);
+        }
+    }
+    ("DEBUG".to_string(), "TRACE".to_string())
+}
+
 pub fn run_app(options: TaskerCliOptions) -> Result<()> {
     info!("Tasker started.");
 
-    let config_path_arg = options.config.or(options.legacy_config).map(PathBuf::from);
+    let config_path = resolve_config_path(&options)?;
     let task_filter = options.task;
     let only_call_center = options.only_call_center;
     let send_exceptions = options.send_exceptions;
     let start_date = options.start_date;
-
-    let default_config_path = executable_dir()?.join("tasker_config.json");
-    let config_path = config_path_arg.unwrap_or(default_config_path);
 
     let default_config_content = r#"{
   "tasks": [
@@ -331,21 +344,9 @@ fn main() -> Result<()> {
 
     let options = TaskerCliOptions::parse();
 
-    // Attempt early config load for logging levels
-    let config_path = executable_dir()?.join("tasker_config.json");
-    let (stdout_lvl, file_lvl) = if config_path.exists() {
-        if let Ok(raw) = std::fs::read_to_string(&config_path) {
-            if let Ok(cfg) = serde_json::from_str::<crm_tool::tasker::config::TaskerConfig>(&raw) {
-                (cfg.log_stdout_level, cfg.log_file_level)
-            } else {
-                ("DEBUG".to_string(), "TRACE".to_string())
-            }
-        } else {
-            ("DEBUG".to_string(), "TRACE".to_string())
-        }
-    } else {
-        ("DEBUG".to_string(), "TRACE".to_string())
-    };
+    // Use the same selected config for logging and task execution.
+    let config_path = resolve_config_path(&options)?;
+    let (stdout_lvl, file_lvl) = read_log_levels(&config_path);
 
     let _guard = setup_logging_with_levels(
         "task_csv_analysis",
@@ -366,6 +367,28 @@ fn main() -> Result<()> {
 mod tests {
     use super::*;
     use clap::Parser;
+
+    #[test]
+    fn custom_config_path_is_shared_by_startup_logging_and_task_execution() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let custom_path = temp_dir.path().join("custom-tasker.json");
+        std::fs::write(
+            &custom_path,
+            r#"{"tasks":[],"log_stdout_level":"ERROR","log_file_level":"WARN"}"#,
+        )
+        .unwrap();
+
+        let options = TaskerCliOptions::parse_from([
+            "tasker",
+            "--config",
+            custom_path.to_str().unwrap(),
+        ]);
+        assert_eq!(resolve_config_path(&options).unwrap(), custom_path);
+        assert_eq!(
+            read_log_levels(&resolve_config_path(&options).unwrap()),
+            ("ERROR".to_string(), "WARN".to_string())
+        );
+    }
 
     #[test]
     fn test_tasker_args_parsing() {
