@@ -380,10 +380,7 @@ mod tests {
 
     #[test]
     fn action_config_overrides_registered_app_config_path() {
-        let mut args = HashMap::from([(
-            "--config".to_string(),
-            "task-specific.json".to_string(),
-        )]);
+        let mut args = HashMap::from([("--config".to_string(), "task-specific.json".to_string())]);
         apply_registered_config_fallback(&mut args, "registered.json");
         assert_eq!(
             args.get("--config").map(String::as_str),
