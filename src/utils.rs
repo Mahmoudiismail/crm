@@ -35,17 +35,7 @@ pub fn resolve_relative_to_exe_dir(path: &str) -> PathBuf {
     }
 }
 
-/// Initializes the global tracing subscriber with independent levels for stdout and file.
-///
-/// The file logger rolls dynamically and defaults to being placed in the executable directory.
-///
-/// # Parameters
-/// - `app_name`: Used to construct the log file name (e.g., `<app_name>.log`).
-/// - `stdout_level`: The minimum log level to display in the terminal.
-/// - `file_level`: The minimum log level to persist to disk.
-///
-/// # Returns
-/// A `WorkerGuard` that ensures logs are flushed when dropped. This must be held for the duration of the program.
+/// Append-mode log writer that recreates its target if it is moved or deleted.
 struct ReopenLogFile {
     path: PathBuf,
     file: Option<std::fs::File>,
@@ -99,6 +89,9 @@ impl Write for ReopenLogFile {
 }
 
 /// Initializes the global tracing subscriber with independent stdout and file levels.
+///
+/// The file is reopened when its configured path disappears. The returned guard must
+/// be held for the duration of the program so queued log events are flushed.
 pub fn setup_logging_with_levels(
     app_name: &str,
     stdout_level: tracing_subscriber::filter::LevelFilter,
