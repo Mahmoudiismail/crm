@@ -91,10 +91,10 @@ This task is designed to process multiple ticket report CSV files and augment th
 
 #### Fields Description
 - `type`: Must be `"csv_analysis"`.
-- `download_path`: Directory to search for downloaded CSV files. It matches files prefixed with `ticket_report` and ending with `.csv`.
+- `download_path`: Directory to search for recent CRM exports. Ticket processing reads `ticket_report*.csv`; lead enrichment reads `lead_report*.csv`.
 - `users_file`: Path to the users mapping CSV (formerly PowerQuery Table11).
 - `assignment_settings_file`: Path to the assignment settings CSV containing category, type, and subtype mappings.
-- `minutes_ago`: Will only process ticket CSV files that have been modified within the last X minutes.
+- `minutes_ago`: Limits both ticket and lead source CSVs to files modified within the last X minutes.
 - `start_date`: (Optional) String representing a date (e.g. "01-May-2026") to filter out tickets created before this date.
 - `exclude_branches`: Array of strings. Tickets belonging to these branches will be excluded from the final output (case-insensitive).
 - `exclude_categories`: Array of strings. Tickets belonging to these categories will be excluded from the final output (case-insensitive).
@@ -102,7 +102,7 @@ This task is designed to process multiple ticket report CSV files and augment th
   - `category`: The category string that normally would be excluded.
   - `branch`: (Optional) Only allow the exception if the ticket branch matches this.
   - `team`: (Optional) If specified and the exception matches, this overrides and assigns the ticket to this team.
-- `output_file`: Destination file path to write the combined, joined, and augmented CSV output.
+- `output_file`: Destination path for the enriched ticket result. Tasker also writes `lead_result.csv` beside this file whenever recent lead exports are available. The lead result preserves the lead columns and adds/updates `team` using the assignee's primary team from `users_file`; an empty or unknown assignee leaves `team` blank. The lead result includes all source lead statuses and branches for review.
 - `email_config`: (Optional) Specifies automated email configuration via Microsoft Outlook.
   - `team_mapping_file`: Path to CSV configuring email recipients per Team or Branch Name (Requires headers `Team Name`, `To Emails`, `CC`).
   - `body_template_file`: (Optional) Path to an HTML file to use as the email template. If it does not exist, `tasker` will auto-generate it. It extracts the subject from the `<title>` tag and the content from the `<body>` tag, replacing `{bucket_name}`, `{from_date_str}`, `{today_str}`, and `{html_table}` dynamically.
@@ -112,7 +112,7 @@ This task is designed to process multiple ticket report CSV files and augment th
   - `send_per_team_all_branches`: List of teams (e.g., "PRE-AUTHORIZATION") whose tickets should be aggregated into a single email spanning across all allowed branches, rather than partitioned by individual branch rules.
   - `send_per_branch_branches`: List of branches that will receive *one email for the entire branch* instead of separated by team.
   - `send_per_team_branches`: List of branches that should have their emails sent per team.
-  - `send_call_center`: Boolean, if true unifies the "Call Center" tickets from all allowed branches into a single email instead of being grouped with the others. It also automatically discovers, parses, and attaches any matching `lead_report_*.csv` files for the Call Center bucket (even if there are zero open tickets for the target period).
+  - `send_call_center`: Boolean, if true unifies the "Call Center" tickets from all allowed branches into a single email instead of being grouped with the others. It also builds the leads attachment from `lead_result.csv`, including only rows whose `team` is `Call Center`, whose status is `New` or `Follow-up`, and whose branch is not excluded. Leads assigned to other teams remain only in the durable `lead_result.csv` for review.
   - `indentation_spaces`: (Optional) Customizable number of non-breaking spaces before the email body content for indentation. Defaults to 4.
 
 ### `dashboard_updater` Task
