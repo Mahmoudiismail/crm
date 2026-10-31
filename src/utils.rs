@@ -173,8 +173,10 @@ where
         .try_init()
     {
         eprintln!(
-            "Warning: Failed to initialize logging for {}: {}",
-            app_name, e
+            "[{}] Warning: Failed to initialize logging for {}: {}",
+            BUILD_VERSION,
+            app_name,
+            e
         );
     }
     Ok(guard)
