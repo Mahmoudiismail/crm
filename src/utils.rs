@@ -120,7 +120,7 @@ pub fn setup_logging_with_levels_and_header(
     let file_appender = ReopenLogFile {
         path: log_dir.join(format!("{}.log", app_name)),
         file: None,
-        recovery_header: r#"{"tasks":[]}"#.to_string(),
+        recovery_header: recovery_header.to_string(),
     };
     let (non_blocking_file, guard) = tracing_appender::non_blocking(file_appender);
 
