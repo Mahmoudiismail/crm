@@ -325,8 +325,9 @@ pub async fn run_external_app(
             .map(str::to_string)
             .or(discovered.1)
             .filter(|name| {
-                manifest
-                    .is_none_or(|m| manifest_arg_dependencies_satisfied(m, name, &effective_args))
+                manifest.as_ref().is_none_or(|m| {
+                    manifest_argument_is_available(m, name, &effective_args)
+                })
             });
 
         let start_arg_name = start_arg.clone();
