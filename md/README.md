@@ -1,49 +1,47 @@
 # CRM Tool Documentation Index
 
-This folder is the consolidated documentation root for the CRM Tool codebase, including core guides, historical plans, issue analyses, and repository audits.
+This directory contains current operational guides, technical references, historical plans, issue analyses and audit records.
 
-## Documentation Areas
+## Start here
 
-- `plans/`: implementation plans and audit plans.
-- `issues/`: issue analyses and remediation records.
-- `audits/`: repository assessments and audit reports.
+1. [Repository instructions](../AGENTS.md) — mandatory workflow for coding agents.
+2. [Application summary](./APPLICATION_SUMMARY.md) — binary roles and core capabilities.
+3. [Architecture](./ARCHITECTURE.md) — runtime boundaries and execution flow.
+4. [Build and Run](./BUILD_AND_RUN.md) — local build, validation and release workflows.
+5. [CLI Reference](./CLI.md) — supported command-line options by binary.
+6. [Configuration](./CONFIG.md) — configuration files, path resolution and persistence.
+7. [Operations](./OPERATIONS.md) — daily operations, CI, troubleshooting and release cautions.
 
-## Production Readiness
+## Application guides
 
-- `PRODUCTION_READINESS.md`: current security mitigations and release blockers that must be closed before general production rollout.
+- [Runner](./RUNNER.md)
+- [Scheduler and Tray](./SCHEDULER_TRAY.md)
+- [CRM authentication](./AUTH_FLOW.md)
+- [CRM Fetcher](./FETCHER.md)
+- [CRM Downloader](./DOWNLOADER.md)
+- [CRM startup](./CRM_STARTUP.md)
+- [CRM Updater](./CRM_UPDATER.md)
+- [Tasker](./TASKER.md)
+- [Yasweb development](./YASWEB_DEV.md)
+- [Yasweb report automation](../docs/yasweb-report-automation.md)
+- [AppManifest schema](./MANIFEST_SCHEMA.md)
 
-## Agent Entry Point
+## Engineering and governance
 
-All AI coding agents must read repository-root `AGENTS.md` before making changes. That file requires agents to keep this `md/` documentation set updated in the same change as code, config, dependency, or script edits.
+- [Testing](./TESTING.md)
+- [AI documentation policy](./AI_DOC_POLICY.md)
+- [Dependency audit](./DEPENDENCY_AUDIT.md)
+- [Production readiness](./PRODUCTION_READINESS.md)
+- [Rebuild guide](./REBUILD_GUIDE.md)
 
-## Read Order
+## Historical material
 
-1. `AGENTS.md`
-2. `APPLICATION_SUMMARY.md`
-3. `ARCHITECTURE.md`
-4. `BUILD_AND_RUN.md`
-5. `CONFIG.md`
-6. `AUTH_FLOW.md`
-7. `FETCHER.md`
-8. `DOWNLOADER.md`
-9. `SCHEDULER_TRAY.md`
-10. `DOCKER.md`
-11. `OPERATIONS.md`
-12. `AI_DOC_POLICY.md`
-13. `DEPENDENCY_AUDIT.md`
+- plans/ contains implementation plans and completed planning records.
+- issues/ contains issue reports and remediation notes.
+- audits/ contains repository assessments and audit history.
 
-## Documentation Rules
+Historical documents describe findings and project state at the time they were written. They are not necessarily statements of current runtime behavior; use the current application guides and source code for operational truth.
 
-- Treat these docs as source-controlled system design.
-- Any behavior change in `src/`, runtime scripts, `.devcontainer/`, or `Cargo.toml` must update relevant docs in this folder.
-- If docs and code conflict, update docs immediately in the same change.
+## Documentation maintenance
 
-## Current Runtime Model
-
-- Runner orchestration lives in `src/bin/runner.rs` + `src/runner/*`.
-- CRM one-shot execution entrypoint lives in `src/bin/crm.rs`.
-- Shared modules are exported from `src/lib.rs`.
-- CRM domain logic lives in `src/crm/*` (via module paths to current implementation files).
-- Runner triggers CRM work by invoking external `crm` executable.
-- `crm` supports CLI args for runtime behavior (`--report`, `--config`).
-- All runnable tasks are stored in `runner_config.json`.
+Any change to Rust, scripts, configuration, dependencies or workflows must update the relevant current guides in the same change. If a historical audit is retained unchanged, label it as historical rather than treating it as current implementation documentation.

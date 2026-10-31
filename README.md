@@ -1,136 +1,85 @@
 # CRM Tool
 
-A comprehensive Rust-based CRM (Customer Relationship Management) system with a task runner, scheduler, headless web automation capabilities, and automated data processing.
+A Rust-based automation suite for CRM data retrieval, browser-based reporting, scheduled execution, and operational report processing. The repository is one Cargo package (crm_tool) that builds five executable targets.
 
-## 📋 Overview
+## Applications
 
-This project provides automated management, downloading, and reporting for CRM systems. It operates through multiple specialized binaries rather than a single monolithic executable.
+| Binary | Responsibility |
+|---|---|
+| runner | Windows system-tray scheduler, local HTTP GUI, task pipelines, process lifecycle and application concurrency |
+| crm | Authenticated CRM API access and report downloads (tickets, calls, leads, users) |
+| yasweb | Headless Chrome automation for configured Yasweb/MIS reports |
+| tasker | CSV enrichment/reporting, Excel automation, Outlook email workflows and other configured operational tasks |
+| crm_updater | Local diagnostics collection and staged application update workflow |
 
-### Architecture Overview
+See [Architecture](./md/ARCHITECTURE.md) for component boundaries and execution flow.
 
-The system consists of four main binaries:
-- **`runner`**: Orchestrates and executes configured tasks, featuring a system tray GUI and interval-based scheduling.
-- **`crm`**: Handles CRM data fetching, downloading, and reporting via authenticated APIs.
-- **`yasweb`**: Automates headless Chrome interactions for legacy web systems (MIS modules).
-- **`tasker`**: Stateless worker for background processes like CSV processing, Excel automation (via PowerShell COM), and dispatching formatted emails.
+## Requirements
 
-For a detailed architectural breakdown, see [`md/ARCHITECTURE.md`](./md/ARCHITECTURE.md).
+- Rust stable toolchain (the repository does not currently declare a minimum supported Rust version).
+- Windows is the primary runtime target. Some components support headless development/testing on other platforms.
+- Cargo, Node.js for CI JavaScript syntax checks, and PowerShell for Windows automation.
 
-For the Yasweb report automation stages, selectors, frame handling, filters, export, and troubleshooting, see [`docs/yasweb-report-automation.md`](./docs/yasweb-report-automation.md).
+## Build
 
-## 🚀 Quick Start
-
-### Prerequisites
-
-- Rust 1.70+ (edition 2021)
-- Windows OS (primary target: `x86_64-pc-windows-msvc`)
-- Cargo
-- (Optional) Docker for containerized builds
-
-### Installation & Build
-
-You can build the project using standard Cargo commands. The release profile is heavily optimized (`lto=fat`, `opt-level=3`, symbols stripped).
+Build all five binaries:
 
 ```bash
-# Build all binaries in release mode
 cargo build --release
+```
 
-# Build specific binaries
-cargo build --release --bin crm
+Build a specific executable:
+
+```bash
 cargo build --release --bin runner
+cargo build --release --bin crm
 cargo build --release --bin yasweb
 cargo build --release --bin tasker
+cargo build --release --bin crm_updater
 ```
 
-### Running
+Artifacts are written to target/release/ (with .exe on Windows).
 
-Execute the built binaries directly from the `target/release/` directory.
+## Run
 
-```bash
-# Run CRM tool (one-shot execution)
-./target/release/crm.exe [OPTIONS]
+Run Runner for scheduled orchestration and its local GUI. Worker binaries can also be run directly:
 
-# Run Runner (starts the background orchestrator and GUI)
-./target/release/runner.exe
-
-# Run Yasweb (headless web automation)
-./target/release/yasweb.exe
-
-# Run Tasker (background reporting tasks)
-./target/release/tasker.exe
+```powershell
+.\\target\\release\\runner.exe
+.\\target\\release\\crm.exe --report tickets
+.\\target\\release\\yasweb.exe --name "Report Name"
+.\\target\\release\\tasker.exe --task 1
+.\\target\\release\\crm_updater.exe --logs-only
 ```
 
-## 🔧 Developer Workflow
+Use --help on an executable for the parser help for that build. See [CLI](./md/CLI.md) and [Configuration](./md/CONFIG.md).
 
-This project standardizes on pure Cargo commands for daily development.
+## Validation
 
-### Testing
-
-Run the test suite across the workspace.
+The repository is one Cargo package with explicit binary targets, not a multi-package Cargo workspace. Existing CI commands use Cargo's --workspace selector against that package.
 
 ```bash
+cargo fmt -- --check
+cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-targets --all-features
 ```
 
-### Linting & Formatting
+The Test workflow additionally validates JavaScript and PowerShell syntax and runs RustSec/cargo-deny dependency checks. See [Build and Run](./md/BUILD_AND_RUN.md) and [Operations](./md/OPERATIONS.md).
 
-Ensure your code meets the project's strict styling and safety guidelines before submitting changes.
+## Releases
 
-```bash
-cargo fmt
-cargo clippy --workspace --all-targets --all-features -- -D warnings
-```
+The manually triggered [Release Binaries workflow](./.github/workflows/release.yml) builds the selected binaries (or all five), packages Windows executables into a timestamped ZIP, publishes it as a GitHub Release asset, uploads a short-lived workflow artifact, and prints the response from the configured paste upload endpoint. It builds from the main commit resolved by the prepare job.
 
-### Benchmarks
+## Documentation
 
-We use `criterion` for benchmarking performance-critical paths (like CSV parsing and manifest loading).
+Start with [the documentation index](./md/README.md). Core references include [Application Summary](./md/APPLICATION_SUMMARY.md), [Architecture](./md/ARCHITECTURE.md), [Build and Run](./md/BUILD_AND_RUN.md), [CLI](./md/CLI.md), [Configuration](./md/CONFIG.md), [Runner](./md/RUNNER.md), [Tasker](./md/TASKER.md), [CRM Updater](./md/CRM_UPDATER.md), and [Operations](./md/OPERATIONS.md).
 
-```bash
-cargo bench
-```
+AI coding agents must read [AGENTS.md](./AGENTS.md) before changing the repository. Documentation policy is described in [md/AI_DOC_POLICY.md](./md/AI_DOC_POLICY.md).
 
-### Documentation Generation
+## Data and security
 
-Generate local documentation for the repository's modules and internal APIs:
+Do not commit operational exports, customer/employee data, credentials, or production configuration. Use synthetic fixtures for tests. Review [Operations](./md/OPERATIONS.md) and [Production Readiness](./md/PRODUCTION_READINESS.md) before using update or release flows in production.
 
-```bash
-cargo doc --no-deps --open
-```
+## License
 
-## 📦 Releases & Deployment
-
-Releases are fully automated via GitHub Actions.
-
-When code is merged to the main branch or tagged, individual workflows (`release-crm.yml`, `release-runner.yml`, `release-yasweb.yml`, `release-tasker.yml`) build optimized Windows binaries, zip them, and publish them directly to GitHub Releases.
-
-## 📚 Documentation
-
-Detailed documentation is consolidated under `md/`. Core application guides are at the top level of that directory; historical plans, issue analyses, and audits are grouped in `md/plans/`, `md/issues/`, and `md/audits/`.
-
-1. [`AGENTS.md`](./AGENTS.md) - **Mandatory reading for AI agents**
-2. [`APPLICATION_SUMMARY.md`](./md/APPLICATION_SUMMARY.md) - Application overview
-3. [`ARCHITECTURE.md`](./md/ARCHITECTURE.md) - System architecture
-4. [`BUILD_AND_RUN.md`](./md/BUILD_AND_RUN.md) - Build and deployment guide
-5. [`CONFIG.md`](./md/CONFIG.md) - Configuration reference
-6. [`AUTH_FLOW.md`](./md/AUTH_FLOW.md) - Authentication flow
-7. [`FETCHER.md`](./md/FETCHER.md) - Data fetching module
-8. [`DOWNLOADER.md`](./md/DOWNLOADER.md) - Download functionality
-9. [`SCHEDULER_TRAY.md`](./md/SCHEDULER_TRAY.md) - Scheduler and system tray
-10. [`DOCKER.md`](./md/DOCKER.md) - Docker setup
-11. [`OPERATIONS.md`](./md/OPERATIONS.md) - Operations guide
-12. [`AI_DOC_POLICY.md`](./md/AI_DOC_POLICY.md) - Documentation policy
-13. [`TASKER.md`](./md/TASKER.md) - Tasker application
-
-## 🛠 Troubleshooting
-
-- **Missing Configurations**: All binaries auto-generate default configurations (e.g., `runner_config.json`, `tasker_config.json`) in their execution directory if missing. Check the logs if a binary exits unexpectedly.
-- **Log Files**: Logs are written with `TRACE` verbosity to `.log` files in the binary's directory and `DEBUG` verbosity to `stdout`.
-- **COM Exceptions (0x800A03EC)**: If `tasker` fails when interacting with Excel, ensure background Excel processes aren't hung. Tasker attempts to forcefully clean up orphaned Excel processes automatically.
-
-## 📝 Contributing
-
-We welcome contributions! Please read our [Contributing Guide](CONTRIBUTING.md) to get started. It covers repository structure, coding standards, pull request workflow, and mandatory documentation policies.
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.
+MIT — see [LICENSE](./LICENSE).

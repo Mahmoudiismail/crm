@@ -620,7 +620,7 @@
               contentDiv.innerHTML = `
                   <div class="space-y-3">
                       <div class="app-select-container mb-4"></div>
-                      <div class="app-periodization-container p-3 bg-gray-50 border border-gray-200 rounded space-y-3">
+                      <div class="app-periodization-container hidden p-3 bg-gray-50 border border-gray-200 rounded space-y-3" style="display:none">
                           <h4 class="text-xs font-semibold text-gray-800">Periodization & Dates</h4>
                           <div class="grid md:grid-cols-3 gap-3">
                               <div>
@@ -697,7 +697,7 @@
                               </div>
                           </div>
                       </div>
-                      <div class="app-preview-box p-3 bg-emerald-50 border border-emerald-200 rounded text-xs text-emerald-900">
+                      <div class="app-preview-box hidden p-3 bg-emerald-50 border border-emerald-200 rounded text-xs text-emerald-900" style="display:none">
                           <h5 class="font-bold text-emerald-800 mb-1">Live Execution Preview (Next 10 Executions)</h5>
                           <div class="app-preview-contents font-mono space-y-1 text-emerald-950">Calculating preview...</div>
                       </div>
@@ -995,12 +995,29 @@
     dynamicInputs.dataset.manifestLoaded = "false";
     dynamicInputs.innerHTML =
       '<div class="text-sm text-gray-500">Loading manifest...</div>';
+    const loadingAction = dynamicInputs.closest(".action-editor");
+    for (const selector of [".app-periodization-container", ".app-preview-box"]) {
+      const element = loadingAction?.querySelector(selector);
+      if (element) {
+        element.classList.add("hidden");
+        element.style.display = "none";
+      }
+    }
     try {
       const manifest = await window.api.fetchAppManifest(appId);
       if (!manifest || !manifest.arguments || manifest.arguments.length === 0) {
         dynamicInputs.innerHTML =
           '<span class="text-sm text-gray-500">No configurable arguments.</span>';
         dynamicInputs.dataset.manifestLoaded = "true";
+        const contentDiv = dynamicInputs.closest(".action-editor");
+        contentDiv?.querySelector(".app-periodization-container")?.classList.add("hidden");
+        contentDiv?.querySelector(".app-preview-box")?.classList.add("hidden");
+        if (contentDiv?.querySelector(".app-periodization-container")) {
+          contentDiv.querySelector(".app-periodization-container").style.display = "none";
+        }
+        if (contentDiv?.querySelector(".app-preview-box")) {
+          contentDiv.querySelector(".app-preview-box").style.display = "none";
+        }
         return;
       }
 
@@ -1013,36 +1030,31 @@
         console.error("Failed to parse existing args", e);
       }
 
-      // Check if the app requires date/periodization inputs
-      let hasDateArgs = manifest.arguments.some(arg =>
-          arg.name.toLowerCase().includes("date") ||
-          arg.name.toLowerCase().includes("period") ||
-          arg.arg_type === "date_var"
-      );
-
       const contentDiv = dynamicInputs.closest(".action-editor");
-      if (contentDiv) {
+      const updatePeriodizationVisibility = () => {
+          const hasDateArgs = Array.from(dynamicInputs.querySelectorAll(".arg-container")).some(container => {
+              if (container.dataset.dependenciesSatisfied === "false") return false;
+              const isMapped = container.dataset.mappedDateArg === "true";
+              if (!isMapped && (container.style.display === "none" || container.classList.contains("hidden"))) {
+                  return false;
+              }
+              const input = container.querySelector("[data-arg-name]");
+              const name = input?.dataset.argName?.toLowerCase() || "";
+              return name.includes("date") || name.includes("period") ||
+                  input?.dataset.argType === "date_var";
+          });
+          if (!contentDiv) return;
           const appPreviewBox = contentDiv.querySelector(".app-preview-box");
           const periodizationContainer = contentDiv.querySelector(".app-periodization-container");
-
           if (periodizationContainer) {
-              if (hasDateArgs) {
-                  periodizationContainer.classList.remove("hidden");
-                  periodizationContainer.style.display = "";
-                  if (appPreviewBox) {
-                      appPreviewBox.classList.remove("hidden");
-                      appPreviewBox.style.display = "";
-                  }
-              } else {
-                  periodizationContainer.classList.add("hidden");
-                  periodizationContainer.style.display = "none";
-                  if (appPreviewBox) {
-                      appPreviewBox.classList.add("hidden");
-                      appPreviewBox.style.display = "none";
-                  }
-              }
+              periodizationContainer.classList.toggle("hidden", !hasDateArgs);
+              periodizationContainer.style.display = hasDateArgs ? "" : "none";
           }
-      }
+          if (appPreviewBox) {
+              appPreviewBox.classList.toggle("hidden", !hasDateArgs);
+              appPreviewBox.style.display = hasDateArgs ? "" : "none";
+          }
+      };
 
       let html =
         '<h4 class="text-sm font-semibold text-gray-800 border-b border-gray-200 pb-1 mb-3">Arguments</h4>';
@@ -1211,6 +1223,7 @@
           startArgSelect.options[0].disabled = false;
           endArgSelect.options[0].disabled = false;
         }
+        updatePeriodizationVisibility();
       };
       if (startArgSelect) startArgSelect.addEventListener("change", () => {
         updateMappedDateArguments();
@@ -1260,12 +1273,16 @@
                }
            }
 
+           container.dataset.dependenciesSatisfied = allMet ? "true" : "false";
            if (allMet && container.dataset.mappedDateArg !== "true") {
                container.style.display = "block";
+               container.classList.remove("hidden");
            } else {
                container.style.display = "none";
+               container.classList.add("hidden");
            }
         });
+        updatePeriodizationVisibility();
       }
 
       const inputs = dynamicInputs.querySelectorAll(
@@ -1280,6 +1297,15 @@
       console.error("Failed to load app manifest", e);
       dynamicInputs.innerHTML =
         '<span class="text-sm text-red-500">Failed to load manifest. Ensure the app executable is correct.</span>';
+      const contentDiv = dynamicInputs.closest(".action-editor");
+      contentDiv?.querySelector(".app-periodization-container")?.classList.add("hidden");
+      contentDiv?.querySelector(".app-preview-box")?.classList.add("hidden");
+      if (contentDiv?.querySelector(".app-periodization-container")) {
+        contentDiv.querySelector(".app-periodization-container").style.display = "none";
+      }
+      if (contentDiv?.querySelector(".app-preview-box")) {
+        contentDiv.querySelector(".app-preview-box").style.display = "none";
+      }
     }
   }
 

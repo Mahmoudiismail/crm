@@ -8,20 +8,24 @@
 If real personal or confidential data was public, treat it as a potential exposure: assess the contents and access window, follow the organization's incident-response process, and rotate any credentials found. History cleanup must be coordinated separately because rewriting history changes commit IDs and affects clones/forks.
 
 ### CI formatting approval
-Both `.github/workflows/test.yml` and `.github/workflows/auto-format.yml` reference the `format-approval` Environment before running formatting jobs. The repository Environment must have **Required reviewers** configured in GitHub Settings for the pause to be enforced. Keep any future workflow that can commit/push formatting changes behind the same gate.
+Only `.github/workflows/auto-format.yml` currently references the `format-approval` Environment. The integrated `.github/workflows/test.yml` format job does not declare that environment. Configure **Required reviewers** on the Environment in GitHub Settings if a manual Auto Format run should pause for approval. Do not assume the environment protects the Test workflow.
 
 ### Release publishing
-The release workflow resolves `main` once in its prepare job and passes that exact commit SHA to the build job, so the version and binaries are built from the same source snapshot. It fails if the remote tag lookup cannot be completed or if a `vVERSION` tag already exists. A version tag is intended to be immutable; publish a new `Cargo.toml` version for new binaries instead of overwriting a previous release. The ZIP password setting is intentionally unchanged by this hardening change, per the repository owner's instruction. The fixed password is not secret and should not be treated as a security boundary.
+The manual Release Binaries workflow resolves `main` once in its prepare job and passes that exact commit SHA to the Windows build job, so the version and binaries come from the same source snapshot. The workflow accepts `all` or a comma-separated selection from `crm`, `runner`, `yasweb`, `tasker`, and `crm_updater`; it validates names and duplicates before building. It creates a timestamped ZIP, tests and extracts the archive to verify the selected executables, publishes the ZIP as a GitHub Release asset, uploads a one-day workflow artifact, and sends the ZIP to paste.c-net.org while printing the endpoint response. The archive uses the legacy fixed password `123456`; this is not a secret and must not be treated as a security boundary. The workflow does not currently enforce immutable version tags: inspect the workflow and existing release assets before rerunning a release for the same package version.
 
 ### RustSec audit
 See `md/DEPENDENCY_AUDIT.md` for the October 2026 review. The lockfile dependency path was updated from `wayland-scanner 0.31.10` to `0.31.11` so it can resolve `quick-xml >=0.41.0`; this edit still requires `cargo check --locked`, `cargo audit`, and `cargo deny` verification. Do not treat `deny.toml` ignores as proof that an advisory is not applicable.
+
+### Runner log recovery
+
+Runner writes a redacted snapshot of its selected configuration into `runner.log` whenever the log file is opened. If the file is moved or deleted while the process is running, the next log write recreates `runner.log` and includes the snapshot again. The moved log remains available at its new location; Runner does not attempt to move or delete archived copies.
 
 ## Managing the Runner
 
 The `runner` application sits in the system tray (on Windows) and exposes a web GUI at `http://127.0.0.1:8787`.
 
 ### Managing Apps (Dynamic AppManifest Registration)
-You can seamlessly integrate external tools like `crm.exe`, `yasweb.exe`, and `tasker.exe` without editing code.
+You can seamlessly integrate supported tools such as `crm.exe`, `yasweb.exe`, `tasker.exe`, and `crm_updater.exe` without editing code.
 1. Navigate to the `/apps` dashboard on the Runner GUI.
 2. Enter the executable path and an arbitrary name/ID.
 3. The runner will invoke the executable with `--manifest` and dynamically learn its command line argument requirements.
@@ -42,9 +46,19 @@ If you need to bypass the runner, invoke the apps directly:
 cargo run --bin crm -- --report tickets --config custom_config.json --start-date eomonth --end-date tomorrow --custom-download-folder "C:\\temp\\downloads"
 ```
 
-**Tasker Worker:**
+**Tasker standard task:**
 ```bash
-cargo run --bin tasker -- --task 1 --only-call-center --send-exceptions
+cargo run --bin tasker -- --task 1
+```
+
+**Tasker Call Center-only task:**
+```bash
+cargo run --bin tasker -- --task 1 --only-call-center
+```
+
+**Tasker exception task:**
+```bash
+cargo run --bin tasker -- --task 1 --send-exceptions
 ```
 
 ## Logs and Debugging
@@ -69,11 +83,11 @@ The automatic pull-request CI runs through `.github/workflows/test.yml`:
 - `Clippy Lints` depends on successful formatting and checks out the latest PR branch ref, including any formatting commit made by the first job.
 - `Test Suite` starts after formatting and after Clippy completes. It runs even if Clippy fails, provided formatting succeeded, so both validation results remain visible.
 - If formatting fails, neither Clippy nor Test Suite runs. The separate `.github/workflows/auto-format.yml` is retained for manual `workflow_dispatch` only to avoid racing the integrated PR workflow.
-- The integrated Test workflow runs on pull requests targeting `main` when Rust source files (`**/*.rs`), `Cargo.toml`, `Cargo.lock`, or either CI workflow changes. It also supports manual `workflow_dispatch`.
+- The Test workflow runs on pull requests and pushes to `main` when Rust, JavaScript, PowerShell, JSON/JSONC, Cargo manifests/lockfile, selected workflow files, `.gitignore`, or `deny.toml` change. It also supports manual `workflow_dispatch`.
 
 ### Rust build cache
 
-Clippy and Test Suite run on separate ephemeral Windows runners, so they cannot share an on-disk `target` directory directly. Both jobs use `Swatinem/rust-cache@v2` with the additional key `rust-ci` and `cache-on-failure: true`, while retaining the action's default job-specific cache key. This gives Clippy and Test Suite separate cache entries: the same immutable GitHub cache key is not shared between jobs, so a cache hit in Clippy cannot prevent Test Suite from saving its own compiled dependency artifacts. The action can save eligible cache data even when the command fails. Cargo may still compile artifacts when profiles, features, flags, toolchain, or source/dependency fingerprints differ; the cache primarily preserves dependencies and does not cache workspace crates by default. A cache hit therefore reduces repeat downloads and compatible dependency compilation, but does not guarantee a fully incremental build.
+Clippy and Test Suite run on separate ephemeral Windows runners, so they cannot share an on-disk `target` directory directly. Both jobs use `Swatinem/rust-cache@v2` with shared-key `rust-repo-windows`, distinct job keys (`clippy` and `test`), and `cache-on-failure: true`, while retaining the action's job-specific cache behavior. This gives Clippy and Test Suite separate cache entries: the same immutable GitHub cache key is not shared between jobs, so a cache hit in Clippy cannot prevent Test Suite from saving its own compiled dependency artifacts. The action can save eligible cache data even when the command fails. Cargo may still compile artifacts when profiles, features, flags, toolchain, or source/dependency fingerprints differ; the cache primarily preserves dependencies and does not cache workspace crates by default. A cache hit therefore reduces repeat downloads and compatible dependency compilation, but does not guarantee a fully incremental build.
 
 The `test_real_duplicate_admission_race` regression test must initialize its isolated `RunnerConfig` with `allow_shell_tasks: true`: shell commands are disabled by default, so leaving the default in this test prevents the marker command from running and causes a misleading missing-marker failure. Use a struct update initializer (`..RunnerConfig::default()`) rather than reassigning a field after `Default::default()`, because Clippy treats `field-reassign-with-default` as an error in CI. The test keeps its absolute marker path and on Windows invokes PowerShell with `Add-Content -LiteralPath` and `Start-Sleep`; it still verifies exactly one execution for concurrent admissions.
 
@@ -92,14 +106,14 @@ The CI stages run in this order:
 
 ### Rust CI approval gate
 
-The `Test` workflow's `Format and Auto-fix` job references the GitHub Environment `format-approval`. To make the workflow wait for human approval before formatting or pushing formatting changes:
+The separate `Auto Format` workflow's format job references the GitHub Environment `format-approval`. To make a manually dispatched Auto Format run wait for human approval before formatting or pushing formatting changes:
 
 1. Open the repository on GitHub and go to **Settings → Environments**.
 2. Create an environment named exactly `format-approval` (if it does not already exist).
 3. Under **Deployment protection rules**, enable **Required reviewers** and add the intended approver.
 4. Save the environment settings.
 
-When configured, a pull-request or manual workflow run pauses before the `format` job starts. After approval, the existing sequence continues: Format and Auto-fix → Clippy Lints → Test Suite. The YAML reference alone does not configure Required reviewers; verify the Environment settings in GitHub. Availability of Required reviewers for private repositories depends on the repository's GitHub plan.
+When configured, a manually dispatched Auto Format run pauses before its format job starts. This environment is not referenced by the integrated Test workflow. The YAML reference alone does not configure Required reviewers; verify the Environment settings in GitHub. Availability of Required reviewers for private repositories depends on the repository's GitHub plan.
 
 ## Concurrency
 
@@ -119,9 +133,15 @@ Task execution is concurrent, with an execution manager enforcing collision prev
 - The Dashboard updater filters out the `Position` and `Is Exception` columns.
 - Ensure the input CSV has a properly formatted `Created At` or `Creation Date` column, as the system relies on it to dynamically append `Month` and `Day` columns.
 
+## Lead Result Retention and Call Center Routing
+
+Each CSV Analysis run writes the enriched ticket output to the configured `output_file` and, when recent lead exports exist, writes a separate `lead_result.csv` in the same directory. The lead result adds or replaces a `team` column based only on the lead's `Assignee` lookup in the configured users export. Unassigned or unmapped assignees remain blank; no category/type assignment fallback is applied. Matching recent lead exports are processed newest-first and deduplicated by Lead Id. If no recent lead export exists, the previous lead_result.csv is left untouched, but that stale file is not used as a new Call Center attachment for that run.
+
+Call Center email attachments are generated from this saved lead result and include only `team = Call Center` rows with status `New` or `Follow-up`, excluding configured branches. Other teams' leads remain in `lead_result.csv` and are not sent to Call Center.
+
 ## Call Center Execution
 - Running the tasker app via CLI with `--only-call-center` explicitly funnels data to the call center team bucket.
-- This mode automatically triggers the CRM lead generation report export as a secondary attachment alongside the primary ticket list, skipping standard branching logic.
+- This mode uses the lead_result.csv produced by the configured CSV Analysis task when recent lead exports are available. The attachment contains only leads mapped to the Call Center team with status New or Follow-up and branches not listed in exclude_branches. It does not trigger a CRM lead export itself.
 - **Runner Manifest Execution Limits:** The `handle_api_apps_manifest` endpoint enforces a strict 10-second timeout using `tokio::time::timeout`. If the application fails to return its manifest within 10 seconds, the child process tree is forcefully terminated using OS-level commands (`taskkill /F /T /PID` on Windows or `pkill -P` on Unix) to prevent process hanging and file handle exhaustion.
 - **TaskLogger I/O Isolation:** `TaskLogger` executes filesystem I/O (log directory creation, file creation, appending bytes, and flushing) using asynchronous `tokio::fs` coupled with Tokio `Mutex` serialization. This ensures Tokio's core executor pool is not stalled by slow I/O when generating large task logs, while also guaranteeing strict log line ordering without cloned file handles. The logger is lazily initialized on the first log line or path request, and safely retries initialization across temporary filesystem errors without permanent lock-out.
 

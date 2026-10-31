@@ -1,66 +1,63 @@
 # Architecture
 
-The system is split into multiple executables designed to run together, orchestrated by a central `runner`. Executable behavior logic is shared and defined via library modules.
+## Repository and package structure
 
-For a detailed guide on how to fundamentally reconstruct these components and their data models from scratch using AI, see the [AI Rebuild Guide](./REBUILD_GUIDE.md).
+The repository builds a single Rust package, crm_tool, from one Cargo.toml. It declares five explicit binaries rather than separate Cargo packages:
 
-## Component Overview
+| Binary | Main source | Responsibility |
+|---|---|---|
+| runner | src/bin/runner.rs, src/runner/** | Scheduling, local GUI, task admission, pipelines and child-process lifecycle |
+| crm | src/bin/crm.rs, src/crm/** | CRM authentication, API requests and report downloads |
+| yasweb | src/bin/yasweb.rs, src/yasweb/** | Headless browser report automation |
+| tasker | src/bin/tasker.rs, src/tasker/** | CSV/report processing, Excel automation and Outlook workflows |
+| crm_updater | src/bin/crm_updater.rs, src/crm_updater/** | Local diagnostics collection and application update orchestration |
 
-1.  **Runner (`src/bin/runner.rs`, `src/runner/*`)**: The background daemon. It runs as a system tray application on Windows, provides a local HTTP GUI, parses the overall `runner_config.json`, manages a chron-like schedule, and orchestrates task execution (launching `shell_command` or dynamically registered `external_app` processes).
-2.  **AppManifest System (`src/manifest.rs`, `md/MANIFEST_SCHEMA.md`)**: A JSON standard dictating how `crm`, `yasweb`, and `tasker` advertise their command-line arguments to the `runner` application, allowing the runner GUI to construct inputs dynamically.
-3.  **CRM Fetcher (`src/bin/crm.rs`, `src/crm/*`)**: A one-shot CLI utility handling Cognito SRP authentication, report payload requests (Tickets, Calls, Leads), and CSV downloading. Handles edge cases like ignoring empty configuration flags injected by the runner, and overriding configurations via CLI arguments such as `--custom-download-folder`.
-4.  **Yasweb Automation (`src/bin/yasweb.rs`)**: A headless Chrome automation utility used to log into an external Yasweb Angular dashboard, discover and configure filters, and extract generated data via iframe injection. Reports can execute concurrently, while a shared semaphore limits active browser operations using `yasweb_config.json` → `concurrency` (default 6; `0` means unlimited, `1` serializes operations, and values above `1` set the maximum). Runner owns date-range scheduling; YASWEB does not split ranges into monthly batches.
-5.  **Tasker (`src/bin/tasker.rs`, `src/tasker/*`)**: A backend utility dedicated to processing generated CSV datasets and transmitting HTML/Excel summary reports via Outlook COM automation or other channels. It also parses `lead_report` files and attaches filtered reports for the Call Center. CSV readers are created through shared utilities in `src/utils.rs`. The default reader is strict about row widths; callers that need to tolerate variable column lengths must opt into flexible parsing explicitly.
+Shared utilities, manifest types and common behavior are exported through src/lib.rs.
 
-## Execution Flow (Runner -> Dynamic Task)
+## Runtime responsibilities
 
-The runner GUI exposes a central execution dashboard. If a user sets up a new application via the **Apps** page, the `runner` fetches its manifest via the `--manifest` flag (e.g. `crm.exe --manifest`).
+### Runner
 
-When a task is executed on its schedule, the `runner/engine.rs` now executes it using a deterministic Pipeline Execution Engine. Tasks are represented as a sequence of `TaskStep`s. Each `TaskStep` contains one or more `ActionSpec`s (representing a `shell_command` or an `external_app`) and operates in either `Sequential` or `Parallel` execution mode.
+Runner loads runner_config.json, starts the scheduler and local HTTP GUI, and on Windows provides a system-tray interface. It dispatches configured shell commands or registered external applications. An external app can expose an AppManifest; Runner uses that schema to build dynamic GUI inputs and determine which CLI arguments the app supports.
 
-- **Sequential TaskSteps** execute each action one-by-one. The step fails immediately if any action fails.
+Runner tasks can contain multiple steps and actions. Sequential steps execute actions in order; parallel steps execute actions concurrently. Post-run steps are a separate pipeline executed after the main pipeline succeeds. Application-level locks and the execution manager coordinate admission and prevent duplicate task execution while the same task is queued or running.
 
-- **Parallel TaskSteps** execute all actions concurrently, waiting for all to complete before continuing. If any action fails, the step is considered failed.
+### CRM
 
-If the primary pipeline completes successfully, any configured `post_run_steps` are subsequently executed using the same pipeline mechanics. The engine leverages `tokio::process` to spawn and track process states, piping logs, and capturing timeouts on a per-action basis.
+CRM is a one-shot CLI worker. It authenticates against the configured CRM service, requests selected report types, downloads report payloads, and writes exports into the configured download directory. Ticket exports can be split into bounded date ranges and fetched concurrently; see [Fetcher](./FETCHER.md) and [Downloader](./DOWNLOADER.md).
 
-## Process Lifecycle & Graceful Shutdown
-The runner acts as an asynchronous daemon. When it receives a termination signal (`Ctrl+C` on Unix, or "Exit" from the Windows system tray), it broadcasts a `Shutdown` command.
-The Execution Manager tracks all actively running processes via `tokio::task::JoinHandle`. During shutdown, it explicitly `.abort()`s these handles, ensuring that child shells, browser sessions, or fetching scripts are cleanly terminated before the daemon exits, preventing zombie processes.
+### Yasweb
 
-**Process Lifecycle Limits:** Strict timeout and termination limits are globally enforced per child process. When a task triggers a timeout, the Runner issues a complete process tree termination (e.g., using `taskkill /F /T /PID` on Windows or `pkill -P` on Unix), ensuring that no descendant shells or long-running worker processes outlive their parent. Output bounds are strictly capped (e.g., to 10MB) to prevent memory ballooning from excessively noisy tasks.
+Yasweb automates configured reports through headless Chrome. Report definitions, selectors, filters, date-key mappings, and browser settings are stored in yasweb_config.json. A shared concurrency limit controls active browser operations in one Yasweb process. Runner owns recurring scheduling and date-period expansion; Yasweb receives dates for each invocation and does not independently split a Runner period into monthly batches.
 
-## Script Manager & Execution Constraints
+### Tasker
 
-The application utilizes a `ScriptManager` utility to standardize the execution of inline scripting (like PowerShell automation). This standard completely bypasses command injection risks by managing deterministic script templates.
-- **Persistent Generation**: Script files are deterministically serialized and stored persistently under `<exe_dir>/scripts/<Task Folder>/`.
-- **Hash Fingerprinting**: The persistence utilizes a canonical SHA-256 fingerprint generated solely from the static text structure of the generator template.
-- **Runtime Separation**: Instead of interpolating dynamic user-strings or config parameters directly into scripts (which opens injection vectors), runtime data is exclusively passed via strictly separated CLI arguments to parameterized script blocks (e.g. `param($arg1)`). The scripts themselves remain statically hashed and are updated only when core logic within the Rust codebase is modified.
+Tasker is a configured worker that processes tasks from tasker_config.json. Its task implementations include CSV analysis, dashboard refresh, CRM Open Sohail, department splitting, OPD analysis, SAT figures and users export. It uses shared CSV utilities and, where configured, Windows Excel/Outlook COM automation through managed PowerShell scripts.
 
-## Data Persistence
+For csv_analysis, ticket output and lead output are distinct artifacts. The ticket result remains at output_file; when recent lead exports exist, lead_result.csv is written beside it. Lead team is derived from Assignee via the users mapping; only eligible Call Center leads are included in the Call Center leads attachment. Other teams remain in the durable lead result for review. See [Tasker](./TASKER.md).
 
-*   **Config State:** Configuration files (`runner_config.json`, `config.json`, `yasweb_config.json`, `tasker_config.json`) are automatically created in the exact same directory as their relative executables with sane defaults if missing.
-*   **Logging State:** Application logs (`runner.log`, `crm.log`, `yasweblog`, `task_csv_analysis.log`, etc.) are heavily emitted into the exact same local execution directory using non-blocking thread workers.
+### CRM Updater
 
-## Components Update
+CRM Updater supports two operational paths: collecting local logs/reports into timestamped folders and applying staged executable replacements. The replacement script runs detached so the updater process can exit before its own executable is replaced. The updater's package trust limitation is documented in [CRM Updater](./CRM_UPDATER.md) and [Production Readiness](./PRODUCTION_READINESS.md).
 
-- **`tasker`:** Aggregates and emails reports based on configured bucket logic. Supports `--send-exceptions` to dynamically read teams mapped in `category_exceptions` and group exception tickets dynamically, using only mapped CC lists and ignoring standard global logic.
-### Recent Fixes
-- **`crm`**: Empty flags passed correctly; improved empty check to correctly bypass.
-- **`yasweb`**: Timeout parsing issues resolved.
-- **`runner`**: Implemented `AppLockManager` to enforce deterministic, step-level application locks.
+## Configuration and persistence
 
-#### CRM Ticket Range Fetching
-Ticket exports are grouped into batches of at most three calendar months, with up to three initial batches executed concurrently. Failed ranges are aggregated into the returned error, while signed-URL failures retain recursive range splitting. Invalid ticket date formats fall back to one direct request for the original range. HTTP error-body diagnostics are bounded to a UTF-8-safe 4096-byte preview at DEBUG level; full response bodies are not logged.
+Each executable has a dedicated configuration file. Defaults are generally located beside the executable; CLI overrides and legacy path behavior are documented in [Configuration](./CONFIG.md) and [CLI](./CLI.md). Configuration writes use shared atomic-write/merge helpers where integrated. Runner mutations are serialized with in-process config access and read back after persistence to detect failed saves.
 
-## CRM Execution & Error Propagation
-- The `crm` binary correctly propagates individual report failures (e.g. `HTTP 500`) outwards, immediately terminating the binary execution with a non-zero exit code.
-- Relative date logic and CLI resolution exclusively utilizes Local system time (`chrono::Local::now()`) to prevent date boundary shifts (due to UTC vs timezone offset collisions).
+## Manifest contract
 
-## PowerShell Script Source and CRM Updater Lifecycle
+The AppManifest describes an application's name, description and accepted CLI arguments. Argument metadata supports data types, required flags, defaults, options, dependencies and autofill. Runner uses the manifest both to construct app forms and to avoid passing unsupported date arguments. See [Manifest Schema](./MANIFEST_SCHEMA.md).
 
-Production PowerShell templates touched by Tasker and CRM Updater are kept as standalone `.ps1` source files and embedded at compile time with `include_str!`, rather than maintained as large Rust raw-string literals. This keeps script logic editable and reviewable without requiring loose script files at runtime.
+## Logging and process management
 
-Tasker uses `ScriptManager` for managed script persistence and execution where wired by the caller. CRM Updater uses managed scripts for draft scanning, file unblocking, and applying updates. The update application script is launched detached through `ScriptManager::execute_script_detached_with_args`; this is intentional because the updater process must be able to exit while the replacement script waits for processes to stop, replaces executables, and restarts configured applications. The replacement-map JSON is passed as a temporary data file, not embedded as PowerShell source.
+Applications use the shared tracing setup with configured stdout/file levels. Runner maintains a top-level scheduler log and per-task execution logs. Its task logger can recover after its log file is moved or deleted and writes a redacted configuration snapshot when the log is reopened. Task-specific logs contain detailed child-process output.
 
-Yasweb is browser automation driven by Rust and injected JavaScript; the reviewed Yasweb sources did not contain PowerShell scripts to externalize in this change.
+Managed PowerShell templates are maintained as source files and embedded at build time where wired through include_str!. ScriptManager persists managed scripts under the executable directory and passes runtime values as separate arguments/data files rather than interpolating them into script source.
+
+## Security boundaries
+
+- Runner's control GUI is intended for loopback access; non-loopback binding is rejected by startup validation.
+- State-changing GUI operations require POST rather than GET.
+- CSV parsing is strict by default; code paths requiring different parsing behavior must opt in explicitly and document the reason.
+- Runtime secrets and configuration values must not be written to logs without redaction.
+- CRM Updater's legacy ZIP password and archive hash checks do not authenticate the publisher; see its production gate.

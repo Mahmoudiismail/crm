@@ -877,8 +877,10 @@ async fn test_sequential_period_execution() {
         period_mode: PeriodMode::Monthly,
         start_date: Some("2026-01-01".to_string()),
         end_date: Some("2026-02-28".to_string()),
-        start_date_arg: None,
-        end_date_arg: None,
+        // Explicit mappings make this synthetic app periodization-capable
+        // without requiring it to expose a real --manifest endpoint.
+        start_date_arg: Some("--start-date".to_string()),
+        end_date_arg: Some("--end-date".to_string()),
     };
 
     let mut task = RunnerTask {

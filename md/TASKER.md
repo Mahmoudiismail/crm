@@ -12,13 +12,14 @@ Configured tasks are run in order. If a task fails, Tasker logs the error and re
 
 ## Configuration
 
-`tasker` looks for a `tasker_config.json` file in the same directory as the executable by default. You can override this by passing the path as the first argument, or using explicit flags. If the targeted configuration file does not exist, `tasker` will automatically generate a default configuration file with a template `csv_analysis` task and log a message to inform the user before attempting to run. Additionally, on each run, `tasker` will automatically scan the existing configuration and merge in any missing default configuration fields seamlessly to prevent breaking changes.
+`tasker` looks for `tasker_config.json` beside the executable by default. `--config <PATH>` selects another file; relative paths for this option are resolved from the executable directory. The legacy positional path is still accepted and retains current-working-directory path semantics. Startup logging-level detection and task execution use the same selected path. If the targeted configuration file does not exist, `tasker` automatically generates a default configuration file with a template `csv_analysis` task and logs a message before attempting to run. On each run, it also merges missing default configuration fields without overwriting user values.
 
 ### CLI Arguments
 - `--config <PATH>`: Overrides the default `tasker_config.json` path. (Legacy support also allows passing just the path without the flag, as long as it does not start with `-`).
 - `--task <INDEX>`: Executes only a specific task from the configuration (1-based index). For example, `--task 1` runs only the first task in the config array.
-- `--only-call-center`: When provided, the task skips generating per-team and per-branch emails, and *only* processes and sends the Call Center email logic for the target task.
-- `--only-call-center2`: When provided, the task skips generating per-team and per-branch emails, and *only* processes and sends the Call Center2 email logic for the target task.
+- `--only-call-center`: When provided, the task skips standard per-team/per-branch email generation and runs the Call Center email path for the selected task.
+- `--send-exceptions`: Runs the configured exception-ticket reporting path. Exception mode bypasses standard team/branch routing and the specialized Call Center lead attachment path. The CLI flag itself does not require `--task`; Runner's manifest exposes it conditionally for task selection.
+- `--start-date <DATE>`: Overrides the configured task start date; this option requires `--task`.
 
 **Example: Scheduling in runner_config.json**
 To schedule these separately in the `runner`, you can configure two different tasks in `runner_config.json`:
@@ -91,10 +92,10 @@ This task is designed to process multiple ticket report CSV files and augment th
 
 #### Fields Description
 - `type`: Must be `"csv_analysis"`.
-- `download_path`: Directory to search for downloaded CSV files. It matches files prefixed with `ticket_report` and ending with `.csv`.
+- `download_path`: Directory to search for recent CRM exports. Ticket processing reads `ticket_report*.csv`; lead enrichment reads `lead_report*.csv`.
 - `users_file`: Path to the users mapping CSV (formerly PowerQuery Table11).
 - `assignment_settings_file`: Path to the assignment settings CSV containing category, type, and subtype mappings.
-- `minutes_ago`: Will only process ticket CSV files that have been modified within the last X minutes.
+- `minutes_ago`: Limits both ticket and lead source CSVs to files modified within the last X minutes.
 - `start_date`: (Optional) String representing a date (e.g. "01-May-2026") to filter out tickets created before this date.
 - `exclude_branches`: Array of strings. Tickets belonging to these branches will be excluded from the final output (case-insensitive).
 - `exclude_categories`: Array of strings. Tickets belonging to these categories will be excluded from the final output (case-insensitive).
@@ -102,7 +103,7 @@ This task is designed to process multiple ticket report CSV files and augment th
   - `category`: The category string that normally would be excluded.
   - `branch`: (Optional) Only allow the exception if the ticket branch matches this.
   - `team`: (Optional) If specified and the exception matches, this overrides and assigns the ticket to this team.
-- `output_file`: Destination file path to write the combined, joined, and augmented CSV output.
+- `output_file`: Destination path for the enriched ticket result. Tasker also writes `lead_result.csv` beside this file whenever recent lead exports are available. The lead result preserves the lead columns and adds/updates `team` using the assignee's primary team from `users_file`; an empty or unknown assignee leaves `team` blank. The lead result includes all recent source lead statuses and branches for review. Source files are limited by the configured minutes_ago lookback. Rows are deduplicated by Lead Id across matching recent exports, with the newest source file considered first. The existing ticket output is not replaced by the lead output.
 - `email_config`: (Optional) Specifies automated email configuration via Microsoft Outlook.
   - `team_mapping_file`: Path to CSV configuring email recipients per Team or Branch Name (Requires headers `Team Name`, `To Emails`, `CC`).
   - `body_template_file`: (Optional) Path to an HTML file to use as the email template. If it does not exist, `tasker` will auto-generate it. It extracts the subject from the `<title>` tag and the content from the `<body>` tag, replacing `{bucket_name}`, `{from_date_str}`, `{today_str}`, and `{html_table}` dynamically.
@@ -112,7 +113,7 @@ This task is designed to process multiple ticket report CSV files and augment th
   - `send_per_team_all_branches`: List of teams (e.g., "PRE-AUTHORIZATION") whose tickets should be aggregated into a single email spanning across all allowed branches, rather than partitioned by individual branch rules.
   - `send_per_branch_branches`: List of branches that will receive *one email for the entire branch* instead of separated by team.
   - `send_per_team_branches`: List of branches that should have their emails sent per team.
-  - `send_call_center`: Boolean, if true unifies the "Call Center" tickets from all allowed branches into a single email instead of being grouped with the others. It also automatically discovers, parses, and attaches any matching `lead_report_*.csv` files for the Call Center bucket (even if there are zero open tickets for the target period).
+  - `send_call_center`: Boolean, if true unifies the "Call Center" tickets from all allowed branches into a single email instead of being grouped with the others. It also builds the leads attachment from `lead_result.csv`, including only rows whose `team` is `Call Center`, whose status is `New` or `Follow-up`, and whose branch is not excluded. Leads assigned to other teams, plus blank/unknown assignees, remain in the durable `lead_result.csv` for review and are not included in the Call Center attachment.
   - `indentation_spaces`: (Optional) Customizable number of non-breaking spaces before the email body content for indentation. Defaults to 4.
 
 ### `dashboard_updater` Task

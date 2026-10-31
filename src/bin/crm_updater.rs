@@ -20,8 +20,19 @@ struct Args {
     )]
     logs_only: bool,
 
+    #[arg(long, value_name = "PATH", help = "Path to updater configuration JSON")]
+    config: Option<PathBuf>,
+
     #[arg(long, help = "Print the manifest and exit")]
     manifest: bool,
+}
+
+fn resolve_config_path(config_arg: Option<&std::path::Path>, exe_dir: &std::path::Path) -> PathBuf {
+    match config_arg {
+        Some(path) if path.is_absolute() => path.to_path_buf(),
+        Some(path) => exe_dir.join(path),
+        None => exe_dir.join("updater_config.json"),
+    }
 }
 
 fn main() -> Result<()> {
@@ -32,6 +43,7 @@ fn main() -> Result<()> {
             name: "CRM Updater".to_string(),
             description: "Updates the CRM tool and runner, and collects logs locally".to_string(),
             arguments: vec![
+                AppArg::new("--config", ArgType::String),
                 AppArg::new("--update-only", ArgType::Boolean),
                 AppArg::new("--logs-only", ArgType::Boolean),
             ],
@@ -49,7 +61,7 @@ fn main() -> Result<()> {
 
     crm_tool::tasker::script_manager::ScriptManager::new().install_builtin_scripts()?;
 
-    let config_path = exe_dir.join("updater_config.json");
+    let config_path = resolve_config_path(args.config.as_deref(), &exe_dir);
 
     let default_config = UpdaterConfig {
         downloads_dir: "downloads".to_string(),
@@ -111,4 +123,35 @@ fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn config_path_supports_default_relative_and_absolute_paths() {
+        let exe_dir = std::path::Path::new("C:/CRM");
+        assert_eq!(
+            resolve_config_path(None, exe_dir),
+            exe_dir.join("updater_config.json")
+        );
+        assert_eq!(
+            resolve_config_path(Some(std::path::Path::new("custom.json")), exe_dir),
+            exe_dir.join("custom.json")
+        );
+        let temp = tempfile::tempdir().unwrap();
+        let absolute = temp.path().join("updater.json");
+        assert_eq!(resolve_config_path(Some(&absolute), exe_dir), absolute);
+    }
+
+    #[test]
+    fn cli_accepts_config_parameter() {
+        let args = Args::try_parse_from(["crm_updater", "--config", "custom.json"])
+            .expect("config argument should parse");
+        assert_eq!(
+            args.config.as_deref(),
+            Some(std::path::Path::new("custom.json"))
+        );
+    }
 }

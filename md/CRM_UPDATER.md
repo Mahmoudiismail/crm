@@ -1,6 +1,6 @@
 # CRM Updater
 
-`crm_updater` is a standalone binary in the CRM tool workspace designed to automate application updates and move reports, logs, and diagnostics into local collections.
+`crm_updater` is a standalone binary in the CRM Tool Cargo package designed to automate application updates and move reports, logs, and diagnostics into local collections.
 
 ## Features
 
@@ -72,11 +72,14 @@ When first run, `crm_updater` generates a default `updater_config.json` configur
 
 ## CLI Options
 
+The updater uses `updater_config.json` beside the executable by default. Pass `--config <PATH>` to select another configuration; relative paths are resolved from the executable directory and absolute paths are used unchanged. The selected file controls both updater settings and logging levels.
+
 By default, executing `crm_updater` runs the local collection pipeline first, followed by the update pipeline.
 Granular execution can be triggered using the following CLI flags:
 
 - `--update-only`: Executes **only** the application update pipeline.
 - `--logs-only`: Executes **only** local report/log collection without compression.
+- `--config <PATH>`: Selects the updater configuration file.
 
 Example:
 ```bash

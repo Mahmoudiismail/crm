@@ -1,6 +1,7 @@
 use crate::manifest::AppManifest;
 use anyhow::{Context, Result};
 use serde::{de::DeserializeOwned, Serialize};
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
@@ -34,17 +35,63 @@ pub fn resolve_relative_to_exe_dir(path: &str) -> PathBuf {
     }
 }
 
-/// Initializes the global tracing subscriber with independent levels for stdout and file.
+/// Append-mode log writer that recreates its target if it is moved or deleted.
+struct ReopenLogFile {
+    path: PathBuf,
+    file: Option<std::fs::File>,
+    recovery_header: String,
+}
+
+impl ReopenLogFile {
+    fn open(&mut self) -> io::Result<()> {
+        if let Some(parent) = self.path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.path)?;
+        if !self.recovery_header.is_empty() {
+            let now = chrono::Local::now().to_rfc3339();
+            writeln!(
+                file,
+                "[{}] RUNNER CONFIG SNAPSHOT (sensitive values redacted):",
+                now
+            )?;
+            file.write_all(self.recovery_header.as_bytes())?;
+            file.write_all(b"\n")?;
+        }
+        self.file = Some(file);
+        Ok(())
+    }
+}
+
+impl Write for ReopenLogFile {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        if !self.path.exists() {
+            self.file = None;
+        }
+        if self.file.is_none() {
+            self.open()?;
+        }
+        self.file
+            .as_mut()
+            .expect("log file is opened above")
+            .write(bytes)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        match self.file.as_mut() {
+            Some(file) => file.flush(),
+            None => Ok(()),
+        }
+    }
+}
+
+/// Initializes the global tracing subscriber with independent stdout and file levels.
 ///
-/// The file logger rolls dynamically and defaults to being placed in the executable directory.
-///
-/// # Parameters
-/// - `app_name`: Used to construct the log file name (e.g., `<app_name>.log`).
-/// - `stdout_level`: The minimum log level to display in the terminal.
-/// - `file_level`: The minimum log level to persist to disk.
-///
-/// # Returns
-/// A `WorkerGuard` that ensures logs are flushed when dropped. This must be held for the duration of the program.
+/// The file is reopened when its configured path disappears. The returned guard must
+/// be held for the duration of the program so queued log events are flushed.
 pub fn setup_logging_with_levels(
     app_name: &str,
     stdout_level: tracing_subscriber::filter::LevelFilter,
@@ -53,8 +100,37 @@ pub fn setup_logging_with_levels(
     let log_dir =
         executable_dir().context("Could not determine executable directory for logging")?;
     let file_appender = tracing_appender::rolling::never(&log_dir, format!("{}.log", app_name));
-    let (non_blocking_file, guard) = tracing_appender::non_blocking(file_appender);
+    setup_logging_with_writer(app_name, stdout_level, file_level, file_appender)
+}
 
+/// Like `setup_logging_with_levels`, but recreates the log file if it is moved/deleted
+/// and repeats the supplied header whenever the file is opened.
+pub fn setup_logging_with_levels_and_header(
+    app_name: &str,
+    stdout_level: tracing_subscriber::filter::LevelFilter,
+    file_level: tracing_subscriber::filter::LevelFilter,
+    recovery_header: &str,
+) -> Result<tracing_appender::non_blocking::WorkerGuard> {
+    let log_dir =
+        executable_dir().context("Could not determine executable directory for logging")?;
+    let file_appender = ReopenLogFile {
+        path: log_dir.join(format!("{}.log", app_name)),
+        file: None,
+        recovery_header: recovery_header.to_string(),
+    };
+    setup_logging_with_writer(app_name, stdout_level, file_level, file_appender)
+}
+
+fn setup_logging_with_writer<W>(
+    app_name: &str,
+    stdout_level: tracing_subscriber::filter::LevelFilter,
+    file_level: tracing_subscriber::filter::LevelFilter,
+    file_writer: W,
+) -> Result<tracing_appender::non_blocking::WorkerGuard>
+where
+    W: Write + Send + 'static,
+{
+    let (non_blocking_file, guard) = tracing_appender::non_blocking(file_writer);
     let file_layer = fmt::layer()
         .with_writer(non_blocking_file)
         .with_ansi(false)
@@ -78,7 +154,6 @@ pub fn setup_logging_with_levels(
             app_name, e
         );
     }
-
     Ok(guard)
 }
 
@@ -1132,5 +1207,37 @@ mod configuration_merge_regression_tests {
         assert!(merge_json(&mut current, &defaults));
         assert_eq!(current["exclude_branches"], json!(["custom", "other"]));
         assert!(current["new_field"].as_bool().unwrap_or(false));
+    }
+}
+
+#[cfg(test)]
+mod reopen_log_file_tests {
+    use super::ReopenLogFile;
+    use std::io::Write;
+
+    #[test]
+    fn recreates_moved_log_and_repeats_recovery_header() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("runner.log");
+        let moved = temp.path().join("runner-archived.log");
+        let mut writer = ReopenLogFile {
+            path: path.clone(),
+            file: None,
+            recovery_header: r#"{"tasks":[]}"#.to_string(),
+        };
+
+        writer.write_all(b"first event\n").unwrap();
+        writer.flush().unwrap();
+        std::fs::rename(&path, &moved).unwrap();
+        writer.write_all(b"second event\n").unwrap();
+        writer.flush().unwrap();
+
+        let archived = std::fs::read_to_string(moved).unwrap();
+        let recreated = std::fs::read_to_string(path).unwrap();
+        assert!(archived.contains("RUNNER CONFIG SNAPSHOT"));
+        assert!(archived.contains("first event"));
+        assert!(recreated.contains("RUNNER CONFIG SNAPSHOT"));
+        assert!(recreated.contains(r#"{"tasks":[]}"#));
+        assert!(recreated.contains("second event"));
     }
 }

@@ -1,106 +1,50 @@
-# Scheduler and Tray Runtime
+# Runner Scheduler and System Tray
 
-Primary implementation: `src/bin/runner.rs`, `src/runner/engine.rs`, `src/runner/config.rs`, `src/runner/gui.rs`
+Primary entry points: src/bin/runner.rs, with implementation under src/runner/.
 
-## Single Instance Guard
+## Startup
 
-At startup, app binds `127.0.0.1:14592`.
+Runner accepts --config PATH. Relative paths are resolved from the executable directory; an absolute path is used unchanged. If omitted, Runner uses runner_config.json beside the executable.
 
-- bind success -> continue.
-- bind fail -> assume already running and exit gracefully.
+An existing malformed configuration is treated as a startup error; Runner does not silently replace it with defaults. If the configuration file is missing, Runner starts with defaults and schedules a non-manual Run All request after startup.
 
-## Tray Setup
+Runner uses a single-instance guard by binding the local port 127.0.0.1:14592. If the bind fails, it reports that Runner may already be running and exits.
 
-Menu items:
+## Windows tray
 
-- `Run All Tasks Now`
-- `Run CRM (Tickets Only)`
-- `Open Runner GUI`
-- `View Logs`
-- `Exit`
+The current tray menu contains:
 
-Behavior:
+- Run All Tasks Now — requests a manual run of all eligible tasks.
+- Open Runner GUI — opens the configured local GUI URL.
+- View Logs — opens runner.log beside the executable.
+- Exit — requests shutdown and exits the tray event loop.
 
-- On `Run All Tasks Now`: trigger all enabled tasks in runner config.
-- On `Run CRM (Tickets Only)`: trigger ad-hoc CRM fetch with report `tickets`.
-- On `Open Runner GUI`: open configured runner GUI URL.
-- On `View Logs`: open `<exe_dir>/runner.log`.
-- On `Exit`: stop event loop.
+The tray does not currently expose a separate Run CRM (Tickets Only) item.
 
-## Scheduler Loop
+On non-Windows platforms Runner runs headless and listens for Ctrl+C to initiate shutdown.
 
-The runner uses **cron-based polling** to evaluate task schedules:
+## Scheduler and manual tasks
 
-1. **Config Reload**: Re-load `runner_config.json` each cycle.
-2. **Poll Interval**: Sleep for `poll_interval_seconds` (minimum 5s, configurable in engine loop).
-3. **Cron Evaluation**: For each enabled task, check all schedules using the `schedule_is_due()` function:
-   - **Interval**: Check if current time >= `next_run_at`. If `start_time` is configured (e.g. 08:00), the task will only run during hours that are multiples of the interval relative to the start time, and only when the current local time is past the start time of the day.
-   - **Once**: Check if current time >= `next_run_at` timestamp
-   - **Daily**: Check if current time >= calculated `next_run_at` for today's times
-   - **Weekly**: Check if current time >= calculated `next_run_at` for the target day
-   - **Monthly**: Check if current time >= calculated `next_run_at` for the target date
-   - **Manual (Empty Schedules)**: If a task has an explicitly empty schedules list (`"schedules": []`), it represents a purely Manual execution mode. It will never run automatically and will strictly wait for manual triggers from the GUI or System Tray.
+Runner evaluates configured schedules (including Interval, Daily, Weekly, Monthly and Once schedules) and applies configured working-hours/week-off constraints where supported. A task with an explicitly empty schedules list is manual-only and is not automatically dispatched by the scheduler.
 
-### Application Task Dates and Periodization Modes
-Applications that utilize start/end dates support explicit dynamic expressions:
-- `today`, `yesterday`, `tomorrow`
-- `beginning_of_month` (e.g. `2024-11-01`), `eomonth` (e.g. `2024-11-30`)
-- `next mon` through `next sun` (dynamically resolves to the upcoming occurrence of that weekday).
+Manual Run Task and Run All requests report queue-admission failures instead of treating a failed queue send as a successful trigger. The execution manager is the authoritative duplicate-admission point for queued/running task IDs.
 
-Tasks utilizing dates also construct explicit runtime execution periods via 5 distinct modes (`Daily`/`Custom`, `Monthly`, `Quarterly`, `A Month`, `A Quarter`).
-**Important**: These period representations are transformed into executing instances strictly in memory at runtime and are **NOT** persisted to the configuration file as duplicated `TaskSteps`. The GUI specifically only exposes Start Date, End Date, and Periodization mode inputs when configuring External App specifications that actually define Date requirements in their Manifest, ensuring tasks that do not utilize dates are not cluttered.
-4. **Task Execution**: If any schedule is due, execute the task:
-   - For `shell_command`, run configured commands. Commands can execute sequentially or in parallel
-5. **Task State Update**:
-   - Update `last_run_at` timestamp
-   - Update `last_status` with execution result
-   - For legacy repeat tasks: update `next_run_at` based on `frequency_seconds`
-   - For cron schedules: call `advance_schedule()` to compute next execution time
-   - For one-time schedules: set `enabled=false` after execution
+## Pipelines and concurrency
 
-If multiple schedules on the same task are due in one scheduler tick, the task runs once and all due schedules advance or disable together.
+A task pipeline consists of steps with one or more actions:
 
-At startup, runner ensures config files exist under executable directory:
+- Sequential steps execute actions in order and stop on failure.
+- Parallel steps start actions concurrently and wait for the step to complete; a failed action makes the step fail.
+- Post Run Steps execute as a separate pipeline only after the main pipeline succeeds.
 
-- `runner_config.json` via runner config loader.
-- `config.json` by invoking `crm --config <path> --report none` when missing.
- - If `runner_config.json` already exists, runner does not perform an immediate task run; tasks will begin on the next scheduler cycle.
+Application locks are acquired for a step and released on completion, error or cancellation. Tasks waiting for a non-concurrent application are surfaced as waiting in Runner status. The execution manager prevents duplicate admission of a task ID already queued or running.
 
-## Run Serialization
+## GUI and HTTP safety
 
-Runner status lock prevents overlap:
+The GUI is served on configured gui_host and gui_port; the default address is http://127.0.0.1:8787. Startup validation rejects non-loopback binding. Read-only pages use GET. State-changing actions (create/update/delete, enable/disable, run and similar mutations) require POST; GET requests to mutation endpoints are rejected with HTTP 405.
 
-- if task is already running -> new run is skipped.
-- else run task and clear running flag when complete.
+Request parsing is bounded by connection deadlines and request-size/header limits. See [Runner](./RUNNER.md) for implementation constraints.
 
-This prevents overlap from startup + scheduler + tray actions.
+## Configuration persistence
 
-## GUI Trigger Endpoints
-
-- `GET /`: HTML dashboard
-- `GET /status`: runner status JSON
-- `GET /tasks`: configured tasks JSON
-- `GET /new-task`: create-task HTML form with multi-schedule and multi-command support
-- `GET /edit/<task_id>`: edit-task HTML form with multi-schedule and multi-command support
-- `POST /create`: create task from form fields using the simplified schedule and command row editor
-- `POST /update/<task_id>`: update task from form fields using the simplified schedule and command row editor
-- `GET /create?...`: legacy create task from query-string fields
-- `GET /update/<task_id>?...`: legacy update task from query-string fields
-- `GET /delete/<task_id>`: delete task
-- `GET /run-all`: trigger run-all
-- `GET /run-tickets`: trigger ad-hoc CRM tickets task
-- `GET /run/<task_id>`: trigger specific configured task
-
-Note: action routes redirect back to the dashboard and display a toast notification on success. The GUI form editor supports multiple schedule types (Interval, Once, Daily at times, Weekly on day, Monthly on day) and multiple command rows with per-command error handling (Run/Continue modes).
-
-CRUD operations persist directly to `runner_config.json` and return validation errors immediately when payload values are invalid.
-
-## Safety Controls
-
-- `allow_shell_tasks=false` blocks all `shell_command` task execution.
-- `shell_timeout_seconds` terminates long-running shell tasks by timeout (this can also be overridden per task via `timeout_seconds`).
-- `min_task_interval_seconds` prevents repeat tasks from running too frequently.
-- `shell_command` tasks use `bash -lc` for each command. A command with `continue_on_error=true` does not fail its task.
-
-## Concurrency
-The scheduler uses an execution manager with a concurrency queue. It allows multiple tasks to run simultaneously while enforcing rules to wait if the exact same task ID or an identical external app task is already running.
+Runner serializes GUI/API configuration access with a shared lock. After a mutation is saved, it reloads the file and compares the persisted configuration with the expected state. A read-back mismatch is surfaced as an error. See [Configuration](./CONFIG.md).

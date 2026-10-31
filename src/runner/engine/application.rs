@@ -43,9 +43,6 @@ fn date_args_from_manifest(manifest: &serde_json::Value) -> (Option<String>, Opt
     let mut start = None;
     let mut end = None;
     for arg in arguments {
-        if arg.get("arg_type").and_then(serde_json::Value::as_str) != Some("date_var") {
-            continue;
-        }
         let Some(name) = arg.get("name").and_then(serde_json::Value::as_str) else {
             continue;
         };
@@ -55,6 +52,15 @@ fn date_args_from_manifest(manifest: &serde_json::Value) -> (Option<String>, Opt
             .to_ascii_lowercase()
             .replace('_', "-");
         let words: Vec<&str> = normalized.split('-').collect();
+        let is_date_argument = arg.get("arg_type").and_then(serde_json::Value::as_str)
+            == Some("date_var")
+            || (words.contains(&"date")
+                && (words
+                    .iter()
+                    .any(|word| matches!(*word, "start" | "from" | "end" | "to"))));
+        if !is_date_argument {
+            continue;
+        }
         if start.is_none()
             && (words.iter().any(|word| *word == "start" || *word == "from"))
             && words.contains(&"date")
@@ -68,6 +74,26 @@ fn date_args_from_manifest(manifest: &serde_json::Value) -> (Option<String>, Opt
         }
     }
     (start, end)
+}
+
+fn manifest_has_argument(manifest: &serde_json::Value, arg_name: &str) -> bool {
+    manifest
+        .get("arguments")
+        .and_then(serde_json::Value::as_array)
+        .is_some_and(|arguments| {
+            arguments
+                .iter()
+                .any(|arg| arg.get("name").and_then(serde_json::Value::as_str) == Some(arg_name))
+        })
+}
+
+fn manifest_argument_is_available(
+    manifest: &serde_json::Value,
+    arg_name: &str,
+    effective_args: &HashMap<String, String>,
+) -> bool {
+    manifest_has_argument(manifest, arg_name)
+        && manifest_arg_dependencies_satisfied(manifest, arg_name, effective_args)
 }
 
 /// Check whether a manifest argument's declared dependencies are satisfied by the
@@ -120,6 +146,67 @@ fn insert_period_args(
     if let Some(arg) = end_arg {
         effective_args.insert(arg, end_date.to_string());
     }
+}
+
+/// Use the registered app config as a fallback while allowing an action-level
+/// --config argument to override it.
+fn apply_registered_config_fallback(
+    effective_args: &mut HashMap<String, String>,
+    registered_config_path: &str,
+) {
+    if registered_config_path.trim().is_empty()
+        || effective_args
+            .get("--config")
+            .is_some_and(|path| !path.trim().is_empty())
+    {
+        return;
+    }
+
+    let resolved = resolve_relative_to_exe_dir(registered_config_path);
+    effective_args.insert(
+        "--config".to_string(),
+        resolved.to_string_lossy().into_owned(),
+    );
+}
+
+/// Returns whether this invocation's manifest exposes an applicable start/end date argument.
+pub async fn supports_periodization(
+    logger: &TaskLogger,
+    app: &RegisteredApp,
+    spec: &crate::runner::config::ExternalAppSpec,
+) -> bool {
+    if spec
+        .args
+        .values()
+        .any(|value| value.contains("{start_date}") || value.contains("{end_date}"))
+    {
+        return true;
+    }
+
+    let (discovered_start, discovered_end, manifest) = discover_date_args(logger, app).await;
+    let start = spec
+        .start_date_arg
+        .as_deref()
+        .filter(|name| !name.is_empty())
+        .map(str::to_string)
+        .or(discovered_start)
+        .filter(|name| {
+            manifest
+                .as_ref()
+                .is_none_or(|value| manifest_argument_is_available(value, name, &spec.args))
+        });
+    let end = spec
+        .end_date_arg
+        .as_deref()
+        .filter(|name| !name.is_empty())
+        .map(str::to_string)
+        .or(discovered_end)
+        .filter(|name| {
+            manifest
+                .as_ref()
+                .is_none_or(|value| manifest_argument_is_available(value, name, &spec.args))
+        });
+    start.is_some() || end.is_some()
 }
 
 async fn discover_date_args(
@@ -192,11 +279,6 @@ pub async fn run_external_app(
     let resolved_executable = resolve_executable(&app.executable_path);
     let mut command = tokio::process::Command::new(&resolved_executable);
 
-    if !app.config_path.trim().is_empty() {
-        let resolved_config = resolve_relative_to_exe_dir(&app.config_path);
-        command.arg("--config").arg(&resolved_config);
-    }
-
     let args = &spec.args;
     let mut effective_args = HashMap::new();
     let (start_str, end_str) = if let Some(p) = period {
@@ -218,6 +300,8 @@ pub async fn run_external_app(
         effective_args.insert(k.clone(), new_v);
     }
 
+    apply_registered_config_fallback(&mut effective_args, &app.config_path);
+
     if period.is_some() {
         // Explicit mappings take precedence, while manifest dependencies still
         // determine whether a configured argument is valid for this invocation.
@@ -231,7 +315,8 @@ pub async fn run_external_app(
             .or(discovered.0)
             .filter(|name| {
                 manifest
-                    .is_none_or(|m| manifest_arg_dependencies_satisfied(m, name, &effective_args))
+                    .as_ref()
+                    .is_none_or(|m| manifest_argument_is_available(m, name, &effective_args))
             });
         let end_arg = spec
             .end_date_arg
@@ -241,7 +326,8 @@ pub async fn run_external_app(
             .or(discovered.1)
             .filter(|name| {
                 manifest
-                    .is_none_or(|m| manifest_arg_dependencies_satisfied(m, name, &effective_args))
+                    .as_ref()
+                    .is_none_or(|m| manifest_argument_is_available(m, name, &effective_args))
             });
 
         let start_arg_name = start_arg.clone();
@@ -276,10 +362,6 @@ pub async fn run_external_app(
 
     for k in sorted_keys {
         let v = &effective_args[k];
-        if k == "--config" && !app.config_path.trim().is_empty() {
-            // Do not allow task arguments to override the app's registered config path if the app already has one defined
-            continue;
-        }
         if v.eq_ignore_ascii_case("true") || v.eq_ignore_ascii_case("on") {
             command.arg(k);
         } else if v.eq_ignore_ascii_case("false") || v.eq_ignore_ascii_case("off") {
@@ -315,8 +397,48 @@ pub async fn run_external_app(
 
 #[cfg(test)]
 mod tests {
-    use super::{date_args_from_manifest, insert_period_args, manifest_arg_dependencies_satisfied};
+    use super::{
+        apply_registered_config_fallback, date_args_from_manifest, insert_period_args,
+        manifest_arg_dependencies_satisfied, manifest_argument_is_available,
+    };
     use std::collections::HashMap;
+
+    #[test]
+    fn action_config_overrides_registered_app_config_path() {
+        let mut args = HashMap::from([("--config".to_string(), "task-specific.json".to_string())]);
+        apply_registered_config_fallback(&mut args, "registered.json");
+        assert_eq!(
+            args.get("--config").map(String::as_str),
+            Some("task-specific.json")
+        );
+    }
+
+    #[test]
+    fn registered_app_config_is_used_when_action_config_is_missing_or_empty() {
+        let temp = tempfile::tempdir().unwrap();
+        let registered = temp.path().join("registered.json");
+        let expected = registered.to_string_lossy().into_owned();
+
+        let mut missing = HashMap::new();
+        apply_registered_config_fallback(&mut missing, &expected);
+        assert_eq!(missing.get("--config"), Some(&expected));
+
+        let mut empty = HashMap::from([("--config".to_string(), "  ".to_string())]);
+        apply_registered_config_fallback(&mut empty, &expected);
+        assert_eq!(empty.get("--config"), Some(&expected));
+    }
+
+    #[test]
+    fn ignores_stale_explicit_date_mapping_when_manifest_does_not_declare_it() {
+        let manifest = serde_json::json!({
+            "arguments": [{"name": "--update-only", "arg_type": "boolean"}]
+        });
+        assert!(!manifest_argument_is_available(
+            &manifest,
+            "--start-date",
+            &HashMap::new()
+        ));
+    }
 
     #[test]
     fn respects_manifest_dependencies_for_explicit_date_arguments() {
@@ -371,6 +493,23 @@ mod tests {
     }
 
     #[test]
+    fn discovers_start_and_end_date_arguments_declared_as_strings() {
+        let manifest = serde_json::json!({
+            "arguments": [
+                {"name": "--start-date", "arg_type": "string"},
+                {"name": "--end-date", "arg_type": "string"}
+            ]
+        });
+        assert_eq!(
+            date_args_from_manifest(&manifest),
+            (
+                Some("--start-date".to_string()),
+                Some("--end-date".to_string())
+            )
+        );
+    }
+
+    #[test]
     fn discovers_standard_and_custom_date_var_names() {
         let manifest = serde_json::json!({
             "arguments": [
@@ -393,7 +532,7 @@ mod tests {
         let manifest = serde_json::json!({
             "arguments": [
                 {"name": "--date", "arg_type": "date_var"},
-                {"name": "--start-date", "arg_type": "string"},
+                {"name": "--range", "arg_type": "string"},
                 {"name": "--report", "arg_type": "string"}
             ]
         });
