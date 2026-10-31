@@ -43,9 +43,6 @@ fn date_args_from_manifest(manifest: &serde_json::Value) -> (Option<String>, Opt
     let mut start = None;
     let mut end = None;
     for arg in arguments {
-        if arg.get("arg_type").and_then(serde_json::Value::as_str) != Some("date_var") {
-            continue;
-        }
         let Some(name) = arg.get("name").and_then(serde_json::Value::as_str) else {
             continue;
         };
@@ -55,6 +52,17 @@ fn date_args_from_manifest(manifest: &serde_json::Value) -> (Option<String>, Opt
             .to_ascii_lowercase()
             .replace('_', "-");
         let words: Vec<&str> = normalized.split('-').collect();
+        let is_date_argument = arg
+            .get("arg_type")
+            .and_then(serde_json::Value::as_str)
+            == Some("date_var")
+            || (words.contains(&"date")
+                && (words.iter().any(|word| {
+                    matches!(*word, "start" | "from" | "end" | "to")
+                })));
+        if !is_date_argument {
+            continue;
+        }
         if start.is_none()
             && (words.iter().any(|word| *word == "start" || *word == "from"))
             && words.contains(&"date")
@@ -120,6 +128,38 @@ fn insert_period_args(
     if let Some(arg) = end_arg {
         effective_args.insert(arg, end_date.to_string());
     }
+}
+
+/// Returns whether this invocation's manifest exposes an applicable start/end date argument.
+pub async fn supports_periodization(
+    logger: &TaskLogger,
+    app: &RegisteredApp,
+    spec: &crate::runner::config::ExternalAppSpec,
+) -> bool {
+    let (discovered_start, discovered_end, manifest) = discover_date_args(logger, app).await;
+    let start = spec
+        .start_date_arg
+        .as_deref()
+        .filter(|name| !name.is_empty())
+        .map(str::to_string)
+        .or(discovered_start)
+        .filter(|name| {
+            manifest
+                .as_ref()
+                .is_none_or(|value| manifest_arg_dependencies_satisfied(value, name, &spec.args))
+        });
+    let end = spec
+        .end_date_arg
+        .as_deref()
+        .filter(|name| !name.is_empty())
+        .map(str::to_string)
+        .or(discovered_end)
+        .filter(|name| {
+            manifest
+                .as_ref()
+                .is_none_or(|value| manifest_arg_dependencies_satisfied(value, name, &spec.args))
+        });
+    start.is_some() || end.is_some()
 }
 
 async fn discover_date_args(
@@ -368,6 +408,23 @@ mod tests {
             ("--end-date".to_string(), "today".to_string()),
         ]);
         assert!(super::validate_explicit_date_range(&non_iso).is_ok());
+    }
+
+    #[test]
+    fn discovers_start_and_end_date_arguments_declared_as_strings() {
+        let manifest = serde_json::json!({
+            "arguments": [
+                {"name": "--start-date", "arg_type": "string"},
+                {"name": "--end-date", "arg_type": "string"}
+            ]
+        });
+        assert_eq!(
+            date_args_from_manifest(&manifest),
+            (
+                Some("--start-date".to_string()),
+                Some("--end-date".to_string())
+            )
+        );
     }
 
     #[test]
