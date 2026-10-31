@@ -8,6 +8,7 @@ pub use reader::*;
 
 mod processing;
 mod writer;
+mod leads;
 
 use std::collections::{HashMap, VecDeque};
 use tracing::{error, info, warn};
@@ -107,6 +108,13 @@ pub fn resolve_relative_to_exe_dir(path: &str) -> std::path::PathBuf {
 }
 
 pub fn generate_csv(params: &CsvAnalysisParams<'_>) -> Result<Option<std::path::PathBuf>> {
+    let (ticket_result, _) = generate_csv_with_leads(params)?;
+    Ok(ticket_result)
+}
+
+fn generate_csv_with_leads(
+    params: &CsvAnalysisParams<'_>,
+) -> Result<(Option<std::path::PathBuf>, Option<std::path::PathBuf>)> {
     info!(
         "Starting CSV Generation (minutes_ago: {})",
         params.minutes_ago
@@ -209,6 +217,13 @@ pub fn generate_csv(params: &CsvAnalysisParams<'_>) -> Result<Option<std::path::
         warn!("Could not find required columns in users file (cognito_username, UserDepartmentName / Team Name).");
     }
 
+    let lead_result_path = leads::generate_lead_result(
+        &download_dir_path,
+        &output_file_path,
+        params.minutes_ago,
+        &assignee_map,
+    )?;
+
     // 2. Load assignment settings
     info!(
         "Loading assignment settings from {}",
@@ -283,7 +298,7 @@ pub fn generate_csv(params: &CsvAnalysisParams<'_>) -> Result<Option<std::path::
             "No target files found modified in the last {} minutes.",
             params.minutes_ago
         );
-        return Ok(None);
+        return Ok((None, lead_result_path));
     }
 
     // Sort files with modification date newer first
@@ -315,13 +330,14 @@ pub fn generate_csv(params: &CsvAnalysisParams<'_>) -> Result<Option<std::path::
         &assignment_map,
     )?;
 
-    crate::tasker::csv_task::writer::write_processed_records(
+    let ticket_result = crate::tasker::csv_task::writer::write_processed_records(
         &output_file_path,
         process_result.headers,
         &process_result.records,
         process_result.total_deduped_rows,
         process_result.total_filtered_rows,
-    )
+    )?;
+    Ok((ticket_result, lead_result_path))
 }
 
 /// Executes the primary CSV parsing, merging, and filtering task.
@@ -349,7 +365,7 @@ pub fn run(
     );
 
     let params = CsvAnalysisParams::from(config);
-    let output_file_path_opt = generate_csv(&params)?;
+    let (output_file_path_opt, lead_result_path) = generate_csv_with_leads(&params)?;
 
     if let Some(output_file_path) = output_file_path_opt {
         if let Some(email_cfg) = &config.email_config {
@@ -358,8 +374,9 @@ pub fn run(
             // Provide sensible defaults for missing arguments based on global context (since csv_task might not have download_dir yet)
             // or we look into how we should pass it. Let's pass standard defaults or look into config.
 
-            if let Err(e) = crate::tasker::email::process_emails(
+            if let Err(e) = crate::tasker::email::process_emails_with_lead_result(
                 &output_file_path.to_string_lossy(),
+                lead_result_path.as_deref(),
                 email_cfg,
                 only_call_center,
                 send_exceptions,
