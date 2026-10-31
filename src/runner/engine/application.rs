@@ -76,6 +76,26 @@ fn date_args_from_manifest(manifest: &serde_json::Value) -> (Option<String>, Opt
     (start, end)
 }
 
+fn manifest_has_argument(manifest: &serde_json::Value, arg_name: &str) -> bool {
+    manifest
+        .get("arguments")
+        .and_then(serde_json::Value::as_array)
+        .is_some_and(|arguments| {
+            arguments.iter().any(|arg| {
+                arg.get("name").and_then(serde_json::Value::as_str) == Some(arg_name)
+            })
+        })
+}
+
+fn manifest_argument_is_available(
+    manifest: &serde_json::Value,
+    arg_name: &str,
+    effective_args: &HashMap<String, String>,
+) -> bool {
+    manifest_has_argument(manifest, arg_name)
+        && manifest_arg_dependencies_satisfied(manifest, arg_name, effective_args)
+}
+
 /// Check whether a manifest argument's declared dependencies are satisfied by the
 /// arguments already configured for this invocation. Unknown arguments remain allowed
 /// for backward compatibility with apps that do not expose a manifest.
@@ -171,9 +191,9 @@ pub async fn supports_periodization(
         .map(str::to_string)
         .or(discovered_start)
         .filter(|name| {
-            manifest
-                .as_ref()
-                .is_none_or(|value| manifest_arg_dependencies_satisfied(value, name, &spec.args))
+            manifest.as_ref().is_none_or(|value| {
+                manifest_argument_is_available(value, name, &spec.args)
+            })
         });
     let end = spec
         .end_date_arg
@@ -294,8 +314,9 @@ pub async fn run_external_app(
             .map(str::to_string)
             .or(discovered.0)
             .filter(|name| {
-                manifest
-                    .is_none_or(|m| manifest_arg_dependencies_satisfied(m, name, &effective_args))
+                manifest.as_ref().is_none_or(|m| {
+                    manifest_argument_is_available(m, name, &effective_args)
+                })
             });
         let end_arg = spec
             .end_date_arg
@@ -401,6 +422,18 @@ mod tests {
         let mut empty = HashMap::from([("--config".to_string(), "  ".to_string())]);
         apply_registered_config_fallback(&mut empty, &expected);
         assert_eq!(empty.get("--config"), Some(&expected));
+    }
+
+    #[test]
+    fn ignores_stale_explicit_date_mapping_when_manifest_does_not_declare_it() {
+        let manifest = serde_json::json!({
+            "arguments": [{"name": "--update-only", "arg_type": "boolean"}]
+        });
+        assert!(!manifest_argument_is_available(
+            &manifest,
+            "--start-date",
+            &HashMap::new()
+        ));
     }
 
     #[test]
