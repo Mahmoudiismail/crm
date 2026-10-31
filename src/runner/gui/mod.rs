@@ -378,19 +378,19 @@ mod tests {
     #[test]
     fn post_origin_validation_allows_same_origin_and_cli_but_rejects_cross_origin() {
         assert!(post_origin_is_allowed(
-            b"POST /create HTTP/1.1\\r\\nHost: 127.0.0.1:8787\\r\\nOrigin: http://127.0.0.1:8787\\r\\n"
+            b"POST /create HTTP/1.1\r\nHost: 127.0.0.1:8787\r\nOrigin: http://127.0.0.1:8787\r\n"
         ));
         assert!(post_origin_is_allowed(
-            b"POST /create HTTP/1.1\\r\\nHost: 127.0.0.1:8787\\r\\n"
+            b"POST /create HTTP/1.1\r\nHost: 127.0.0.1:8787\r\n"
         ));
         assert!(!post_origin_is_allowed(
-            b"POST /create HTTP/1.1\\r\\nHost: 127.0.0.1:8787\\r\\nOrigin: http://evil.example\\r\\n"
+            b"POST /create HTTP/1.1\r\nHost: 127.0.0.1:8787\r\nOrigin: http://evil.example\r\n"
         ));
         assert!(!post_origin_is_allowed(
-            b"POST /create HTTP/1.1\\r\\nHost: evil.example\\r\\nOrigin: http://evil.example\\r\\n"
+            b"POST /create HTTP/1.1\r\nHost: evil.example\r\nOrigin: http://evil.example\r\n"
         ));
         assert!(!post_origin_is_allowed(
-            b"POST /create HTTP/1.1\\r\\nOrigin: null\\r\\n"
+            b"POST /create HTTP/1.1\r\nOrigin: null\r\n"
         ));
     }
 
