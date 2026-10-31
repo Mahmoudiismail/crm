@@ -1,5 +1,5 @@
-use headless_chrome::{protocol::cdp::Page, Tab};
 use base64::Engine;
+use headless_chrome::{protocol::cdp::Page, Tab};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -100,7 +100,10 @@ fn persist_frame_resources(
     let tree = match tab.call_method(Page::GetResourceTree(None)) {
         Ok(tree) => tree,
         Err(error) => {
-            warn!("Failed to inspect browser frame tree for '{}': {:#}", step, error);
+            warn!(
+                "Failed to inspect browser frame tree for '{}': {:#}",
+                step, error
+            );
             return;
         }
     };
@@ -108,14 +111,21 @@ fn persist_frame_resources(
     let tree_value = match serde_json::to_value(tree) {
         Ok(value) => value,
         Err(error) => {
-            warn!("Failed to serialize browser frame tree for '{}': {}", step, error);
+            warn!(
+                "Failed to serialize browser frame tree for '{}': {}",
+                step, error
+            );
             return;
         }
     };
 
     let mut frames = Vec::new();
     collect_frame_resources(&tree_value, &mut frames);
-    info!("Browser frame diagnostics: step='{}' frames={}", step, frames.len());
+    info!(
+        "Browser frame diagnostics: step='{}' frames={}",
+        step,
+        frames.len()
+    );
 
     for (index, frame_id, frame_url) in frames {
         let frame_id_value = match serde_json::from_value::<Page::FrameId>(frame_id.clone()) {
@@ -135,7 +145,10 @@ fn persist_frame_resources(
                     match base64::engine::general_purpose::STANDARD.decode(&resource.content) {
                         Ok(bytes) => bytes,
                         Err(error) => {
-                            warn!("Could not decode frame {} resource content: {}", frame_id, error);
+                            warn!(
+                                "Could not decode frame {} resource content: {}",
+                                frame_id, error
+                            );
                             continue;
                         }
                     }
@@ -171,10 +184,7 @@ fn persist_frame_resources(
     }
 }
 
-fn collect_frame_resources(
-    value: &serde_json::Value,
-    frames: &mut Vec<(usize, String, String)>,
-) {
+fn collect_frame_resources(value: &serde_json::Value, frames: &mut Vec<(usize, String, String)>) {
     if let Some(frame_tree) = value.get("frameTree") {
         collect_frame_resources(frame_tree, frames);
         return;
@@ -188,7 +198,10 @@ fn collect_frame_resources(
             }
         }
     }
-    if let Some(children) = value.get("childFrames").and_then(serde_json::Value::as_array) {
+    if let Some(children) = value
+        .get("childFrames")
+        .and_then(serde_json::Value::as_array)
+    {
         for child in children {
             collect_frame_resources(child, frames);
         }

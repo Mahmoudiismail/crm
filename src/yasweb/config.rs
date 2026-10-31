@@ -192,10 +192,9 @@ mod tests {
 
     #[test]
     fn report_config_accepts_legacy_files_without_filter_options() {
-        let report: ReportConfig = serde_json::from_str(
-            r#"{"report_type":"Report Manager","filters":{"Hospital":""}}"#,
-        )
-        .unwrap();
+        let report: ReportConfig =
+            serde_json::from_str(r#"{"report_type":"Report Manager","filters":{"Hospital":""}}"#)
+                .unwrap();
         assert!(report.filter_options.is_empty());
     }
 

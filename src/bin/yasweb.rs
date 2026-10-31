@@ -158,7 +158,11 @@ fn get_manifest(config_path: Option<PathBuf>) -> AppManifest {
         };
 
         let options = filter_options.remove(&f_name).unwrap_or_default();
-        let arg_type = if options.is_empty() { ArgType::String } else { ArgType::List };
+        let arg_type = if options.is_empty() {
+            ArgType::String
+        } else {
+            ArgType::List
+        };
         let mut arg = AppArg::new(format!("--filter-{}", f_name), arg_type).depends_on(depends_map);
         if !options.is_empty() {
             arg = arg.options(options);
@@ -283,9 +287,17 @@ fn available_output_path(requested: &std::path::Path) -> std::path::PathBuf {
         return requested.to_path_buf();
     }
 
-    let parent = requested.parent().unwrap_or_else(|| std::path::Path::new("."));
-    let stem = requested.file_stem().and_then(|value| value.to_str()).unwrap_or("report");
-    let extension = requested.extension().and_then(|value| value.to_str()).unwrap_or("xlsx");
+    let parent = requested
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."));
+    let stem = requested
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("report");
+    let extension = requested
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("xlsx");
     for suffix in 1u32.. {
         let candidate = parent.join(format!("{stem} ({suffix}).{extension}"));
         if !candidate.exists() {
@@ -503,17 +515,21 @@ async fn main() -> Result<()> {
     let mut config_updated_global = config_updated;
     for active_report_name in &active_report_names {
         if !active_report_type_global.is_empty() || !active_filters_global.is_empty() {
-            let (existing_start_key, existing_end_key, existing_download_path, existing_filter_options) =
-                if let Some(existing) = config.reports.get(active_report_name) {
-                    (
-                        existing.start_date_key.clone(),
-                        existing.end_date_key.clone(),
-                        existing.download_path.clone(),
-                        existing.filter_options.clone(),
-                    )
-                } else {
-                    (None, None, None, HashMap::new())
-                };
+            let (
+                existing_start_key,
+                existing_end_key,
+                existing_download_path,
+                existing_filter_options,
+            ) = if let Some(existing) = config.reports.get(active_report_name) {
+                (
+                    existing.start_date_key.clone(),
+                    existing.end_date_key.clone(),
+                    existing.download_path.clone(),
+                    existing.filter_options.clone(),
+                )
+            } else {
+                (None, None, None, HashMap::new())
+            };
 
             let report_conf = ReportConfig {
                 report_type: active_report_type_global.clone(),
@@ -984,7 +1000,15 @@ mod tests_yasweb_finalization {
                 },
                 &lock,
             ),
-            persist_discovered_filters(&config_path, "second", DiscoveredReportFilters { names: vec!["filter_b".to_string()], options: HashMap::new() }, &lock),
+            persist_discovered_filters(
+                &config_path,
+                "second",
+                DiscoveredReportFilters {
+                    names: vec!["filter_b".to_string()],
+                    options: HashMap::new()
+                },
+                &lock
+            ),
         );
         first.unwrap();
         second.unwrap();
@@ -1012,7 +1036,10 @@ mod tests_yasweb_finalization {
         assert!(persist_discovered_filters(
             &config_path,
             "first",
-            DiscoveredReportFilters { names: vec!["filter_a".to_string()], options: HashMap::new() },
+            DiscoveredReportFilters {
+                names: vec!["filter_a".to_string()],
+                options: HashMap::new()
+            },
             &lock,
         )
         .await
