@@ -2,6 +2,7 @@ use anyhow::Result;
 use chrono::{Datelike, Local, NaiveDate};
 use std::collections::{HashSet, VecDeque};
 use std::fs::File;
+use std::path::Path;
 use tracing::{error, info};
 
 use crate::tasker::config::EmailConfig;
@@ -14,6 +15,7 @@ use crate::tasker::email::recipients::{
 use crate::tasker::email::reports::generate_leads_report;
 
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 pub fn process_emails(
     results_file: &str,
     config: &EmailConfig,
@@ -24,8 +26,34 @@ pub fn process_emails(
     category_exceptions: Option<&[crate::tasker::config::CategoryException]>,
     exclude_branches: &[String],
 ) -> Result<()> {
-    process_emails_with_runner(
+    process_emails_with_lead_result(
         results_file,
+        None,
+        config,
+        only_call_center,
+        send_exceptions,
+        download_dir,
+        minutes_ago,
+        category_exceptions,
+        exclude_branches,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn process_emails_with_lead_result(
+    results_file: &str,
+    lead_result_file: Option<&Path>,
+    config: &EmailConfig,
+    only_call_center: bool,
+    send_exceptions: bool,
+    download_dir: &str,
+    minutes_ago: i64,
+    category_exceptions: Option<&[crate::tasker::config::CategoryException]>,
+    exclude_branches: &[String],
+) -> Result<()> {
+    process_emails_with_runner_and_lead_result(
+        results_file,
+        lead_result_file,
         config,
         only_call_center,
         send_exceptions,
@@ -55,6 +83,36 @@ pub fn process_emails_with_runner<F>(
     send_exceptions: bool,
     download_dir: &str,
     minutes_ago: i64,
+    category_exceptions: Option<&[crate::tasker::config::CategoryException]>,
+    exclude_branches: &[String],
+    send_email_fn: F,
+) -> Result<()>
+where
+    F: FnMut(&str, &str, &str, &str, Option<&str>, Option<&str>, &str) -> Result<()>,
+{
+    process_emails_with_runner_and_lead_result(
+        results_file,
+        None,
+        config,
+        only_call_center,
+        send_exceptions,
+        download_dir,
+        minutes_ago,
+        category_exceptions,
+        exclude_branches,
+        send_email_fn,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn process_emails_with_runner_and_lead_result<F>(
+    results_file: &str,
+    lead_result_file: Option<&Path>,
+    config: &EmailConfig,
+    only_call_center: bool,
+    send_exceptions: bool,
+    _download_dir: &str,
+    _minutes_ago: i64,
     category_exceptions: Option<&[crate::tasker::config::CategoryException]>,
     exclude_branches: &[String],
     mut send_email_fn: F,
@@ -312,14 +370,16 @@ where
         let mut leads_report_path = None;
         let mut leads_report_failed = false;
         if bucket_name.eq_ignore_ascii_case("call center") && !effective_send_exceptions {
-            match generate_leads_report(download_dir, minutes_ago, exclude_branches) {
-                Ok(path_opt) => leads_report_path = path_opt,
-                Err(e) => {
-                    error!(
-                        "Failed to generate leads report for Call Center; sending the email without the Leads Report attachment: {}",
-                        e
-                    );
-                    leads_report_failed = true;
+            if let Some(lead_result_file) = lead_result_file {
+                match generate_leads_report(lead_result_file, exclude_branches) {
+                    Ok(path_opt) => leads_report_path = path_opt,
+                    Err(e) => {
+                        error!(
+                            "Failed to generate leads attachment from lead result; sending the email without it: {}",
+                            e
+                        );
+                        leads_report_failed = true;
+                    }
                 }
             }
         }
