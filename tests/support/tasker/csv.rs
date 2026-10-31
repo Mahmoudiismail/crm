@@ -48,10 +48,12 @@ pub fn setup_test_dataset() -> TestDataset {
 
     std::fs::write(
         leads_file.path(),
-        "Lead Id,Assignee,Lead Type,Lead Sub-Type,Lead Category,Created At,Branch,Status\n",
-        "L-2001,alice,General Enquiry,Website,General,2026-04-10 10:00:00,DSFH,New\n",
-        "L-2002,bob,General Enquiry,Website,General,2026-04-10 10:01:00,DSFH,New\n",
-        "L-2003,,General Enquiry,Website,General,2026-04-10 10:02:00,DSFH,New\n",
+        concat!(
+            "Lead Id,Assignee,Lead Type,Lead Sub-Type,Lead Category,Created At,Branch,Status\n",
+            "L-2001,alice,General Enquiry,Website,General,2026-04-10 10:00:00,DSFH,New\n",
+            "L-2002,bob,General Enquiry,Website,General,2026-04-10 10:01:00,DSFH,New\n",
+            "L-2003,,General Enquiry,Website,General,2026-04-10 10:02:00,DSFH,New\n",
+        ),
     )
     .unwrap();
     std::fs::copy(
