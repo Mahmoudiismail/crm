@@ -242,9 +242,8 @@ mod tests {
             .expect("lead result should be generated");
         assert_eq!(output, dir.path().join("lead_result.csv"));
 
-        let mut reader = crate::utils::build_csv_reader_from_reader(
-            std::fs::File::open(&output).unwrap(),
-        );
+        let mut reader =
+            crate::utils::build_csv_reader_from_reader(std::fs::File::open(&output).unwrap());
         let headers = reader.headers().unwrap().clone();
         let team_idx = headers
             .iter()
@@ -289,12 +288,14 @@ mod tests {
         let output = generate_lead_result(&download_dir, &ticket_result, 60, &users)
             .unwrap()
             .unwrap();
-        let mut reader = crate::utils::build_csv_reader_from_reader(
-            std::fs::File::open(output).unwrap(),
-        );
+        let mut reader =
+            crate::utils::build_csv_reader_from_reader(std::fs::File::open(output).unwrap());
         let headers = reader.headers().unwrap().clone();
         assert_eq!(
-            headers.iter().filter(|header| header.eq_ignore_ascii_case("team")).count(),
+            headers
+                .iter()
+                .filter(|header| header.eq_ignore_ascii_case("team"))
+                .count(),
             1
         );
         let record = reader.records().next().unwrap().unwrap();

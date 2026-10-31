@@ -334,7 +334,10 @@ fn test_task1_only_call_center() {
     crm_tool::tasker::csv_task::run(&csv_config, true, false).unwrap();
 
     let lead_result_path = dataset.download_dir.path().join("lead_result.csv");
-    assert!(lead_result_path.exists(), "lead_result.csv should be saved beside ticket results");
+    assert!(
+        lead_result_path.exists(),
+        "lead_result.csv should be saved beside ticket results"
+    );
     let lead_content = std::fs::read(&lead_result_path).unwrap();
     let mut lead_reader = build_csv_reader_from_reader(lead_content.as_slice());
     let lead_headers = lead_reader.headers().unwrap().clone();
@@ -350,7 +353,10 @@ fn test_task1_only_call_center() {
             record.get(lead_team_idx).unwrap_or("").to_string(),
         );
     }
-    assert_eq!(lead_teams.get("L-2001").map(String::as_str), Some("Call Center"));
+    assert_eq!(
+        lead_teams.get("L-2001").map(String::as_str),
+        Some("Call Center")
+    );
     assert_eq!(
         lead_teams.get("L-2002").map(String::as_str),
         Some("Incomplete Reservation")
