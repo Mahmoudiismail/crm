@@ -140,8 +140,9 @@ mod tests {
             resolve_config_path(Some(std::path::Path::new("custom.json")), exe_dir),
             exe_dir.join("custom.json")
         );
-        let absolute = std::path::Path::new("D:/Settings/updater.json");
-        assert_eq!(resolve_config_path(Some(absolute), exe_dir), absolute);
+        let temp = tempfile::tempdir().unwrap();
+        let absolute = temp.path().join("updater.json");
+        assert_eq!(resolve_config_path(Some(&absolute), exe_dir), absolute);
     }
 
     #[test]
