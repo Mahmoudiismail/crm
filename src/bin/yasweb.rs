@@ -1259,6 +1259,19 @@ mod tests_yasweb_finalization {
         assert_eq!(filters.get("Hospital").map(String::as_str), Some("Fakeeh"));
     }
 
+    #[test]
+    fn dynamic_filter_cli_rejects_a_missing_value() {
+        let error = normalize_filter_cli_args(vec![
+            "yasweb".to_string(),
+            "--filter-Hospital".to_string(),
+        ])
+        .unwrap_err();
+
+        assert!(error
+            .to_string()
+            .contains("--filter-Hospital requires a value"));
+    }
+
     #[tokio::test]
     async fn concurrent_filter_updates_preserve_both_reports() {
         let root = tempfile::tempdir().unwrap();
