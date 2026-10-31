@@ -96,7 +96,13 @@ pub fn generate_leads_report(
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_nanos())
         .unwrap_or_default();
-    let output_path = std::env::temp_dir().join(format!(
+    // Keep the generated workbook beside its input so concurrent runs and tests
+    // cannot pick up another run's attachment from the shared system temp dir.
+    let output_dir = lead_result_file
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(std::env::temp_dir);
+    let output_path = output_dir.join(format!(
         "Call_Center_Leads_{}_{}.xlsx",
         std::process::id(),
         unique_id
