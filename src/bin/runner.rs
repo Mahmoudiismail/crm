@@ -9,16 +9,17 @@ use crm_tool::runner::engine::RunnerHandle;
 use crm_tool::runner::engine::{start_scheduler, RunnerCommand};
 use crm_tool::runner::gui::start_gui_server;
 use crm_tool::utils::{
-    executable_dir, intercept_manifest, parse_log_level, setup_logging_with_levels_and_header, InterceptResult,
+    executable_dir, intercept_manifest, parse_log_level, setup_logging_with_levels_and_header,
+    InterceptResult,
 };
 #[cfg(target_os = "windows")]
 use muda::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem};
+use std::path::{Path, PathBuf};
 #[cfg(target_os = "windows")]
 use std::time::Duration;
 #[cfg(target_os = "windows")]
 use tracing::error;
 use tracing::info;
-use std::path::{Path, PathBuf};
 #[cfg(target_os = "windows")]
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
 #[cfg(target_os = "windows")]
@@ -60,9 +61,18 @@ fn redact_config_value(value: &mut serde_json::Value) {
         serde_json::Value::Object(object) => {
             for (key, nested) in object.iter_mut() {
                 let normalized = key.to_ascii_lowercase().replace('-', "_");
-                if ["password", "passwd", "token", "secret", "credential", "authorization", "api_key", "apikey"]
-                    .iter()
-                    .any(|needle| normalized.contains(needle))
+                if [
+                    "password",
+                    "passwd",
+                    "token",
+                    "secret",
+                    "credential",
+                    "authorization",
+                    "api_key",
+                    "apikey",
+                ]
+                .iter()
+                .any(|needle| normalized.contains(needle))
                 {
                     *nested = serde_json::Value::String("[REDACTED]".to_string());
                 } else {
@@ -202,7 +212,10 @@ mod tests {
     #[test]
     fn runner_config_path_supports_default_relative_and_absolute_paths() {
         let exe_dir = Path::new("CRM");
-        assert_eq!(resolve_config_path(None, exe_dir), exe_dir.join("runner_config.json"));
+        assert_eq!(
+            resolve_config_path(None, exe_dir),
+            exe_dir.join("runner_config.json")
+        );
         assert_eq!(
             resolve_config_path(Some(Path::new("settings/custom.json")), exe_dir),
             exe_dir.join("settings/custom.json")

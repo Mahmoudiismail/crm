@@ -149,6 +149,9 @@ mod tests {
     fn cli_accepts_config_parameter() {
         let args = Args::try_parse_from(["crm_updater", "--config", "custom.json"])
             .expect("config argument should parse");
-        assert_eq!(args.config.as_deref(), Some(std::path::Path::new("custom.json")));
+        assert_eq!(
+            args.config.as_deref(),
+            Some(std::path::Path::new("custom.json"))
+        );
     }
 }

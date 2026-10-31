@@ -63,7 +63,11 @@ impl ReopenLogFile {
             .open(&self.path)?;
         if !self.recovery_header.is_empty() {
             let now = chrono::Local::now().to_rfc3339();
-            writeln!(file, "[{}] RUNNER CONFIG SNAPSHOT (sensitive values redacted):", now)?;
+            writeln!(
+                file,
+                "[{}] RUNNER CONFIG SNAPSHOT (sensitive values redacted):",
+                now
+            )?;
             file.write_all(self.recovery_header.as_bytes())?;
             file.write_all(b"\n")?;
         }
@@ -80,7 +84,10 @@ impl Write for ReopenLogFile {
         if self.file.is_none() {
             self.open()?;
         }
-        self.file.as_mut().expect("log file is opened above").write(bytes)
+        self.file
+            .as_mut()
+            .expect("log file is opened above")
+            .write(bytes)
     }
 
     fn flush(&mut self) -> io::Result<()> {
@@ -113,7 +120,7 @@ pub fn setup_logging_with_levels_and_header(
     let file_appender = ReopenLogFile {
         path: log_dir.join(format!("{}.log", app_name)),
         file: None,
-            recovery_header: r#"{"tasks":[]}"#.to_string(),
+        recovery_header: r#"{"tasks":[]}"#.to_string(),
     };
     let (non_blocking_file, guard) = tracing_appender::non_blocking(file_appender);
 
@@ -1195,7 +1202,6 @@ mod configuration_merge_regression_tests {
         assert!(current["new_field"].as_bool().unwrap_or(false));
     }
 }
-
 
 #[cfg(test)]
 mod reopen_log_file_tests {

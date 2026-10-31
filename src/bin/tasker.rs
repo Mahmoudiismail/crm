@@ -32,7 +32,11 @@ pub struct TaskerCliOptions {
 }
 
 fn resolve_config_path(options: &TaskerCliOptions) -> Result<PathBuf> {
-    if let Some(path) = options.config.as_deref().or(options.legacy_config.as_deref()) {
+    if let Some(path) = options
+        .config
+        .as_deref()
+        .or(options.legacy_config.as_deref())
+    {
         return Ok(PathBuf::from(path));
     }
     Ok(executable_dir()?.join("tasker_config.json"))
@@ -378,11 +382,8 @@ mod tests {
         )
         .unwrap();
 
-        let options = TaskerCliOptions::parse_from([
-            "tasker",
-            "--config",
-            custom_path.to_str().unwrap(),
-        ]);
+        let options =
+            TaskerCliOptions::parse_from(["tasker", "--config", custom_path.to_str().unwrap()]);
         assert_eq!(resolve_config_path(&options).unwrap(), custom_path);
         assert_eq!(
             read_log_levels(&resolve_config_path(&options).unwrap()),

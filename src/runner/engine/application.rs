@@ -52,14 +52,12 @@ fn date_args_from_manifest(manifest: &serde_json::Value) -> (Option<String>, Opt
             .to_ascii_lowercase()
             .replace('_', "-");
         let words: Vec<&str> = normalized.split('-').collect();
-        let is_date_argument = arg
-            .get("arg_type")
-            .and_then(serde_json::Value::as_str)
+        let is_date_argument = arg.get("arg_type").and_then(serde_json::Value::as_str)
             == Some("date_var")
             || (words.contains(&"date")
-                && (words.iter().any(|word| {
-                    matches!(*word, "start" | "from" | "end" | "to")
-                })));
+                && (words
+                    .iter()
+                    .any(|word| matches!(*word, "start" | "from" | "end" | "to"))));
         if !is_date_argument {
             continue;
         }
@@ -136,9 +134,11 @@ pub async fn supports_periodization(
     app: &RegisteredApp,
     spec: &crate::runner::config::ExternalAppSpec,
 ) -> bool {
-    if spec.args.values().any(|value| {
-        value.contains("{start_date}") || value.contains("{end_date}")
-    }) {
+    if spec
+        .args
+        .values()
+        .any(|value| value.contains("{start_date}") || value.contains("{end_date}"))
+    {
         return true;
     }
 
