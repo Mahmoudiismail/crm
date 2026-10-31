@@ -113,7 +113,7 @@ pub fn setup_logging_with_levels_and_header(
     let file_appender = ReopenLogFile {
         path: log_dir.join(format!("{}.log", app_name)),
         file: None,
-        recovery_header: r#"{"tasks":[]}"#.to_string(),
+            recovery_header: r#"{"tasks":[]}"#.to_string(),
     };
     let (non_blocking_file, guard) = tracing_appender::non_blocking(file_appender);
 
@@ -1210,13 +1210,13 @@ mod reopen_log_file_tests {
         let mut writer = ReopenLogFile {
             path: path.clone(),
             file: None,
-            recovery_header: "{\\"tasks\\":[]}".to_string(),
+            recovery_header: r#"{"tasks":[]}"#.to_string(),
         };
 
-        writer.write_all(b"first event\\n").unwrap();
+        writer.write_all(b"first event\n").unwrap();
         writer.flush().unwrap();
         std::fs::rename(&path, &moved).unwrap();
-        writer.write_all(b"second event\\n").unwrap();
+        writer.write_all(b"second event\n").unwrap();
         writer.flush().unwrap();
 
         let archived = std::fs::read_to_string(moved).unwrap();
