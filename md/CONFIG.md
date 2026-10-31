@@ -44,10 +44,12 @@ Ticket exports are automatically split into requests covering at most three cale
 
 ## Application Configurations
 
-Executables spawned via the runner or manually have their own configurations.
+Executables spawned via Runner or run manually have their own configurations. Each worker reads its own configuration; Runner's runner_config.json is a separate orchestration configuration.
 
 - **`runner_config.json` (Runner):** Override the default file with `runner.exe --config <PATH>`. Relative paths are resolved from the executable directory.
 - **`updater_config.json` (CRM Updater):** Override the default file with `crm_updater.exe --config <PATH>`. Relative paths are resolved from the executable directory.
+- **`tasker_config.json` (Tasker):** Override with `tasker.exe --config <PATH>`. Relative paths supplied with this flag are resolved from the executable directory. The legacy positional config path remains supported and is resolved from the current working directory.
+- **`yasweb_config.json` (Yasweb):** Selected with `--config <PATH>`; the CLI default is `yasweb_config.json`.
 
 - **`config.json` (CRM):** Cognito user pool, API endpoints, credentials. Can override the standard `Downloads` folder using `custom_download_folder`. The CLI argument `--custom-download-folder` overrides this config key for a single run without persisting to `config.json`. Includes CRM-specific download configuration properties:
   - `recent_download_window_seconds`: (Default: 30) Recent completed-report suppression window in seconds. Set to `0` to always fetch. For date-ranged tickets, calls, and leads, suppression requires a completion marker for the same requested range and all files recorded by that marker to still exist; a lone recent chunk file is not proof of completion. Users are fetched as one direct Base64 payload and retain the recent-file check. This is not a general CRM execution cooldown.
