@@ -738,7 +738,7 @@ async fn main() -> Result<()> {
 
                         drop(browser);
                         let _ = std::fs::remove_dir_all(&user_data_dir);
-                        tracing::info!("YASWEB TASK END: status=SUCCESS task={} elapsed_ms={} discovered_filters={}", i, task_started.elapsed().as_millis(), res.len());
+                        tracing::info!("YASWEB TASK END: status=SUCCESS task={} elapsed_ms={} discovered_filters={} dropdown_lists={}", i, task_started.elapsed().as_millis(), res.names.len(), res.options.len());
                         Ok((res, temp_dl_dir_clone, final_filename))
                     }));
 
@@ -779,7 +779,7 @@ async fn main() -> Result<()> {
                         format!("Failed to finalize Yasweb report '{}'", active_report_name_clone)
                     })?;
 
-                    if !discovered_filters.is_empty() {
+                    if !discovered_filters.names.is_empty() || !discovered_filters.options.is_empty() {
                         if let Err(e) = persist_discovered_filters(
                             &config_path_clone,
                             &active_report_name_clone,
@@ -858,6 +858,7 @@ mod tests_yasweb_finalization {
                     ReportConfig {
                         report_type: "Standard Report".to_string(),
                         filters: std::collections::HashMap::new(),
+                        filter_options: std::collections::HashMap::new(),
                         start_date_key: None,
                         end_date_key: None,
                         download_path: None,
