@@ -1028,6 +1028,37 @@ mod tests_yasweb_finalization {
         );
     }
 
+    #[test]
+    fn manifest_uses_free_text_when_reports_have_conflicting_filter_options() {
+        let root = tempfile::tempdir().unwrap();
+        let config_path = root.path().join("yasweb_config.json");
+        let make_report = |options: Vec<String>| ReportConfig {
+            report_type: "Report Manager".to_string(),
+            filters: HashMap::from([("Hospital".to_string(), String::new())]),
+            filter_options: HashMap::from([("Hospital".to_string(), options)]),
+            start_date_key: None,
+            end_date_key: None,
+            download_path: None,
+        };
+        let config = YaswebConfig {
+            url: "https://example.test".to_string(),
+            username: "test".to_string(),
+            reports: HashMap::from([
+                ("Appointments".to_string(), make_report(vec!["Fakeeh".to_string(), "Neom".to_string()])),
+                ("Admissions".to_string(), make_report(vec!["Cairo".to_string(), "Jeddah".to_string()])),
+            ]),
+            ..YaswebConfig::default()
+        };
+        std::fs::write(&config_path, serde_json::to_string_pretty(&config).unwrap()).unwrap();
+
+        let manifest = get_manifest(Some(config_path));
+        let hospital = manifest.arguments.iter()
+            .find(|argument| argument.name == "--filter-Hospital")
+            .expect("Hospital filter should be exposed");
+        assert_eq!(hospital.arg_type, crm_tool::manifest::ArgType::String);
+        assert!(hospital.options.is_none());
+    }
+
     #[tokio::test]
     async fn concurrent_filter_updates_preserve_both_reports() {
         let root = tempfile::tempdir().unwrap();
