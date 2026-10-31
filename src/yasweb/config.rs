@@ -83,6 +83,12 @@ pub struct ReportConfig {
     pub download_path: Option<String>,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct DiscoveredReportFilters {
+    pub names: Vec<String>,
+    pub options: HashMap<String, Vec<String>>,
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct YaswebConfig {
     pub url: String,
