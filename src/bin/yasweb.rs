@@ -737,7 +737,7 @@ async fn main() -> Result<()> {
                         None
                     };
                     tracing::trace!("Spawning task for range: {} to {}", start_dt, end_dt);
-                    tasks.push(tokio::task::spawn_blocking(move || -> Result<(Vec<String>, PathBuf, String)> {
+                    tasks.push(tokio::task::spawn_blocking(move || -> Result<(DiscoveredReportFilters, PathBuf, String)> {
                         let _operation_permit = operation_permit;
                         let task_started = std::time::Instant::now();
                         tracing::info!("YASWEB TASK START: index={} report='{}' date_suffix='{}'", i, active_report_name_task, date_suffix);
