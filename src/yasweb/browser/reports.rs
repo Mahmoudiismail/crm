@@ -836,6 +836,39 @@ pub fn navigate_and_run_report(
     Ok(discovered_filters)
 }
 
+/// Waits for the Angular SPA to finish routing into the MIS report module.
+///
+/// Clicking a module only starts client-side navigation; the URL can remain on
+/// the dashboard briefly. Do not fail or click the module again during that
+/// transition window.
+fn wait_for_mis_reports_route(tab: &Arc<Tab>, timeout: Duration) -> Result<()> {
+    let started = Instant::now();
+    let deadline = started + timeout;
+    while Instant::now() < deadline {
+        let current_url = tab.get_url();
+        if is_mis_reports_route(&current_url) {
+            info!(
+                "YASWEB MIS SPA route reached: url='{}' elapsed_ms={}",
+                current_url,
+                started.elapsed().as_millis()
+            );
+            return Ok(());
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+
+    let last_url = tab.get_url();
+    anyhow::bail!(
+        "Timed out waiting {}ms for MIS SPA route; last_url='{}'",
+        timeout.as_millis(),
+        last_url
+    )
+}
+
+fn is_mis_reports_route(url: &str) -> bool {
+    url.contains("/home/mis-report/module/")
+}
+
 /// Runs a report automation step in the embedded report frame's own CDP execution context.
 /// The report UI is cross-origin from the parent page, so parent-page JavaScript cannot read its DOM.
 fn evaluate_report_frame_step(
@@ -843,13 +876,9 @@ fn evaluate_report_frame_step(
     js_code: &str,
     step_name: &str,
 ) -> Result<serde_json::Value> {
-    if step_name.starts_with("Wait for MIS Reports")
-        && !tab.get_url().contains("/home/mis-report/module/")
-    {
-        anyhow::bail!(
-            "MIS navigation route was not reached before report-frame readiness check: {}",
-            tab.get_url()
-        );
+    if step_name.starts_with("Wait for MIS Reports") {
+        wait_for_mis_reports_route(tab, Duration::from_secs(30))
+            .with_context(|| format!("{}: MIS SPA route did not become active", step_name))?;
     }
 
     let started = Instant::now();
@@ -1238,6 +1267,25 @@ pub fn generate_mis_reports_wait_js(timeout_seconds: u64) -> String {
         "##,
         timeout_seconds
     )
+}
+
+#[cfg(test)]
+mod mis_route_tests {
+    use super::is_mis_reports_route;
+
+    #[test]
+    fn recognizes_the_mis_reports_spa_route() {
+        assert!(is_mis_reports_route(
+            "https://yasweb.fakeeh.care/home/mis-report/module/H5F296ADEE1A17F02E06364BB010ACC5C"
+        ));
+    }
+
+    #[test]
+    fn does_not_treat_the_dashboard_as_the_mis_reports_route() {
+        assert!(!is_mis_reports_route(
+            "https://yasweb.fakeeh.care/home/dashboard"
+        ));
+    }
 }
 
 #[cfg(test)]
