@@ -159,6 +159,15 @@ jobs:
           name: crm_tool_windows_zip
           path: target/release/crm_tool_v${{ env.VERSION }}_${{ env.BUILD_DATE }}_windows.zip
           retention-days: 1
+      - name: Upload ZIP to paste.c-net.org
+        if: success()
+        shell: bash
+        env:
+          ZIP_FILE: target/release/crm_tool_v${{ env.VERSION }}_${{ env.BUILD_DATE }}_windows.zip
+        run: |
+          set -euo pipefail
+          RESPONSE="$(curl --show-error --silent --upload-file "$ZIP_FILE" 'https://paste.c-net.org/')"
+          printf 'paste.c-net.org response:\n%s\n' "$RESPONSE"
       - name: Summarize release attempt
         id: summary
         if: always()
