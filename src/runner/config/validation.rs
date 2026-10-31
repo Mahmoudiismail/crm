@@ -261,13 +261,21 @@ fn normalize_and_validate_schedules(
                         format!("Invalid monthly time '{}'. Use HH:MM", at_time)
                     })?;
                 }
-                // Compute next_run_at
-                *next_run_at = next_monthly_run_after(
-                    *day_of_month,
-                    at_time,
-                    chrono::Utc::now(),
-                    working_hours.as_ref(),
-                )?;
+                *next_run_at = next_run_at.trim().to_string();
+                if next_run_at.is_empty() {
+                    *next_run_at = next_monthly_run_after(
+                        *day_of_month,
+                        at_time,
+                        chrono::Utc::now(),
+                        working_hours.as_ref(),
+                    )?;
+                } else {
+                    // Preserve due/overdue occurrences; the scheduler advances them
+                    // only after the corresponding run has been handled.
+                    parse_rfc3339_utc(next_run_at).with_context(|| {
+                        format!("Invalid monthly next_run_at '{}'. Use RFC3339", next_run_at)
+                    })?;
+                }
             }
         }
     }
