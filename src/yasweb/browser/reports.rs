@@ -844,14 +844,12 @@ pub fn navigate_and_run_report(
 fn wait_for_mis_reports_route(tab: &Arc<Tab>, timeout: Duration) -> Result<()> {
     let started = Instant::now();
     let deadline = started + timeout;
-    let mut last_url = tab.get_url();
-
     while Instant::now() < deadline {
-        last_url = tab.get_url();
-        if is_mis_reports_route(&last_url) {
+        let current_url = tab.get_url();
+        if is_mis_reports_route(&current_url) {
             info!(
                 "YASWEB MIS SPA route reached: url='{}' elapsed_ms={}",
-                last_url,
+                current_url,
                 started.elapsed().as_millis()
             );
             return Ok(());
@@ -859,7 +857,7 @@ fn wait_for_mis_reports_route(tab: &Arc<Tab>, timeout: Duration) -> Result<()> {
         std::thread::sleep(Duration::from_millis(100));
     }
 
-    last_url = tab.get_url();
+    let last_url = tab.get_url();
     anyhow::bail!(
         "Timed out waiting {}ms for MIS SPA route; last_url='{}'",
         timeout.as_millis(),
