@@ -20,3 +20,8 @@ Any operational changes to the codebase MUST be reflected in the markdown files 
 - Outlook recipient pre-validation via `Recipients.ResolveAll()` is intentionally disabled; do not reintroduce a custom recipient-resolution gate without an explicit requirement.
 - Yasweb reviewed sources did not contain PowerShell scripts for this extraction change.
 - Documentation for these behaviors is maintained in `md/TASKER.md`, `md/CRM_UPDATER.md`, and `md/ARCHITECTURE.md`.
+
+
+## Repository-wide documentation audit
+
+For requests to review or update repository documentation as a whole, inventory tracked Markdown files and compare current operational guides with the source tree, Cargo metadata, CLI parsers, and workflow YAML. Treat plans, issue reports, and audit snapshots as historical records unless they are explicitly maintained as live operational references. Do not bulk-rewrite historical findings to make them appear current. Verify links and examples after edits, and do not claim build/test/CI success unless those checks were actually run.
