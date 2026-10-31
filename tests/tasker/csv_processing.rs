@@ -376,10 +376,9 @@ fn test_task1_only_call_center() {
         let path = entry.unwrap().path();
         if path.to_string_lossy().contains("Call_Center_Leads_") {
             found_leads = true;
+            use calamine::Reader;
             let mut workbook = calamine::open_workbook_auto(&path).unwrap();
-            let sheet = calamine::Reader::worksheet_range_at(&mut workbook, 0)
-                .unwrap()
-                .unwrap();
+            let sheet = workbook.worksheet_range_at(0).unwrap().unwrap();
             let lead_ids = sheet
                 .rows()
                 .skip(1)
