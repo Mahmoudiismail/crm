@@ -1,86 +1,79 @@
 # Build & Run Guide
 
-## Local Development Requirements
-- **Rust Toolchain**: Stable version. Install via [rustup](https://rustup.rs).
-- **Node.js/npm**: Used occasionally for frontend linting (e.g., Prettier).
+## Development requirements
 
-## Compiling
+- Rust stable toolchain installed through rustup. Cargo.toml does not declare an explicit MSRV.
+- Windows is the primary runtime/build target (x86_64-pc-windows-msvc).
+- Node.js is used by CI to syntax-check JavaScript files.
+- PowerShell is used by Windows automation and CI to parse PowerShell scripts.
 
-The project consists of multiple binaries. Build all of them at once:
+## Cargo package and binaries
 
-```bash
+The repository is one Cargo package (crm_tool) with explicit binary targets; it is not a multi-package workspace. It declares five executables:
+
+\`\`\`bash
 cargo build --release
-```
-
-Or build a specific binary:
-
-```bash
 cargo build --release --bin runner
 cargo build --release --bin crm
 cargo build --release --bin yasweb
 cargo build --release --bin tasker
 cargo build --release --bin crm_updater
-```
+\`\`\`
 
-Executables will be placed in `target/release/`.
+Binaries are placed in target/release/.
 
-## Running the Architecture
+## Running
 
-To run the full suite as a user would, ensure the executables are placed together.
+Run Runner to start the scheduler and local GUI:
 
-1. Start the runner:
-   ```bash
-   cargo run --bin runner
-   ```
-2. The Runner GUI will be available at `http://127.0.0.1:8787`.
-3. Configure CRM, Yasweb, and Tasker instances from the GUI, or add them via the **Apps** page for dynamic manifest orchestration.
+\`\`\`powershell
+.\\target\\release\\runner.exe
+\`\`\`
 
-### Dynamic App Execution
+The default GUI address is http://127.0.0.1:8787; the configured host and port are read from runner_config.json. Runner is a system-tray application on Windows and runs headless with Ctrl+C shutdown on non-Windows platforms.
 
-Executables supporting the `AppManifest` standard can be queried independently:
+Workers may also be invoked directly. See [CLI Reference](./CLI.md) and [Configuration Guide](./CONFIG.md).
 
-```bash
-cargo run --bin crm -- --manifest
-cargo run --bin yasweb -- --manifest
-cargo run --bin tasker -- --manifest
-```
+## AppManifest integration
 
-They output a JSON representation of their arguments and exit.
+Runner can register supported applications dynamically. It invokes their hidden --manifest option to retrieve the argument schema:
 
-## CI Pipeline and Testing
+\`\`\`powershell
+crm.exe --manifest
+yasweb.exe --manifest
+tasker.exe --manifest
+crm_updater.exe --manifest
+runner.exe --manifest
+\`\`\`
 
-The GitHub Actions test workflow runs on relevant pull requests and can be started manually. It enforces:
+The manifest is JSON written to stdout; the process exits after printing it. See [Manifest Schema](./MANIFEST_SCHEMA.md).
 
-1. `cargo fmt -- --check`
-2. `cargo clippy --workspace --all-targets --all-features -- -D warnings`
-3. `cargo test --workspace --all-targets --all-features`
+## Local validation
 
-Run the test suite locally with:
+Use the core Rust checks run by the Test workflow:
 
-```bash
+\`\`\`bash
 cargo fmt -- --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-targets --all-features
-```
+\`\`\`
 
-## Windows Release Workflow
+The workflow additionally checks JavaScript syntax, parses PowerShell source files, and runs cargo audit and cargo deny check advisories.
 
-The manually triggered **Release Binaries** workflow accepts `all` or a comma-separated selection from this allowlist:
+## GitHub Actions
 
-- `crm`
-- `runner`
-- `yasweb`
-- `tasker`
-- `crm_updater`
+- .github/workflows/test.yml runs for relevant pull requests and pushes to main, and supports manual dispatch. It performs formatting, Clippy, dependency advisory checks, JavaScript/PowerShell syntax checks, and the test suite.
+- .github/workflows/auto-format.yml is manual-dispatch-only. Its format job references the format-approval GitHub Environment; configure required reviewers in repository settings if an approval pause is desired.
+- .github/workflows/release.yml is manually triggered. Its binary input accepts all or a comma-separated selection from crm, runner, yasweb, tasker, and crm_updater.
 
-Unknown names, empty selections, and duplicates are rejected before building. The workflow builds only the selected targets and packages their Windows executables into the release ZIP.
+The Test workflow's format job can commit Rust formatting changes to the branch when permitted by the event/repository context. The workflow YAML is the source of truth for exact triggers and job dependencies.
 
-## Cross-Compiling for Windows (from Linux/WSL)
+## Windows cross-compilation from Linux/WSL
 
-For targets supported by the installed toolchain, install the Windows target and linker:
+For the GNU Windows target (not the primary MSVC release target), install the target and linker:
 
-```bash
+\`\`\`bash
 rustup target add x86_64-pc-windows-gnu
 sudo apt-get install mingw-w64
 cargo build --target x86_64-pc-windows-gnu --release
-```
+\`\`\`
