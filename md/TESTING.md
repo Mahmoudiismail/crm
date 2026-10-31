@@ -29,3 +29,16 @@ This document tracks testing improvements and technical debt identified during t
 ## Synthetic tasker test data
 
 The shared CSV integration-test fixture in `tests/support/tasker/csv.rs` generates fictional users, assignments, ticket reports, lead reports, team mappings, and task configuration in temporary files/directories. Tests must not load operational exports from `TestingDownloads/`. Email sending is disabled in this fixture; use reserved `.invalid` addresses. Keep fixture records minimal but representative of the CSV headers and behaviors under test, including an explicitly mapped PRE-AUTHORIZATION ticket and a lead with an accepted status (`New` or `Follow-up`) when those outputs are asserted.
+
+
+## Current PR 457 regression coverage
+
+The current Runner/Tasker change set adds focused coverage for:
+- Runner config path resolution and redaction of secret-like configuration keys in the startup log snapshot.
+- Recovery of the Runner task log after initialization failures and duplicate task admission behavior (see the Runner guide for the behavioral guarantees).
+- Lead result generation beside the configured ticket output, Assignee-to-primary-team lookup, blank/unknown Assignee handling, and replacement of an existing team column.
+- Call Center lead attachment filtering by team, accepted status (New or Follow-up), and excluded branch.
+
+The Tasker integration fixture uses synthetic lead and ticket exports and does not depend on production exports. The lead attachment assertion reads the generated XLSX and verifies that only eligible Call Center leads are included.
+
+These are source-level test additions documented for this change; their passing status must be confirmed from the corresponding CI run rather than inferred from the presence of the tests.
