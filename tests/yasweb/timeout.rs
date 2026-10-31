@@ -89,7 +89,6 @@ fn mis_route_wait_is_not_a_fail_fast_url_check() {
         .contains("MIS navigation route was not reached before report-frame readiness check"));
 }
 
-
 #[test]
 fn runner_filter_form_supports_multiselect_dependencies_and_optional_dropdowns() {
     let source = include_str!("../../src/runner/assets/js/forms.js");

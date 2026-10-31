@@ -251,9 +251,8 @@ fn normalize_filter_cli_args(args: Vec<String>) -> Result<Vec<String>> {
 
     if has_filters {
         normalized.push("--filters".to_string());
-        normalized.push(
-            serde_json::to_string(&filters).context("Failed to serialize filter arguments")?,
-        );
+        normalized
+            .push(serde_json::to_string(&filters).context("Failed to serialize filter arguments")?);
     }
 
     Ok(normalized)
