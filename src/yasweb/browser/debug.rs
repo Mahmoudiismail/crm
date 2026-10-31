@@ -211,7 +211,29 @@ fn sanitize_filename(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::sanitize_filename;
+    use super::{collect_frame_resources, sanitize_filename};
+
+    #[test]
+    fn frame_tree_collection_includes_nested_cross_origin_frames() {
+        let tree = serde_json::json!({
+            "frameTree": {
+                "frame": {"id": "root", "url": "https://portal.example/"},
+                "childFrames": [{
+                    "frame": {"id": "report", "url": "https://reports.example/report"},
+                    "childFrames": [{
+                        "frame": {"id": "nested", "url": "https://reports.example/lookup"}
+                    }]
+                }]
+            }
+        });
+        let mut frames = Vec::new();
+        collect_frame_resources(&tree, &mut frames);
+
+        assert_eq!(frames.len(), 3);
+        assert_eq!(frames[0].1, "root");
+        assert_eq!(frames[1].1, "report");
+        assert_eq!(frames[2].1, "nested");
+    }
 
     #[test]
     fn snapshot_filename_components_cannot_escape_debug_directory() {
