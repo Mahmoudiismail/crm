@@ -128,7 +128,9 @@ fn persist_frame_resources(
     );
 
     for (index, frame_id, frame_url) in frames {
-        let frame_id_value = match serde_json::from_value::<Page::FrameId>(serde_json::Value::String(frame_id.clone())) {
+        let frame_id_value = match serde_json::from_value::<Page::FrameId>(
+            serde_json::Value::String(frame_id.clone()),
+        ) {
             Ok(value) => value,
             Err(error) => {
                 warn!("Invalid CDP frame id for '{}': {}", frame_url, error);
