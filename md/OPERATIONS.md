@@ -25,7 +25,7 @@ Runner writes a redacted snapshot of its selected configuration into `runner.log
 The `runner` application sits in the system tray (on Windows) and exposes a web GUI at `http://127.0.0.1:8787`.
 
 ### Managing Apps (Dynamic AppManifest Registration)
-You can seamlessly integrate external tools like `crm.exe`, `yasweb.exe`, and `tasker.exe` without editing code.
+You can seamlessly integrate supported tools such as `crm.exe`, `yasweb.exe`, `tasker.exe`, and `crm_updater.exe` without editing code.
 1. Navigate to the `/apps` dashboard on the Runner GUI.
 2. Enter the executable path and an arbitrary name/ID.
 3. The runner will invoke the executable with `--manifest` and dynamically learn its command line argument requirements.
@@ -46,9 +46,19 @@ If you need to bypass the runner, invoke the apps directly:
 cargo run --bin crm -- --report tickets --config custom_config.json --start-date eomonth --end-date tomorrow --custom-download-folder "C:\\temp\\downloads"
 ```
 
-**Tasker Worker:**
+**Tasker standard task:**
 ```bash
-cargo run --bin tasker -- --task 1 --only-call-center --send-exceptions
+cargo run --bin tasker -- --task 1
+```
+
+**Tasker Call Center-only task:**
+```bash
+cargo run --bin tasker -- --task 1 --only-call-center
+```
+
+**Tasker exception task:**
+```bash
+cargo run --bin tasker -- --task 1 --send-exceptions
 ```
 
 ## Logs and Debugging
@@ -125,7 +135,7 @@ Task execution is concurrent, with an execution manager enforcing collision prev
 
 ## Lead Result Retention and Call Center Routing
 
-Each CSV Analysis run writes the enriched ticket output to the configured `output_file` and, when recent lead exports exist, writes a separate `lead_result.csv` in the same directory. The lead result adds a `team` column based only on the lead's `Assignee` lookup in the configured users export. Unassigned or unmapped assignees remain blank; no category/type assignment fallback is applied.
+Each CSV Analysis run writes the enriched ticket output to the configured `output_file` and, when recent lead exports exist, writes a separate `lead_result.csv` in the same directory. The lead result adds or replaces a `team` column based only on the lead's `Assignee` lookup in the configured users export. Unassigned or unmapped assignees remain blank; no category/type assignment fallback is applied. Matching recent lead exports are processed newest-first and deduplicated by Lead Id. If no recent lead export exists, the previous lead_result.csv is left untouched, but that stale file is not used as a new Call Center attachment for that run.
 
 Call Center email attachments are generated from this saved lead result and include only `team = Call Center` rows with status `New` or `Follow-up`, excluding configured branches. Other teams' leads remain in `lead_result.csv` and are not sent to Call Center.
 
