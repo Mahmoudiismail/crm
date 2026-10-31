@@ -906,7 +906,7 @@ mod tests_yasweb_finalization {
                     "first".to_string(),
                     ReportConfig {
                         report_type: "Standard Report".to_string(),
-                        filters: std::collections::HashMap::new(),
+                        filters: HashMap::from([("HOSPITAL".to_string(), String::new())]),
                         filter_options: std::collections::HashMap::new(),
                         start_date_key: None,
                         end_date_key: None,
@@ -951,9 +951,10 @@ mod tests_yasweb_finalization {
         let saved: YaswebConfig =
             serde_json::from_str(&std::fs::read_to_string(&config_path).unwrap()).unwrap();
         assert!(saved.reports["first"].filters.contains_key("filter_a"));
-        assert!(saved.reports["first"].filters.contains_key("Hospital"));
+        assert!(saved.reports["first"].filters.contains_key("HOSPITAL"));
+        assert!(!saved.reports["first"].filters.contains_key("Hospital"));
         assert_eq!(
-            saved.reports["first"].filter_options["Hospital"],
+            saved.reports["first"].filter_options["HOSPITAL"],
             vec!["Fakeeh".to_string(), "Neom".to_string()]
         );
         assert!(saved.reports["second"].filters.contains_key("filter_b"));
