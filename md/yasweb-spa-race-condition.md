@@ -37,3 +37,26 @@ The latest production run reached the MIS module route, but the wait still timed
 ## Follow-up: async evaluator return contract (2026-10-18)
 
 The MIS readiness script uses a top-level `return await` so its result is the final structured JSON string, but Chrome's `Runtime.evaluate` expects an expression. The shared automation evaluator now wraps only scripts beginning with `return await` in an async function expression before evaluation with Promise awaiting enabled. Other existing IIFE expressions are passed through unchanged. Focused tests protect both paths. This prevents the evaluator from receiving an undefined result before the browser-side readiness loop completes.
+
+
+## Follow-up: delayed SPA route was failing before the readiness wait (2026-10-31)
+
+A later production run exposed an earlier race than the report-frame readiness
+logic: `evaluate_report_frame_step` checked the parent tab URL once and returned
+an error immediately when the SPA was still on the dashboard. The route changed
+to `/home/mis-report/module/...` shortly afterward, so the 30-second browser
+readiness script never ran. The recovery path could then click MIS a second time
+while the first navigation was still completing.
+
+The route guard now polls the parent tab URL every 100 ms for up to 30 seconds
+before discovering the report iframe and creating its CDP execution context.
+This keeps the existing 30-second readiness wait, and prevents a second MIS
+click merely because Angular has not updated the URL yet. The existing recovery
+click remains available only after the full route wait expires. The frame is
+still discovered from the current frame tree after the route is reached, so a
+replaced iframe is not tied to a stale frame ID.
+
+Focused tests cover MIS-route recognition and ensure the integration path uses
+a bounded route wait rather than the former fail-fast guard. A live YASWEB run
+is still required to verify the deployed Angular transition and cross-origin
+frame behavior.
