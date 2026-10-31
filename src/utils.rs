@@ -97,11 +97,14 @@ pub fn setup_logging_with_levels(
     stdout_level: tracing_subscriber::filter::LevelFilter,
     file_level: tracing_subscriber::filter::LevelFilter,
 ) -> Result<tracing_appender::non_blocking::WorkerGuard> {
-    setup_logging_with_levels_and_header(app_name, stdout_level, file_level, "")
+    let log_dir =
+        executable_dir().context("Could not determine executable directory for logging")?;
+    let file_appender = tracing_appender::rolling::never(&log_dir, format!("{}.log", app_name));
+    setup_logging_with_writer(app_name, stdout_level, file_level, file_appender)
 }
 
-/// Like `setup_logging_with_levels`, but repeats the supplied header whenever the log
-/// file is first opened or recreated after being moved/deleted.
+/// Like `setup_logging_with_levels`, but recreates the log file if it is moved/deleted
+/// and repeats the supplied header whenever the file is opened.
 pub fn setup_logging_with_levels_and_header(
     app_name: &str,
     stdout_level: tracing_subscriber::filter::LevelFilter,
@@ -115,8 +118,19 @@ pub fn setup_logging_with_levels_and_header(
         file: None,
         recovery_header: recovery_header.to_string(),
     };
-    let (non_blocking_file, guard) = tracing_appender::non_blocking(file_appender);
+    setup_logging_with_writer(app_name, stdout_level, file_level, file_appender)
+}
 
+fn setup_logging_with_writer<W>(
+    app_name: &str,
+    stdout_level: tracing_subscriber::filter::LevelFilter,
+    file_level: tracing_subscriber::filter::LevelFilter,
+    file_writer: W,
+) -> Result<tracing_appender::non_blocking::WorkerGuard>
+where
+    W: Write + Send + 'static,
+{
+    let (non_blocking_file, guard) = tracing_appender::non_blocking(file_writer);
     let file_layer = fmt::layer()
         .with_writer(non_blocking_file)
         .with_ansi(false)
