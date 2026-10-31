@@ -128,6 +128,27 @@ fn insert_period_args(
     }
 }
 
+/// Use the registered app config as a fallback while allowing an action-level
+/// --config argument to override it.
+fn apply_registered_config_fallback(
+    effective_args: &mut HashMap<String, String>,
+    registered_config_path: &str,
+) {
+    if registered_config_path.trim().is_empty()
+        || effective_args
+            .get("--config")
+            .is_some_and(|path| !path.trim().is_empty())
+    {
+        return;
+    }
+
+    let resolved = resolve_relative_to_exe_dir(registered_config_path);
+    effective_args.insert(
+        "--config".to_string(),
+        resolved.to_string_lossy().into_owned(),
+    );
+}
+
 /// Returns whether this invocation's manifest exposes an applicable start/end date argument.
 pub async fn supports_periodization(
     logger: &TaskLogger,
@@ -238,11 +259,6 @@ pub async fn run_external_app(
     let resolved_executable = resolve_executable(&app.executable_path);
     let mut command = tokio::process::Command::new(&resolved_executable);
 
-    if !app.config_path.trim().is_empty() {
-        let resolved_config = resolve_relative_to_exe_dir(&app.config_path);
-        command.arg("--config").arg(&resolved_config);
-    }
-
     let args = &spec.args;
     let mut effective_args = HashMap::new();
     let (start_str, end_str) = if let Some(p) = period {
@@ -263,6 +279,8 @@ pub async fn run_external_app(
         }
         effective_args.insert(k.clone(), new_v);
     }
+
+    apply_registered_config_fallback(&mut effective_args, &app.config_path);
 
     if period.is_some() {
         // Explicit mappings take precedence, while manifest dependencies still
@@ -322,10 +340,6 @@ pub async fn run_external_app(
 
     for k in sorted_keys {
         let v = &effective_args[k];
-        if k == "--config" && !app.config_path.trim().is_empty() {
-            // Do not allow task arguments to override the app's registered config path if the app already has one defined
-            continue;
-        }
         if v.eq_ignore_ascii_case("true") || v.eq_ignore_ascii_case("on") {
             command.arg(k);
         } else if v.eq_ignore_ascii_case("false") || v.eq_ignore_ascii_case("off") {
@@ -363,6 +377,34 @@ pub async fn run_external_app(
 mod tests {
     use super::{date_args_from_manifest, insert_period_args, manifest_arg_dependencies_satisfied};
     use std::collections::HashMap;
+
+    #[test]
+    fn action_config_overrides_registered_app_config_path() {
+        let mut args = HashMap::from([(
+            "--config".to_string(),
+            "task-specific.json".to_string(),
+        )]);
+        apply_registered_config_fallback(&mut args, "registered.json");
+        assert_eq!(
+            args.get("--config").map(String::as_str),
+            Some("task-specific.json")
+        );
+    }
+
+    #[test]
+    fn registered_app_config_is_used_when_action_config_is_missing_or_empty() {
+        let temp = tempfile::tempdir().unwrap();
+        let registered = temp.path().join("registered.json");
+        let expected = registered.to_string_lossy().into_owned();
+
+        let mut missing = HashMap::new();
+        apply_registered_config_fallback(&mut missing, &expected);
+        assert_eq!(missing.get("--config"), Some(&expected));
+
+        let mut empty = HashMap::from([("--config".to_string(), "  ".to_string())]);
+        apply_registered_config_fallback(&mut empty, &expected);
+        assert_eq!(empty.get("--config"), Some(&expected));
+    }
 
     #[test]
     fn respects_manifest_dependencies_for_explicit_date_arguments() {
