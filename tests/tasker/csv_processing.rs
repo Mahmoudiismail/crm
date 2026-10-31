@@ -333,6 +333,30 @@ fn test_task1_only_call_center() {
 
     crm_tool::tasker::csv_task::run(&csv_config, true, false).unwrap();
 
+    let lead_result_path = dataset.download_dir.path().join("lead_result.csv");
+    assert!(lead_result_path.exists(), "lead_result.csv should be saved beside ticket results");
+    let lead_content = std::fs::read(&lead_result_path).unwrap();
+    let mut lead_reader = build_csv_reader_from_reader(lead_content.as_slice());
+    let lead_headers = lead_reader.headers().unwrap().clone();
+    let lead_team_idx = lead_headers
+        .iter()
+        .position(|header| header.eq_ignore_ascii_case("team"))
+        .expect("lead result must include team");
+    let mut lead_teams = std::collections::HashMap::new();
+    for record in lead_reader.records() {
+        let record = record.unwrap();
+        lead_teams.insert(
+            record.get(0).unwrap().to_string(),
+            record.get(lead_team_idx).unwrap_or("").to_string(),
+        );
+    }
+    assert_eq!(lead_teams.get("L-2001").map(String::as_str), Some("Call Center"));
+    assert_eq!(
+        lead_teams.get("L-2002").map(String::as_str),
+        Some("Incomplete Reservation")
+    );
+    assert_eq!(lead_teams.get("L-2003").map(String::as_str), Some(""));
+
     let temp_dir = std::env::temp_dir();
     let html_path = find_temp_artifact("Call_Center_", "email.html");
     assert!(
@@ -346,12 +370,22 @@ fn test_task1_only_call_center() {
         "CSV tickets attachment should be generated"
     );
 
-    // Find the dynamic leads attachment
+    // The email attachment must contain only eligible Call Center leads.
     let mut found_leads = false;
     for entry in std::fs::read_dir(&temp_dir).unwrap() {
         let path = entry.unwrap().path();
         if path.to_string_lossy().contains("Call_Center_Leads_") {
             found_leads = true;
+            let mut workbook = calamine::open_workbook_auto(&path).unwrap();
+            let sheet = calamine::Reader::worksheet_range_at(&mut workbook, 0)
+                .unwrap()
+                .unwrap();
+            let lead_ids = sheet
+                .rows()
+                .skip(1)
+                .map(|row| row[0].to_string())
+                .collect::<Vec<_>>();
+            assert_eq!(lead_ids, vec!["L-2001"]);
             let _ = std::fs::remove_file(path);
         }
     }
