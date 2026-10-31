@@ -11,7 +11,7 @@ use crm_tool::utils::{
     executable_dir, intercept_manifest, parse_log_level, setup_logging_with_levels, InterceptResult,
 };
 use crm_tool::yasweb::browser::run_browser_tab;
-use crm_tool::yasweb::config::{ReportConfig, YaswebConfig};
+use crm_tool::yasweb::config::{DiscoveredReportFilters, ReportConfig, YaswebConfig};
 use tokio::fs;
 use tracing::{error, info};
 
@@ -50,6 +50,8 @@ fn get_manifest(config_path: Option<PathBuf>) -> AppManifest {
         String,
         std::collections::HashMap<String, String>,
     > = std::collections::HashMap::new();
+    let mut filter_options: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
 
     if let Some(path) = config_path.clone() {
         if let Ok(config_str) = std::fs::read_to_string(&path) {
@@ -73,6 +75,14 @@ fn get_manifest(config_path: Option<PathBuf>) -> AppManifest {
                         .unwrap_or_default();
 
                     for (filter_key, filter_val) in &report.filters {
+                        if let Some(options) = report.filter_options.get(filter_key) {
+                            let cached = filter_options.entry(filter_key.clone()).or_default();
+                            for option in options {
+                                if !option.trim().is_empty() && !cached.contains(option) {
+                                    cached.push(option.clone());
+                                }
+                            }
+                        }
                         // Skip generating filter args for standard date keys since we map --start-date/--end-date to them
                         if filter_key == &start_key || filter_key == &end_key {
                             continue;
@@ -147,8 +157,12 @@ fn get_manifest(config_path: Option<PathBuf>) -> AppManifest {
             None
         };
 
-        let mut arg =
-            AppArg::new(format!("--filter-{}", f_name), ArgType::String).depends_on(depends_map);
+        let options = filter_options.remove(&f_name).unwrap_or_default();
+        let arg_type = if options.is_empty() { ArgType::String } else { ArgType::List };
+        let mut arg = AppArg::new(format!("--filter-{}", f_name), arg_type).depends_on(depends_map);
+        if !options.is_empty() {
+            arg = arg.options(options);
+        }
         if let Some(auto) = autofill_opt {
             arg = arg.autofill(auto);
         }
@@ -187,7 +201,7 @@ fn sanitize_filename_component(value: &str) -> String {
 async fn persist_discovered_filters(
     config_path: &Path,
     report_name: &str,
-    discovered_filters: Vec<String>,
+    discovered_filters: DiscoveredReportFilters,
     update_lock: &tokio::sync::Mutex<()>,
 ) -> Result<()> {
     let _guard = update_lock.lock().await;
@@ -210,10 +224,19 @@ async fn persist_discovered_filters(
     };
 
     let mut updated_filters = false;
-    for filter in discovered_filters {
+    for filter in discovered_filters.names {
         if let std::collections::hash_map::Entry::Vacant(entry) = report.filters.entry(filter) {
             entry.insert(String::new());
             updated_filters = true;
+        }
+    }
+    for (filter, options) in discovered_filters.options {
+        let cached = report.filter_options.entry(filter).or_default();
+        for option in options {
+            if !option.trim().is_empty() && !cached.contains(&option) {
+                cached.push(option);
+                updated_filters = true;
+            }
         }
     }
 
@@ -430,20 +453,22 @@ async fn main() -> Result<()> {
     let mut config_updated_global = config_updated;
     for active_report_name in &active_report_names {
         if !active_report_type_global.is_empty() || !active_filters_global.is_empty() {
-            let (existing_start_key, existing_end_key, existing_download_path) =
+            let (existing_start_key, existing_end_key, existing_download_path, existing_filter_options) =
                 if let Some(existing) = config.reports.get(active_report_name) {
                     (
                         existing.start_date_key.clone(),
                         existing.end_date_key.clone(),
                         existing.download_path.clone(),
+                        existing.filter_options.clone(),
                     )
                 } else {
-                    (None, None, None)
+                    (None, None, None, HashMap::new())
                 };
 
             let report_conf = ReportConfig {
                 report_type: active_report_type_global.clone(),
                 filters: active_filters_global.clone(),
+                filter_options: existing_filter_options,
                 start_date_key: existing_start_key,
                 end_date_key: existing_end_key,
                 download_path: existing_download_path,
@@ -822,6 +847,7 @@ mod tests_yasweb_finalization {
                     ReportConfig {
                         report_type: "Standard Report".to_string(),
                         filters: std::collections::HashMap::new(),
+                        filter_options: std::collections::HashMap::new(),
                         start_date_key: None,
                         end_date_key: None,
                         download_path: None,
@@ -844,8 +870,8 @@ mod tests_yasweb_finalization {
         let lock = Arc::new(AsyncMutex::new(()));
 
         let (first, second) = tokio::join!(
-            persist_discovered_filters(&config_path, "first", vec!["filter_a".to_string()], &lock),
-            persist_discovered_filters(&config_path, "second", vec!["filter_b".to_string()], &lock),
+            persist_discovered_filters(&config_path, "first", DiscoveredReportFilters { names: vec!["filter_a".to_string()], options: HashMap::new() }, &lock),
+            persist_discovered_filters(&config_path, "second", DiscoveredReportFilters { names: vec!["filter_b".to_string()], options: HashMap::new() }, &lock),
         );
         first.unwrap();
         second.unwrap();
@@ -867,7 +893,7 @@ mod tests_yasweb_finalization {
         assert!(persist_discovered_filters(
             &config_path,
             "first",
-            vec!["filter_a".to_string()],
+            DiscoveredReportFilters { names: vec!["filter_a".to_string()], options: HashMap::new() },
             &lock,
         )
         .await
