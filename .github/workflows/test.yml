@@ -1,5 +1,10 @@
 name: Test
 
+# Keep only the newest CI run for each PR or branch.
+concurrency:
+  group: test-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 on:
   pull_request:
     branches: [main]
