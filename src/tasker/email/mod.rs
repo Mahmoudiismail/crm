@@ -7,4 +7,4 @@ pub mod recipients;
 pub mod reports;
 pub mod utils;
 
-pub use client::process_emails;
+pub use client::{process_emails, process_emails_with_lead_result};
