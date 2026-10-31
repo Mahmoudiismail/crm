@@ -497,7 +497,7 @@ pub fn navigate_and_run_report(
                                             const discoveredFilters = [];
                                             const discoveredFilterOptions = {{}};
                                             const failedFilters = [];
-                                            const normalize = value => (value || '').replace(/\\s+/g, ' ').trim().toLowerCase();
+                                            const normalize = value => (value || '').replace(/\s+/g, ' ').trim().toLowerCase();
 
                                             function findFilterControl(label) {{
                                                 const field = label.closest('mat-form-field');
@@ -529,7 +529,7 @@ pub fn navigate_and_run_report(
                                                     await sleep(100);
                                                 }}
                                                 const values = optionElements
-                                                    .map(option => (option.innerText || option.textContent || '').replace(/\\s+/g, ' ').trim())
+                                                    .map(option => (option.innerText || option.textContent || '').replace(/\s+/g, ' ').trim())
                                                     .filter(Boolean);
                                                 const backdrop = doc.querySelector('.cdk-overlay-backdrop');
                                                 if (backdrop) backdrop.click();
