@@ -79,3 +79,13 @@ fn test_generate_mis_reports_wait_js_zero_timeout() {
     let js = generate_mis_reports_wait_js(0);
     assert!(js.contains("})(0);"));
 }
+
+
+#[test]
+fn mis_route_wait_is_not_a_fail_fast_url_check() {
+    let source = include_str!("../../src/yasweb/browser/reports.rs");
+    assert!(source.contains("wait_for_mis_reports_route(tab, Duration::from_secs(30))"));
+    assert!(source.contains("std::thread::sleep(Duration::from_millis(100))"));
+    assert!(!source.contains("MIS navigation route was not reached before report-frame readiness check"));
+}
+
