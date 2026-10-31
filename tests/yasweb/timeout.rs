@@ -88,3 +88,12 @@ fn mis_route_wait_is_not_a_fail_fast_url_check() {
     assert!(!source
         .contains("MIS navigation route was not reached before report-frame readiness check"));
 }
+
+#[test]
+fn runner_filter_form_supports_multiselect_dependencies_and_optional_dropdowns() {
+    let source = include_str!("../../src/runner/assets/js/forms.js");
+    assert!(source.contains("input.hasAttribute(\"data-multilist\")"));
+    assert!(source.contains("input.checked"));
+    assert!(source.contains("-- Select --"));
+    assert!(source.contains("allowedValues.some(value => currentValues.includes(value))"));
+}

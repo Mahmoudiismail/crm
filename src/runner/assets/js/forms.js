@@ -1086,8 +1086,8 @@
             </div>
           `;
         } else if (arg.arg_type === "list" || (arg.arg_type === "string" && arg.options && arg.options.length > 0)) {
-          let opts = "";
-          arg.options.forEach((opt) => {
+          let opts = '<option value="">-- Select --</option>';
+          (Array.isArray(arg.options) ? arg.options : []).forEach((opt) => {
             const selected = opt === val ? "selected" : "";
             opts += `<option value="${opt}" ${selected}>${opt}</option>`;
           });
@@ -1255,18 +1255,28 @@
 
            let allMet = true;
            for (const [depName, allowedValues] of Object.entries(dependsMap)) {
-               const depInput = dynamicInputs.querySelector(`[data-arg-name="${depName}"]`);
-               if (depInput) {
-                   let currentVal = "";
-                   if (depInput.type === "checkbox" && !depInput.hasAttribute("data-multilist")) {
-                       currentVal = depInput.checked ? "true" : "false";
-                   } else if (depInput.tagName === "SELECT") {
-                       currentVal = depInput.value;
+               const dependencyInputs = Array.from(
+                   dynamicInputs.querySelectorAll("[data-arg-name]"),
+               ).filter(input => input.dataset.argName === depName);
+               if (dependencyInputs.length > 0) {
+                   let currentValues;
+                   if (dependencyInputs.some(input => input.hasAttribute("data-multilist"))) {
+                       currentValues = dependencyInputs
+                           .filter(input => input.hasAttribute("data-multilist") && input.checked)
+                           .map(input => input.value);
                    } else {
-                       currentVal = depInput.value;
+                       const depInput = dependencyInputs[0];
+                       if (depInput.type === "checkbox") {
+                           currentValues = [depInput.checked ? "true" : "false"];
+                       } else {
+                           currentValues = [depInput.value];
+                       }
                    }
 
-                   if (!allowedValues.includes(currentVal)) {
+                   if (
+                       !Array.isArray(allowedValues) ||
+                       !allowedValues.some(value => currentValues.includes(value))
+                   ) {
                        allMet = false;
                        break;
                    }
