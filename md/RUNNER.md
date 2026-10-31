@@ -97,3 +97,22 @@ External Application sections feature a robust **Preview** button displaying a v
 The preview is strictly bounded to the upcoming 10 evaluations (preventing unbounded computational recursion for tightly-scheduled tasks).
 
 The frontend relies **100%** on the Rust backend API (`/api/tasks/preview`) as the authoritative source of truth. The backend API uses the exact same `generate_upcoming_executions_for_app` scheduling engine that evaluates live background tasks, meaning the GUI prediction is functionally identical to the background behavior, accurately rendering working hours blockages, week-off eliminations, and interval compounding.
+
+
+## External App Manifest Filters
+
+Runner renders external-app arguments from the executable's manifest. For a
+manifest argument declared as `list`, the UI must render a dropdown with an
+explicit empty option so an optional filter is not silently applied by the
+browser selecting the first item. Arguments depending on `--name` must evaluate
+all checked values when `--name` is a `multi_list`; inspecting only the first
+checkbox can hide filters for the selected report or show filters for an
+unselected report.
+
+Yasweb declares report-specific filter arguments with `depends_on: { "--name":
+[report names] }`. Cached options for a shared filter are merged across reports
+rather than discarded when another report has no cached option list. At runtime
+Runner passes the declared `--filter-<key>` values as separate process
+arguments; Yasweb normalizes those dynamic flags into its supported
+`--filters <JSON>` input. This preserves the manifest-driven dropdown UI
+without requiring a fixed set of filter names in the Yasweb CLI.
