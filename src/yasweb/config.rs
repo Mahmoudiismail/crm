@@ -89,6 +89,16 @@ pub struct DiscoveredReportFilters {
     pub options: HashMap<String, Vec<String>>,
 }
 
+impl DiscoveredReportFilters {
+    pub fn len(&self) -> usize {
+        self.names.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.names.is_empty() && self.options.is_empty()
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct YaswebConfig {
     pub url: String,
@@ -179,6 +189,15 @@ impl std::fmt::Debug for YaswebConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn report_config_accepts_legacy_files_without_filter_options() {
+        let report: ReportConfig = serde_json::from_str(
+            r#"{"report_type":"Report Manager","filters":{"Hospital":""}}"#,
+        )
+        .unwrap();
+        assert!(report.filter_options.is_empty());
+    }
 
     #[test]
     fn concurrency_is_configurable_and_defaults_to_six() {
