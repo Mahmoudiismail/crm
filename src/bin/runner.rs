@@ -9,7 +9,7 @@ use crm_tool::runner::engine::RunnerHandle;
 use crm_tool::runner::engine::{start_scheduler, RunnerCommand};
 use crm_tool::runner::gui::start_gui_server;
 use crm_tool::utils::{
-    executable_dir, intercept_manifest, parse_log_level, setup_logging_with_levels, InterceptResult,
+    executable_dir, intercept_manifest, parse_log_level, setup_logging_with_levels_and_header, InterceptResult,
 };
 #[cfg(target_os = "windows")]
 use muda::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem};
@@ -18,6 +18,7 @@ use std::time::Duration;
 #[cfg(target_os = "windows")]
 use tracing::error;
 use tracing::info;
+use std::path::{Path, PathBuf};
 #[cfg(target_os = "windows")]
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
 #[cfg(target_os = "windows")]
@@ -32,6 +33,8 @@ use winit::window::WindowId;
 #[derive(Parser)]
 #[command(name = "runner", about = "Runner daemon")]
 struct RunnerCliOptions {
+    #[arg(long, value_name = "PATH")]
+    config: Option<PathBuf>,
     #[arg(long, hide = true)]
     manifest: bool,
 }
@@ -40,8 +43,46 @@ fn get_manifest() -> AppManifest {
     AppManifest {
         name: "runner".to_string(),
         description: "Runner daemon".to_string(),
-        arguments: vec![],
+        arguments: vec![AppArg::new("--config", crm_tool::manifest::ArgType::String)],
     }
+}
+
+fn resolve_config_path(config_arg: Option<&Path>, exe_dir: &Path) -> PathBuf {
+    match config_arg {
+        Some(path) if path.is_absolute() => path.to_path_buf(),
+        Some(path) => exe_dir.join(path),
+        None => exe_dir.join("runner_config.json"),
+    }
+}
+
+fn redact_config_value(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(object) => {
+            for (key, nested) in object.iter_mut() {
+                let normalized = key.to_ascii_lowercase().replace('-', "_");
+                if ["password", "passwd", "token", "secret", "credential", "authorization", "api_key", "apikey"]
+                    .iter()
+                    .any(|needle| normalized.contains(needle))
+                {
+                    *nested = serde_json::Value::String("[REDACTED]".to_string());
+                } else {
+                    redact_config_value(nested);
+                }
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for item in items {
+                redact_config_value(item);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn runner_config_log_snapshot(config: &crm_tool::runner::config::RunnerConfig) -> Result<String> {
+    let mut value = serde_json::to_value(config)?;
+    redact_config_value(&mut value);
+    Ok(serde_json::to_string_pretty(&value)?)
 }
 
 #[tokio::main]
@@ -49,7 +90,7 @@ async fn main() -> Result<()> {
     if let InterceptResult::ExitSuccessfully = intercept_manifest(get_manifest()) {
         return Ok(());
     }
-    let _options = RunnerCliOptions::parse();
+    let options = RunnerCliOptions::parse();
     let _instance_lock = match std::net::TcpListener::bind("127.0.0.1:14592") {
         Ok(listener) => listener,
         Err(e) => {
@@ -58,43 +99,10 @@ async fn main() -> Result<()> {
         }
     };
 
-    let config_path = executable_dir()?.join("runner_config.json");
-    let (stdout_lvl, file_lvl) = if config_path.exists() {
-        if let Ok(raw) = std::fs::read_to_string(&config_path) {
-            if let Ok(cfg) = serde_json::from_str::<crm_tool::runner::config::RunnerConfig>(&raw) {
-                (cfg.log_stdout_level, cfg.log_file_level)
-            } else {
-                ("DEBUG".to_string(), "TRACE".to_string())
-            }
-        } else {
-            ("DEBUG".to_string(), "TRACE".to_string())
-        }
-    } else {
-        ("DEBUG".to_string(), "TRACE".to_string())
-    };
-
-    let _log_guard = match setup_logging_with_levels(
-        "runner",
-        parse_log_level(&stdout_lvl)?,
-        parse_log_level(&file_lvl)?,
-    ) {
-        Ok(guard) => guard,
-        Err(e) => {
-            eprintln!("Failed to set up logging: {}", e);
-            std::process::exit(1);
-        }
-    };
-
-    info!("==================================================");
-    info!("RUNNER - Starting tray scheduler mode");
-    info!("==================================================");
-
-    let runner_config_path =
-        executable_dir().context("Failed to determine executable directory")?;
-    let runner_config_path = runner_config_path.join("runner_config.json");
-    let runner_config_path_str = runner_config_path.to_string_lossy().to_string();
-
-    let config_exists = runner_config_path.exists();
+    let exe_dir = executable_dir().context("Failed to determine executable directory")?;
+    let config_path = resolve_config_path(options.config.as_deref(), &exe_dir);
+    let runner_config_path_str = config_path.to_string_lossy().to_string();
+    let config_exists = config_path.exists();
 
     let runner_cfg = {
         let cfg = if config_exists {
@@ -102,7 +110,8 @@ async fn main() -> Result<()> {
                 Ok(c) => c,
                 Err(e) => {
                     eprintln!(
-                        "CRITICAL ERROR: Failed to parse existing runner_config.json: {}",
+                        "CRITICAL ERROR: Failed to parse existing runner config {}: {}",
+                        config_path.display(),
                         e
                     );
                     std::process::exit(1);
@@ -122,6 +131,23 @@ async fn main() -> Result<()> {
         cfg
     };
 
+    let config_snapshot = runner_config_log_snapshot(&runner_cfg)?;
+    let _log_guard = match setup_logging_with_levels_and_header(
+        "runner",
+        parse_log_level(&runner_cfg.log_stdout_level)?,
+        parse_log_level(&runner_cfg.log_file_level)?,
+        &config_snapshot,
+    ) {
+        Ok(guard) => guard,
+        Err(e) => {
+            eprintln!("Failed to set up logging: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    info!("==================================================");
+    info!("RUNNER - Starting tray scheduler mode");
+    info!("==================================================");
     info!(
         "Loaded runner configuration successfully with {} tasks",
         runner_cfg.tasks.len()
@@ -166,6 +192,35 @@ async fn main() -> Result<()> {
         }
         info!("Shutting down runner daemon.");
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn runner_config_path_supports_default_relative_and_absolute_paths() {
+        let exe_dir = Path::new("C:/CRM");
+        assert_eq!(resolve_config_path(None, exe_dir), exe_dir.join("runner_config.json"));
+        assert_eq!(
+            resolve_config_path(Some(Path::new("settings/custom.json")), exe_dir),
+            exe_dir.join("settings/custom.json")
+        );
+        let absolute = Path::new("D:/Settings/runner.json");
+        assert_eq!(resolve_config_path(Some(absolute), exe_dir), absolute);
+    }
+
+    #[test]
+    fn runner_config_log_snapshot_redacts_secret_fields() {
+        let mut value = serde_json::json!({
+            "api_token": "secret-value",
+            "tasks": [{"args": {"--password": "pw", "--report": "tickets"}}]
+        });
+        redact_config_value(&mut value);
+        assert_eq!(value["api_token"], "[REDACTED]");
+        assert_eq!(value["tasks"][0]["args"]["--password"], "[REDACTED]");
+        assert_eq!(value["tasks"][0]["args"]["--report"], "tickets");
     }
 }
 
