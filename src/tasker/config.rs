@@ -19,14 +19,12 @@ impl TaskerConfig {
                 TaskConfig::CrmOpenSohail(config) => Some(config.dashboard_config.minutes_ago),
                 _ => None,
             };
-            if let Some(minutes) = minutes_ago {
-                if minutes < 0 {
-                    anyhow::bail!(
-                        "Task at index {} has negative minutes_ago ({}); the value must be zero or greater",
-                        index,
-                        minutes
-                    );
-                }
+            if let Some(minutes) = minutes_ago.filter(|minutes| *minutes < 0) {
+                anyhow::bail!(
+                    "Task at index {} has negative minutes_ago ({}); the value must be zero or greater",
+                    index,
+                    minutes
+                );
             }
         }
         Ok(())
