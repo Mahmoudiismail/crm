@@ -1144,6 +1144,8 @@ mod tests_yasweb_finalization {
             })
             .collect::<Vec<_>>();
         assert_eq!(output_files.len(), 1, "expected exactly one report file");
+        let directory_entries = std::fs::read_dir(&dst_dir).unwrap().count();
+        assert_eq!(directory_entries, 1, "the output directory must not contain lock artifacts");
         assert_eq!(output_files[0].parent(), Some(dst_dir.as_path()));
         assert_ne!(
             output_files[0].file_name().and_then(|name| name.to_str()),
