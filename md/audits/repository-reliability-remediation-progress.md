@@ -32,6 +32,8 @@ Base: `86806fbd07f61b794d1a819c24f165c501a1792f`
 - CRM Updater package authenticity remains a release-security decision. A checksum is not authenticity unless the expected checksum is anchored in a trusted source. Signing/key management is intentionally not invented in this PR.
 
 ## Verification status
-- Changes are committed to the branch and focused regression tests were added.
-- Full `cargo fmt`, `cargo test`, Clippy, Windows CI, and runtime validation have not yet been executed in this environment. Do not treat this progress document as a passing test report.
+- Windows CI `Format and Auto-fix` completed successfully, including `cargo fmt -- --check`.
+- The first Windows test attempt caught a compile error in the new lookback validation because `anyhow::Context` was not imported. The import was added in commit `658fe7d41de7bee53f0d495d61575eaaebdf7081`.
+- The corrected workflow rerun (attempt 2) is currently running Clippy and the dependency audit; the test job is gated on Clippy. No passing test, Clippy, or dependency-audit result is claimed yet.
+- Runtime validation for Yasweb multi-process behavior, GUI browser-origin behavior, and Windows Excel/Outlook automation has not been performed.
 - GUI CSRF protection is limited to Origin-bearing POST requests; non-browser clients without Origin remain supported. Review this compatibility boundary before release.
