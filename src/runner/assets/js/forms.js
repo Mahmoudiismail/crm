@@ -1223,6 +1223,7 @@
           startArgSelect.options[0].disabled = false;
           endArgSelect.options[0].disabled = false;
         }
+        updatePeriodizationVisibility();
       };
       if (startArgSelect) startArgSelect.addEventListener("change", () => {
         updateMappedDateArguments();
