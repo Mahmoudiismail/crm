@@ -202,9 +202,9 @@ pub async fn supports_periodization(
         .map(str::to_string)
         .or(discovered_end)
         .filter(|name| {
-            manifest
-                .as_ref()
-                .is_none_or(|value| manifest_arg_dependencies_satisfied(value, name, &spec.args))
+            manifest.as_ref().is_none_or(|value| {
+                manifest_argument_is_available(value, name, &spec.args)
+            })
         });
     start.is_some() || end.is_some()
 }
