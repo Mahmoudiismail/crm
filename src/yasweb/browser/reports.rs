@@ -1,3 +1,517 @@
+use anyhow::{Context, Result};
+use headless_chrome::protocol::cdp::Page;
+use headless_chrome::Tab;
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+use tracing::{error, info, warn};
+
+use crate::yasweb::browser::{debug, javascript};
+
+/// Navigates to an MIS report, applies the requested filters, and exports the report as XLSX.
+///
+/// Returns the filter labels discovered in the report form.
+///
+/// # Examples
+///
+/// ```no_run
+/// use std::collections::HashMap;
+/// use std::sync::Arc;
+/// use headless_chrome::Tab;
+/// use crm_tool::yasweb::browser::reports::navigate_and_run_report;
+///
+/// # fn example() -> anyhow::Result<()> {
+/// # let tab: Arc<Tab> = unimplemented!();
+/// let mut step_num = 0;
+/// let filters = HashMap::new();
+///
+/// let discovered = navigate_and_run_report(
+///     &tab,
+///     "Sales Report",
+///     "Operational",
+///     &filters,
+///     10,
+///     &mut step_num,
+/// )?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// # Arguments
+///
+/// * `active_report_name` - The report to select and export.
+/// * `active_report_type` - The report category to select.
+/// * `active_filters` - Filter values to apply before generating the report.
+/// * `step_num` - Counter used to number saved browser-state snapshots.
+///
+/// # Returns
+///
+/// The labels of the filters discovered in the report form.
+pub fn navigate_and_run_report(
+    tab: &Arc<Tab>,
+    active_report_name: &str,
+    active_report_type: &str,
+    active_filters: &HashMap<String, String>,
+    timeout_minutes: u64,
+    step_num: &mut u32,
+) -> Result<Vec<String>> {
+    let report_started = Instant::now();
+    info!(
+        "YASWEB STAGE START: navigate_and_run_report report='{}' type='{}' filters_count={}",
+        active_report_name,
+        active_report_type,
+        active_filters.len()
+    );
+    let mut discovered_filters = Vec::new();
+
+    // Replicate navigation block to find "MIS" and run steps
+    info!("Waiting for #menuPinnedBtn...");
+    match tab.wait_for_element("#menuPinnedBtn:not(.d-none), #pinButton:not(.d-none)") {
+        Ok(menu_btn) => {
+            let mut mis_found = false;
+            let mis_selector = ".misManagement";
+
+            for attempt in 1..=3 {
+                let mut sidebar_toggled = false;
+
+                info!("Clicking #menuPinnedBtn (Attempt {})...", attempt);
+                if let Err(e) = menu_btn.click() {
+                    error!("Failed to click menu button: {:?}", e);
+                    debug::save_failure_diagnostics(tab, "menu_button_click");
+                } else {
+                    let check_js_eval = r#"
+                        new Promise(resolve => {
+                            let attempts = 0;
+                            let check = () => {
+                                let m = document.querySelector('.menuModules');
+                                if (m && m.classList.contains('show-modules')) { resolve(true); }
+                                else if (attempts > 50) { resolve(false); }
+                                else { attempts++; setTimeout(check, 100); }
+                            };
+                            check();
+                        })
+                    "#;
+                    if let Ok(eval_result) = tab.evaluate(check_js_eval, true) {
+                        if let Some(val) = eval_result.value {
+                            sidebar_toggled = val.as_bool().unwrap_or(false);
+                        }
+                    }
+
+                    if !sidebar_toggled {
+                        warn!("Menu '.menuModules' did not receive 'show-modules' class after waiting. MIS Reports might be inaccessible.");
+                        let log_classes_js = "document.querySelector('.menuModules') ? document.querySelector('.menuModules').className : 'NOT_FOUND'";
+                        if let Ok(eval_result) = tab.evaluate(log_classes_js, true) {
+                            if let Some(val) = eval_result.value {
+                                if let Some(classes) = val.as_str() {
+                                    warn!("Current .menuModules classes: {}", classes);
+                                }
+                            }
+                        }
+                    } else {
+                        info!("Menu successfully opened.");
+                    }
+                    debug::save_html_state(
+                        tab,
+                        active_report_name,
+                        *step_num,
+                        "After clicking #menuPinnedBtn",
+                    );
+                    *step_num += 1;
+
+                    info!("Waiting for MIS module to be present in DOM...");
+                    if tab
+                        .wait_for_element_with_custom_timeout(mis_selector, Duration::from_secs(10))
+                        .is_ok()
+                    {
+                        mis_found = true;
+                    }
+                }
+
+                if mis_found {
+                    break;
+                } else {
+                    info!("MIS module not found in attempt {}, retrying...", attempt);
+                }
+            }
+
+            if !mis_found {
+                error!(
+                    "MIS module ('{}') not found after all attempts.",
+                    mis_selector
+                );
+                debug::save_failure_diagnostics(tab, "mis_module_wait_timeout");
+                return Err(anyhow::anyhow!("MIS module wait timeout"));
+            }
+
+            match tab.wait_for_element(mis_selector) {
+                Ok(mis_module) => {
+                    info!("Clicking on MIS module...");
+                    if let Err(e) = mis_module.click() {
+                        error!("Failed to click MIS module: {:?}", e);
+                        debug::save_failure_diagnostics(tab, "click_mis_module");
+                        return Err(e).context("Yasweb stage failed: click MIS module");
+                    } else {
+                        info!("Clicked MIS successfully. Waiting for MIS Reports button...");
+                        tracing::debug!("Waiting for MIS Reports button...");
+                        info!("MIS module click returned; checking the SPA transition to MIS Reports.");
+
+                        let mis_wait_started = Instant::now();
+                        info!("YASWEB STAGE START: wait_for_mis_reports timeout_seconds=30");
+                        let wait_js = generate_mis_reports_wait_js(30);
+                        if let Err(first_error) =
+                            evaluate_report_frame_step(tab, &wait_js, "Wait for MIS Reports")
+                        {
+                            error!(
+                                "YASWEB STAGE RETRY: wait_for_mis_reports initial attempt failed elapsed_ms={} error={:#}",
+                                mis_wait_started.elapsed().as_millis(),
+                                first_error
+                            );
+
+                            // A failed transition can leave the SPA on the previous report route.
+                            // Retry the MIS navigation once only when the MIS route was not reached.
+                            match retry_mis_navigation(tab) {
+                                Ok(true) => {
+                                    info!("MIS route was not reached; retried the MIS module click once.");
+                                    if let Err(retry_error) = evaluate_report_frame_step(
+                                        tab,
+                                        &wait_js,
+                                        "Wait for MIS Reports (retry)",
+                                    ) {
+                                        error!(
+                                            "YASWEB STAGE FAILED: wait_for_mis_reports after retry elapsed_ms={} error={:#}",
+                                            mis_wait_started.elapsed().as_millis(),
+                                            retry_error
+                                        );
+                                        debug::save_failure_diagnostics(
+                                            tab,
+                                            "wait_for_mis_reports_retry",
+                                        );
+                                        return Err(retry_error).context("Yasweb stage failed: wait for MIS Reports after navigation retry");
+                                    }
+                                }
+                                Ok(false) => {
+                                    // The route was reached, so this was likely a slow embedded UI.
+                                    // Retry the readiness wait without clicking navigation again.
+                                    info!("MIS route already reached; retrying readiness wait once without another navigation click.");
+                                    if let Err(retry_error) = evaluate_report_frame_step(
+                                        tab,
+                                        &wait_js,
+                                        "Wait for MIS Reports (readiness retry)",
+                                    ) {
+                                        error!(
+                                            "YASWEB STAGE FAILED: wait_for_mis_reports after readiness retry elapsed_ms={} error={:#}",
+                                            mis_wait_started.elapsed().as_millis(),
+                                            retry_error
+                                        );
+                                        debug::save_failure_diagnostics(
+                                            tab,
+                                            "wait_for_mis_reports_readiness_retry",
+                                        );
+                                        return Err(retry_error).context("Yasweb stage failed: wait for MIS Reports after readiness retry");
+                                    }
+                                }
+                                Err(recovery_error) => {
+                                    error!(
+                                        "Failed to recover MIS navigation after initial readiness failure: {:#}",
+                                        recovery_error
+                                    );
+                                    debug::save_failure_diagnostics(tab, "mis_navigation_recovery");
+                                    return Err(first_error)
+                                        .context("Yasweb stage failed: wait for MIS Reports; navigation recovery also failed");
+                                }
+                            }
+                        }
+                        info!(
+                            "YASWEB STAGE END: wait_for_mis_reports status=SUCCESS elapsed_ms={}",
+                            mis_wait_started.elapsed().as_millis()
+                        );
+                        info!("MIS Reports button successfully verified.");
+                        println!("MIS Reports button successfully verified.");
+                        debug::save_html_state(
+                            tab,
+                            active_report_name,
+                            *step_num,
+                            "After clicking MIS module",
+                        );
+                        *step_num += 1;
+
+                        info!("Searching for auto-login iframe...");
+                        let mut iframe_node_id = None;
+
+                        if let Ok(iframe_node) = tab
+                            .wait_for_element_with_custom_timeout("iframe", Duration::from_secs(10))
+                        {
+                            iframe_node_id = Some(iframe_node.node_id);
+                        }
+
+                        if iframe_node_id.is_none() {
+                            error!("Could not find iframe.");
+                            return Err(anyhow::anyhow!("Iframe not found"));
+                        }
+
+                        info!("Running full JS automation sequence...");
+
+                        let filters_json = serde_json::to_string(active_filters)
+                            .unwrap_or_else(|_| "{}".to_string());
+                        // let timeout_loops = (timeout_minutes * 60) / 10;
+
+                        // STEP 1: Select Report Type
+                        tracing::debug!(
+                            "Executing JavaScript to select report type: {}",
+                            active_report_type
+                        );
+                        let step1_js = generate_step1_js(active_report_type);
+
+                        debug::save_html_state(
+                            tab,
+                            active_report_name,
+                            *step_num,
+                            "Before selecting Report Type",
+                        );
+                        *step_num += 1;
+                        info!("Selecting Report Type: {}", active_report_type);
+                        evaluate_report_frame_step(tab, &step1_js, "Step 1 (Report Type)")?;
+                        debug::save_html_state(
+                            tab,
+                            active_report_name,
+                            *step_num,
+                            "After Selecting Report Type",
+                        );
+                        *step_num += 1;
+
+                        // STEP 1.5 & 2: Wait for List, Search, and Select Report
+                        tracing::debug!(
+                            "Executing JavaScript to search & select report: {}",
+                            active_report_name
+                        );
+                        let step2_js = format!(
+                            r#"
+                                        (async function(reportType, reportName, timeoutMinutes) {{
+                                            function sleep(ms) {{ return new Promise(r => setTimeout(r, ms)); }}
+                                            let logs = [];
+                                            let doc = document;
+
+                                            logs.push("Waiting for loader to disappear before typing...");
+                                            for(let i=0; i<30; i++) {{
+                                                let loader = document.querySelector('#loader_svg, .loading-screen-wrapper, mat-progress-bar, .dx-loadpanel') || doc.querySelector('#loader_svg, .loading-screen-wrapper, mat-progress-bar, .dx-loadpanel');
+                                                let isLoaderVisible = false;
+                                                if (loader) {{
+                                                    let style = loader.ownerDocument.defaultView.getComputedStyle(loader);
+                                                    if (style.display !== 'none' && style.opacity !== '0' && style.visibility !== 'hidden') {{                                                        isLoaderVisible = true;
+                                                    }}
+                                                }}
+                                                if (!isLoaderVisible) {{
+                                                    break;
+                                                }}
+                                                await sleep(500);
+                                            }}
+
+                                            let listLoaded = false;
+                                            logs.push("Waiting for report list to load (tree-view)...");
+                                            const deadlineList = Date.now() + timeoutMinutes * 60 * 1000;
+                                            while (Date.now() <= deadlineList) {{
+                                                if (doc.querySelectorAll('.tree-view').length > 0) {{
+                                                    listLoaded = true; break;
+                                                }}
+                                                await sleep(500);
+                                            }}
+                                            if (!listLoaded) return JSON.stringify({{ status: "ERROR", msg: "Report list timeout.", logs }});
+                                            logs.push("Report list loaded.");
+                                            await sleep(200);
+
+                                            logs.push("Typing in search input...");
+                                            let searchInputList = doc.querySelector('input[formcontrolname="searchInput"], input[placeholder="Search"]');
+                                            if (searchInputList) {{
+                                                searchInputList.focus();
+                                                searchInputList.value = '';
+                                                for (let i = 0; i < reportName.length; i++) {{
+                                                    searchInputList.value += reportName[i];
+                                                    searchInputList.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                                                    await sleep(5);
+                                                }}
+                                                searchInputList.dispatchEvent(new Event('change', {{ bubbles: true }}));
+
+                                                // Trigger the 'Enter' key to execute the search
+                                                searchInputList.dispatchEvent(new KeyboardEvent('keydown', {{ bubbles: true, cancelable: true, key: 'Enter', code: 'Enter', keyCode: 13 }}));
+                                                searchInputList.dispatchEvent(new KeyboardEvent('keyup', {{ bubbles: true, cancelable: true, key: 'Enter', code: 'Enter', keyCode: 13 }}));
+
+                                                searchInputList.blur();
+                                                searchInputList.dispatchEvent(new Event('blur', {{ bubbles: true }}));
+                                                logs.push("Typed search input using simulation and triggered Enter");
+                                                await sleep(100); // Wait after typing
+                                            }} else {{
+                                                logs.push("Warning: searchInputList not found.");
+                                            }}
+
+                                            let reportFound = false;
+                                            logs.push("Waiting for report span in list: " + reportName);
+                                            const deadlineReport = Date.now() + timeoutMinutes * 60 * 1000;
+                                            while (Date.now() <= deadlineReport) {{
+                                                let exactMatchSpan = null;
+                                                let partialMatchSpan = null;
+
+                                                let spans = doc.querySelectorAll('.tree-view span');
+                                                let searchName = reportName.trim().toLowerCase();
+
+                                                for (let span of spans) {{
+                                                    let spanText = span.textContent.trim().toLowerCase();
+                                                    if (spanText === searchName) {{
+                                                        exactMatchSpan = span;
+                                                        break;
+                                                    }} else if (!partialMatchSpan && spanText.includes(searchName)) {{
+                                                        partialMatchSpan = span;
+                                                    }}
+                                                }}
+
+                                                let bestMatchSpan = exactMatchSpan || partialMatchSpan;
+
+                                                if (bestMatchSpan) {{
+                                                    if (exactMatchSpan) {{
+                                                        logs.push("Found exact match reportSpan");
+                                                    }} else {{
+                                                        logs.push("Found partial match reportSpan");
+                                                    }}
+
+                                                    let listItemElement = bestMatchSpan.closest('.sub-list-items');
+                                                    if (listItemElement) {{
+                                                        listItemElement.click();
+                                                        logs.push("Clicked sub-list-items");
+                                                    }} else {{
+                                                        bestMatchSpan.click();
+                                                        logs.push("Clicked reportSpan");
+                                                    }}
+                                                    reportFound = true;
+                                                    break;
+                                                }}
+                                                await sleep(1000);
+                                            }}
+                                            if (!reportFound) return JSON.stringify({{ status: "ERROR", msg: "Report name not found: " + reportName, logs }});
+                                            return JSON.stringify({{ status: "SUCCESS", logs }});
+                                        }})({}, {}, {});
+                                        "#,
+                            serde_json::to_string(&active_report_type).unwrap(),
+                            serde_json::to_string(&active_report_name).unwrap(),
+                            timeout_minutes
+                        );
+
+                        info!("Searching & Selecting Report: {}", active_report_name);
+                        evaluate_report_frame_step(tab, &step2_js, "Step 2 (Select Report)")?;
+                        debug::save_html_state(
+                            tab,
+                            active_report_name,
+                            *step_num,
+                            "After Selecting Report from List",
+                        );
+                        *step_num += 1;
+
+                        // STEP 3: Wait for binding
+                        tracing::debug!("Executing JavaScript to wait for binding...");
+                        let step3_js = format!(
+                            r#"
+                                        (async function(reportName) {{
+                                            function sleep(ms) {{ return new Promise(r => setTimeout(r, ms)); }}
+                                            let logs = [];
+                                            let doc = document;
+                                            let reportBound = false;
+                                            logs.push("Waiting for report binding...");
+                                            for (let i = 0; i < 30; i++) {{
+                                                let selects = doc.querySelectorAll('mat-select');
+                                                for (let s of selects) {{
+                                                    if (s.innerText.includes({0}) || s.textContent.includes({0})) {{
+                                                        reportBound = true; break;
+                                                    }}
+                                                }}
+                                                if (!reportBound) {{
+                                                    let headers = doc.querySelectorAll('.fw-semibold, .fw-bold');
+                                                    for (let h of headers) {{
+                                                        if (h.innerText.includes({0}) || h.textContent.includes({0})) {{
+                                                            reportBound = true; break;
+                                                        }}
+                                                    }}
+                                                }}
+                                                if (reportBound) break;
+                                                await sleep(1000);
+                                            }}
+                                            if (!reportBound) return JSON.stringify({{ status: "ERROR", msg: "Binding timeout.", logs }});
+                                            return JSON.stringify({{ status: "SUCCESS", logs }});
+                                        }})({0}, {1});
+                                        "#,
+                            serde_json::to_string(&active_report_name).unwrap(),
+                            timeout_minutes
+                        );
+
+                        info!("Waiting for Report Binding...");
+                        evaluate_report_frame_step(tab, &step3_js, "Step 3 (Binding)")?;
+                        debug::save_html_state(
+                            tab,
+                            active_report_name,
+                            *step_num,
+                            "After Report Bound",
+                        );
+                        *step_num += 1;
+
+                        // STEP 3.5 & 4: Wait for Loader to disappear, then fill filters
+                        tracing::debug!("Executing JavaScript to apply filters...");
+                        let step4_fill_js = format!(
+                            r#"
+                                        (async function(filters, timeoutMinutes) {{
+                                            function sleep(ms) {{ return new Promise(r => setTimeout(r, ms)); }}
+                                            let logs = [];
+                                            let doc = document;
+
+                                            logs.push("Waiting for loader to disappear...");
+                                            let loaderGone = false;
+                                            const deadlineFillLoader = Date.now() + timeoutMinutes * 60 * 1000;
+                                            while (Date.now() <= deadlineFillLoader) {{
+                                                let loader = document.querySelector('#loader_svg, .loading-screen-wrapper, mat-progress-bar, .dx-loadpanel') || doc.querySelector('#loader_svg, .loading-screen-wrapper, mat-progress-bar, .dx-loadpanel');
+                                                let isLoaderVisible = false;
+                                                if (loader) {{
+                                                    let style = loader.ownerDocument.defaultView.getComputedStyle(loader);
+                                                    if (style.display !== 'none' && style.opacity !== '0' && style.visibility !== 'hidden') {{
+                                                        isLoaderVisible = true;
+                                                    }}
+                                                }}
+                                                if (!isLoaderVisible && doc.querySelectorAll('mat-label').length > 0) {{
+                                                    loaderGone = true;
+                                                    break;
+                                                }}
+                                                await sleep(500);
+                                            }}
+                                            if (!loaderGone) logs.push("Warning: Loader timeout or labels never appeared.");
+
+                                            async function simulateTyping(inputElem, text) {{
+                                                inputElem.focus();
+                                                inputElem.value = '';
+                                                for (let i = 0; i < text.length; i++) {{
+                                                    inputElem.value += text[i];
+                                                    inputElem.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                                                    await sleep(10);
+                                                }}
+                                                inputElem.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                                                inputElem.blur();
+                                                inputElem.dispatchEvent(new Event('blur', {{ bubbles: true }}));
+                                            }}
+
+                                            let labels = doc.querySelectorAll('mat-label');
+                                            let discoveredFilters = [];
+                                            let failedFilters = [];
+                                            for (let lbl of labels) {{
+                                                if (lbl.innerText) {{ discoveredFilters.push(lbl.innerText.trim()); }}
+                                            }}
+                                            logs.push("Discovered filters count: " + discoveredFilters.length);
+
+                                            for (const [key, value] of Object.entries(filters)) {{
+                                                if (!value || value.trim() === '') {{
+                                                    logs.push("Skipping empty filter: " + key);
+                                                    continue;
+                                                }}
+                                                logs.push("Applying filter: " + key + " = " + value);
+                                                let normalizedKey = key.toLowerCase().replace(/_/g, ' ');
+                                                let filterFilled = false;
+
+                                                for (let lbl of labels) {{
+                                                    let labelText = lbl.innerText.trim().toLowerCase().replace(/_/g, ' ');
+                                                    if (labelText === normalizedKey) {{
                                                         let labelParent = lbl.closest('label');
                                                         if (labelParent && labelParent.hasAttribute('for')) {{
                                                             let inputId = labelParent.getAttribute('for');
@@ -50,64 +564,15 @@
                                                         }}
                                                     }}
                                                 }}
-                                                        const input = findFilterControl(lbl);
-                                                        if (input) {{
-                                                            if (input.tagName === 'INPUT') {{
-                                                                let v = value;
-                                                                if (key.toLowerCase().includes('date') && v.includes('-')) {{
-                                                                    const parts = v.split(' ')[0].split('-');
-                                                                    if (parts.length === 3) {{
-                                                                        v = parts[0].padStart(2, '0') + "-" + parts[1].padStart(2, '0') + "-" + parts[2] + (v.includes(' ') ? ' ' + v.split(' ').slice(1).join(' ') : '');
-                                                                    }}
-                                                                }}
-                                                                await simulateTyping(input, v);
-                                                                logs.push("Typed into INPUT for " + key);
-                                                                filterFilled = true;
-                                                                break;
-                                                            }} else if (input.tagName === 'MAT-SELECT' || input.getAttribute('role') === 'combobox') {{
-                                                                input.click();
-                                                                await sleep(300);
-                                                                const overlay = doc.querySelector('.cdk-overlay-container') || doc;
-                                                                const options = Array.from(overlay.querySelectorAll('mat-option, [role="option"]'));
-                                                                const selectedOption = options.find(option => normalize(option.innerText || option.textContent).includes(normalize(value)));
-                                                                if (selectedOption) {{
-                                                                    selectedOption.click();
-                                                                    logs.push("Selected dropdown option for " + key);
-                                                                    filterFilled = true;
-                                                                }} else {{
-                                                                    const backdrop = doc.querySelector('.cdk-overlay-backdrop');
-                                                                    if (backdrop) backdrop.click();
-                                                                    logs.push("Dropdown option not found for " + key + ": " + value);
-                                                                }}
-                                                                await sleep(300);
-                                                                break;
-                                                            }} else if (input.tagName === 'SELECT') {{
-                                                                const option = Array.from(input.options).find(item =>
-                                                                    normalize(item.textContent) === normalize(value) || item.value === value
-                                                                );
-                                                                if (option) {{
-                                                                    input.value = option.value;
-                                                                    input.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                                                                    input.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                                                                    logs.push("Selected native SELECT option for " + key);
-                                                                    filterFilled = true;
-                                                                }} else {{
-                                                                    logs.push("Native SELECT option not found for " + key + ": " + value);
-                                                                }}
-                                                                break;
-                                                            }}
-                                                        }}
-                                                    }}
-                                                }}
                                                 if (!filterFilled) {{
                                                     logs.push("Failed to fill filter: " + key);
                                                     failedFilters.push(key);
                                                 }}
                                             }}
                                             if (failedFilters.length > 0) {{
-                                                return JSON.stringify({{ status: "ERROR", msg: "One or more requested filters could not be applied: " + failedFilters.join(", "), failed_filters: failedFilters, discovered_filters: discoveredFilters, discovered_filter_options: discoveredFilterOptions, logs }});
+                                                return JSON.stringify({{ status: "ERROR", msg: "One or more requested filters could not be applied: " + failedFilters.join(", "), failed_filters: failedFilters, discovered_filters: discoveredFilters, logs }});
                                             }}
-                                            return JSON.stringify({{ status: "SUCCESS", discovered_filters: discoveredFilters, discovered_filter_options: discoveredFilterOptions, logs }});
+                                            return JSON.stringify({{ status: "SUCCESS", discovered_filters: discoveredFilters, logs }});
                                         }})({});
                                         "#,
                             filters_json
@@ -123,26 +588,9 @@
                             .get("discovered_filters")
                             .and_then(|v| v.as_array())
                         {
-                            for filter in arr {
-                                if let Some(name) = filter.as_str() {
-                                    discovered_filters.names.push(name.to_string());
-                                }
-                            }
-                        }
-                        if let Some(options) = step4_res
-                            .get("discovered_filter_options")
-                            .and_then(|value| value.as_object())
-                        {
-                            for (filter, values) in options {
-                                let values = values
-                                    .as_array()
-                                    .into_iter()
-                                    .flatten()
-                                    .filter_map(serde_json::Value::as_str)
-                                    .map(str::to_owned)
-                                    .collect::<Vec<_>>();
-                                if !values.is_empty() {
-                                    discovered_filters.options.insert(filter.clone(), values);
+                            for f in arr {
+                                if let Some(s) = f.as_str() {
+                                    discovered_filters.push(s.to_string());
                                 }
                             }
                         }
