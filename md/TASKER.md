@@ -18,7 +18,7 @@ Configured tasks are run in order. If a task fails, Tasker logs the error and re
 - `--config <PATH>`: Overrides the default `tasker_config.json` path. (Legacy support also allows passing just the path without the flag, as long as it does not start with `-`).
 - `--task <INDEX>`: Executes only a specific task from the configuration (1-based index). For example, `--task 1` runs only the first task in the config array.
 - `--only-call-center`: When provided, the task skips standard per-team/per-branch email generation and runs the Call Center email path for the selected task.
-- `--send-exceptions`: Runs the configured exception-ticket reporting path. Exception mode bypasses standard team/branch routing and the specialized Call Center lead attachment path.
+- `--send-exceptions`: Runs the configured exception-ticket reporting path. Exception mode bypasses standard team/branch routing and the specialized Call Center lead attachment path. The CLI flag itself does not require `--task`; Runner's manifest exposes it conditionally for task selection.
 - `--start-date <DATE>`: Overrides the configured task start date; this option requires `--task`.
 
 **Example: Scheduling in runner_config.json**
