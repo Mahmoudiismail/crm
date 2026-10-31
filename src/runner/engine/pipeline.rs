@@ -35,6 +35,10 @@ async fn execute_action(
         }
         ActionSpec::ExternalApp(spec) => {
             if let Some(app) = policy.registered_apps.iter().find(|a| a.id == spec.app_id) {
+                if !crate::runner::engine::application::supports_periodization(logger, app, spec).await {
+                    return run_external_app(logger, app, spec, None, timeout_seconds).await;
+                }
+
                 let periods = crate::runner::config::resolve_app_periods_at(spec, execution_at)?;
                 logger
                     .log(&format!(
