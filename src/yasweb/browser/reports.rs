@@ -527,7 +527,7 @@ pub fn navigate_and_run_report(
                                                                     }}
                                                                     await simulateTyping(input, v);
                                                                     logs.push("Typed into INPUT for " + key);
-                                                                    filterFilled = optionFound;
+                                                                    filterFilled = true;
                                                                     break;
                                                                 }} else if (input.tagName === 'MAT-SELECT') {{
                                                                     input.click();
