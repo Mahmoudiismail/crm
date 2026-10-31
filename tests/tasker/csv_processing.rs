@@ -380,7 +380,8 @@ fn test_task1_only_call_center() {
     let mut found_leads = false;
     for entry in std::fs::read_dir(temp_dir).unwrap() {
         let path = entry.unwrap().path();
-        if path.file_name()
+        if path
+            .file_name()
             .and_then(|name| name.to_str())
             .is_some_and(|name| name.starts_with("Call_Center_Leads_") && name.ends_with(".xlsx"))
         {
