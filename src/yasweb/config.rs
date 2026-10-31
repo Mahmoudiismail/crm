@@ -73,6 +73,8 @@ pub struct ReportConfig {
     pub report_type: String,
     #[serde(default)]
     pub filters: HashMap<String, String>,
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub filter_options: HashMap<String, Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub start_date_key: Option<DateKeyConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
