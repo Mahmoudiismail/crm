@@ -205,39 +205,6 @@ async fn main() -> Result<()> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn runner_config_path_supports_default_relative_and_absolute_paths() {
-        let exe_dir = Path::new("CRM");
-        assert_eq!(
-            resolve_config_path(None, exe_dir),
-            exe_dir.join("runner_config.json")
-        );
-        assert_eq!(
-            resolve_config_path(Some(Path::new("settings/custom.json")), exe_dir),
-            exe_dir.join("settings/custom.json")
-        );
-        let temp = tempfile::tempdir().unwrap();
-        let absolute = temp.path().join("runner.json");
-        assert_eq!(resolve_config_path(Some(&absolute), exe_dir), absolute);
-    }
-
-    #[test]
-    fn runner_config_log_snapshot_redacts_secret_fields() {
-        let mut value = serde_json::json!({
-            "api_token": "secret-value",
-            "tasks": [{"args": {"--password": "pw", "--report": "tickets"}}]
-        });
-        redact_config_value(&mut value);
-        assert_eq!(value["api_token"], "[REDACTED]");
-        assert_eq!(value["tasks"][0]["args"]["--password"], "[REDACTED]");
-        assert_eq!(value["tasks"][0]["args"]["--report"], "tickets");
-    }
-}
-
 #[cfg(target_os = "windows")]
 struct App {
     tray_icon: Option<TrayIcon>,
@@ -340,4 +307,37 @@ fn load_icon() -> anyhow::Result<Icon> {
     let rgba = [0, 255, 0, 255].repeat((width * height) as usize);
     Icon::from_rgba(rgba, width, height)
         .map_err(|e| anyhow::anyhow!("Failed to create icon: {:?}", e))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn runner_config_path_supports_default_relative_and_absolute_paths() {
+        let exe_dir = Path::new("CRM");
+        assert_eq!(
+            resolve_config_path(None, exe_dir),
+            exe_dir.join("runner_config.json")
+        );
+        assert_eq!(
+            resolve_config_path(Some(Path::new("settings/custom.json")), exe_dir),
+            exe_dir.join("settings/custom.json")
+        );
+        let temp = tempfile::tempdir().unwrap();
+        let absolute = temp.path().join("runner.json");
+        assert_eq!(resolve_config_path(Some(&absolute), exe_dir), absolute);
+    }
+
+    #[test]
+    fn runner_config_log_snapshot_redacts_secret_fields() {
+        let mut value = serde_json::json!({
+            "api_token": "secret-value",
+            "tasks": [{"args": {"--password": "pw", "--report": "tickets"}}]
+        });
+        redact_config_value(&mut value);
+        assert_eq!(value["api_token"], "[REDACTED]");
+        assert_eq!(value["tasks"][0]["args"]["--password"], "[REDACTED]");
+        assert_eq!(value["tasks"][0]["args"]["--report"], "tickets");
+    }
 }
