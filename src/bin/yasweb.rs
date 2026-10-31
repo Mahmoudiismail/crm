@@ -278,6 +278,23 @@ async fn persist_discovered_filters(
     Ok(())
 }
 
+fn available_output_path(requested: &std::path::Path) -> std::path::PathBuf {
+    if !requested.exists() {
+        return requested.to_path_buf();
+    }
+
+    let parent = requested.parent().unwrap_or_else(|| std::path::Path::new("."));
+    let stem = requested.file_stem().and_then(|value| value.to_str()).unwrap_or("report");
+    let extension = requested.extension().and_then(|value| value.to_str()).unwrap_or("xlsx");
+    for suffix in 1u32.. {
+        let candidate = parent.join(format!("{stem} ({suffix}).{extension}"));
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+    unreachable!("u32 output suffix space exhausted")
+}
+
 pub fn finalize_download(
     temp_dl_dir: &std::path::Path,
     final_out_dir: &std::path::Path,
@@ -290,6 +307,17 @@ pub fn finalize_download(
 
     std::fs::create_dir_all(final_out_dir)
         .with_context(|| format!("Failed to create download directory {:?}", final_out_dir))?;
+
+    // Serialize finalization across independent Yasweb processes sharing one output folder.
+    let lock_path = final_out_dir.join(".yasweb-finalize.lock");
+    let output_lock = std::fs::OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .open(&lock_path)
+        .with_context(|| format!("Failed to open output lock {:?}", lock_path))?;
+    fs2::FileExt::lock_exclusive(&output_lock)
+        .with_context(|| format!("Failed to lock output directory {:?}", final_out_dir))?;
 
     let entries = std::fs::read_dir(temp_dl_dir)
         .with_context(|| format!("Failed to read download directory {:?}", temp_dl_dir))?;
@@ -327,7 +355,8 @@ pub fn finalize_download(
         if !ext.eq_ignore_ascii_case("xlsx") {
             final_name = final_name.replace(".xlsx", &format!(".{}", ext));
         }
-        let out_file = final_out_dir.join(final_name);
+        let requested_out_file = final_out_dir.join(final_name);
+        let out_file = available_output_path(&requested_out_file);
 
         tracing::info!("Moving downloaded file from {:?} to {:?}", path, out_file);
         if let Err(rename_error) = std::fs::rename(path, &out_file) {
@@ -1101,9 +1130,10 @@ mod tests_yasweb_finalization {
 
         finalize_download(&src_dir, &dst_dir, "final.xlsx").unwrap();
 
-        let content = std::fs::read_to_string(dst_file).unwrap();
-        // Since rename on windows doesn't overwrite, but the fallback copy+delete will overwrite
-        assert_eq!(content, "new data");
+        let original = std::fs::read_to_string(&dst_file).unwrap();
+        let collision_copy = std::fs::read_to_string(dst_dir.join("final (1).xlsx")).unwrap();
+        assert_eq!(original, "old data");
+        assert_eq!(collision_copy, "new data");
         std::fs::remove_dir_all(&dst_dir).unwrap();
     }
 }
