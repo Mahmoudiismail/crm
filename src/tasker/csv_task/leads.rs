@@ -41,7 +41,7 @@ pub fn generate_lead_result(
         if !name.starts_with("lead_report") || !name.ends_with(".csv") {
             continue;
         }
-        if entry
+        if path
             .metadata()
             .and_then(|metadata| metadata.modified())
             .is_ok_and(|modified| modified >= threshold)
@@ -169,10 +169,10 @@ pub fn generate_lead_result(
     if let Some(parent) = output_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let file = File::create(&output_path)
+    let mut file = File::create(&output_path)
         .with_context(|| format!("Failed to create {}", output_path.display()))?;
+    file.write_all(b"\xEF\xBB\xBF")?;
     let mut writer = csv::WriterBuilder::new().from_writer(file);
-    writer.get_mut().write_all(b"\xEF\xBB\xBF")?;
     writer.write_record(&headers)?;
     for record in &output_records {
         writer.write_record(record)?;
