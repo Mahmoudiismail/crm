@@ -13,7 +13,6 @@ impl tracing_subscriber::fmt::time::FormatTime for BuildVersionTimer {
         &self,
         writer: &mut tracing_subscriber::fmt::format::Writer<'_>,
     ) -> std::fmt::Result {
-        use std::fmt::Write as _;
         write!(
             writer,
             "[{}] {}",
