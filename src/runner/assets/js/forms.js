@@ -1033,7 +1033,11 @@
       const contentDiv = dynamicInputs.closest(".action-editor");
       const updatePeriodizationVisibility = () => {
           const hasDateArgs = Array.from(dynamicInputs.querySelectorAll(".arg-container")).some(container => {
-              if (container.style.display === "none" || container.classList.contains("hidden")) return false;
+              if (container.dataset.dependenciesSatisfied === "false") return false;
+              const isMapped = container.dataset.mappedDateArg === "true";
+              if (!isMapped && (container.style.display === "none" || container.classList.contains("hidden"))) {
+                  return false;
+              }
               const input = container.querySelector("[data-arg-name]");
               const name = input?.dataset.argName?.toLowerCase() || "";
               return name.includes("date") || name.includes("period") ||
@@ -1268,6 +1272,7 @@
                }
            }
 
+           container.dataset.dependenciesSatisfied = allMet ? "true" : "false";
            if (allMet && container.dataset.mappedDateArg !== "true") {
                container.style.display = "block";
                container.classList.remove("hidden");
