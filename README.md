@@ -24,19 +24,19 @@ See [Architecture](./md/ARCHITECTURE.md) for component boundaries and execution 
 
 Build all five binaries:
 
-\`\`\`bash
+```bash
 cargo build --release
-\`\`\`
+```
 
 Build a specific executable:
 
-\`\`\`bash
+```bash
 cargo build --release --bin runner
 cargo build --release --bin crm
 cargo build --release --bin yasweb
 cargo build --release --bin tasker
 cargo build --release --bin crm_updater
-\`\`\`
+```
 
 Artifacts are written to target/release/ (with .exe on Windows).
 
@@ -44,13 +44,13 @@ Artifacts are written to target/release/ (with .exe on Windows).
 
 Run Runner for scheduled orchestration and its local GUI. Worker binaries can also be run directly:
 
-\`\`\`powershell
+```powershell
 .\\target\\release\\runner.exe
 .\\target\\release\\crm.exe --report tickets
 .\\target\\release\\yasweb.exe --name "Report Name"
 .\\target\\release\\tasker.exe --task 1
 .\\target\\release\\crm_updater.exe --logs-only
-\`\`\`
+```
 
 Use --help on an executable for the parser help for that build. See [CLI](./md/CLI.md) and [Configuration](./md/CONFIG.md).
 
@@ -58,11 +58,11 @@ Use --help on an executable for the parser help for that build. See [CLI](./md/C
 
 The repository is one Cargo package with explicit binary targets, not a multi-package Cargo workspace. Existing CI commands use Cargo's --workspace selector against that package.
 
-\`\`\`bash
+```bash
 cargo fmt -- --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-targets --all-features
-\`\`\`
+```
 
 The Test workflow additionally validates JavaScript and PowerShell syntax and runs RustSec/cargo-deny dependency checks. See [Build and Run](./md/BUILD_AND_RUN.md) and [Operations](./md/OPERATIONS.md).
 
