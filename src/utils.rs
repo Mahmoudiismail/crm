@@ -76,8 +76,7 @@ impl ReopenLogFile {
             writeln!(
                 file,
                 "[{}] [{}] RUNNER CONFIG SNAPSHOT (sensitive values redacted):",
-                BUILD_VERSION,
-                now
+                BUILD_VERSION, now
             )?;
             file.write_all(self.recovery_header.as_bytes())?;
             file.write_all(b"\n")?;
@@ -174,9 +173,7 @@ where
     {
         eprintln!(
             "[{}] Warning: Failed to initialize logging for {}: {}",
-            BUILD_VERSION,
-            app_name,
-            e
+            BUILD_VERSION, app_name, e
         );
     }
     Ok(guard)
