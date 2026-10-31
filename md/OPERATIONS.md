@@ -123,6 +123,12 @@ Task execution is concurrent, with an execution manager enforcing collision prev
 - The Dashboard updater filters out the `Position` and `Is Exception` columns.
 - Ensure the input CSV has a properly formatted `Created At` or `Creation Date` column, as the system relies on it to dynamically append `Month` and `Day` columns.
 
+## Lead Result Retention and Call Center Routing
+
+Each CSV Analysis run writes the enriched ticket output to the configured `output_file` and, when recent lead exports exist, writes a separate `lead_result.csv` in the same directory. The lead result adds a `team` column based only on the lead's `Assignee` lookup in the configured users export. Unassigned or unmapped assignees remain blank; no category/type assignment fallback is applied.
+
+Call Center email attachments are generated from this saved lead result and include only `team = Call Center` rows with status `New` or `Follow-up`, excluding configured branches. Other teams' leads remain in `lead_result.csv` and are not sent to Call Center.
+
 ## Call Center Execution
 - Running the tasker app via CLI with `--only-call-center` explicitly funnels data to the call center team bucket.
 - This mode automatically triggers the CRM lead generation report export as a secondary attachment alongside the primary ticket list, skipping standard branching logic.
