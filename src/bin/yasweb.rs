@@ -547,6 +547,16 @@ async fn main() -> Result<()> {
         // Push an async block into our futures list
         report_futures.push(async move {
             let active_report_name = active_report_name_clone_for_future;
+            // Every process/report invocation gets its own Chrome profile and download folder.
+            let run_id = format!(
+                "{}_{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_nanos()
+            );
+            info!("YASWEB RUN INSTANCE: report='{}' run_id={}", active_report_name, run_id);
             let mut active_report_type = active_report_type;
             let mut active_filters = active_filters;
 
@@ -651,8 +661,8 @@ async fn main() -> Result<()> {
                     let temp_dl_dir = {
                         let mut dir = executable_dir()?;
                         dir.push(format!(
-                            "yasweb_downloads_tmp_{}_{}_{}",
-                            safe_report_name, safe_date_suffix, i
+                            "yasweb_downloads_tmp_{}_{}_{}_{}",
+                            safe_report_name, safe_date_suffix, i, run_id
                         ));
                         fs::create_dir_all(&dir)
                             .await
@@ -672,6 +682,7 @@ async fn main() -> Result<()> {
                     }
 
                     let active_report_name_for_dir = active_report_name.clone();
+                    let run_id_for_browser = run_id.clone();
 
                     let operation_permit = if let Some(operation_limit) = &operation_limit {
                         tracing::trace!("Waiting for browser-operation permit: report={} range={}..{}", active_report_name_task, start_dt, end_dt);
@@ -690,10 +701,11 @@ async fn main() -> Result<()> {
                         let mut user_data_dir = crm_tool::utils::executable_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
                         user_data_dir.push("yasweb_chrome_data");
                         user_data_dir.push(format!(
-                            "session_{}_{}_{}",
+                            "session_{}_{}_{}_{}",
                             sanitize_filename_component(&active_report_name_for_dir),
                             sanitize_filename_component(&date_suffix),
-                            i
+                            i,
+                            run_id_for_browser
                         ));
 
                         let args = vec![
