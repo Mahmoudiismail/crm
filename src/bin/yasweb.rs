@@ -80,12 +80,17 @@ fn get_manifest(config_path: Option<PathBuf>) -> AppManifest {
                             continue;
                         }
 
-                        let options = report.filter_options.get(filter_key).map(|values| {
-                            values.iter()
-                                .filter(|value| !value.trim().is_empty())
-                                .cloned()
-                                .collect::<Vec<_>>()
-                        }).filter(|values| !values.is_empty());
+                        let options = report
+                            .filter_options
+                            .get(filter_key)
+                            .map(|values| {
+                                values
+                                    .iter()
+                                    .filter(|value| !value.trim().is_empty())
+                                    .cloned()
+                                    .collect::<Vec<_>>()
+                            })
+                            .filter(|values| !values.is_empty());
                         match filter_options.entry(filter_key.clone()) {
                             std::collections::hash_map::Entry::Vacant(entry) => {
                                 entry.insert(options);
@@ -344,8 +349,12 @@ pub fn finalize_download(
 
     // Keep the stable cross-process lock outside the report directory. Never unlink it.
     use std::hash::{Hash, Hasher};
-    let canonical_out_dir = final_out_dir.canonicalize()
-        .with_context(|| format!("Failed to canonicalize output directory {:?}", final_out_dir))?;
+    let canonical_out_dir = final_out_dir.canonicalize().with_context(|| {
+        format!(
+            "Failed to canonicalize output directory {:?}",
+            final_out_dir
+        )
+    })?;
     let mut path_hasher = std::collections::hash_map::DefaultHasher::new();
     canonical_out_dir.hash(&mut path_hasher);
     let lock_path = std::env::temp_dir().join(format!(
@@ -598,8 +607,10 @@ async fn main() -> Result<()> {
                 .with_context(|| format!("Failed to lock Yasweb config {:?}", path))?;
             let latest_content = std::fs::read_to_string(&path)
                 .with_context(|| format!("Failed to read Yasweb config {:?}", path))?;
-            let mut latest: YaswebConfig = serde_json::from_str(&latest_content)
-                .with_context(|| format!("Refusing to overwrite invalid Yasweb config {:?}", path))?;
+            let mut latest: YaswebConfig =
+                serde_json::from_str(&latest_content).with_context(|| {
+                    format!("Refusing to overwrite invalid Yasweb config {:?}", path)
+                })?;
             for report_name in report_names {
                 if !report_type.is_empty() || !filters.is_empty() {
                     if let Some(existing) = latest.reports.get_mut(&report_name) {
@@ -1062,15 +1073,23 @@ mod tests_yasweb_finalization {
             url: "https://example.test".to_string(),
             username: "test".to_string(),
             reports: HashMap::from([
-                ("Appointments".to_string(), make_report(vec!["Fakeeh".to_string(), "Neom".to_string()])),
-                ("Admissions".to_string(), make_report(vec!["Cairo".to_string(), "Jeddah".to_string()])),
+                (
+                    "Appointments".to_string(),
+                    make_report(vec!["Fakeeh".to_string(), "Neom".to_string()]),
+                ),
+                (
+                    "Admissions".to_string(),
+                    make_report(vec!["Cairo".to_string(), "Jeddah".to_string()]),
+                ),
             ]),
             ..YaswebConfig::default()
         };
         std::fs::write(&config_path, serde_json::to_string_pretty(&config).unwrap()).unwrap();
 
         let manifest = get_manifest(Some(config_path));
-        let hospital = manifest.arguments.iter()
+        let hospital = manifest
+            .arguments
+            .iter()
             .find(|argument| argument.name == "--filter-Hospital")
             .expect("Hospital filter should be exposed");
         assert_eq!(hospital.arg_type, crm_tool::manifest::ArgType::String);
@@ -1164,7 +1183,8 @@ mod tests_yasweb_finalization {
                 names: vec!["filter_a".to_string()],
                 options: HashMap::new()
             },
-        ).is_err());
+        )
+        .is_err());
         assert_eq!(std::fs::read_to_string(&config_path).unwrap(), invalid);
     }
     use std::io::Write;
@@ -1194,7 +1214,10 @@ mod tests_yasweb_finalization {
             .collect::<Vec<_>>();
         assert_eq!(output_files.len(), 1, "expected exactly one report file");
         let directory_entries = std::fs::read_dir(&dst_dir).unwrap().count();
-        assert_eq!(directory_entries, 1, "the output directory must not contain lock artifacts");
+        assert_eq!(
+            directory_entries, 1,
+            "the output directory must not contain lock artifacts"
+        );
         assert_eq!(output_files[0].parent(), Some(dst_dir.as_path()));
         assert_ne!(
             output_files[0].file_name().and_then(|name| name.to_str()),

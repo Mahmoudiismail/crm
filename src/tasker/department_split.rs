@@ -35,8 +35,7 @@ pub fn run(config: &DepartmentSplitConfig) -> Result<()> {
         anyhow::bail!("Chair mapping file not found at: {:?}", chair_path);
     }
 
-    let mut excel: Xlsx<_> =
-        open_workbook(&chair_path).context("Failed to open Chair.xlsx")?;
+    let mut excel: Xlsx<_> = open_workbook(&chair_path).context("Failed to open Chair.xlsx")?;
     let sheet_names = excel.sheet_names().to_owned();
     if sheet_names.is_empty() {
         anyhow::bail!("No sheets found in Chair.xlsx");
@@ -65,9 +64,10 @@ pub fn run(config: &DepartmentSplitConfig) -> Result<()> {
 
     info!("Loaded {} department mappings.", mapping.len());
 
-    let dashboard_path = crate::tasker::csv_task::resolve_relative_to_exe_dir(&config.dashboard_file)
-        .canonicalize()
-        .context("Failed to canonicalize dashboard_file path")?;
+    let dashboard_path =
+        crate::tasker::csv_task::resolve_relative_to_exe_dir(&config.dashboard_file)
+            .canonicalize()
+            .context("Failed to canonicalize dashboard_file path")?;
 
     let dashboard_path_str = {
         let path_str = dashboard_path

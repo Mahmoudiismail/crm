@@ -23,12 +23,15 @@ fn calculate_vacant_slots(total_slots: i64, slots_booked: i64) -> Result<i64> {
             slots_booked
         );
     }
-    total_slots.checked_sub(slots_booked)
+    total_slots
+        .checked_sub(slots_booked)
         .filter(|vacant| *vacant >= 0)
-        .with_context(|| format!(
-            "Sat Figures booked slots ({}) exceed total slots ({})",
-            slots_booked, total_slots
-        ))
+        .with_context(|| {
+            format!(
+                "Sat Figures booked slots ({}) exceed total slots ({})",
+                slots_booked, total_slots
+            )
+        })
 }
 
 fn is_source_report(path: &std::path::Path) -> bool {

@@ -16,8 +16,7 @@ pub fn generate_leads_report(
         .map(|s| s.trim().to_lowercase())
         .collect();
 
-    let lookback_minutes = u64::try_from(minutes_ago)
-        .context("minutes_ago cannot be negative")?;
+    let lookback_minutes = u64::try_from(minutes_ago).context("minutes_ago cannot be negative")?;
     let lookback_seconds = lookback_minutes
         .checked_mul(60)
         .context("minutes_ago is too large")?;
@@ -230,8 +229,7 @@ mod tests {
     #[test]
     fn negative_lookback_is_rejected() {
         let dir = tempdir().unwrap();
-        let error = generate_leads_report(dir.path().to_str().unwrap(), -1, &[])
-            .unwrap_err();
+        let error = generate_leads_report(dir.path().to_str().unwrap(), -1, &[]).unwrap_err();
         assert!(error.to_string().contains("minutes_ago cannot be negative"));
     }
 

@@ -326,8 +326,8 @@ fn post_origin_is_allowed(headers: &[u8]) -> bool {
     } else {
         return false;
     };
-    let is_loopback_host = matches!(host_name, "127.0.0.1" | "localhost" | "::1")
-        && port.parse::<u16>().is_ok();
+    let is_loopback_host =
+        matches!(host_name, "127.0.0.1" | "localhost" | "::1") && port.parse::<u16>().is_ok();
     is_loopback_host && origin.eq_ignore_ascii_case(&format!("http://{host}"))
 }
 

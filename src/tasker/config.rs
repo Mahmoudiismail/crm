@@ -321,7 +321,11 @@ mod tests {
         let invalid: TaskerConfig = serde_json::from_str(
             r#"{"tasks":[{"type":"csv_analysis","download_path":"./downloads","users_file":"./users.csv","assignment_settings_file":"./assignments.csv","minutes_ago":-1,"output_file":"./out.csv"}]}"#,
         ).unwrap();
-        assert!(invalid.validate().unwrap_err().to_string().contains("negative minutes_ago"));
+        assert!(invalid
+            .validate()
+            .unwrap_err()
+            .to_string()
+            .contains("negative minutes_ago"));
     }
 
     #[test]
