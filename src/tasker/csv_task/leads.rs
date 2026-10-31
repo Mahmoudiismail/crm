@@ -179,14 +179,10 @@ pub fn generate_lead_result(
     }
     writer.flush()?;
 
+    let team_column_idx = team_idx.unwrap_or(headers.len() - 1);
     let unassigned = output_records
         .iter()
-        .filter(|record| {
-            team_idx
-                .and_then(|index| record.get(index))
-                .or_else(|| record.get(headers.len() - 1))
-                .is_none_or(str::is_empty)
-        })
+        .filter(|record| record.get(team_column_idx).unwrap_or("").trim().is_empty())
         .count();
     if unassigned > 0 {
         warn!(
@@ -200,4 +196,112 @@ pub fn generate_lead_result(
         output_path.display()
     );
     Ok(Some(output_path))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::generate_lead_result;
+    use crate::tasker::csv_task::UserInfo;
+    use std::collections::HashMap;
+    use std::io::Write;
+    use tempfile::tempdir;
+
+    #[test]
+    fn lead_result_maps_team_from_assignee_and_leaves_missing_assignees_blank() {
+        let dir = tempdir().unwrap();
+        let download_dir = dir.path().join("downloads");
+        std::fs::create_dir_all(&download_dir).unwrap();
+        let ticket_result = dir.path().join("ticket_result.csv");
+        let lead_input = download_dir.join("lead_report_test.csv");
+        let mut file = std::fs::File::create(&lead_input).unwrap();
+        writeln!(file, "Lead Id,Assignee,Lead Type,Branch,Status").unwrap();
+        writeln!(file, "L1,alice,Inquiry,Main,New").unwrap();
+        writeln!(file, "L2,bob,Inquiry,Main,New").unwrap();
+        writeln!(file, "L3,,Inquiry,Main,New").unwrap();
+        writeln!(file, "L4,unknown,Inquiry,Main,New").unwrap();
+
+        let users = HashMap::from([
+            (
+                "ALICE".to_string(),
+                UserInfo {
+                    positions: vec!["Call Center".to_string()],
+                    first_position: Some("Call Center".to_string()),
+                },
+            ),
+            (
+                "BOB".to_string(),
+                UserInfo {
+                    positions: vec!["Admissions".to_string()],
+                    first_position: Some("Admissions".to_string()),
+                },
+            ),
+        ]);
+
+        let output = generate_lead_result(&download_dir, &ticket_result, 60, &users)
+            .unwrap()
+            .expect("lead result should be generated");
+        assert_eq!(output, dir.path().join("lead_result.csv"));
+
+        let mut reader = crate::utils::build_csv_reader_from_reader(
+            std::fs::File::open(&output).unwrap(),
+        );
+        let headers = reader.headers().unwrap().clone();
+        let team_idx = headers
+            .iter()
+            .position(|header| header.eq_ignore_ascii_case("team"))
+            .unwrap();
+        let rows = reader
+            .records()
+            .map(Result::unwrap)
+            .map(|record| {
+                (
+                    record.get(0).unwrap().to_string(),
+                    record.get(team_idx).unwrap_or("").to_string(),
+                )
+            })
+            .collect::<HashMap<_, _>>();
+        assert_eq!(rows.get("L1").map(String::as_str), Some("Call Center"));
+        assert_eq!(rows.get("L2").map(String::as_str), Some("Admissions"));
+        assert_eq!(rows.get("L3").map(String::as_str), Some(""));
+        assert_eq!(rows.get("L4").map(String::as_str), Some(""));
+    }
+
+    #[test]
+    fn existing_team_column_is_replaced_not_duplicated() {
+        let dir = tempdir().unwrap();
+        let download_dir = dir.path().join("downloads");
+        std::fs::create_dir_all(&download_dir).unwrap();
+        let ticket_result = dir.path().join("ticket_result.csv");
+        let lead_input = download_dir.join("lead_report_test.csv");
+        std::fs::write(
+            &lead_input,
+            "Lead Id,Assignee,team,Status\nL1,alice,Old Team,New\n",
+        )
+        .unwrap();
+        let users = HashMap::from([(
+            "ALICE".to_string(),
+            UserInfo {
+                positions: vec!["Call Center".to_string()],
+                first_position: Some("Call Center".to_string()),
+            },
+        )]);
+
+        let output = generate_lead_result(&download_dir, &ticket_result, 60, &users)
+            .unwrap()
+            .unwrap();
+        let mut reader = crate::utils::build_csv_reader_from_reader(
+            std::fs::File::open(output).unwrap(),
+        );
+        let headers = reader.headers().unwrap().clone();
+        assert_eq!(
+            headers.iter().filter(|header| header.eq_ignore_ascii_case("team")).count(),
+            1
+        );
+        let record = reader.records().next().unwrap().unwrap();
+        let team_idx = headers
+            .iter()
+            .position(|header| header.eq_ignore_ascii_case("team"))
+            .unwrap();
+        assert_eq!(record.get(team_idx), Some("Call Center"));
+    }
 }
