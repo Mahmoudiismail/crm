@@ -73,12 +73,30 @@ pub struct ReportConfig {
     pub report_type: String,
     #[serde(default)]
     pub filters: HashMap<String, String>,
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub filter_options: HashMap<String, Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub start_date_key: Option<DateKeyConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub end_date_key: Option<DateKeyConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub download_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct DiscoveredReportFilters {
+    pub names: Vec<String>,
+    pub options: HashMap<String, Vec<String>>,
+}
+
+impl DiscoveredReportFilters {
+    pub fn len(&self) -> usize {
+        self.names.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.names.is_empty() && self.options.is_empty()
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -171,6 +189,14 @@ impl std::fmt::Debug for YaswebConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn report_config_accepts_legacy_files_without_filter_options() {
+        let report: ReportConfig =
+            serde_json::from_str(r#"{"report_type":"Report Manager","filters":{"Hospital":""}}"#)
+                .unwrap();
+        assert!(report.filter_options.is_empty());
+    }
 
     #[test]
     fn concurrency_is_configurable_and_defaults_to_six() {

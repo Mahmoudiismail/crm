@@ -11,7 +11,7 @@ use crm_tool::utils::{
     executable_dir, intercept_manifest, parse_log_level, setup_logging_with_levels, InterceptResult,
 };
 use crm_tool::yasweb::browser::run_browser_tab;
-use crm_tool::yasweb::config::{ReportConfig, YaswebConfig};
+use crm_tool::yasweb::config::{DiscoveredReportFilters, ReportConfig, YaswebConfig};
 use tokio::fs;
 use tracing::{error, info};
 
@@ -50,6 +50,8 @@ fn get_manifest(config_path: Option<PathBuf>) -> AppManifest {
         String,
         std::collections::HashMap<String, String>,
     > = std::collections::HashMap::new();
+    let mut filter_options: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
 
     if let Some(path) = config_path.clone() {
         if let Ok(config_str) = std::fs::read_to_string(&path) {
@@ -73,6 +75,14 @@ fn get_manifest(config_path: Option<PathBuf>) -> AppManifest {
                         .unwrap_or_default();
 
                     for (filter_key, filter_val) in &report.filters {
+                        if let Some(options) = report.filter_options.get(filter_key) {
+                            let cached = filter_options.entry(filter_key.clone()).or_default();
+                            for option in options {
+                                if !option.trim().is_empty() && !cached.contains(option) {
+                                    cached.push(option.clone());
+                                }
+                            }
+                        }
                         // Skip generating filter args for standard date keys since we map --start-date/--end-date to them
                         if filter_key == &start_key || filter_key == &end_key {
                             continue;
@@ -147,8 +157,16 @@ fn get_manifest(config_path: Option<PathBuf>) -> AppManifest {
             None
         };
 
-        let mut arg =
-            AppArg::new(format!("--filter-{}", f_name), ArgType::String).depends_on(depends_map);
+        let options = filter_options.remove(&f_name).unwrap_or_default();
+        let arg_type = if options.is_empty() {
+            ArgType::String
+        } else {
+            ArgType::List
+        };
+        let mut arg = AppArg::new(format!("--filter-{}", f_name), arg_type).depends_on(depends_map);
+        if !options.is_empty() {
+            arg = arg.options(options);
+        }
         if let Some(auto) = autofill_opt {
             arg = arg.autofill(auto);
         }
@@ -160,6 +178,15 @@ fn get_manifest(config_path: Option<PathBuf>) -> AppManifest {
         description: "Executes headless browser automation for web reporting.".to_string(),
         arguments,
     }
+}
+
+fn normalize_filter_key(value: &str) -> String {
+    value
+        .replace('_', " ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
 }
 
 fn sanitize_filename_component(value: &str) -> String {
@@ -187,7 +214,7 @@ fn sanitize_filename_component(value: &str) -> String {
 async fn persist_discovered_filters(
     config_path: &Path,
     report_name: &str,
-    discovered_filters: Vec<String>,
+    discovered_filters: DiscoveredReportFilters,
     update_lock: &tokio::sync::Mutex<()>,
 ) -> Result<()> {
     let _guard = update_lock.lock().await;
@@ -210,10 +237,31 @@ async fn persist_discovered_filters(
     };
 
     let mut updated_filters = false;
-    for filter in discovered_filters {
-        if let std::collections::hash_map::Entry::Vacant(entry) = report.filters.entry(filter) {
+    for filter in discovered_filters.names {
+        let filter_key = report
+            .filters
+            .keys()
+            .find(|existing| normalize_filter_key(existing) == normalize_filter_key(&filter))
+            .cloned()
+            .unwrap_or(filter);
+        if let std::collections::hash_map::Entry::Vacant(entry) = report.filters.entry(filter_key) {
             entry.insert(String::new());
             updated_filters = true;
+        }
+    }
+    for (filter, options) in discovered_filters.options {
+        let filter_key = report
+            .filters
+            .keys()
+            .find(|existing| normalize_filter_key(existing) == normalize_filter_key(&filter))
+            .cloned()
+            .unwrap_or(filter);
+        let cached = report.filter_options.entry(filter_key).or_default();
+        for option in options {
+            if !option.trim().is_empty() && !cached.contains(&option) {
+                cached.push(option);
+                updated_filters = true;
+            }
         }
     }
 
@@ -234,6 +282,31 @@ async fn persist_discovered_filters(
     Ok(())
 }
 
+fn available_output_path(requested: &std::path::Path) -> std::path::PathBuf {
+    if !requested.exists() {
+        return requested.to_path_buf();
+    }
+
+    let parent = requested
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."));
+    let stem = requested
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("report");
+    let extension = requested
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("xlsx");
+    for suffix in 1u32.. {
+        let candidate = parent.join(format!("{stem} ({suffix}).{extension}"));
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+    unreachable!("u32 output suffix space exhausted")
+}
+
 pub fn finalize_download(
     temp_dl_dir: &std::path::Path,
     final_out_dir: &std::path::Path,
@@ -246,6 +319,18 @@ pub fn finalize_download(
 
     std::fs::create_dir_all(final_out_dir)
         .with_context(|| format!("Failed to create download directory {:?}", final_out_dir))?;
+
+    // Serialize finalization across independent Yasweb processes sharing one output folder.
+    let lock_path = final_out_dir.join(".yasweb-finalize.lock");
+    let output_lock = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(&lock_path)
+        .with_context(|| format!("Failed to open output lock {:?}", lock_path))?;
+    fs2::FileExt::lock_exclusive(&output_lock)
+        .with_context(|| format!("Failed to lock output directory {:?}", final_out_dir))?;
 
     let entries = std::fs::read_dir(temp_dl_dir)
         .with_context(|| format!("Failed to read download directory {:?}", temp_dl_dir))?;
@@ -283,7 +368,8 @@ pub fn finalize_download(
         if !ext.eq_ignore_ascii_case("xlsx") {
             final_name = final_name.replace(".xlsx", &format!(".{}", ext));
         }
-        let out_file = final_out_dir.join(final_name);
+        let requested_out_file = final_out_dir.join(final_name);
+        let out_file = available_output_path(&requested_out_file);
 
         tracing::info!("Moving downloaded file from {:?} to {:?}", path, out_file);
         if let Err(rename_error) = std::fs::rename(path, &out_file) {
@@ -430,20 +516,26 @@ async fn main() -> Result<()> {
     let mut config_updated_global = config_updated;
     for active_report_name in &active_report_names {
         if !active_report_type_global.is_empty() || !active_filters_global.is_empty() {
-            let (existing_start_key, existing_end_key, existing_download_path) =
-                if let Some(existing) = config.reports.get(active_report_name) {
-                    (
-                        existing.start_date_key.clone(),
-                        existing.end_date_key.clone(),
-                        existing.download_path.clone(),
-                    )
-                } else {
-                    (None, None, None)
-                };
+            let (
+                existing_start_key,
+                existing_end_key,
+                existing_download_path,
+                existing_filter_options,
+            ) = if let Some(existing) = config.reports.get(active_report_name) {
+                (
+                    existing.start_date_key.clone(),
+                    existing.end_date_key.clone(),
+                    existing.download_path.clone(),
+                    existing.filter_options.clone(),
+                )
+            } else {
+                (None, None, None, HashMap::new())
+            };
 
             let report_conf = ReportConfig {
                 report_type: active_report_type_global.clone(),
                 filters: active_filters_global.clone(),
+                filter_options: existing_filter_options,
                 start_date_key: existing_start_key,
                 end_date_key: existing_end_key,
                 download_path: existing_download_path,
@@ -501,6 +593,16 @@ async fn main() -> Result<()> {
         // Push an async block into our futures list
         report_futures.push(async move {
             let active_report_name = active_report_name_clone_for_future;
+            // Every process/report invocation gets its own Chrome profile and download folder.
+            let run_id = format!(
+                "{}_{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_nanos()
+            );
+            info!("YASWEB RUN INSTANCE: report='{}' run_id={}", active_report_name, run_id);
             let mut active_report_type = active_report_type;
             let mut active_filters = active_filters;
 
@@ -605,8 +707,8 @@ async fn main() -> Result<()> {
                     let temp_dl_dir = {
                         let mut dir = executable_dir()?;
                         dir.push(format!(
-                            "yasweb_downloads_tmp_{}_{}_{}",
-                            safe_report_name, safe_date_suffix, i
+                            "yasweb_downloads_tmp_{}_{}_{}_{}",
+                            safe_report_name, safe_date_suffix, i, run_id
                         ));
                         fs::create_dir_all(&dir)
                             .await
@@ -626,6 +728,7 @@ async fn main() -> Result<()> {
                     }
 
                     let active_report_name_for_dir = active_report_name.clone();
+                    let run_id_for_browser = run_id.clone();
 
                     let operation_permit = if let Some(operation_limit) = &operation_limit {
                         tracing::trace!("Waiting for browser-operation permit: report={} range={}..{}", active_report_name_task, start_dt, end_dt);
@@ -635,7 +738,7 @@ async fn main() -> Result<()> {
                         None
                     };
                     tracing::trace!("Spawning task for range: {} to {}", start_dt, end_dt);
-                    tasks.push(tokio::task::spawn_blocking(move || -> Result<(Vec<String>, PathBuf, String)> {
+                    tasks.push(tokio::task::spawn_blocking(move || -> Result<(DiscoveredReportFilters, PathBuf, String)> {
                         let _operation_permit = operation_permit;
                         let task_started = std::time::Instant::now();
                         tracing::info!("YASWEB TASK START: index={} report='{}' date_suffix='{}'", i, active_report_name_task, date_suffix);
@@ -644,10 +747,11 @@ async fn main() -> Result<()> {
                         let mut user_data_dir = crm_tool::utils::executable_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
                         user_data_dir.push("yasweb_chrome_data");
                         user_data_dir.push(format!(
-                            "session_{}_{}_{}",
+                            "session_{}_{}_{}_{}",
                             sanitize_filename_component(&active_report_name_for_dir),
                             sanitize_filename_component(&date_suffix),
-                            i
+                            i,
+                            run_id_for_browser
                         ));
 
                         let args = vec![
@@ -713,7 +817,7 @@ async fn main() -> Result<()> {
 
                         drop(browser);
                         let _ = std::fs::remove_dir_all(&user_data_dir);
-                        tracing::info!("YASWEB TASK END: status=SUCCESS task={} elapsed_ms={} discovered_filters={}", i, task_started.elapsed().as_millis(), res.len());
+                        tracing::info!("YASWEB TASK END: status=SUCCESS task={} elapsed_ms={} discovered_filters={} dropdown_lists={}", i, task_started.elapsed().as_millis(), res.names.len(), res.options.len());
                         Ok((res, temp_dl_dir_clone, final_filename))
                     }));
 
@@ -754,7 +858,7 @@ async fn main() -> Result<()> {
                         format!("Failed to finalize Yasweb report '{}'", active_report_name_clone)
                     })?;
 
-                    if !discovered_filters.is_empty() {
+                    if !discovered_filters.names.is_empty() || !discovered_filters.options.is_empty() {
                         if let Err(e) = persist_discovered_filters(
                             &config_path_clone,
                             &active_report_name_clone,
@@ -809,6 +913,45 @@ mod tests_yasweb_finalization {
         assert_eq!(sanitize_filename_component("..."), "report");
     }
 
+    #[test]
+    fn manifest_exposes_cached_dropdown_options_as_a_list() {
+        let root = tempfile::tempdir().unwrap();
+        let config_path = root.path().join("yasweb_config.json");
+        let config = YaswebConfig {
+            url: "https://example.test".to_string(),
+            username: "test".to_string(),
+            reports: HashMap::from([(
+                "Appointments".to_string(),
+                ReportConfig {
+                    report_type: "Report Manager".to_string(),
+                    filters: HashMap::from([("Hospital".to_string(), String::new())]),
+                    filter_options: HashMap::from([(
+                        "Hospital".to_string(),
+                        vec!["Fakeeh".to_string(), "Neom".to_string()],
+                    )]),
+                    start_date_key: None,
+                    end_date_key: None,
+                    download_path: None,
+                },
+            )]),
+            ..YaswebConfig::default()
+        };
+        std::fs::write(&config_path, serde_json::to_string_pretty(&config).unwrap()).unwrap();
+
+        let manifest = get_manifest(Some(config_path));
+        let hospital = manifest
+            .arguments
+            .iter()
+            .find(|argument| argument.name == "--filter-Hospital")
+            .expect("Hospital filter should be exposed");
+
+        assert_eq!(hospital.arg_type, crm_tool::manifest::ArgType::List);
+        assert_eq!(
+            hospital.options.as_ref().unwrap(),
+            &vec!["Fakeeh".to_string(), "Neom".to_string()]
+        );
+    }
+
     #[tokio::test]
     async fn concurrent_filter_updates_preserve_both_reports() {
         let root = tempfile::tempdir().unwrap();
@@ -821,7 +964,8 @@ mod tests_yasweb_finalization {
                     "first".to_string(),
                     ReportConfig {
                         report_type: "Standard Report".to_string(),
-                        filters: std::collections::HashMap::new(),
+                        filters: HashMap::from([("HOSPITAL".to_string(), String::new())]),
+                        filter_options: std::collections::HashMap::new(),
                         start_date_key: None,
                         end_date_key: None,
                         download_path: None,
@@ -832,6 +976,7 @@ mod tests_yasweb_finalization {
                     ReportConfig {
                         report_type: "Standard Report".to_string(),
                         filters: std::collections::HashMap::new(),
+                        filter_options: std::collections::HashMap::new(),
                         start_date_key: None,
                         end_date_key: None,
                         download_path: None,
@@ -844,8 +989,27 @@ mod tests_yasweb_finalization {
         let lock = Arc::new(AsyncMutex::new(()));
 
         let (first, second) = tokio::join!(
-            persist_discovered_filters(&config_path, "first", vec!["filter_a".to_string()], &lock),
-            persist_discovered_filters(&config_path, "second", vec!["filter_b".to_string()], &lock),
+            persist_discovered_filters(
+                &config_path,
+                "first",
+                DiscoveredReportFilters {
+                    names: vec!["filter_a".to_string(), "Hospital".to_string()],
+                    options: HashMap::from([(
+                        "Hospital".to_string(),
+                        vec!["Fakeeh".to_string(), "Neom".to_string()],
+                    )]),
+                },
+                &lock,
+            ),
+            persist_discovered_filters(
+                &config_path,
+                "second",
+                DiscoveredReportFilters {
+                    names: vec!["filter_b".to_string()],
+                    options: HashMap::new()
+                },
+                &lock
+            ),
         );
         first.unwrap();
         second.unwrap();
@@ -853,6 +1017,12 @@ mod tests_yasweb_finalization {
         let saved: YaswebConfig =
             serde_json::from_str(&std::fs::read_to_string(&config_path).unwrap()).unwrap();
         assert!(saved.reports["first"].filters.contains_key("filter_a"));
+        assert!(saved.reports["first"].filters.contains_key("HOSPITAL"));
+        assert!(!saved.reports["first"].filters.contains_key("Hospital"));
+        assert_eq!(
+            saved.reports["first"].filter_options["HOSPITAL"],
+            vec!["Fakeeh".to_string(), "Neom".to_string()]
+        );
         assert!(saved.reports["second"].filters.contains_key("filter_b"));
     }
 
@@ -867,7 +1037,10 @@ mod tests_yasweb_finalization {
         assert!(persist_discovered_filters(
             &config_path,
             "first",
-            vec!["filter_a".to_string()],
+            DiscoveredReportFilters {
+                names: vec!["filter_a".to_string()],
+                options: HashMap::new()
+            },
             &lock,
         )
         .await
@@ -889,8 +1062,17 @@ mod tests_yasweb_finalization {
         let output_files = std::fs::read_dir(&dst_dir)
             .unwrap()
             .map(|entry| entry.unwrap().path())
+            .filter(|path| {
+                path.extension()
+                    .and_then(|ext| ext.to_str())
+                    .is_some_and(|ext| {
+                        ext.eq_ignore_ascii_case("xlsx")
+                            || ext.eq_ignore_ascii_case("xls")
+                            || ext.eq_ignore_ascii_case("csv")
+                    })
+            })
             .collect::<Vec<_>>();
-        assert_eq!(output_files.len(), 1, "expected exactly one output file");
+        assert_eq!(output_files.len(), 1, "expected exactly one report file");
         assert_eq!(output_files[0].parent(), Some(dst_dir.as_path()));
         assert_ne!(
             output_files[0].file_name().and_then(|name| name.to_str()),
@@ -985,9 +1167,10 @@ mod tests_yasweb_finalization {
 
         finalize_download(&src_dir, &dst_dir, "final.xlsx").unwrap();
 
-        let content = std::fs::read_to_string(dst_file).unwrap();
-        // Since rename on windows doesn't overwrite, but the fallback copy+delete will overwrite
-        assert_eq!(content, "new data");
+        let original = std::fs::read_to_string(&dst_file).unwrap();
+        let collision_copy = std::fs::read_to_string(dst_dir.join("final (1).xlsx")).unwrap();
+        assert_eq!(original, "old data");
+        assert_eq!(collision_copy, "new data");
         std::fs::remove_dir_all(&dst_dir).unwrap();
     }
 }

@@ -13,7 +13,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tracing::{error, info};
 
-use crate::yasweb::config::YaswebConfig;
+use crate::yasweb::config::{DiscoveredReportFilters, YaswebConfig};
 
 // Public API Re-exports matching original monolith
 pub use debug::save_html_state;
@@ -26,7 +26,7 @@ pub fn run_browser_tab(
     active_report_type: &str,
     active_filters: &HashMap<String, String>,
     download_dir: Option<PathBuf>,
-) -> Result<Vec<String>> {
+) -> Result<DiscoveredReportFilters> {
     let task_started = Instant::now();
     info!(
         "YASWEB RUN START: report='{}' type='{}' keep_open={} headless={} timeout_minutes={}",
@@ -97,7 +97,7 @@ pub fn run_browser_tab(
             return Err(e.context("Yasweb stage failed: report navigation/export"));
         }
     };
-    info!("YASWEB STAGE END: report_navigation_and_export status=SUCCESS elapsed_ms={} discovered_filters={}", report_started.elapsed().as_millis(), discovered_filters.len());
+    info!("YASWEB STAGE END: report_navigation_and_export status=SUCCESS elapsed_ms={} discovered_filters={}", report_started.elapsed().as_millis(), discovered_filters.names.len());
 
     // Wait for download if applicable
     info!("YASWEB STAGE START: wait_for_download");

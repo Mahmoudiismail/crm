@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 use tracing::{error, info, warn};
 
 use crate::yasweb::browser::{debug, javascript};
+use crate::yasweb::config::DiscoveredReportFilters;
 
 /// Navigates to an MIS report, applies the requested filters, and exports the report as XLSX.
 ///
@@ -46,7 +47,7 @@ use crate::yasweb::browser::{debug, javascript};
 ///
 /// # Returns
 ///
-/// The labels of the filters discovered in the report form.
+/// The filter labels and dropdown options discovered in the report form.
 pub fn navigate_and_run_report(
     tab: &Arc<Tab>,
     active_report_name: &str,
@@ -54,7 +55,7 @@ pub fn navigate_and_run_report(
     active_filters: &HashMap<String, String>,
     timeout_minutes: u64,
     step_num: &mut u32,
-) -> Result<Vec<String>> {
+) -> Result<DiscoveredReportFilters> {
     let report_started = Instant::now();
     info!(
         "YASWEB STAGE START: navigate_and_run_report report='{}' type='{}' filters_count={}",
@@ -62,7 +63,7 @@ pub fn navigate_and_run_report(
         active_report_type,
         active_filters.len()
     );
-    let mut discovered_filters = Vec::new();
+    let mut discovered_filters = DiscoveredReportFilters::default();
 
     // Replicate navigation block to find "MIS" and run steps
     info!("Waiting for #menuPinnedBtn...");
@@ -492,13 +493,70 @@ pub fn navigate_and_run_report(
                                                 inputElem.dispatchEvent(new Event('blur', {{ bubbles: true }}));
                                             }}
 
-                                            let labels = doc.querySelectorAll('mat-label');
-                                            let discoveredFilters = [];
-                                            let failedFilters = [];
-                                            for (let lbl of labels) {{
-                                                if (lbl.innerText) {{ discoveredFilters.push(lbl.innerText.trim()); }}
+                                            const labels = doc.querySelectorAll('mat-label');
+                                            const discoveredFilters = [];
+                                            const discoveredFilterOptions = {{}};
+                                            const failedFilters = [];
+                                            const normalize = value => (value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+
+                                            function findFilterControl(label) {{
+                                                const field = label.closest('mat-form-field');
+                                                if (field) {{
+                                                    const control = field.querySelector('mat-select, select, input, [role="combobox"]');
+                                                    if (control) return control;
+                                                }}
+                                                const labelled = label.closest('label[for]');
+                                                if (labelled) return doc.getElementById(labelled.getAttribute('for'));
+                                                return null;
+                                            }}
+
+                                            async function readFilterOptions(control) {{
+                                                if (!control) return [];
+                                                if (control.tagName === 'SELECT') {{
+                                                    return Array.from(control.options)
+                                                        .filter(option => !option.disabled)
+                                                        .map(option => (option.textContent || '').trim())
+                                                        .filter(Boolean);
+                                                }}
+                                                if (control.tagName !== 'MAT-SELECT' && control.getAttribute('role') !== 'combobox') return [];
+
+                                                control.click();
+                                                const deadline = Date.now() + 2500;
+                                                let optionElements = [];
+                                                while (Date.now() < deadline) {{
+                                                    const overlay = doc.querySelector('.cdk-overlay-container') || doc;
+                                                    optionElements = Array.from(overlay.querySelectorAll('mat-option, [role="option"]'));
+                                                    if (optionElements.length > 0) break;
+                                                    await sleep(100);
+                                                }}
+                                                const values = optionElements
+                                                    .filter(option => option.getAttribute('aria-disabled') !== 'true' && !option.classList.contains('mat-option-disabled'))
+                                                    .map(option => (option.innerText || option.textContent || '').replace(/\s+/g, ' ').trim())
+                                                    .filter(Boolean);
+                                                const backdrop = doc.querySelector('.cdk-overlay-backdrop');
+                                                if (backdrop) backdrop.click();
+                                                else control.click();
+                                                await sleep(100);
+                                                return [...new Set(values)];
+                                            }}
+
+                                            for (const label of labels) {{
+                                                const filterName = (label.innerText || label.textContent || '').trim();
+                                                if (!filterName) continue;
+                                                if (!discoveredFilters.includes(filterName)) discoveredFilters.push(filterName);
+                                                const control = findFilterControl(label);
+                                                if (!control) {{
+                                                    logs.push("No control found for filter label: " + filterName);
+                                                    continue;
+                                                }}
+                                                const options = await readFilterOptions(control);
+                                                if (options.length > 0) {{
+                                                    discoveredFilterOptions[filterName] = options;
+                                                    logs.push("Discovered " + options.length + " options for filter: " + filterName);
+                                                }}
                                             }}
                                             logs.push("Discovered filters count: " + discoveredFilters.length);
+                                            logs.push("Discovered dropdown lists: " + Object.keys(discoveredFilterOptions).length);
 
                                             for (const [key, value] of Object.entries(filters)) {{
                                                 if (!value || value.trim() === '') {{
@@ -512,54 +570,58 @@ pub fn navigate_and_run_report(
                                                 for (let lbl of labels) {{
                                                     let labelText = lbl.innerText.trim().toLowerCase().replace(/_/g, ' ');
                                                     if (labelText === normalizedKey) {{
-                                                        let labelParent = lbl.closest('label');
-                                                        if (labelParent && labelParent.hasAttribute('for')) {{
-                                                            let inputId = labelParent.getAttribute('for');
-                                                            let input = doc.getElementById(inputId);
-                                                            if (input) {{
-                                                                if (input.tagName === 'INPUT') {{
-                                                                    let v = value;
-                                                                    if (key.toLowerCase().includes('date') && v.includes('-')) {{
-                                                                        let parts = v.split(' ')[0].split('-');
-                                                                        if (parts.length === 3) {{
-                                                                            v = parts[0].padStart(2, '0') + "-" + parts[1].padStart(2, '0') + "-" + parts[2] + (v.includes(' ') ? ' ' + v.split(' ').slice(1).join(' ') : '');
-                                                                        }}
+                                                        const input = findFilterControl(lbl);
+                                                        if (input) {{
+                                                            if (input.tagName === 'INPUT') {{
+                                                                let v = value;
+                                                                if (key.toLowerCase().includes('date') && v.includes('-')) {{
+                                                                    const parts = v.split(' ')[0].split('-');
+                                                                    if (parts.length === 3) {{
+                                                                        v = parts[0].padStart(2, '0') + "-" + parts[1].padStart(2, '0') + "-" + parts[2] + (v.includes(' ') ? ' ' + v.split(' ').slice(1).join(' ') : '');
                                                                     }}
-                                                                    await simulateTyping(input, v);
-                                                                    logs.push("Typed into INPUT for " + key);
-                                                                    filterFilled = true;
-                                                                    break;
-                                                                }} else if (input.tagName === 'MAT-SELECT') {{
-                                                                    input.click();
-                                                                    await sleep(500);
-
-                                                                    let options = doc.querySelectorAll('mat-option');
-                                                                    if (options.length === 0) {{
-                                                                        let mainOverlay = document.querySelector('.cdk-overlay-container');
-                                                                        if (mainOverlay) {{
-                                                                            options = mainOverlay.querySelectorAll('mat-option');
-                                                                        }}
-                                                                    }}
-
-                                                                    let optionFound = false;
-                                                                    for (let opt of options) {{
-                                                                        if (opt.textContent.toLowerCase().includes(value.toLowerCase())) {{                                                                            opt.click();
-                                                                            optionFound = true;
-                                                                            logs.push("Selected MAT-OPTION for " + key);
-                                                                            break;
-                                                                        }}
-                                                                    }}
-
-                                                                    if (!optionFound) {{
-                                                                        let backdrop = doc.querySelector('.cdk-overlay-backdrop') || document.querySelector('.cdk-overlay-backdrop');
-                                                                        if (backdrop) backdrop.click();
-                                                                        logs.push("MAT-OPTION not found for " + key);
-                                                                    }}
-
-                                                                    await sleep(500);
-                                                                    filterFilled = true;
-                                                                    break;
                                                                 }}
+                                                                await simulateTyping(input, v);
+                                                                logs.push("Typed into INPUT for " + key);
+                                                                filterFilled = true;
+                                                                break;
+                                                            }} else if (input.tagName === 'MAT-SELECT' || input.getAttribute('role') === 'combobox') {{
+                                                                input.click();
+                                                                const optionDeadline = Date.now() + 2500;
+                                                                let options = [];
+                                                                while (Date.now() < optionDeadline) {{
+                                                                    const overlay = doc.querySelector('.cdk-overlay-container') || doc;
+                                                                    options = Array.from(overlay.querySelectorAll('mat-option, [role="option"]'));
+                                                                    if (options.length > 0) break;
+                                                                    await sleep(100);
+                                                                }}
+                                                                const exactOption = options.find(option => normalize(option.innerText || option.textContent) === normalize(value));
+                                                                const partialMatches = options.filter(option => normalize(option.innerText || option.textContent).includes(normalize(value)));
+                                                                const selectedOption = exactOption || (partialMatches.length === 1 ? partialMatches[0] : null);
+                                                                if (selectedOption) {{
+                                                                    selectedOption.click();
+                                                                    logs.push("Selected dropdown option for " + key);
+                                                                    filterFilled = true;
+                                                                }} else {{
+                                                                    const backdrop = doc.querySelector('.cdk-overlay-backdrop');
+                                                                    if (backdrop) backdrop.click();
+                                                                    logs.push("Dropdown option not found for " + key + ": " + value);
+                                                                }}
+                                                                await sleep(300);
+                                                                break;
+                                                            }} else if (input.tagName === 'SELECT') {{
+                                                                const option = Array.from(input.options).find(item =>
+                                                                    normalize(item.textContent) === normalize(value) || item.value === value
+                                                                );
+                                                                if (option) {{
+                                                                    input.value = option.value;
+                                                                    input.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                                                                    input.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                                                                    logs.push("Selected native SELECT option for " + key);
+                                                                    filterFilled = true;
+                                                                }} else {{
+                                                                    logs.push("Native SELECT option not found for " + key + ": " + value);
+                                                                }}
+                                                                break;
                                                             }}
                                                         }}
                                                     }}
@@ -570,9 +632,9 @@ pub fn navigate_and_run_report(
                                                 }}
                                             }}
                                             if (failedFilters.length > 0) {{
-                                                return JSON.stringify({{ status: "ERROR", msg: "One or more requested filters could not be applied: " + failedFilters.join(", "), failed_filters: failedFilters, discovered_filters: discoveredFilters, logs }});
+                                                return JSON.stringify({{ status: "ERROR", msg: "One or more requested filters could not be applied: " + failedFilters.join(", "), failed_filters: failedFilters, discovered_filters: discoveredFilters, discovered_filter_options: discoveredFilterOptions, logs }});
                                             }}
-                                            return JSON.stringify({{ status: "SUCCESS", discovered_filters: discoveredFilters, logs }});
+                                            return JSON.stringify({{ status: "SUCCESS", discovered_filters: discoveredFilters, discovered_filter_options: discoveredFilterOptions, logs }});
                                         }})({});
                                         "#,
                             filters_json
@@ -588,9 +650,26 @@ pub fn navigate_and_run_report(
                             .get("discovered_filters")
                             .and_then(|v| v.as_array())
                         {
-                            for f in arr {
-                                if let Some(s) = f.as_str() {
-                                    discovered_filters.push(s.to_string());
+                            for filter in arr {
+                                if let Some(name) = filter.as_str() {
+                                    discovered_filters.names.push(name.to_string());
+                                }
+                            }
+                        }
+                        if let Some(options) = step4_res
+                            .get("discovered_filter_options")
+                            .and_then(|value| value.as_object())
+                        {
+                            for (filter, values) in options {
+                                let values = values
+                                    .as_array()
+                                    .into_iter()
+                                    .flatten()
+                                    .filter_map(serde_json::Value::as_str)
+                                    .map(str::to_owned)
+                                    .collect::<Vec<_>>();
+                                if !values.is_empty() {
+                                    discovered_filters.options.insert(filter.clone(), values);
                                 }
                             }
                         }
