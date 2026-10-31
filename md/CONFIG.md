@@ -4,7 +4,7 @@ All applications manage their own specific configuration files but work in tande
 
 ## `runner_config.json`
 
-This file controls the GUI, global timing, and task scheduling. It has a `registered_apps` array that manages dynamically registered `AppManifest` applications.
+This file controls the GUI, global timing, and task scheduling. The following JSON is illustrative; comments are explanatory and must be removed before saving it as strict JSON. It has a `registered_apps` array that manages dynamically registered `AppManifest` applications.
 
 ```json
 {
@@ -51,7 +51,7 @@ Executables spawned via Runner or run manually have their own configurations. Ea
 - **`tasker_config.json` (Tasker):** Override with `tasker.exe --config <PATH>`. Relative paths supplied with this flag are resolved from the executable directory. The legacy positional config path remains supported and is resolved from the current working directory.
 - **`yasweb_config.json` (Yasweb):** Selected with `--config <PATH>`; the CLI default is `yasweb_config.json`.
 
-- **`config.json` (CRM):** Cognito user pool, API endpoints, credentials. Can override the standard `Downloads` folder using `custom_download_folder`. The CLI argument `--custom-download-folder` overrides this config key for a single run without persisting to `config.json`. Includes CRM-specific download configuration properties:
+- **`config.json` (CRM):** Cognito user pool, API endpoints, credentials. Override the default with `crm.exe --config <PATH>`; relative paths are resolved from the executable directory and absolute paths are used unchanged. Can override the standard `Downloads` folder using `custom_download_folder`. The CLI argument `--custom-download-folder` overrides this config key for a single run without persisting to `config.json`. Includes CRM-specific download configuration properties:
   - `recent_download_window_seconds`: (Default: 30) Recent completed-report suppression window in seconds. Set to `0` to always fetch. For date-ranged tickets, calls, and leads, suppression requires a completion marker for the same requested range and all files recorded by that marker to still exist; a lone recent chunk file is not proof of completion. Users are fetched as one direct Base64 payload and retain the recent-file check. This is not a general CRM execution cooldown.
   - `remember_secrets`: (Default: `false`) Controls where CRM secrets are persisted. With `false` (default), passwords and tokens are omitted from the JSON config; token cache is protected separately with Windows DPAPI and passwords are never cached. With `true`, the password and tokens are stored in JSON for compatibility.
   - `retention_days`: (Optional) If configured with a value greater than `0`, the CRM process will clean up older downloaded CRM reports (`ticket_report_*`, `call_logs_*`, `lead_report_*`, `users_*`) modified longer than `retention_days` days ago. Missing, `null` or `0` disables cleanup. Unrelated files in the directory are safely preserved.
@@ -65,6 +65,10 @@ Executables spawned via Runner or run manually have their own configurations. Ea
   ```
 - **`yasweb_config.json`:** Browser automation configurations, cached filter mappings, and report timeout limits. The `timeout_minutes` field independently controls the maximum wait time for report generation (Step 6 loader) and the subsequent XLSX file download. It does not act as a global UI timeout for navigation or filter readiness. `start_date_key` and `end_date_key` are dictionaries containing `key` and `format` fields to specify both the web UI filter name and its exact expected date/time format (e.g. `{"key": "FromDate", "format": "%d-%m-%Y 00:00"}`).
 - **`tasker_config.json`:** Tasker tasks like CSV pivoting, team mappings, Outlook configuration, and leads reporting for the Call Center. Includes `send_exceptions` to dynamically read from `category_exceptions` and skip standard team branch logic for exception tickets.
+
+### Registered app config precedence
+
+For a registered external application, `registered_apps[].config_path` is the default configuration path. If the task action supplies a non-empty `--config <PATH>` argument, that action-level value takes precedence. If the action-level value is absent or blank, Runner passes the registered app's `config_path`. Runner's own `--config <PATH>` is separate: it selects the Runner configuration used by startup validation, the scheduler and the GUI.
 
 ### Merging and Persistence Behavior
 - Across all configurations, missing properties in files are systematically injected with application defaults using a recursive object merge via `utils::merge_json`.
