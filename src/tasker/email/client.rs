@@ -15,7 +15,6 @@ use crate::tasker::email::recipients::{
 use crate::tasker::email::reports::generate_leads_report;
 
 #[allow(clippy::too_many_arguments)]
-#[allow(clippy::too_many_arguments)]
 pub fn process_emails(
     results_file: &str,
     config: &EmailConfig,
