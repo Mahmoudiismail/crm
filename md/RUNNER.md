@@ -8,6 +8,10 @@ Runner writes a redacted configuration snapshot into `runner.log` at startup. If
 
 The Runner GUI provides an interface to configure tasks, applications, and pipelines. It is accessible via HTTP according to `gui_host` and `gui_port` inside `runner_config.json`.
 
+## Application Config Selection
+
+A registered application's `config_path` is its default configuration path. An action-level `--config <PATH>` argument overrides that default for that action. If the action argument is blank or omitted, Runner passes the registered app's configured path.
+
 ## Multiple Steps and Execution Modes
 Tasks inside the Runner support executing multiple sequential or parallel actions within "Steps". You can configure an unlimited number of Steps and Actions inside the GUI by clicking **Add step** or **Add action**.
 
