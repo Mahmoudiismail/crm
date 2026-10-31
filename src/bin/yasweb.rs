@@ -855,6 +855,45 @@ mod tests_yasweb_finalization {
         assert_eq!(sanitize_filename_component("..."), "report");
     }
 
+    #[test]
+    fn manifest_exposes_cached_dropdown_options_as_a_list() {
+        let root = tempfile::tempdir().unwrap();
+        let config_path = root.path().join("yasweb_config.json");
+        let config = YaswebConfig {
+            url: "https://example.test".to_string(),
+            username: "test".to_string(),
+            reports: HashMap::from([(
+                "Appointments".to_string(),
+                ReportConfig {
+                    report_type: "Report Manager".to_string(),
+                    filters: HashMap::from([("Hospital".to_string(), String::new())]),
+                    filter_options: HashMap::from([(
+                        "Hospital".to_string(),
+                        vec!["Fakeeh".to_string(), "Neom".to_string()],
+                    )]),
+                    start_date_key: None,
+                    end_date_key: None,
+                    download_path: None,
+                },
+            )]),
+            ..YaswebConfig::default()
+        };
+        std::fs::write(&config_path, serde_json::to_string_pretty(&config).unwrap()).unwrap();
+
+        let manifest = get_manifest(Some(config_path));
+        let hospital = manifest
+            .arguments
+            .iter()
+            .find(|argument| argument.name == "--filter-Hospital")
+            .expect("Hospital filter should be exposed");
+
+        assert_eq!(hospital.arg_type, crm_tool::manifest::ArgType::List);
+        assert_eq!(
+            hospital.options.as_ref().unwrap(),
+            &vec!["Fakeeh".to_string(), "Neom".to_string()]
+        );
+    }
+
     #[tokio::test]
     async fn concurrent_filter_updates_preserve_both_reports() {
         let root = tempfile::tempdir().unwrap();
