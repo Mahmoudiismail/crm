@@ -6,7 +6,7 @@ Runner accepts `--config <PATH>` to select its configuration file instead of the
 
 Runner writes a redacted configuration snapshot into `runner.log` at startup. If `runner.log` is moved or deleted while Runner is running, the next log event recreates it and writes the snapshot again. Sensitive values whose keys indicate passwords, tokens, secrets, credentials, authorization, or API keys are redacted.
 
-The Runner GUI provides an interface to configure tasks, applications, and pipelines. It is accessible via HTTP according to `gui_host` and `gui_port` inside `runner_config.json`.
+The Runner GUI provides an interface to configure tasks, applications, and pipelines. It is accessible via HTTP according to `gui_host` and `gui_port` inside the selected Runner configuration file (default `runner_config.json`).
 
 ## Application Config Selection
 
@@ -42,7 +42,7 @@ Focused regression coverage protects three runtime guarantees:
 - Manual **Run Task** and **Run All** requests wait for the Execution Manager to confirm queue admission. A closed scheduler/queue channel, missing task, already queued/running task, or queue-send failure must be shown as an error rather than a successful trigger message.
 - The execution manager remains the final duplicate-admission authority; status snapshots are not a guarantee that a concurrent request has not already queued the same task.
 - Runner GUI and task API reads use the shared configuration lock also used by mutations, so a page does not read the file midway through a configuration update.
-- Every mutation through the dispatcher reloads `runner_config.json` after its atomic save and compares the persisted configuration with the expected configuration. A read-back mismatch is returned as an error.
+- Every mutation through the dispatcher reloads the selected Runner configuration file after its atomic save and compares the persisted configuration with the expected configuration. A read-back mismatch is returned as an error.
 - Task edits additionally compare the saved editable task fields with the normalized submitted task. Runtime-managed fields (`last_run_at`, `last_status`, and `next_run_at`) are excluded because they can change independently of the edit form.
 - The runner's top-level log reports scheduler dispatch; detailed execution outcomes remain in each task's task-specific log.
 
