@@ -32,11 +32,16 @@ pub struct TaskerCliOptions {
 }
 
 fn resolve_config_path(options: &TaskerCliOptions) -> Result<PathBuf> {
-    if let Some(path) = options
-        .config
-        .as_deref()
-        .or(options.legacy_config.as_deref())
-    {
+    if let Some(path) = options.config.as_deref() {
+        let path = PathBuf::from(path);
+        return if path.is_absolute() {
+            Ok(path)
+        } else {
+            Ok(executable_dir()?.join(path))
+        };
+    }
+    if let Some(path) = options.legacy_config.as_deref() {
+        // Preserve the legacy positional argument's current-working-directory semantics.
         return Ok(PathBuf::from(path));
     }
     Ok(executable_dir()?.join("tasker_config.json"))
@@ -371,6 +376,15 @@ fn main() -> Result<()> {
 mod tests {
     use super::*;
     use clap::Parser;
+
+    #[test]
+    fn relative_flag_config_path_is_resolved_from_executable_directory() {
+        let options = TaskerCliOptions::parse_from(["tasker", "--config", "custom.json"]);
+        assert_eq!(
+            resolve_config_path(&options).unwrap(),
+            executable_dir().unwrap().join("custom.json")
+        );
+    }
 
     #[test]
     fn custom_config_path_is_shared_by_startup_logging_and_task_execution() {
