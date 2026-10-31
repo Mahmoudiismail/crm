@@ -81,9 +81,9 @@ fn manifest_has_argument(manifest: &serde_json::Value, arg_name: &str) -> bool {
         .get("arguments")
         .and_then(serde_json::Value::as_array)
         .is_some_and(|arguments| {
-            arguments.iter().any(|arg| {
-                arg.get("name").and_then(serde_json::Value::as_str) == Some(arg_name)
-            })
+            arguments
+                .iter()
+                .any(|arg| arg.get("name").and_then(serde_json::Value::as_str) == Some(arg_name))
         })
 }
 
@@ -191,9 +191,9 @@ pub async fn supports_periodization(
         .map(str::to_string)
         .or(discovered_start)
         .filter(|name| {
-            manifest.as_ref().is_none_or(|value| {
-                manifest_argument_is_available(value, name, &spec.args)
-            })
+            manifest
+                .as_ref()
+                .is_none_or(|value| manifest_argument_is_available(value, name, &spec.args))
         });
     let end = spec
         .end_date_arg
@@ -202,9 +202,9 @@ pub async fn supports_periodization(
         .map(str::to_string)
         .or(discovered_end)
         .filter(|name| {
-            manifest.as_ref().is_none_or(|value| {
-                manifest_argument_is_available(value, name, &spec.args)
-            })
+            manifest
+                .as_ref()
+                .is_none_or(|value| manifest_argument_is_available(value, name, &spec.args))
         });
     start.is_some() || end.is_some()
 }
@@ -314,9 +314,9 @@ pub async fn run_external_app(
             .map(str::to_string)
             .or(discovered.0)
             .filter(|name| {
-                manifest.as_ref().is_none_or(|m| {
-                    manifest_argument_is_available(m, name, &effective_args)
-                })
+                manifest
+                    .as_ref()
+                    .is_none_or(|m| manifest_argument_is_available(m, name, &effective_args))
             });
         let end_arg = spec
             .end_date_arg
@@ -325,9 +325,9 @@ pub async fn run_external_app(
             .map(str::to_string)
             .or(discovered.1)
             .filter(|name| {
-                manifest.as_ref().is_none_or(|m| {
-                    manifest_argument_is_available(m, name, &effective_args)
-                })
+                manifest
+                    .as_ref()
+                    .is_none_or(|m| manifest_argument_is_available(m, name, &effective_args))
             });
 
         let start_arg_name = start_arg.clone();
