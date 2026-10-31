@@ -2,7 +2,7 @@ use crate::crm_updater::config::UpdaterConfig;
 use anyhow::{Context, Result};
 use std::collections::HashSet;
 use std::fs::{self, File};
-use std::io::{Read, Write};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use tracing::{info, warn};
 use zip::write::SimpleFileOptions;
