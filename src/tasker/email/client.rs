@@ -137,7 +137,7 @@ where
     let mut dynamic_statuses = HashSet::new();
 
     let mut records = rdr.records();
-    let mut previous_records: VecDeque<(usize, String)> = VecDeque::with_capacity(10);
+    let mut previous_records: VecDeque<usize> = VecDeque::with_capacity(10);
     let mut record_number = 1usize;
 
     while let Some(result) = records.next() {
@@ -148,19 +148,18 @@ where
                     "Failed to read CSV record {} from {}: {}",
                     record_number, results_file, error
                 );
-                for (number, row) in &previous_records {
+                for number in &previous_records {
                     error!(
-                        "CSV context before error at record {}: record {}: {}",
-                        record_number, number, row
+                        "CSV context before error at record {}: record {} (row contents omitted)",
+                        record_number, number
                     );
                 }
                 for offset in 1..=10 {
                     match records.next() {
-                        Some(Ok(row)) => error!(
-                            "CSV context after error at record {}: record {}: {}",
+                        Some(Ok(_row)) => error!(
+                            "CSV context after error at record {}: record {} (row contents omitted)",
                             record_number,
-                            record_number + offset,
-                            row.iter().collect::<Vec<_>>().join(" | ")
+                            record_number + offset
                         ),
                         Some(Err(next_error)) => error!(
                             "Additional CSV read error after record {} (lookahead {}): {}",
@@ -173,8 +172,7 @@ where
             }
         };
 
-        let row_context = record.iter().collect::<Vec<_>>().join(" | ");
-        previous_records.push_back((record_number, row_context));
+        previous_records.push_back(record_number);
         if previous_records.len() > 10 {
             previous_records.pop_front();
         }
