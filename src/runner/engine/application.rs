@@ -396,7 +396,10 @@ pub async fn run_external_app(
 
 #[cfg(test)]
 mod tests {
-    use super::{date_args_from_manifest, insert_period_args, manifest_arg_dependencies_satisfied};
+    use super::{
+        apply_registered_config_fallback, date_args_from_manifest, insert_period_args,
+        manifest_arg_dependencies_satisfied, manifest_argument_is_available,
+    };
     use std::collections::HashMap;
 
     #[test]
