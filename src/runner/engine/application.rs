@@ -456,7 +456,7 @@ mod tests {
         let manifest = serde_json::json!({
             "arguments": [
                 {"name": "--date", "arg_type": "date_var"},
-                {"name": "--start-date", "arg_type": "string"},
+                {"name": "--range", "arg_type": "string"},
                 {"name": "--report", "arg_type": "string"}
             ]
         });
