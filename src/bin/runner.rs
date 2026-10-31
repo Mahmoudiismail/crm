@@ -3,7 +3,7 @@
 use anyhow::Context;
 use anyhow::Result;
 use clap::Parser;
-use crm_tool::manifest::AppManifest;
+use crm_tool::manifest::{AppArg, AppManifest};
 #[cfg(target_os = "windows")]
 use crm_tool::runner::engine::RunnerHandle;
 use crm_tool::runner::engine::{start_scheduler, RunnerCommand};
@@ -201,14 +201,15 @@ mod tests {
 
     #[test]
     fn runner_config_path_supports_default_relative_and_absolute_paths() {
-        let exe_dir = Path::new("C:/CRM");
+        let exe_dir = Path::new("CRM");
         assert_eq!(resolve_config_path(None, exe_dir), exe_dir.join("runner_config.json"));
         assert_eq!(
             resolve_config_path(Some(Path::new("settings/custom.json")), exe_dir),
             exe_dir.join("settings/custom.json")
         );
-        let absolute = Path::new("D:/Settings/runner.json");
-        assert_eq!(resolve_config_path(Some(absolute), exe_dir), absolute);
+        let temp = tempfile::tempdir().unwrap();
+        let absolute = temp.path().join("runner.json");
+        assert_eq!(resolve_config_path(Some(&absolute), exe_dir), absolute);
     }
 
     #[test]
