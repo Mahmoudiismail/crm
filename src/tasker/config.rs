@@ -210,6 +210,8 @@ pub struct UsersExportConfig {
     pub enabled: bool,
     pub download_path: String,
     pub mapping_workbook: String,
+    #[serde(default = "default_users_export_overrides_file")]
+    pub overrides_file: String,
     pub output_file: String,
     #[serde(default = "default_users_export_minutes")]
     pub minutes_ago: u64,
@@ -217,6 +219,10 @@ pub struct UsersExportConfig {
 
 fn default_users_export_minutes() -> u64 {
     10
+}
+
+fn default_users_export_overrides_file() -> String {
+    "./user_team_overrides.csv".to_string()
 }
 
 fn default_special_column_name() -> String {

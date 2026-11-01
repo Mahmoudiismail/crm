@@ -34,6 +34,9 @@ These jobs replace the Excel/VBS processing paths with native Tasker processing.
 
 - Reads `users_*.csv` files created within the configured recent window (10 minutes by default), then combines only the file(s) with the latest modification timestamp, matching the workbook query.
 - Reads the manual user-to-department mapping from `Sheet2`, columns H:I, in `users.xlsm`.
+- Optionally reads `overrides_file` (default `./user_team_overrides.csv`) with `Email` and `Team` columns. Email matching trims whitespace and ignores case.
+- An override replaces the final team; users not listed retain the existing workbook mapping. The mapped-department output column remains unchanged.
+- A missing overrides file means no overrides. Duplicate emails or incomplete rows fail the task. If overrides are present, the CRM export must contain an `Email` column.
 - Writes the five query output columns in their existing order to `users.csv`; unmatched names keep an empty mapped department in the expanded mapping column and use `Teams` for the final `UserDepartmentName / Team Name` column, matching the query.
 - Does not open Excel or execute the old `ExportSheet2ToCSV` macro.
 
