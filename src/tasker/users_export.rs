@@ -96,6 +96,12 @@ fn load_team_overrides(path: &Path) -> Result<HashMap<String, String>> {
         info!("User team overrides file {:?} not found; continuing without overrides", path);
         return Ok(HashMap::new());
     }
+    let metadata = fs::metadata(path)
+        .with_context(|| format!("Failed to read metadata for user team overrides CSV {:?}", path))?;
+    if metadata.len() == 0 {
+        info!("User team overrides file {:?} is empty; continuing without overrides", path);
+        return Ok(HashMap::new());
+    }
     let file = fs::File::open(path)
         .with_context(|| format!("Failed to open user team overrides CSV {:?}", path))?;
     parse_team_overrides(file)
