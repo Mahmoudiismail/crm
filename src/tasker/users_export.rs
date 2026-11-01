@@ -335,21 +335,21 @@ mod tests {
 
     #[test]
     fn team_overrides_match_emails_case_insensitively() {
-        let csv = "Email,Team\n User@Example.com ,Team C\n";
+        let csv = concat!("Email,Team", "\n", " User@Example.com ,Team C", "\n");
         let overrides = parse_team_overrides(Cursor::new(csv)).unwrap();
         assert_eq!(overrides.get("user@example.com").unwrap(), "Team C");
     }
 
     #[test]
     fn duplicate_override_emails_are_rejected_case_insensitively() {
-        let csv = "Email,Team\nuser@example.com,Team A\nUSER@example.com,Team B\n";
+        let csv = concat!("Email,Team", "\n", "user@example.com,Team A", "\n", "USER@example.com,Team B", "\n");
         let error = parse_team_overrides(Cursor::new(csv)).unwrap_err();
         assert!(error.to_string().contains("Duplicate email"));
     }
 
     #[test]
     fn incomplete_override_rows_are_rejected() {
-        let csv = "Email,Team\nuser@example.com,\n";
+        let csv = concat!("Email,Team", "\n", "user@example.com,", "\n");
         let error = parse_team_overrides(Cursor::new(csv)).unwrap_err();
         assert!(error.to_string().contains("both Email and Team are required"));
     }
