@@ -363,7 +363,7 @@ fn test_task1_only_call_center() {
     );
     assert_eq!(lead_teams.get("L-2003").map(String::as_str), Some(""));
 
-    let temp_dir = std::env::temp_dir();
+    let temp_dir = dataset.download_dir.path();
     let html_path = find_temp_artifact("Call_Center_", "email.html");
     assert!(
         html_path.exists(),
@@ -378,9 +378,13 @@ fn test_task1_only_call_center() {
 
     // The email attachment must contain only eligible Call Center leads.
     let mut found_leads = false;
-    for entry in std::fs::read_dir(&temp_dir).unwrap() {
+    for entry in std::fs::read_dir(temp_dir).unwrap() {
         let path = entry.unwrap().path();
-        if path.to_string_lossy().contains("Call_Center_Leads_") {
+        if path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.starts_with("Call_Center_Leads_") && name.ends_with(".xlsx"))
+        {
             found_leads = true;
             use calamine::Reader;
             let mut workbook = calamine::open_workbook_auto(&path).unwrap();

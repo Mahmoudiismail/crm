@@ -2,6 +2,25 @@ use crate::manifest::AppManifest;
 use anyhow::{Context, Result};
 use serde::{de::DeserializeOwned, Serialize};
 use std::io::{self, Write};
+
+const BUILD_VERSION: &str = env!("GIT_COMMIT_SHA");
+
+#[derive(Clone, Copy, Debug)]
+struct BuildVersionTimer;
+
+impl tracing_subscriber::fmt::time::FormatTime for BuildVersionTimer {
+    fn format_time(
+        &self,
+        writer: &mut tracing_subscriber::fmt::format::Writer<'_>,
+    ) -> std::fmt::Result {
+        write!(
+            writer,
+            "[{}] {}",
+            BUILD_VERSION,
+            chrono::Local::now().to_rfc3339()
+        )
+    }
+}
 use std::path::{Path, PathBuf};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
@@ -55,8 +74,8 @@ impl ReopenLogFile {
             let now = chrono::Local::now().to_rfc3339();
             writeln!(
                 file,
-                "[{}] RUNNER CONFIG SNAPSHOT (sensitive values redacted):",
-                now
+                "[{}] [{}] RUNNER CONFIG SNAPSHOT (sensitive values redacted):",
+                BUILD_VERSION, now
             )?;
             file.write_all(self.recovery_header.as_bytes())?;
             file.write_all(b"\n")?;
@@ -132,6 +151,7 @@ where
 {
     let (non_blocking_file, guard) = tracing_appender::non_blocking(file_writer);
     let file_layer = fmt::layer()
+        .with_timer(BuildVersionTimer)
         .with_writer(non_blocking_file)
         .with_ansi(false)
         .with_target(true)
@@ -139,6 +159,7 @@ where
         .with_filter(file_level);
 
     let stdout_layer = fmt::layer()
+        .with_timer(BuildVersionTimer)
         .with_writer(std::io::stdout)
         .with_target(true)
         .with_thread_ids(true)
@@ -150,8 +171,8 @@ where
         .try_init()
     {
         eprintln!(
-            "Warning: Failed to initialize logging for {}: {}",
-            app_name, e
+            "[{}] Warning: Failed to initialize logging for {}: {}",
+            BUILD_VERSION, app_name, e
         );
     }
     Ok(guard)
