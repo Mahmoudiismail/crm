@@ -341,6 +341,20 @@ mod tests {
     }
 
     #[test]
+    fn duplicate_override_emails_are_rejected_case_insensitively() {
+        let csv = "Email,Team\\nuser@example.com,Team A\\nUSER@example.com,Team B\\n";
+        let error = parse_team_overrides(Cursor::new(csv)).unwrap_err();
+        assert!(error.to_string().contains("Duplicate email"));
+    }
+
+    #[test]
+    fn incomplete_override_rows_are_rejected() {
+        let csv = "Email,Team\\nuser@example.com,\\n";
+        let error = parse_team_overrides(Cursor::new(csv)).unwrap_err();
+        assert!(error.to_string().contains("both Email and Team are required"));
+    }
+
+    #[test]
     fn windows_1252_decodes_non_ascii_bytes() {
         assert_eq!(decode_windows_1252(&[b'A', 0x80, b'B']), "A€B");
         assert_eq!(decode_windows_1252(&[0xEF, 0xBB, 0xBF, b'A']), "A");
