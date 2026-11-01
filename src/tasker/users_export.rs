@@ -4,7 +4,7 @@ use calamine::Reader;
 use csv::{ReaderBuilder, WriterBuilder};
 use std::collections::HashMap;
 use std::fs;
-use std::io::Cursor;
+use std::io::{Cursor, Read};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 use tracing::{info, warn};
@@ -58,6 +58,47 @@ fn load_department_mapping(path: &Path) -> Result<HashMap<String, String>> {
         anyhow::bail!("No user-to-department mappings were found in Table2 (Sheet2 columns H:I)");
     }
     Ok(mapping)
+}
+
+
+fn normalize_email(value: &str) -> String {
+    value.trim().to_ascii_lowercase()
+}
+
+fn parse_team_overrides<R: Read>(reader: R) -> Result<HashMap<String, String>> {
+    let mut csv_reader = ReaderBuilder::new().from_reader(reader);
+    let headers = csv_reader.headers()?.clone();
+    let email_idx = find_column(&headers, "Email")
+        .context("User team overrides CSV is missing the required 'Email' column")?;
+    let team_idx = find_column(&headers, "Team")
+        .context("User team overrides CSV is missing the required 'Team' column")?;
+    let mut overrides = HashMap::new();
+
+    for (index, record) in csv_reader.records().enumerate() {
+        let record = record.context("Malformed record in user team overrides CSV")?;
+        let email = normalize_email(record.get(email_idx).unwrap_or_default());
+        let team = record.get(team_idx).unwrap_or_default().trim().to_string();
+        if email.is_empty() && team.is_empty() {
+            continue;
+        }
+        if email.is_empty() || team.is_empty() {
+            anyhow::bail!("Invalid user team override on CSV row {}: both Email and Team are required", index + 2);
+        }
+        if overrides.insert(email.clone(), team).is_some() {
+            anyhow::bail!("Duplicate email '{}' in user team overrides CSV", email);
+        }
+    }
+    Ok(overrides)
+}
+
+fn load_team_overrides(path: &Path) -> Result<HashMap<String, String>> {
+    if !path.exists() {
+        info!("User team overrides file {:?} not found; continuing without overrides", path);
+        return Ok(HashMap::new());
+    }
+    let file = fs::File::open(path)
+        .with_context(|| format!("Failed to open user team overrides CSV {:?}", path))?;
+    parse_team_overrides(file)
 }
 
 fn recent_latest_user_csvs(download_dir: &Path, minutes_ago: u64) -> Result<Vec<PathBuf>> {
@@ -140,6 +181,8 @@ pub fn run(config: &UsersExportConfig) -> Result<()> {
     let download_dir = resolve(&config.download_path);
     let mapping_path = resolve(&config.mapping_workbook);
     let output_path = resolve(&config.output_file);
+    let overrides_path = resolve(&config.overrides_file);
+    let overrides = load_team_overrides(&overrides_path)?;
     let files = recent_latest_user_csvs(&download_dir, config.minutes_ago)?;
 
     if files.is_empty() {
@@ -212,8 +255,16 @@ pub fn run(config: &UsersExportConfig) -> Result<()> {
         .context("Required users CSV column 'Branches' is missing")?;
     let teams_idx =
         find_column(&headers, "Teams").context("Required users CSV column 'Teams' is missing")?;
+    let email_idx = if overrides.is_empty() {
+        None
+    } else {
+        Some(find_column(&headers, "Email").context(
+            "Required users CSV column 'Email' is missing while user team overrides are configured",
+        )?)
+    };
 
     let mut output_rows = Vec::new();
+    let mut applied_overrides = 0usize;
     for record in reader.records() {
         let record = record.context("Malformed record in combined users CSV data")?;
         let username = format!(
@@ -223,11 +274,20 @@ pub fn run(config: &UsersExportConfig) -> Result<()> {
         );
         let mapped_department = mapping.get(&username).cloned().unwrap_or_default();
         let teams = record.get(teams_idx).unwrap_or_default().to_string();
-        let final_department = if mapped_department.is_empty() {
-            teams.clone()
-        } else {
-            mapped_department.clone()
-        };
+        let override_department = email_idx
+            .and_then(|idx| record.get(idx))
+            .map(normalize_email)
+            .and_then(|email| overrides.get(&email));
+        if override_department.is_some() {
+            applied_overrides += 1;
+        }
+        let final_department = override_department.cloned().unwrap_or_else(|| {
+            if mapped_department.is_empty() {
+                teams.clone()
+            } else {
+                mapped_department.clone()
+            }
+        });
 
         output_rows.push(csv::StringRecord::from(vec![
             final_department,
@@ -252,9 +312,10 @@ pub fn run(config: &UsersExportConfig) -> Result<()> {
     writer.flush()?;
 
     info!(
-        "Users export completed: {} source file(s), {} row(s), output {:?}",
+        "Users export completed: {} source file(s), {} row(s), {} team override(s) applied, output {:?}",
         files.len(),
         output_rows.len(),
+        applied_overrides,
         output_path
     );
     Ok(())
