@@ -335,7 +335,7 @@ mod tests {
 
     #[test]
     fn team_overrides_match_emails_case_insensitively() {
-        let csv = r#"Email,Team\n User@Example.com ,Team C\n"#;
+        let csv = "Email,Team\\n User@Example.com ,Team C\\n";
         let overrides = parse_team_overrides(Cursor::new(csv)).unwrap();
         assert_eq!(overrides.get("user@example.com").unwrap(), "Team C");
     }
