@@ -60,7 +60,6 @@ fn load_department_mapping(path: &Path) -> Result<HashMap<String, String>> {
     Ok(mapping)
 }
 
-
 fn normalize_email(value: &str) -> String {
     value.trim().to_ascii_lowercase()
 }
@@ -82,7 +81,10 @@ fn parse_team_overrides<R: Read>(reader: R) -> Result<HashMap<String, String>> {
             continue;
         }
         if email.is_empty() || team.is_empty() {
-            anyhow::bail!("Invalid user team override on CSV row {}: both Email and Team are required", index + 2);
+            anyhow::bail!(
+                "Invalid user team override on CSV row {}: both Email and Team are required",
+                index + 2
+            );
         }
         if overrides.insert(email.clone(), team).is_some() {
             anyhow::bail!("Duplicate email '{}' in user team overrides CSV", email);
@@ -93,13 +95,23 @@ fn parse_team_overrides<R: Read>(reader: R) -> Result<HashMap<String, String>> {
 
 fn load_team_overrides(path: &Path) -> Result<HashMap<String, String>> {
     if !path.exists() {
-        info!("User team overrides file {:?} not found; continuing without overrides", path);
+        info!(
+            "User team overrides file {:?} not found; continuing without overrides",
+            path
+        );
         return Ok(HashMap::new());
     }
-    let metadata = fs::metadata(path)
-        .with_context(|| format!("Failed to read metadata for user team overrides CSV {:?}", path))?;
+    let metadata = fs::metadata(path).with_context(|| {
+        format!(
+            "Failed to read metadata for user team overrides CSV {:?}",
+            path
+        )
+    })?;
     if metadata.len() == 0 {
-        info!("User team overrides file {:?} is empty; continuing without overrides", path);
+        info!(
+            "User team overrides file {:?} is empty; continuing without overrides",
+            path
+        );
         return Ok(HashMap::new());
     }
     let file = fs::File::open(path)
@@ -348,7 +360,14 @@ mod tests {
 
     #[test]
     fn duplicate_override_emails_are_rejected_case_insensitively() {
-        let csv = concat!("Email,Team", "\n", "user@example.com,Team A", "\n", "USER@example.com,Team B", "\n");
+        let csv = concat!(
+            "Email,Team",
+            "\n",
+            "user@example.com,Team A",
+            "\n",
+            "USER@example.com,Team B",
+            "\n"
+        );
         let error = parse_team_overrides(Cursor::new(csv)).unwrap_err();
         assert!(error.to_string().contains("Duplicate email"));
     }
@@ -357,7 +376,9 @@ mod tests {
     fn incomplete_override_rows_are_rejected() {
         let csv = concat!("Email,Team", "\n", "user@example.com,", "\n");
         let error = parse_team_overrides(Cursor::new(csv)).unwrap_err();
-        assert!(error.to_string().contains("both Email and Team are required"));
+        assert!(error
+            .to_string()
+            .contains("both Email and Team are required"));
     }
 
     #[test]
