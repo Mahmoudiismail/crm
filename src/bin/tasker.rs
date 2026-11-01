@@ -181,6 +181,7 @@ pub fn run_app(options: TaskerCliOptions) -> Result<()> {
       "enabled": false,
       "download_path": "../crm_windows/Downloads",
       "mapping_workbook": "../../users.xlsm",
+      "overrides_file": "./user_team_overrides.csv",
       "output_file": "./task1/users.csv",
       "minutes_ago": 10
     }
