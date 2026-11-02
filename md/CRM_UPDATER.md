@@ -91,9 +91,9 @@ cargo run -p crm_updater -- --logs-only
 
 The updater PowerShell source is maintained in these standalone files and embedded into the binary at compile time:
 
-- `src/crm_updater/scripts/scan_update_drafts.ps1` — scans Outlook Drafts and writes a small result marker to a caller-provided result file so Rust can read the result through the managed script runner.
-- `src/crm_updater/scripts/apply_update.ps1` — applies the replacement map, waits for the parent updater to exit, replaces target files, restarts configured applications, and writes the detached update log.
-- `src/crm_updater/scripts/unblock_file.ps1` — unblocks extracted update files.
+- `apps/crm_updater/src/crm_updater/scripts/scan_update_drafts.ps1` — scans Outlook Drafts and writes a small result marker to a caller-provided result file so Rust can read the result through the managed script runner.
+- `apps/crm_updater/src/crm_updater/scripts/apply_update.ps1` — applies the replacement map, waits for the parent updater to exit, replaces target files, restarts configured applications, and writes the detached update log.
+- `apps/crm_updater/src/crm_updater/scripts/unblock_file.ps1` — unblocks extracted update files.
 
 At startup, `crm_updater` calls `ScriptManager::install_builtin_scripts()`, which materializes every built-in PowerShell template—including Tasker and Updater scripts—under `<exe_dir>/scripts/<Task Name>/` before the update or collection pipeline starts. The source templates remain embedded in the executable so missing files can be restored. The apply script is launched detached via `ScriptManager::execute_script_detached_with_args` so it can continue after `crm_updater` exits and replace the updater executable itself. Replacement data is passed through a temporary JSON file using `-ReplacementMapPath`, rather than interpolated into the PowerShell source. The detached script is managed persistently; it does not delete its own script file after running.
 

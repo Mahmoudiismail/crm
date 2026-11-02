@@ -57,8 +57,8 @@ fn username_matches(displayed: &str, configured: &str) -> bool {
 /// ```no_run
 /// use std::sync::Arc;
 /// use headless_chrome::Tab;
-/// use crm_tool::yasweb::config::YaswebConfig;
-/// use crm_tool::yasweb::browser::login::execute_login;
+/// use yasweb_app::yasweb::config::YaswebConfig;
+/// use yasweb_app::yasweb::browser::login::execute_login;
 ///
 /// # fn example() -> anyhow::Result<()> {
 /// # let tab: Arc<Tab> = unimplemented!();

@@ -576,7 +576,7 @@ pub fn parse_flexible_date(val: &str) -> Option<chrono::NaiveDate> {
     parse_flexible_date_impl(val, None)
 }
 
-pub(crate) fn parse_flexible_date_with_base(
+pub fn parse_flexible_date_with_base(
     val: &str,
     base_date: Option<&str>,
 ) -> Option<chrono::NaiveDate> {
@@ -592,7 +592,7 @@ pub fn to_iso_date(val: &str) -> String {
 }
 
 #[allow(dead_code)]
-pub(crate) fn to_iso_date_with_base(val: &str, base_date: Option<&str>) -> String {
+pub fn to_iso_date_with_base(val: &str, base_date: Option<&str>) -> String {
     if let Some(dt) = parse_flexible_date_with_base(val, base_date) {
         dt.format("%Y-%m-%d").to_string()
     } else {
@@ -608,7 +608,7 @@ pub fn replace_date_vars(val: &str, base_date: Option<&str>) -> String {
     }
 }
 
-pub(crate) fn build_csv_reader_builder() -> csv::ReaderBuilder {
+pub fn build_csv_reader_builder() -> csv::ReaderBuilder {
     let mut builder = csv::ReaderBuilder::new();
     builder.has_headers(true);
     builder
@@ -618,7 +618,7 @@ pub fn build_csv_reader_from_reader<R: std::io::Read>(rdr: R) -> csv::Reader<R> 
     build_csv_reader_builder().from_reader(rdr)
 }
 
-pub(crate) fn generate_csv_diagnostic_context_from_file(
+pub fn generate_csv_diagnostic_context_from_file(
     file_path: impl AsRef<std::path::Path>,
     line_num: usize,
 ) -> String {

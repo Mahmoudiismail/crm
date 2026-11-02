@@ -14,7 +14,7 @@ static NEW_TAB_LOCK: Mutex<()> = Mutex::new(());
 ///
 /// ```no_run
 /// use headless_chrome::Browser;
-/// use crm_tool::yasweb::browser::client::get_or_create_tab;
+/// use yasweb_app::yasweb::browser::client::get_or_create_tab;
 ///
 /// # fn example(browser: std::sync::Arc<Browser>) -> anyhow::Result<()> {
 /// let tab = get_or_create_tab(&browser)?;

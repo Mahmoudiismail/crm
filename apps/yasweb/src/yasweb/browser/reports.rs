@@ -19,7 +19,7 @@ use crate::yasweb::config::DiscoveredReportFilters;
 /// use std::collections::HashMap;
 /// use std::sync::Arc;
 /// use headless_chrome::Tab;
-/// use crm_tool::yasweb::browser::reports::navigate_and_run_report;
+/// use yasweb_app::yasweb::browser::reports::navigate_and_run_report;
 ///
 /// # fn example() -> anyhow::Result<()> {
 /// # let tab: Arc<Tab> = unimplemented!();
