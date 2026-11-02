@@ -4,9 +4,21 @@ pub mod update;
 
 fn install_with_manager(manager: &crm_tool::script_manager::ScriptManager) -> anyhow::Result<()> {
     let scripts: &[(&str, &str, &str)] = &[
-        ("CRM Updater", "scan_update_drafts.ps1", include_str!("scripts/scan_update_drafts.ps1")),
-        ("CRM Updater", "apply_update.ps1", include_str!("scripts/apply_update.ps1")),
-        ("CRM Updater", "unblock_file.ps1", include_str!("scripts/unblock_file.ps1")),
+        (
+            "CRM Updater",
+            "scan_update_drafts.ps1",
+            include_str!("scripts/scan_update_drafts.ps1"),
+        ),
+        (
+            "CRM Updater",
+            "apply_update.ps1",
+            include_str!("scripts/apply_update.ps1"),
+        ),
+        (
+            "CRM Updater",
+            "unblock_file.ps1",
+            include_str!("scripts/unblock_file.ps1"),
+        ),
     ];
     for (task_name, logical_name, content) in scripts {
         manager.get_or_create_script(task_name, logical_name, content)?;
@@ -31,7 +43,11 @@ mod tests {
 
         install_with_manager(&manager).unwrap();
 
-        assert!(root.path().join("CRM Updater").join("apply_update.ps1").is_file());
+        assert!(root
+            .path()
+            .join("CRM Updater")
+            .join("apply_update.ps1")
+            .is_file());
         assert!(!root.path().join("Email").exists());
     }
 }
