@@ -785,7 +785,6 @@ dependencies = [
  "calamine",
  "chrono",
  "chrono-tz",
- "clap",
  "criterion",
  "csv",
  "filetime",
@@ -795,7 +794,6 @@ dependencies = [
  "hex",
  "hmac",
  "lazy_static",
- "muda",
  "num-bigint",
  "open",
  "rand 0.10.3",
@@ -810,11 +808,9 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
- "tray-icon",
  "urlencoding",
  "walkdir",
  "windows-dpapi",
- "winit",
  "winsafe",
  "zip",
 ]
@@ -5134,3 +5130,73 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
+
+[[package]]
+name = "crm"
+version = "1.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "crm_tool",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "crm_updater"
+version = "1.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "crm_tool",
+ "tempfile",
+ "tracing",
+]
+
+[[package]]
+name = "runner"
+version = "1.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "crm_tool",
+ "muda",
+ "open",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tray-icon",
+ "winit",
+]
+
+[[package]]
+name = "tasker"
+version = "1.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "crm_tool",
+ "serde_json",
+ "tempfile",
+ "tracing",
+]
+
+[[package]]
+name = "yasweb"
+version = "1.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "crm_tool",
+ "fs2",
+ "futures-util",
+ "headless_chrome",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+

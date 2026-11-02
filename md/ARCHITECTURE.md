@@ -2,15 +2,15 @@
 
 ## Repository and package structure
 
-The repository builds a single Rust package, crm_tool, from one Cargo.toml. It declares five explicit binaries rather than separate Cargo packages:
+The repository is a Cargo workspace. `crm_tool` owns the shared domain implementation and contracts; each executable is a separate package under `apps/`, so it can be built, released, and deployed independently:
 
 | Binary | Main source | Responsibility |
 |---|---|---|
-| runner | src/bin/runner.rs, src/runner/** | Scheduling, local GUI, task admission, pipelines and child-process lifecycle |
-| crm | src/bin/crm.rs, src/crm/** | CRM authentication, API requests and report downloads |
-| yasweb | src/bin/yasweb.rs, src/yasweb/** | Headless browser report automation |
-| tasker | src/bin/tasker.rs, src/tasker/** | CSV/report processing, Excel automation and Outlook workflows |
-| crm_updater | src/bin/crm_updater.rs, src/crm_updater/** | Local diagnostics collection and application update orchestration |
+| runner | apps/runner/src/main.rs, src/runner/** | Scheduling, local GUI, task admission, pipelines and child-process lifecycle |
+| crm | apps/crm/src/main.rs, src/crm/** | CRM authentication, API requests and report downloads |
+| yasweb | apps/yasweb/src/main.rs, src/yasweb/** | Headless browser report automation |
+| tasker | apps/tasker/src/main.rs, src/tasker/** | CSV/report processing, Excel automation and Outlook workflows |
+| crm_updater | apps/crm_updater/src/main.rs, src/crm_updater/** | Local diagnostics collection and application update orchestration |
 
 Shared utilities, manifest types and common behavior are exported through src/lib.rs.
 
@@ -18,7 +18,7 @@ Shared utilities, manifest types and common behavior are exported through src/li
 
 ### Runner
 
-Runner loads runner_config.json, starts the scheduler and local HTTP GUI, and on Windows provides a system-tray interface. It dispatches configured shell commands or registered external applications. An external app can expose an AppManifest; Runner uses that schema to build dynamic GUI inputs and determine which CLI arguments the app supports.
+Runner is the process-plugin host. It loads `registered_apps` from runner_config.json, starts the scheduler and local HTTP GUI, and on Windows provides a system-tray interface. It launches each registered executable as a separate OS process, supervises its output/timeout, and retains support for arbitrary external EXEs and shell commands. First-party process plugins expose a versioned `AppManifest`; legacy external applications without a plugin API version remain supported.
 
 Runner tasks can contain multiple steps and actions. Sequential steps execute actions in order; parallel steps execute actions concurrently. Post-run steps are a separate pipeline executed after the main pipeline succeeds. Application-level locks and the execution manager coordinate admission and prevent duplicate task execution while the same task is queued or running.
 
@@ -46,7 +46,7 @@ Each executable has a dedicated configuration file. Defaults are generally locat
 
 ## Manifest contract
 
-The AppManifest describes an application's name, description and accepted CLI arguments. Argument metadata supports data types, required flags, defaults, options, dependencies and autofill. Runner uses the manifest both to construct app forms and to avoid passing unsupported date arguments. See [Manifest Schema](./MANIFEST_SCHEMA.md).
+The AppManifest describes an application's name, description and accepted CLI arguments. First-party CRM, Tasker, and Yasweb workers declare `plugin_api_version: 1`. When `registered_apps[].plugin_api_version` is configured, Runner rejects missing or incompatible manifest versions before launch. When the registry field is absent, Runner skips the compatibility probe and preserves legacy external-app behavior. Argument metadata supports data types, required flags, defaults, options, dependencies and autofill. Runner uses the manifest both to construct app forms and to avoid passing unsupported date arguments. See [Manifest Schema](./MANIFEST_SCHEMA.md).
 
 ## Logging and process management
 
@@ -61,3 +61,7 @@ Managed PowerShell templates are maintained as source files and embedded at buil
 - CSV parsing is strict by default; code paths requiring different parsing behavior must opt in explicitly and document the reason.
 - Runtime secrets and configuration values must not be written to logs without redaction.
 - CRM Updater's legacy ZIP password and archive hash checks do not authenticate the publisher; see its production gate.
+
+## Independent build and deployment
+
+Each executable package can be built with `cargo build --release -p <package>`. Updating the Tasker executable does not require rebuilding or replacing `runner.exe`; the two remain separate processes. The shared `crm_tool` library is rebuilt only as a dependency of the selected package.

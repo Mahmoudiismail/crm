@@ -49,6 +49,8 @@ fn test_validate_config_duplicate_app_id() {
         name: "App 1".to_string(),
         executable_path: "app.exe".to_string(),
         config_path: "app_config.json".to_string(),
+        plugin_api_version: None,
+
         allow_concurrent_tasks: false,
     };
     config.registered_apps = vec![app.clone(), app.clone()];
@@ -163,4 +165,38 @@ fn test_validate_config_invalid_external_app_reference() {
     } else {
         panic!("Expected Validation error");
     }
+}
+
+#[test]
+fn legacy_registered_app_config_defaults_to_unversioned() {
+    let app: RegisteredApp = serde_json::from_value(serde_json::json!({
+        "id": "legacy",
+        "name": "Legacy app",
+        "executable_path": "legacy.exe",
+        "config_path": "legacy.json",
+        "allow_concurrent_tasks": false
+    }))
+    .unwrap();
+
+    assert_eq!(app.plugin_api_version, None);
+    let serialized = serde_json::to_value(app).unwrap();
+    assert!(serialized.get("plugin_api_version").is_none());
+}
+
+#[test]
+fn validate_config_rejects_unsupported_registered_plugin_api_version() {
+    let mut config = RunnerConfig::default();
+    config.registered_apps.push(RegisteredApp {
+        id: "future_plugin".to_string(),
+        name: "Future plugin".to_string(),
+        executable_path: "future.exe".to_string(),
+        config_path: String::new(),
+        plugin_api_version: Some(2),
+        allow_concurrent_tasks: false,
+    });
+
+    let error = validate_config(&config).unwrap_err();
+    assert!(
+        matches!(error, EngineError::Validation(message) if message.contains("Runner supports 1"))
+    );
 }

@@ -7,7 +7,7 @@ This document provides the essential structural and architectural blueprint requ
 The system is a decentralized, multi-binary orchestration suite primarily targeting Windows.
 
 - **The `runner` daemon** is the central nervous system. It schedules tasks, exposes a local HTTP GUI, and orchestrates other executables via `tokio::process`.
-- **Worker Apps (`crm`, `yasweb`, `tasker`)** are independent CLI tools that perform specific domain tasks (fetching data, web scraping, processing CSVs).
+- **Worker Apps (`crm`, `yasweb`, `tasker`)** are independent Cargo packages and OS processes that perform specific domain tasks (fetching data, web scraping, processing CSVs).
 - **The Orchestration Contract (`AppManifest`)**: Instead of hardcoding how to run every worker, the `runner` dynamically registers them. If executed with `--manifest`, any worker app must print a JSON schema (the `AppManifest`) describing its required/optional CLI arguments and immediately exit. The `runner` uses this schema to generate GUI forms and spawn the worker with the correct parameters.
 
 ## 2. Core Data Models
@@ -19,6 +19,7 @@ Used by all worker bins to self-report their capabilities to the runner.
 
 ```rust
 pub struct AppManifest {
+    pub plugin_api_version: Option<u32>, // process-plugin contract; currently 1 for first-party workers
     pub name: String,
     pub description: String,
     pub arguments: Vec<AppArg>,
@@ -82,7 +83,7 @@ pub struct AppConfig {
 }
 ```
 
-### Yasweb Config (`src/bin/yasweb.rs`)
+### Yasweb Config (`apps/yasweb/src/main.rs`)
 Used for browser automation state (`yasweb_config.json`).
 
 ```rust
@@ -158,3 +159,7 @@ pub struct CsvAnalysisConfig {
 - **Non-blocking logging:** Logs must be written locally next to the executable, and log flush guards (`WorkerGuard`) must be held in `main()` until graceful termination.
 - **Error Handling:** Avoid `unwrap()`. Bubble errors up to `main()` using `anyhow::Result` to ensure logging has time to flush.
 - **Port Conflicts:** During test suites or concurrent execution, bind to ephemeral port `0` to prevent collisions.
+
+## 4. Workspace and process plugin build model
+
+The repository is a Cargo workspace. `crm_tool` contains the shared implementation library and each executable package lives under `apps/<name>/`. Build one independently with `cargo build --release -p runner`, `-p crm`, `-p tasker`, `-p yasweb`, or `-p crm_updater`. The process-plugin API version is independent of Cargo package versioning; Runner supervises worker EXEs through the existing process lifecycle and `AppManifest` contract.

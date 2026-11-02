@@ -1,6 +1,6 @@
 # Runner Scheduler and System Tray
 
-Primary entry points: src/bin/runner.rs, with implementation under src/runner/.
+Primary entry points: apps/runner/src/main.rs, with implementation under src/runner/.
 
 ## Startup
 

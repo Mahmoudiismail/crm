@@ -4,7 +4,7 @@ All applications manage their own specific configuration files but work in tande
 
 ## `runner_config.json`
 
-This file controls the GUI, global timing, and task scheduling. The following JSON is illustrative; comments are explanatory and must be removed before saving it as strict JSON. It has a `registered_apps` array that manages dynamically registered `AppManifest` applications.
+This file controls the GUI, global timing, task scheduling, and process-plugin registry. The `registered_apps` array is the explicit registry for managed first-party workers and arbitrary external executables. Each entry retains its existing `id`, executable path, config path, and concurrency policy; no migration is required. The optional `plugin_api_version` field opts an entry into strict process-plugin compatibility checks.
 
 ```json
 {
@@ -18,7 +18,8 @@ This file controls the GUI, global timing, and task scheduling. The following JS
       "id": "my_crm",
       "name": "Local CRM Tool",
       "executable_path": "crm.exe",
-      "config_path": "config.json"
+      "config_path": "config.json",
+      "plugin_api_version": 1
     }
   ],
   "tasks": [
@@ -96,3 +97,7 @@ Specific to the `crm_open_sohail` task. Inherits all fields from `DashboardUpdat
 
 - **Loopback Enforcement**: Runner GUI binds to `127.0.0.1` (localhost loopback). Binding to non-loopback `gui_host` addresses (such as `0.0.0.0` or local network interfaces) without protection is rejected on startup to prevent unauthenticated remote control.
 - **HTTP GET Safety**: State-changing operations (`/create`, `/update/...`, `/delete/...`, `/run/...`, `/enable/...`, `/disable/...`, `/run-all`, `/working-hours/create`, `/apps/create`, etc.) strictly require `POST` requests. `GET` requests to state-changing endpoints are rejected with `HTTP 405 Method Not Allowed`.
+
+### Process plugin compatibility
+
+CRM, Tasker, and Yasweb are first-party process plugins. Their `--manifest` JSON includes `plugin_api_version: 1`. When a registered app sets `plugin_api_version` (currently `1` for first-party workers), Runner requires the executable to return a valid `--manifest` with the matching version before launch. If the field is absent, Runner does not probe the executable and preserves legacy external-app behavior. Existing configs therefore remain compatible; add `plugin_api_version: 1` to managed first-party worker entries to enable enforcement. The registry remains explicit in `runner_config.json`; placing an executable on disk does not silently register or execute it.

@@ -199,6 +199,7 @@ fn get_manifest(config_path: Option<PathBuf>) -> AppManifest {
     }
 
     AppManifest {
+        plugin_api_version: Some(crm_tool::manifest::PROCESS_PLUGIN_API_VERSION),
         name: "Yasweb Automation Engine".to_string(),
         description: "Executes headless browser automation for web reporting.".to_string(),
         arguments,

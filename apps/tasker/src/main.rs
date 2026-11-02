@@ -319,6 +319,7 @@ pub fn run_app(options: TaskerCliOptions) -> Result<()> {
 
 fn get_manifest() -> AppManifest {
     AppManifest {
+        plugin_api_version: Some(crm_tool::manifest::PROCESS_PLUGIN_API_VERSION),
         name: "Tasker Reporting Tool".to_string(),
         description:
             "Executes configured background workflows such as CSV analysis and email dispatching."

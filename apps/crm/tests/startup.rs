@@ -61,18 +61,5 @@ fn test_crm_manifest_intercept() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("\"name\":"));
     assert!(stdout.contains("\"arguments\":"));
-}
-
-#[test]
-fn test_runner_manifest_intercept() {
-    let output = Command::new(env!("CARGO_BIN_EXE_runner"))
-        .arg("--manifest")
-        .output()
-        .expect("Failed to execute command");
-
-    // The runner itself shouldn't provide a manifest because it's the orchestrator.
-    // However, it accepts `--manifest` based on previous logic (usually we expect an error or it ignores it).
-    // Let's assert based on actual behavior.
-    assert!(!output.status.success() || output.status.success());
-    // In many implementations it either returns help or errors. This is just a sanity check.
+    assert!(stdout.contains("\"plugin_api_version\":1"));
 }

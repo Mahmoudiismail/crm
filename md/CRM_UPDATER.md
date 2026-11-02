@@ -1,6 +1,6 @@
 # CRM Updater
 
-`crm_updater` is a standalone binary in the CRM Tool Cargo package designed to automate application updates and move reports, logs, and diagnostics into local collections.
+`crm_updater` is a standalone executable in the `crm_updater` Cargo workspace package designed to automate application updates and move reports, logs, and diagnostics into local collections.
 
 ## Features
 
@@ -84,7 +84,7 @@ Granular execution can be triggered using the following CLI flags:
 
 Example:
 ```bash
-cargo run --bin crm_updater -- --logs-only
+cargo run -p crm_updater -- --logs-only
 ```
 
 ## PowerShell Script Management

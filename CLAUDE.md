@@ -4,10 +4,10 @@ This document guides Claude Code agents working on the CRM Tool project.
 
 ## Project Overview
 
-The **CRM Tool** is a Rust-based application consisting of two separate executables:
+The **CRM Tool** is a Rust Cargo workspace with a shared `crm_tool` implementation library and five independent executable packages:
 
-- **runner** (`src/bin/runner.rs`): A tray-based scheduler with GUI dashboard that runs tasks and manages the scheduler
-- **crm** (`src/bin/crm.rs`): A one-shot executable that fetches CRM reports via AWS Cognito authentication and downloads CSV files
+- **runner** (`apps/runner/src/main.rs`): A tray-based scheduler with GUI dashboard that runs tasks and manages the scheduler
+- **crm** (`apps/crm/src/main.rs`): A one-shot executable that fetches CRM reports via AWS Cognito authentication and downloads CSV files
 
 Both applications are optimized for Windows deployment (cross-compiled from Linux) and use Tokio async runtime for concurrent operations.
 
@@ -16,9 +16,12 @@ Both applications are optimized for Windows deployment (cross-compiled from Linu
 ### Executables
 
 ```
-src/bin/
-├── runner.rs - Tray app + scheduler + GUI server
-└── crm.rs    - One-shot CRM fetch/download
+apps/
+├── runner/src/main.rs - Tray app + scheduler + GUI server
+├── crm/src/main.rs - One-shot CRM fetch/download
+├── tasker/src/main.rs - Operational task processor
+├── yasweb/src/main.rs - Browser automation worker
+└── crm_updater/src/main.rs - Detached updater utility
 ```
 
 ### Shared Library Modules
@@ -101,8 +104,8 @@ When you modify a file, you **MUST** update these corresponding documentation fi
 
 | Code File Modified | Documentation Files That MUST Be Updated |
 |-------------------|------------------------------------------|
-| `src/bin/runner.rs` | `APPLICATION_SUMMARY.md`, `ARCHITECTURE.md`, `SCHEDULER_TRAY.md`, `OPERATIONS.md`, `BUILD_AND_RUN.md` |
-| `src/bin/crm.rs` | `APPLICATION_SUMMARY.md`, `ARCHITECTURE.md`, `OPERATIONS.md`, `BUILD_AND_RUN.md` |
+| `apps/runner/src/main.rs` | `APPLICATION_SUMMARY.md`, `ARCHITECTURE.md`, `SCHEDULER_TRAY.md`, `OPERATIONS.md`, `BUILD_AND_RUN.md` |
+| `apps/crm/src/main.rs` | `APPLICATION_SUMMARY.md`, `ARCHITECTURE.md`, `OPERATIONS.md`, `BUILD_AND_RUN.md` |
 | `src/lib.rs` | `APPLICATION_SUMMARY.md`, `ARCHITECTURE.md` |
 | `src/runner/config.rs` | `APPLICATION_SUMMARY.md`, `ARCHITECTURE.md`, `CONFIG.md`, `SCHEDULER_TRAY.md`, `OPERATIONS.md` |
 | `src/runner/engine.rs` | `APPLICATION_SUMMARY.md`, `ARCHITECTURE.md`, `CONFIG.md`, `SCHEDULER_TRAY.md`, `OPERATIONS.md` |
@@ -137,8 +140,8 @@ A change is **INCOMPLETE** if behavior changed and no matching doc update exists
 - Document defaults, edge cases, and failure modes  
 - Keep examples runnable and aligned with current CLI
 - Update version numbers, timestamps, and examples
-   - `src/bin/runner.rs` → `APPLICATION_SUMMARY.md`, `ARCHITECTURE.md`, `SCHEDULER_TRAY.md`, `OPERATIONS.md`, `BUILD_AND_RUN.md`
-   - `src/bin/crm.rs` → `APPLICATION_SUMMARY.md`, `ARCHITECTURE.md`, `OPERATIONS.md`, `BUILD_AND_RUN.md`
+   - `apps/runner/src/main.rs` → `APPLICATION_SUMMARY.md`, `ARCHITECTURE.md`, `SCHEDULER_TRAY.md`, `OPERATIONS.md`, `BUILD_AND_RUN.md`
+   - `apps/crm/src/main.rs` → `APPLICATION_SUMMARY.md`, `ARCHITECTURE.md`, `OPERATIONS.md`, `BUILD_AND_RUN.md`
    - `src/lib.rs` → `APPLICATION_SUMMARY.md`, `ARCHITECTURE.md`
    - `src/runner/*` → `APPLICATION_SUMMARY.md`, `ARCHITECTURE.md`, `CONFIG.md`, `SCHEDULER_TRAY.md`, `OPERATIONS.md`
    - `src/crm/*` → `ARCHITECTURE.md`, `CONFIG.md`, `AUTH_FLOW.md`, `FETCHER.md`, `DOWNLOADER.md`, `OPERATIONS.md`
@@ -178,33 +181,36 @@ If any answer is `no`, update docs before finalizing the change.
 
 Development build:
 ```bash
-cargo check
-cargo test
-cargo build
+cargo check --workspace
+cargo test --workspace
+cargo build --workspace
 ```
 
 Release build (optimized):
 ```bash
-cargo build --release --bin runner
-cargo build --release --bin crm
+cargo build --release -p runner
+cargo build --release -p crm
+cargo build --release -p tasker
+cargo build --release -p yasweb
+cargo build --release -p crm_updater
 ```
 
 Windows cross-compile:
 ```bash
 rustup target add x86_64-pc-windows-gnu
-cargo build --release --target x86_64-pc-windows-gnu --bin runner
-cargo build --release --target x86_64-pc-windows-gnu --bin crm
+cargo build --release --target x86_64-pc-windows-gnu -p runner
+cargo build --release --target x86_64-pc-windows-gnu -p crm
 ```
 
 ### Run Commands
 
 ```bash
 # Run tray scheduler + GUI
-cargo run --bin runner
+cargo run -p runner
 
 # Run one-shot CRM fetch
-cargo run --bin crm -- --report all
-cargo run --bin crm -- --config custom_config.json --report tickets
+cargo run -p crm -- --report all
+cargo run -p crm -- --config custom_config.json --report tickets
 ```
 
 ### Test Tasks

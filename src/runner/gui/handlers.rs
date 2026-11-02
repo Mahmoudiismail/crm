@@ -587,6 +587,8 @@ pub(crate) async fn handle_apps_create(
             .get("config_path")
             .map(|s| s.trim().to_string())
             .unwrap_or_default(),
+        plugin_api_version: None,
+
         allow_concurrent_tasks: crate::runner::gui::forms::parse_checkbox(
             values,
             "allow_concurrent_tasks",
@@ -643,6 +645,8 @@ pub(crate) async fn handle_apps_update(
             .get("config_path")
             .map(|s| s.trim().to_string())
             .unwrap_or_default(),
+        plugin_api_version: None,
+
         allow_concurrent_tasks: crate::runner::gui::forms::parse_checkbox(
             values,
             "allow_concurrent_tasks",

@@ -27,8 +27,8 @@ docker compose exec dev bash
 Run builds/tests inside:
 
 ```bash
-cargo check
-cargo test
+cargo check --workspace
+cargo test --workspace
 ```
 
 ## One-shot Windows Build
@@ -70,10 +70,10 @@ Docker and local release builds use the same `Cargo.toml` release profile:
 - stripped symbols,
 - aborting panics.
 
-The scripted Windows build still builds both executables. GitHub release publishing is split into one workflow for `runner` and one workflow for `crm`.
+The workspace can build each executable package independently or build all members together. GitHub release publishing uses the Release Binaries workflow and supports selecting any of the five executable packages.
 
 ## Common Issues
 
 1. **Cache stale**: rebuild image with `--no-cache`.
 2. **Permission mismatch**: repair ownership on host after container writes.
-3. **Missing output**: verify `cargo build --release --target x86_64-pc-windows-gnu` succeeded.
+3. **Missing output**: verify `cargo build --workspace --release --target x86_64-pc-windows-gnu` succeeded.
