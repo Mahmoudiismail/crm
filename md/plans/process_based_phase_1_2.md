@@ -27,12 +27,12 @@ Move application-owned implementation out of the root `crm_tool` library and est
 
 | Package | Owns |
 | --- | --- |
-| `crm_tool` (shared root package) | Manifest contract and utilities genuinely used by multiple applications |
+| `crm_tool` (shared root package) | Manifest contract, genuinely shared utilities, and the generic managed-script engine (no app-specific script catalog) |
 | `apps/crm` | CRM authentication, configuration, fetcher, downloader, and CRM CLI |
-| `apps/tasker` | Tasker configuration, report/task implementations, email, and Tasker script management |
+| `apps/tasker` | Tasker configuration, report/task implementations, email, and the Tasker-owned PowerShell template catalog |
 | `apps/yasweb` | Yasweb configuration and browser automation |
 | `apps/runner` | Runner configuration, scheduler, process execution, and GUI |
-| `apps/crm_updater` | Updater configuration, update pipeline, diagnostics, and updater-specific script management |
+| `apps/crm_updater` | Updater configuration, update pipeline, diagnostics, and the Updater-owned PowerShell template catalog |
 
 The shared package must not re-export or depend on application-owned modules. An application may depend on the shared package, but no application package may depend on another executable package merely to reuse implementation.
 
@@ -41,7 +41,7 @@ The shared package must not re-export or depend on application-owned modules. An
 1. Inventory all source files, tests, benchmarks, `include_str!` paths, module references, and direct/transitive dependency use.
 2. Move each application module and its unit tests into the owning app package; add a package library target where needed so the existing binary remains a thin entry point.
 3. Reduce the root library to the shared manifest and utility surface. Keep compatibility only where required by actual external consumers; do not retain application modules as forwarding shims.
-4. Split Tasker and Updater script management. Updater must install and execute only updater-owned scripts; Tasker retains its own built-in scripts.
+4. Keep the generic ScriptManager engine in shared core, but move each built-in PowerShell template catalog into its owning app. Updater installs only updater-owned scripts; Tasker installs only Tasker-owned scripts.
 5. Reassign root integration tests to package-local tests or rewrite the remaining cross-process tests to exercise public CLI/manifest behavior.
 6. Prune root and app Cargo dependencies based on source use and package-specific `cargo tree` / dependency audit results. Do not remove a dependency solely because it is not referenced by the binary entry-point file.
 7. Update the architecture, build, dependency, and application documentation in `md/`.
