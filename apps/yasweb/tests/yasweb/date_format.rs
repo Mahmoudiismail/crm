@@ -1,4 +1,4 @@
-use crm_tool::yasweb::config::YaswebConfig;
+use yasweb::yasweb::config::YaswebConfig;
 
 #[test]
 fn test_yasweb_config_deserialization_handles_string_and_struct() {

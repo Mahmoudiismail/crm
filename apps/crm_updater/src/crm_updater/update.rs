@@ -129,7 +129,7 @@ fn download_update_zip_from_drafts(downloads_dir: &Path) -> Result<Option<PathBu
     let result_path = result_file.path().to_path_buf();
     drop(result_file);
 
-    let run_result = crate::tasker::script_manager::ScriptManager::new().run_script_with_args(
+    let run_result = crm_tool::tasker::script_manager::ScriptManager::new().run_script_with_args(
         "CRM Updater",
         "scan_update_drafts.ps1",
         SCAN_DRAFTS_TEMPLATE,
@@ -200,7 +200,7 @@ fn extract_zip(zip_path: &Path, extract_dir: &Path, password: &[u8]) -> Result<V
 
 fn unblock_file(path: &Path) {
     let path_string = path.to_string_lossy().into_owned();
-    let result = crate::tasker::script_manager::ScriptManager::new().run_script_with_args(
+    let result = crm_tool::tasker::script_manager::ScriptManager::new().run_script_with_args(
         "CRM Updater",
         "unblock_file.ps1",
         include_str!("scripts/unblock_file.ps1"),
@@ -302,7 +302,7 @@ fn generate_update_script(
 
     let payload_json = serde_json::to_string(&payload)?;
 
-    let script_path = crate::tasker::script_manager::ScriptManager::new()
+    let script_path = crm_tool::tasker::script_manager::ScriptManager::new()
         .get_or_create_script("CRM Updater", "apply_update.ps1", UPDATE_SCRIPT_TEMPLATE)
         .context("Failed to prepare detached updater script through ScriptManager")?;
 
@@ -332,7 +332,7 @@ fn execute_detached_powershell(script_path: &Path, args: &[(String, String)]) ->
         .iter()
         .map(|(key, value)| (key.as_str(), value.as_str()))
         .collect();
-    crate::tasker::script_manager::ScriptManager::new()
+    crm_tool::tasker::script_manager::ScriptManager::new()
         .execute_script_detached_with_args(script_path, &borrowed_args)
 }
 

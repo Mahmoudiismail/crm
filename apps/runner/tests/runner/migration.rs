@@ -1,4 +1,4 @@
-use crm_tool::runner::config::{ActionSpec, ExecutionMode, RunnerTask};
+use runner::runner::config::{ActionSpec, ExecutionMode, RunnerTask};
 
 #[test]
 fn test_legacy_configuration_migration() {

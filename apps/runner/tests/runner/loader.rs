@@ -1,5 +1,5 @@
 use chrono::Utc;
-use crm_tool::runner::config::models::*;
+use runner::runner::config::models::*;
 use std::fs;
 
 #[test]
@@ -136,11 +136,11 @@ fn test_empty_schedule_is_manual_persistence() {
     };
 
     let legacy_val = serde_json::to_value(
-        crm_tool::runner::config::migration::RunnerTaskLegacy::from(task.clone()),
+        runner::runner::config::migration::RunnerTaskLegacy::from(task.clone()),
     )
     .unwrap();
     let loaded: RunnerTask =
-        serde_json::from_value::<crm_tool::runner::config::migration::RunnerTaskLegacy>(legacy_val)
+        serde_json::from_value::<runner::runner::config::migration::RunnerTaskLegacy>(legacy_val)
             .unwrap()
             .into();
 

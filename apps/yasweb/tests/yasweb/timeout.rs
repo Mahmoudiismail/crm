@@ -1,4 +1,4 @@
-use crm_tool::yasweb::browser::reports::generate_step6_js;
+use yasweb::yasweb::browser::reports::generate_step6_js;
 
 #[test]
 fn test_generate_step6_js_normal_timeout() {
@@ -37,7 +37,7 @@ fn test_download_wait_uses_correct_duration() {
     assert_eq!(timeout_duration.as_secs(), 360000);
 }
 
-use crm_tool::yasweb::browser::reports::generate_mis_reports_wait_js;
+use yasweb::yasweb::browser::reports::generate_mis_reports_wait_js;
 
 #[test]
 fn test_generate_mis_reports_wait_js_normal_timeout() {

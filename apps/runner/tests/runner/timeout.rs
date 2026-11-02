@@ -1,5 +1,5 @@
-use crm_tool::runner::engine::logging::TaskLogger;
-use crm_tool::runner::engine::process::{run_process, ProcessContext};
+use runner::runner::engine::logging::TaskLogger;
+use runner::runner::engine::process::{run_process, ProcessContext};
 use std::time::Duration;
 
 #[tokio::test]

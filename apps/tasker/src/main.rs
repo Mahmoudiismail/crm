@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use crm_tool::manifest::{AppArg, AppManifest, ArgType};
-use crm_tool::tasker::config::{TaskConfig, TaskerConfig};
-use crm_tool::tasker::{csv_task, dashboard_updater, opd_task, sat_figures, users_export};
+use tasker::tasker::config::{TaskConfig, TaskerConfig};
+use tasker::tasker::{csv_task, dashboard_updater, opd_task, sat_figures, users_export};
 use crm_tool::utils::{
     executable_dir, intercept_manifest, parse_log_level, setup_logging_with_levels, InterceptResult,
 };
@@ -267,7 +267,7 @@ pub fn run_app(options: TaskerCliOptions) -> Result<()> {
             }
             TaskConfig::CrmOpenSohail(sohail_config) => {
                 tracing::trace!("Executing CrmOpenSohail for task #{}.", task_idx);
-                if let Err(e) = crm_tool::tasker::crm_open_sohail::run(sohail_config) {
+                if let Err(e) = tasker::tasker::crm_open_sohail::run(sohail_config) {
                     error!("Error running CrmOpenSohail task #{}: {:?}", task_idx, e);
                     anyhow::bail!("CrmOpenSohail task {} failed: {}", task_idx, e);
                 }
@@ -275,7 +275,7 @@ pub fn run_app(options: TaskerCliOptions) -> Result<()> {
             }
             TaskConfig::DepartmentSplit(split_config) => {
                 tracing::trace!("Executing DepartmentSplit for task #{}.", task_idx);
-                if let Err(e) = crm_tool::tasker::department_split::run(split_config) {
+                if let Err(e) = tasker::tasker::department_split::run(split_config) {
                     error!("Error running DepartmentSplit task #{}: {:?}", task_idx, e);
                     anyhow::bail!("DepartmentSplit task {} failed: {}", task_idx, e);
                 }
@@ -365,7 +365,7 @@ fn main() -> Result<()> {
         parse_log_level(&file_lvl)?,
     )?;
 
-    crm_tool::tasker::script_manager::ScriptManager::new().install_builtin_scripts()?;
+    tasker::tasker::script_manager::ScriptManager::new().install_builtin_scripts()?;
 
     if let Err(e) = run_app(options) {
         error!("Fatal application error: {:#}", e);

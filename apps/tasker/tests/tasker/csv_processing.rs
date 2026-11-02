@@ -196,7 +196,7 @@ fn test_csv_processing_header_only() {
 }
 
 use crate::support::tasker::csv::setup_test_dataset;
-use crm_tool::tasker::config::CsvAnalysisConfig;
+use tasker::tasker::config::CsvAnalysisConfig;
 use std::io::Write;
 use tempfile::NamedTempFile;
 
@@ -222,7 +222,7 @@ fn test_real_dataset_mapping() {
         email_config: None,
     };
 
-    crm_tool::tasker::csv_task::run(&config, false, false).unwrap();
+    tasker::tasker::csv_task::run(&config, false, false).unwrap();
 
     let out_content = std::fs::read_to_string(dataset.output_file.path()).unwrap();
     let mut rdr = crm_tool::utils::build_csv_reader_from_reader(out_content.as_bytes());
@@ -233,15 +233,15 @@ fn test_real_dataset_mapping() {
 #[test]
 fn test_task1_generate_results_and_html_email() {
     let dataset = setup_test_dataset();
-    let config: crm_tool::tasker::config::TaskerConfig =
+    let config: tasker::tasker::config::TaskerConfig =
         serde_json::from_str(&dataset.config_json).unwrap();
     let mut csv_config = match config.tasks.first().unwrap() {
-        crm_tool::tasker::config::TaskConfig::CsvAnalysis(c) => c.clone(),
+        tasker::tasker::config::TaskConfig::CsvAnalysis(c) => c.clone(),
         _ => panic!("Expected CsvAnalysis task"),
     };
 
     // Let's add an explicit category exception to match the test assertion
-    csv_config.category_exceptions = Some(vec![crm_tool::tasker::config::CategoryException {
+    csv_config.category_exceptions = Some(vec![tasker::tasker::config::CategoryException {
         category: "Incomplete Reservation".to_string(),
         branch: None,
         team: Some("Incomplete Reservation".to_string()),
@@ -271,7 +271,7 @@ fn test_task1_generate_results_and_html_email() {
     email_config.send_emails = Some(false);
     csv_config.email_config = Some(email_config);
 
-    crm_tool::tasker::csv_task::run(&csv_config, false, false).unwrap();
+    tasker::tasker::csv_task::run(&csv_config, false, false).unwrap();
 
     let out_content = std::fs::read_to_string(dataset.output_file.path()).unwrap();
     let mut rdr = crm_tool::utils::build_csv_reader_from_reader(out_content.as_bytes());
@@ -301,10 +301,10 @@ fn test_task1_generate_results_and_html_email() {
 #[test]
 fn test_task1_only_call_center() {
     let dataset = setup_test_dataset();
-    let config: crm_tool::tasker::config::TaskerConfig =
+    let config: tasker::tasker::config::TaskerConfig =
         serde_json::from_str(&dataset.config_json).unwrap();
     let mut csv_config = match config.tasks.first().unwrap() {
-        crm_tool::tasker::config::TaskConfig::CsvAnalysis(c) => c.clone(),
+        tasker::tasker::config::TaskConfig::CsvAnalysis(c) => c.clone(),
         _ => panic!("Expected CsvAnalysis task"),
     };
 
@@ -331,7 +331,7 @@ fn test_task1_only_call_center() {
     email_config.send_emails = Some(false);
     csv_config.email_config = Some(email_config);
 
-    crm_tool::tasker::csv_task::run(&csv_config, true, false).unwrap();
+    tasker::tasker::csv_task::run(&csv_config, true, false).unwrap();
 
     let lead_result_path = dataset.download_dir.path().join("lead_result.csv");
     assert!(
@@ -414,10 +414,10 @@ fn test_task1_only_call_center() {
 #[test]
 fn test_task1_send_exceptions() {
     let dataset = setup_test_dataset();
-    let config: crm_tool::tasker::config::TaskerConfig =
+    let config: tasker::tasker::config::TaskerConfig =
         serde_json::from_str(&dataset.config_json).unwrap();
     let mut csv_config = match config.tasks.first().unwrap() {
-        crm_tool::tasker::config::TaskConfig::CsvAnalysis(c) => c.clone(),
+        tasker::tasker::config::TaskConfig::CsvAnalysis(c) => c.clone(),
         _ => panic!("Expected CsvAnalysis task"),
     };
 
@@ -444,7 +444,7 @@ fn test_task1_send_exceptions() {
     email_config.send_emails = Some(false);
     csv_config.email_config = Some(email_config);
 
-    crm_tool::tasker::csv_task::run(&csv_config, false, true).unwrap();
+    tasker::tasker::csv_task::run(&csv_config, false, true).unwrap();
 
     let out_content = std::fs::read_to_string(dataset.output_file.path()).unwrap();
     let mut rdr = crm_tool::utils::build_csv_reader_from_reader(out_content.as_bytes());
@@ -541,7 +541,7 @@ fn test_csv_analysis_deduplication() {
         email_config: None,
     };
 
-    crm_tool::tasker::csv_task::run(&config, false, false).unwrap();
+    tasker::tasker::csv_task::run(&config, false, false).unwrap();
 
     let out_content = std::fs::read_to_string(output_file.path()).unwrap();
     let mut rdr = crm_tool::utils::build_csv_reader_from_reader(out_content.as_bytes());
@@ -601,7 +601,7 @@ fn test_csv_analysis_mapping() {
         email_config: None,
     };
 
-    crm_tool::tasker::csv_task::run(&config, false, false).unwrap();
+    tasker::tasker::csv_task::run(&config, false, false).unwrap();
 
     let output_content = std::fs::read_to_string(config.output_file).unwrap();
     assert!(output_content.contains("Ticket Id"));

@@ -6,7 +6,7 @@ use crm_tool::utils::{load_or_create_config, parse_log_level, setup_logging_with
 use std::path::PathBuf;
 use tracing::info;
 
-use crm_tool::crm_updater::config::{ReplacementMapEntry, UpdaterConfig};
+use crm_updater::crm_updater::config::{ReplacementMapEntry, UpdaterConfig};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -110,14 +110,14 @@ fn main() -> Result<()> {
     let run_all = !args.update_only && !args.logs_only;
 
     if run_all || args.logs_only {
-        if let Err(e) = crm_tool::crm_updater::logs::process_and_collect_logs(&config) {
+        if let Err(e) = crm_updater::crm_updater::logs::process_and_collect_logs(&config) {
             tracing::error!("Logs pipeline failed: {}", e);
             return Err(e);
         }
     }
 
     if run_all || args.update_only {
-        if let Err(e) = crm_tool::crm_updater::update::process_update_pipeline(&config) {
+        if let Err(e) = crm_updater::crm_updater::update::process_update_pipeline(&config) {
             tracing::error!("Update pipeline failed: {}", e);
             return Err(e);
         }

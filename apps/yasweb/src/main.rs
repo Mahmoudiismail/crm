@@ -10,8 +10,8 @@ use clap::Parser;
 use crm_tool::utils::{
     executable_dir, intercept_manifest, parse_log_level, setup_logging_with_levels, InterceptResult,
 };
-use crm_tool::yasweb::browser::run_browser_tab;
-use crm_tool::yasweb::config::{DiscoveredReportFilters, ReportConfig, YaswebConfig};
+use yasweb::yasweb::browser::run_browser_tab;
+use yasweb::yasweb::config::{DiscoveredReportFilters, ReportConfig, YaswebConfig};
 use tokio::fs;
 use tracing::{error, info};
 

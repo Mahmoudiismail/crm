@@ -1,7 +1,7 @@
 // Added as required by test mandate for bugfixes
 #[cfg(test)]
 mod tests {
-    use crm_tool::runner::config::{ExecutionMode, TaskStep};
+    use runner::runner::config::{ExecutionMode, TaskStep};
     use std::collections::HashMap;
 
     #[test]

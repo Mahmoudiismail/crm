@@ -1,4 +1,4 @@
-use crm_tool::runner::config::{RunnerConfig, WorkingHours, WorkingHoursProfile};
+use runner::runner::config::{RunnerConfig, WorkingHours, WorkingHoursProfile};
 use std::collections::HashMap;
 
 #[test]

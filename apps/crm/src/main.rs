@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::Parser;
-use crm_tool::crm;
+use crm::crm;
 use crm_tool::manifest::{AppArg, AppManifest, ArgType};
 use crm_tool::utils::{
     executable_dir, intercept_manifest, parse_log_level, setup_logging_with_levels, InterceptResult,
@@ -42,7 +42,7 @@ async fn run_crm_startup(options: CrmCliOptions) -> Result<()> {
 
     // Load config to grab logging levels early
     let config_path_str = config_path.to_string_lossy();
-    let mut config = crm_tool::crm::config::AppConfig::load(&config_path_str)
+    let mut config = crm::crm::config::AppConfig::load(&config_path_str)
         .context("Failed to load application configuration")?;
 
     config

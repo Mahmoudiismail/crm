@@ -1,9 +1,9 @@
-use crm_tool::runner::config::{
+use runner::runner::config::{
     ActionSpec, ExecutionMode, ExternalAppSpec, RegisteredApp, Repetition, RunnerConfig,
     RunnerTask, ShellCommandSpec, TaskStep,
 };
-use crm_tool::runner::engine::errors::EngineError;
-use crm_tool::runner::engine::validation::validate_config;
+use runner::runner::engine::errors::EngineError;
+use runner::runner::engine::validation::validate_config;
 
 #[test]
 fn test_validate_config_duplicate_task_id() {
@@ -134,7 +134,7 @@ fn test_validate_config_invalid_external_app_reference() {
         actions: vec![ActionSpec::ExternalApp(ExternalAppSpec {
             app_id: "missing_app".to_string(),
             args: std::collections::HashMap::new(),
-            period_mode: crm_tool::runner::config::PeriodMode::Custom,
+            period_mode: runner::runner::config::PeriodMode::Custom,
             start_date: None,
             end_date: None,
             start_date_arg: None,
