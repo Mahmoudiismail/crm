@@ -119,7 +119,7 @@ jobs:
           cache-on-failure: true
 
       - name: Run clippy
-        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
 
 
@@ -199,4 +199,7 @@ jobs:
           cache-on-failure: true
 
       - name: Run tests
-        run: cargo test --workspace --all-targets --all-features
+        run: cargo test --workspace --all-targets --all-features --locked
+
+      - name: Build all process packages in release mode
+        run: cargo build --workspace --release --locked

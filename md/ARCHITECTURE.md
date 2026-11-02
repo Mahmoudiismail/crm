@@ -18,7 +18,7 @@ Shared manifest and utility contracts plus the generic managed-script engine are
 
 ### Runner
 
-Runner is the process-plugin host. It loads `registered_apps` from runner_config.json, starts the scheduler and local HTTP GUI, and on Windows provides a system-tray interface. It launches each registered executable as a separate OS process, supervises its output/timeout, and retains support for arbitrary external EXEs and shell commands. First-party process plugins expose a versioned `AppManifest`; legacy external applications without a plugin API version remain supported.
+Runner is the process-plugin host. Its package-local build script preserves the compile-time `BUILD_TIME` value after the implementation was moved out of the root crate. It loads `registered_apps` from runner_config.json, starts the scheduler and local HTTP GUI, and on Windows provides a system-tray interface. It launches each registered executable as a separate OS process, supervises its output/timeout, and retains support for arbitrary external EXEs and shell commands. First-party process plugins expose a versioned `AppManifest`; legacy external applications without a plugin API version remain supported.
 
 Runner tasks can contain multiple steps and actions. Sequential steps execute actions in order; parallel steps execute actions concurrently. Post-run steps are a separate pipeline executed after the main pipeline succeeds. Application-level locks and the execution manager coordinate admission and prevent duplicate task execution while the same task is queued or running.
 

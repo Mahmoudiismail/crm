@@ -55,7 +55,7 @@ Required before merge:
 - `cargo check --workspace --locked`
 - `cargo test --workspace --all-targets --all-features --locked`
 - `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`
-- Windows release build for all five executables.
+- `cargo build --workspace --release --locked` on Windows, covering all five executable packages.
 - Verify each package's dependency tree and ensure app packages do not depend on one another.
 - Verify `--manifest` output, CLI help, configuration path behavior, logging, and updater/Tasker script installation behavior.
 - Inspect CI results and the final PR diff; do not claim a check passed unless its actual run succeeded.

@@ -781,38 +781,19 @@ name = "crm_tool"
 version = "1.1.0"
 dependencies = [
  "anyhow",
- "base64 0.22.1",
- "calamine",
  "chrono",
- "chrono-tz",
  "criterion",
  "csv",
- "filetime",
  "fs2",
- "futures-util",
- "headless_chrome",
  "hex",
- "hmac",
  "lazy_static",
- "num-bigint",
- "open",
- "rand 0.10.3",
- "regex",
- "reqwest",
- "rust_xlsxwriter",
  "serde",
  "serde_json",
  "sha2",
  "tempfile",
- "tokio",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
- "urlencoding",
- "walkdir",
- "windows-dpapi",
- "winsafe",
- "zip",
 ]
 
 [[package]]
@@ -5136,11 +5117,25 @@ name = "crm"
 version = "1.1.0"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
+ "chrono",
  "clap",
  "crm_tool",
+ "csv",
+ "futures-util",
+ "hex",
+ "hmac",
+ "num-bigint",
+ "rand 0.10.3",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
  "tempfile",
  "tokio",
  "tracing",
+ "urlencoding",
+ "windows-dpapi",
 ]
 
 [[package]]
@@ -5148,10 +5143,15 @@ name = "crm_updater"
 version = "1.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "clap",
  "crm_tool",
+ "serde",
+ "serde_json",
  "tempfile",
  "tracing",
+ "walkdir",
+ "zip",
 ]
 
 [[package]]
@@ -5159,15 +5159,21 @@ name = "runner"
 version = "1.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "clap",
  "crm_tool",
+ "lazy_static",
  "muda",
  "open",
+ "reqwest",
+ "serde",
  "serde_json",
  "tempfile",
  "tokio",
  "tracing",
  "tray-icon",
+ "urlencoding",
+ "walkdir",
  "winit",
 ]
 
@@ -5176,11 +5182,19 @@ name = "tasker"
 version = "1.1.0"
 dependencies = [
  "anyhow",
+ "calamine",
+ "chrono",
  "clap",
  "crm_tool",
+ "csv",
+ "rand 0.10.3",
+ "regex",
+ "rust_xlsxwriter",
+ "serde",
  "serde_json",
  "tempfile",
  "tracing",
+ "walkdir",
 ]
 
 [[package]]
@@ -5188,12 +5202,15 @@ name = "yasweb"
 version = "1.1.0"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "chrono",
  "clap",
  "crm_tool",
  "fs2",
  "futures-util",
  "headless_chrome",
+ "lazy_static",
+ "serde",
  "serde_json",
  "tempfile",
  "tokio",
