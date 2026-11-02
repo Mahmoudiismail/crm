@@ -116,7 +116,7 @@ jobs:
           BUILD_ARGS=()
           EXE_FILES=()
           for bin in "${SELECTED_BINS[@]}"; do
-            BUILD_ARGS+=(--bin "$bin")
+            BUILD_ARGS+=(-p "$bin")
             EXE_FILES+=("$bin.exe")
           done
           cargo build --release "${BUILD_ARGS[@]}"

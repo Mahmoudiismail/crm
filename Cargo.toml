@@ -45,7 +45,6 @@ chrono-tz = "0.10.4"
 open = "5.3.5"
 headless_chrome = "1.0.21"
 rust_xlsxwriter = "0.101.0"
-clap = { version = "4.6.1", features = ["derive"] }
 lazy_static = "1.5.0"
 tempfile = "3.10.1"
 zip = { version = "9.0.0", features = ["aes-crypto", "deflate"] }
@@ -63,27 +62,12 @@ debug = false          # omit debug info in release artifacts
 incremental = false    # keep release builds fully optimized
 overflow-checks = false
 
-[[bin]]
-name = "yasweb"
-path = "src/bin/yasweb.rs"
 
-[[bin]]
-name = "tasker"
-path = "src/bin/tasker.rs"
 
-[[bin]]
-name = "runner"
-path = "src/bin/runner.rs"
 
-[[bin]]
-name = "crm"
-path = "src/bin/crm.rs"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-dpapi = "0.2.0"
-tray-icon = "0.24.0"
-muda = "0.19.2"
-winit = "0.30.13"
 
 [dev-dependencies]
 criterion = "0.8.2"
@@ -93,7 +77,14 @@ reqwest = { version = "0.13.4", features = ["blocking"] }
 tempfile = "3.10.1"
 
 [workspace]
-members = []
+members = [
+    "apps/runner",
+    "apps/crm",
+    "apps/tasker",
+    "apps/yasweb",
+    "apps/crm_updater",
+]
+resolver = "2"
 
 [[bench]]
 name = "csv_parsing"
@@ -103,6 +94,3 @@ harness = false
 name = "config_merging"
 harness = false
 
-[[bin]]
-name = "crm_updater"
-path = "src/bin/crm_updater.rs"

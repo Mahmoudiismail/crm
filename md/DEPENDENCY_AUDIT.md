@@ -2,6 +2,8 @@
 
 This document provides a reputation and trust audit of the primary dependencies used in the CRM Tool. All identified crates are well-established, high-reputation components of the Rust ecosystem.
 
+The Cargo workspace now keeps executable-only dependencies with their owning packages: CLI parsing is declared by each app package, and Runner-only GUI dependencies (`muda`, `tray-icon`, and `winit`) live under `apps/runner`. `crm_tool` remains the shared core library. The dependency versions listed below are historical audit snapshots, not a guarantee that every crate is a direct dependency of the root package.
+
 ## Core Infrastructure & Async Runtime
 
 | Dependency | Version | Reputation Summary |

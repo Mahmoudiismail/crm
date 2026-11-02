@@ -7,20 +7,29 @@
 - Node.js is used by CI to syntax-check JavaScript files.
 - PowerShell is used by Windows automation and CI to parse PowerShell scripts.
 
-## Cargo package and binaries
+## Cargo workspace and independent executables
 
-The repository is one Cargo package (crm_tool) with explicit binary targets; it is not a multi-package workspace. It declares five executables:
+The repository is a Cargo workspace. `crm_tool` is the shared core library; each process has an independent executable package under `apps/`:
+
+| Package | Executable | Source |
+|---|---|---|
+| `runner` | `runner.exe` | `apps/runner/src/main.rs` |
+| `crm` | `crm.exe` | `apps/crm/src/main.rs` |
+| `tasker` | `tasker.exe` | `apps/tasker/src/main.rs` |
+| `yasweb` | `yasweb.exe` | `apps/yasweb/src/main.rs` |
+| `crm_updater` | `crm_updater.exe` | `apps/crm_updater/src/main.rs` |
+
+Build all executables with `cargo build --workspace --release`, or build only the executable being changed:
 
 ```bash
-cargo build --release
-cargo build --release --bin runner
-cargo build --release --bin crm
-cargo build --release --bin yasweb
-cargo build --release --bin tasker
-cargo build --release --bin crm_updater
+cargo build --release -p runner
+cargo build --release -p crm
+cargo build --release -p tasker
+cargo build --release -p yasweb
+cargo build --release -p crm_updater
 ```
 
-Binaries are placed in target/release/.
+Each command writes the selected executable to `target/release/`; shared dependencies are compiled as needed, but unrelated executable targets are not rebuilt.
 
 ## Running
 

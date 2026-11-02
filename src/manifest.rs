@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// Current process-plugin contract supported by Runner.
+pub const PROCESS_PLUGIN_API_VERSION: u32 = 1;
+
 /// Represents an error that occurred during validation of an AppManifest.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ValidationError {
@@ -43,6 +46,9 @@ impl std::error::Error for ValidationError {}
 /// - Argument names within `arguments` must be unique and non-empty.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppManifest {
+    /// Optional process-plugin protocol version. Missing means a legacy external app.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plugin_api_version: Option<u32>,
     pub name: String,
     pub description: String,
     pub arguments: Vec<AppArg>,
@@ -160,6 +166,7 @@ mod tests {
     #[test]
     fn test_valid_manifest() {
         let manifest = AppManifest {
+            plugin_api_version: None,
             name: "Test App".to_string(),
             description: "A test application".to_string(),
             arguments: vec![
@@ -173,6 +180,7 @@ mod tests {
     #[test]
     fn test_empty_manifest_name() {
         let manifest = AppManifest {
+            plugin_api_version: None,
             name: "   ".to_string(),
             description: "A test application".to_string(),
             arguments: vec![],
@@ -188,6 +196,7 @@ mod tests {
     #[test]
     fn test_empty_arg_name() {
         let manifest = AppManifest {
+            plugin_api_version: None,
             name: "Test App".to_string(),
             description: "A test application".to_string(),
             arguments: vec![AppArg::new("   ", ArgType::String)],
@@ -204,6 +213,7 @@ mod tests {
     #[test]
     fn test_duplicate_arg_name() {
         let manifest = AppManifest {
+            plugin_api_version: None,
             name: "Test App".to_string(),
             description: "A test application".to_string(),
             arguments: vec![
@@ -228,6 +238,7 @@ mod tests {
     #[test]
     fn test_serialization_format() {
         let manifest = AppManifest {
+            plugin_api_version: None,
             name: "Test App".to_string(),
             description: "A test application".to_string(),
             arguments: vec![

@@ -4,6 +4,7 @@ use crm_tool::manifest::{AppArg, AppManifest, ArgType, ValidationError};
 fn test_manifest_integration_invalid_cases() {
     // 1. Missing name
     let manifest1 = AppManifest {
+        plugin_api_version: None,
         name: "".to_string(),
         description: "Test".to_string(),
         arguments: vec![],
@@ -15,6 +16,7 @@ fn test_manifest_integration_invalid_cases() {
 
     // 2. Duplicate argument
     let manifest2 = AppManifest {
+        plugin_api_version: None,
         name: "App".to_string(),
         description: "Test".to_string(),
         arguments: vec![
@@ -30,6 +32,7 @@ fn test_manifest_integration_invalid_cases() {
 #[test]
 fn test_manifest_integration_valid_cases() {
     let manifest = AppManifest {
+        plugin_api_version: None,
         name: "TestApp".to_string(),
         description: "My Test App".to_string(),
         arguments: vec![AppArg::new("--mode", ArgType::String).required(true)],

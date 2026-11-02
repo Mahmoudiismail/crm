@@ -1,6 +1,6 @@
 # CRM Tool
 
-A Rust-based automation suite for CRM data retrieval, browser-based reporting, scheduled execution, and operational report processing. The repository is one Cargo package (crm_tool) that builds five executable targets.
+A Rust-based automation suite for CRM data retrieval, browser-based reporting, scheduled execution, and operational report processing. The repository is a Cargo workspace. The shared `crm_tool` package contains domain implementations and shared contracts; five executable packages produce independently deployable processes.
 
 ## Applications
 
@@ -22,20 +22,20 @@ See [Architecture](./md/ARCHITECTURE.md) for component boundaries and execution 
 
 ## Build
 
-Build all five binaries:
+Build all five executables:
 
 ```bash
-cargo build --release
+cargo build --workspace --release
 ```
 
-Build a specific executable:
+Build one executable independently:
 
 ```bash
-cargo build --release --bin runner
-cargo build --release --bin crm
-cargo build --release --bin yasweb
-cargo build --release --bin tasker
-cargo build --release --bin crm_updater
+cargo build --release -p runner
+cargo build --release -p crm
+cargo build --release -p yasweb
+cargo build --release -p tasker
+cargo build --release -p crm_updater
 ```
 
 Artifacts are written to target/release/ (with .exe on Windows).
@@ -56,7 +56,7 @@ Use --help on an executable for the parser help for that build. See [CLI](./md/C
 
 ## Validation
 
-The repository is one Cargo package with explicit binary targets, not a multi-package Cargo workspace. Existing CI commands use Cargo's --workspace selector against that package.
+The repository is a multi-package Cargo workspace. The `crm_tool` package remains the shared core library and integration-test host; each executable has its own package and can be built independently.
 
 ```bash
 cargo fmt -- --check

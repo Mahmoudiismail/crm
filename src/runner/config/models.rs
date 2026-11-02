@@ -38,6 +38,8 @@ pub struct RegisteredApp {
     pub name: String,
     pub executable_path: String,
     pub config_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plugin_api_version: Option<u32>,
     #[serde(default)]
     pub allow_concurrent_tasks: bool,
 }

@@ -42,6 +42,7 @@ struct RunnerCliOptions {
 
 fn get_manifest() -> AppManifest {
     AppManifest {
+        plugin_api_version: None,
         name: "runner".to_string(),
         description: "Runner daemon".to_string(),
         arguments: vec![AppArg::new("--config", crm_tool::manifest::ArgType::String)],

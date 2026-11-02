@@ -14,6 +14,8 @@ fn create_mock_app(id: &str, concurrent: bool) -> RegisteredApp {
         name: id.to_string(),
         executable_path: "exe".to_string(),
         config_path: "cfg".to_string(),
+        plugin_api_version: None,
+
         allow_concurrent_tasks: concurrent,
     }
 }

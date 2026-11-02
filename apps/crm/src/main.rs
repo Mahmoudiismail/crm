@@ -94,6 +94,7 @@ fn resolve_config_path(config_arg: Option<&str>, base_dir: &std::path::Path) -> 
 
 fn get_manifest() -> AppManifest {
     AppManifest {
+        plugin_api_version: Some(crm_tool::manifest::PROCESS_PLUGIN_API_VERSION),
         name: "CRM One-Shot Fetcher".to_string(),
         description: "Fetches CRM data on a one-off basis.".to_string(),
         arguments: vec![

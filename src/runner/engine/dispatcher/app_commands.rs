@@ -39,6 +39,39 @@ mod tests {
     use tempfile::tempdir;
 
     #[tokio::test]
+    async fn update_registered_app_preserves_plugin_api_version() {
+        let temp_dir = tempdir().unwrap();
+        let config_path = temp_dir.path().join("runner.json");
+        let path_str = config_path.to_str().unwrap();
+
+        let mut cfg = RunnerConfig::default();
+        cfg.registered_apps.push(RegisteredApp {
+            id: "managed".to_string(),
+            name: "Managed plugin".to_string(),
+            executable_path: "plugin.exe".to_string(),
+            config_path: "plugin.json".to_string(),
+            plugin_api_version: Some(1),
+            allow_concurrent_tasks: false,
+        });
+        cfg.save(path_str).unwrap();
+
+        let edited = RegisteredApp {
+            id: "managed".to_string(),
+            name: "Renamed plugin".to_string(),
+            executable_path: "plugin.exe".to_string(),
+            config_path: "plugin.json".to_string(),
+            plugin_api_version: None,
+            allow_concurrent_tasks: true,
+        };
+        update_registered_app(path_str, edited).await.unwrap();
+
+        let loaded = RunnerConfig::load(path_str).unwrap();
+        assert_eq!(loaded.registered_apps[0].plugin_api_version, Some(1));
+        assert_eq!(loaded.registered_apps[0].name, "Renamed plugin");
+        assert!(loaded.registered_apps[0].allow_concurrent_tasks);
+    }
+
+    #[tokio::test]
     async fn test_update_nonexistent_registered_app_fails() {
         let temp_dir = tempdir().unwrap();
         let config_path = temp_dir.path().join("runner.json");
@@ -52,6 +85,8 @@ mod tests {
             name: "fake".to_string(),
             executable_path: "fake.exe".to_string(),
             config_path: "fake.json".to_string(),
+            plugin_api_version: None,
+
             allow_concurrent_tasks: false,
         };
 

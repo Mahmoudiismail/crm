@@ -1,6 +1,6 @@
 # CRM Startup Lifecycle
 
-This document describes the startup sequence and lifecycle of the `crm` application binary (`src/bin/crm.rs`).
+This document describes the startup sequence and lifecycle of the `crm` application binary (`apps/crm/src/main.rs`).
 
 ## Startup Flow
 

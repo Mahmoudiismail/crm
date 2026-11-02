@@ -5,7 +5,7 @@ Yasweb Automation (Browser Waits & Loaders): When injecting JavaScript blocks (s
 Yasweb Automation (Step Logging): JavaScript evaluations are refactored into distinct micro-steps (e.g., "Step 6 (Wait & Export)") mapping fine-grained step executions and logging back to the Rust host. This guarantees high observability inside browser interaction workflows.
 
 ## Yasweb Process Cleanup
-* To prevent headless browser instances from persisting as zombie processes in the background (especially on Windows) when tasks timeout or fail, the `browser` process `Arc<Browser>` is explicitly dropped (`drop(browser);`) immediately after `run_browser_tab()` finishes execution in `src/bin/yasweb.rs`. This relies on `headless_chrome`'s internal Drop implementation which issues process termination commands (e.g. `.kill()`).
+* To prevent headless browser instances from persisting as zombie processes in the background (especially on Windows) when tasks timeout or fail, the `browser` process `Arc<Browser>` is explicitly dropped (`drop(browser);`) immediately after `run_browser_tab()` finishes execution in `apps/yasweb/src/main.rs`. This relies on `headless_chrome`'s internal Drop implementation which issues process termination commands (e.g. `.kill()`).
 Yasweb Automation (Error Handling): JavaScript micro-step evaluations must return a valid JSON string with an explicit `status` of `SUCCESS` or `ERROR`. Invalid JSON, a missing/invalid status, and unsupported status values must return a Rust `Err`; `ERROR` must also return `Err` through `evaluate_automation_step` so browser logic cannot silently continue on a broken DOM state.
 
 

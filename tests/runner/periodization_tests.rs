@@ -630,6 +630,8 @@ async fn test_concurrent_period_execution() {
         name: "Concurrent App".to_string(),
         executable_path: "echo".to_string(),
         config_path: String::new(),
+        plugin_api_version: None,
+
         allow_concurrent_tasks: true,
     };
 
@@ -737,6 +739,8 @@ async fn test_concurrent_period_execution_overlapping() {
         name: "Concurrent App".to_string(),
         executable_path: "python3".to_string(),
         config_path: String::new(),
+        plugin_api_version: None,
+
         allow_concurrent_tasks: true,
     };
 
@@ -856,6 +860,8 @@ async fn test_sequential_period_execution() {
         name: "Sequential App".to_string(),
         executable_path: "python3".to_string(),
         config_path: String::new(),
+        plugin_api_version: None,
+
         allow_concurrent_tasks: false,
     };
 
@@ -948,6 +954,8 @@ async fn test_concurrent_period_error_propagation() {
         name: "Failing App".to_string(),
         executable_path: "python3".to_string(),
         config_path: String::new(),
+        plugin_api_version: None,
+
         allow_concurrent_tasks: true,
     };
 
@@ -1032,6 +1040,8 @@ async fn test_multiple_external_apps_execution_isolation() {
         name: "Iso App".to_string(),
         executable_path: "python3".to_string(),
         config_path: String::new(),
+        plugin_api_version: None,
+
         allow_concurrent_tasks: false,
     };
 
@@ -1138,6 +1148,8 @@ async fn test_post_run_external_app_execution() {
         name: "Post App".to_string(),
         executable_path: "python3".to_string(),
         config_path: String::new(),
+        plugin_api_version: None,
+
         allow_concurrent_tasks: false,
     };
 

@@ -42,6 +42,16 @@ pub fn validate_config(config: &RunnerConfig) -> Result<(), EngineError> {
 
     let mut app_ids = std::collections::HashSet::new();
     for app in &config.registered_apps {
+        if let Some(version) = app.plugin_api_version {
+            if version != crate::manifest::PROCESS_PLUGIN_API_VERSION {
+                return Err(EngineError::Validation(format!(
+                    "Registered plugin '{}' expects API version {}, but Runner supports {}",
+                    app.id,
+                    version,
+                    crate::manifest::PROCESS_PLUGIN_API_VERSION
+                )));
+            }
+        }
         if !app_ids.insert(&app.id) {
             return Err(EngineError::Validation(format!(
                 "Duplicate application ID found: {}",

@@ -14,7 +14,8 @@ First off, thank you for considering contributing to the CRM Tool! It's people l
 
 ## Repository Structure
 
-- `src/bin/`: Entry points for the executable binaries (`crm`, `runner`, `yasweb`, `tasker`).
+- `apps/<name>/`: Independent Cargo packages and executable entry points (`crm`, `runner`, `yasweb`, `tasker`, `crm_updater`).
+- `crm_tool` (root package): Shared domain implementation and cross-application contracts.
 - `src/crm/`: CRM domain logic (fetching, authentication).
 - `src/runner/`: Task runner orchestration and GUI scheduler.
 - `src/tasker/`: Background task processing (CSV analysis, emailing, Excel automation).
@@ -33,7 +34,8 @@ First off, thank you for considering contributing to the CRM Tool! It's people l
 
 Use standard `cargo` commands for development:
 
-- **Build:** `cargo build` (use `--release` for optimized builds).
+- **Build all executables:** `cargo build --workspace` (use `--release` for optimized builds).
+- **Build one executable:** `cargo build --release -p runner` (replace the package name with `crm`, `tasker`, `yasweb`, or `crm_updater`).
 - **Format:** `cargo fmt` (enforced by CI).
 - **Lint:** `cargo clippy --workspace --all-targets --all-features -- -D warnings` (enforced by CI).
 - **Test:** `cargo test --workspace --all-targets --all-features`.
@@ -53,7 +55,7 @@ When a bug is fixed or a new feature is added, a corresponding test case **MUST*
 
 **Documentation is Mandatory:** After every code, configuration, dependency, or script change that impacts behavior, you MUST update the relevant markdown files in the `md/` directory in the *same pull request*.
 
-- Read `md/AI_DOC_POLICY.md` for specific mapping rules (e.g., changing `src/bin/runner.rs` requires updating `APPLICATION_SUMMARY.md`, `ARCHITECTURE.md`, etc.).
+- Read `md/AI_DOC_POLICY.md` for specific mapping rules (e.g., changing `apps/runner/src/main.rs` requires updating `APPLICATION_SUMMARY.md`, `ARCHITECTURE.md`, etc.).
 - Ensure examples and commands in documentation remain runnable and accurate.
 - AI Agents must always consult `AGENTS.md` before operating on this repository.
 

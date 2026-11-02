@@ -43,22 +43,22 @@ If you need to bypass the runner, invoke the apps directly:
 
 **CRM One-Shot:**
 ```bash
-cargo run --bin crm -- --report tickets --config custom_config.json --start-date eomonth --end-date tomorrow --custom-download-folder "C:\\temp\\downloads"
+cargo run -p crm -- --report tickets --config custom_config.json --start-date eomonth --end-date tomorrow --custom-download-folder "C:\\temp\\downloads"
 ```
 
 **Tasker standard task:**
 ```bash
-cargo run --bin tasker -- --task 1
+cargo run -p tasker -- --task 1
 ```
 
 **Tasker Call Center-only task:**
 ```bash
-cargo run --bin tasker -- --task 1 --only-call-center
+cargo run -p tasker -- --task 1 --only-call-center
 ```
 
 **Tasker exception task:**
 ```bash
-cargo run --bin tasker -- --task 1 --send-exceptions
+cargo run -p tasker -- --task 1 --send-exceptions
 ```
 
 ## Logs and Debugging
@@ -149,3 +149,7 @@ Call Center email attachments are generated from this saved lead result and incl
 ### Yasweb MIS transition readiness
 
 After clicking the MIS module, Yasweb waits up to 30 seconds for the expected MIS module route plus a usable report interface. The wait inspects the main page and accessible iframes and requires either a rendered, interactive `MIS Reports` control or visible report-list controls. A text label without a rendered rectangle does not count as readiness. If the wait fails, inspect the `wait_for_mis_reports` diagnostic JSON for document URLs, route matches, candidate visibility, report-control presence, and loader state before changing report search or export logic.
+
+### Independent executable builds
+
+Build the complete suite with `cargo build --workspace --release`. To rebuild only one process executable, use `cargo build --release -p crm`, `-p tasker`, `-p yasweb`, `-p runner`, or `-p crm_updater`. Runner continues to launch registered workers as separate OS processes.

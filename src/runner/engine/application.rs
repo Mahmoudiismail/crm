@@ -269,6 +269,69 @@ async fn discover_date_args(
     }
 }
 
+fn validate_process_plugin_manifest(
+    manifest: &serde_json::Value,
+    expected_version: u32,
+) -> Result<()> {
+    let raw_version = manifest
+        .get("plugin_api_version")
+        .context("Process plugin manifest is missing plugin_api_version")?;
+    let version = raw_version
+        .as_u64()
+        .and_then(|value| u32::try_from(value).ok())
+        .context("Process plugin manifest has an invalid plugin_api_version")?;
+    if version != expected_version {
+        anyhow::bail!(
+            "Process plugin API version {} does not match the registered version {}",
+            version,
+            expected_version
+        );
+    }
+    Ok(())
+}
+
+async fn validate_process_plugin_compatibility(
+    app: &RegisteredApp,
+    executable: &std::path::Path,
+) -> Result<()> {
+    let Some(expected_version) = app.plugin_api_version else {
+        // Legacy external applications do not need a --manifest probe.
+        return Ok(());
+    };
+
+    let supported_version = crate::manifest::PROCESS_PLUGIN_API_VERSION;
+    if expected_version != supported_version {
+        anyhow::bail!(
+            "Registered process plugin API version {} is incompatible with Runner (supported version {})",
+            expected_version,
+            supported_version
+        );
+    }
+
+    let mut command = tokio::process::Command::new(executable);
+    command
+        .arg("--manifest")
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .kill_on_drop(true);
+
+    let output = tokio::time::timeout(MANIFEST_TIMEOUT, command.output())
+        .await
+        .context("Timed out while discovering process plugin manifest")?
+        .with_context(|| format!("Could not start process plugin '{}' manifest", app.name))?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "Process plugin '{}' manifest command exited with status {}",
+            app.name,
+            output.status
+        );
+    }
+    let manifest = serde_json::from_slice::<serde_json::Value>(&output.stdout)
+        .context("Could not parse process plugin manifest JSON")?;
+    validate_process_plugin_manifest(&manifest, expected_version)
+        .with_context(|| format!("Process plugin '{}' is not compatible", app.name))
+}
+
 pub async fn run_external_app(
     logger: &TaskLogger,
     app: &RegisteredApp,
@@ -277,6 +340,7 @@ pub async fn run_external_app(
     timeout_seconds: u64,
 ) -> Result<()> {
     let resolved_executable = resolve_executable(&app.executable_path);
+    validate_process_plugin_compatibility(app, &resolved_executable).await?;
     let mut command = tokio::process::Command::new(&resolved_executable);
 
     let args = &spec.args;
@@ -400,8 +464,71 @@ mod tests {
     use super::{
         apply_registered_config_fallback, date_args_from_manifest, insert_period_args,
         manifest_arg_dependencies_satisfied, manifest_argument_is_available,
+        validate_process_plugin_compatibility, validate_process_plugin_manifest, RegisteredApp,
     };
     use std::collections::HashMap;
+
+    #[test]
+    fn accepts_matching_process_plugin_manifest_version() {
+        assert!(validate_process_plugin_manifest(
+            &serde_json::json!({
+                "name": "Current plugin",
+                "plugin_api_version": 1,
+                "arguments": []
+            }),
+            1
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn rejects_missing_process_plugin_version_when_registry_opts_in() {
+        let missing =
+            validate_process_plugin_manifest(&serde_json::json!({"name": "Unversioned plugin"}), 1)
+                .unwrap_err();
+        assert!(missing.to_string().contains("missing plugin_api_version"));
+    }
+
+    #[test]
+    fn rejects_incompatible_or_malformed_process_plugin_versions() {
+        let incompatible = validate_process_plugin_manifest(
+            &serde_json::json!({
+                "plugin_api_version": 2
+            }),
+            1,
+        )
+        .unwrap_err();
+        assert!(incompatible
+            .to_string()
+            .contains("does not match the registered version"));
+
+        let malformed = validate_process_plugin_manifest(
+            &serde_json::json!({
+                "plugin_api_version": "1"
+            }),
+            1,
+        )
+        .unwrap_err();
+        assert!(malformed.to_string().contains("invalid plugin_api_version"));
+    }
+
+    #[tokio::test]
+    async fn legacy_external_apps_skip_plugin_manifest_probe() {
+        let app = RegisteredApp {
+            id: "legacy".to_string(),
+            name: "Legacy external app".to_string(),
+            executable_path: "missing-executable-for-legacy-test".to_string(),
+            config_path: String::new(),
+            plugin_api_version: None,
+            allow_concurrent_tasks: false,
+        };
+        assert!(validate_process_plugin_compatibility(
+            &app,
+            std::path::Path::new("missing-executable-for-legacy-test")
+        )
+        .await
+        .is_ok());
+    }
 
     #[test]
     fn action_config_overrides_registered_app_config_path() {
