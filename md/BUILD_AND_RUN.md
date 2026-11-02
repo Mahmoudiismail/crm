@@ -31,6 +31,10 @@ cargo build --release -p crm_updater
 
 Each command writes the selected executable to `target/release/`; shared dependencies are compiled as needed, but unrelated executable targets are not rebuilt.
 
+### Enabling first-party plugin compatibility checks
+
+CRM, Tasker, and Yasweb advertise process-plugin API version `1`. To make Runner enforce the version for a registered worker, add `"plugin_api_version": 1` to that worker's entry in `runner_config.json`. If the field is omitted, Runner treats the entry as a legacy external application and skips the extra `--manifest` probe.
+
 ## Running
 
 Run Runner to start the scheduler and local GUI:
