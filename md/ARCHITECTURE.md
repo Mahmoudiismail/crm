@@ -12,7 +12,7 @@ The repository is a Cargo workspace. Each executable package owns its implementa
 | tasker | apps/tasker/src/main.rs, apps/tasker/src/tasker/** | CSV/report processing, Excel automation and Outlook workflows |
 | crm_updater | apps/crm_updater/src/main.rs, apps/crm_updater/src/crm_updater/** | Local diagnostics collection and application update orchestration |
 
-Shared utilities, manifest types, and managed-script infrastructure are exported through `src/lib.rs`.
+Shared manifest and utility contracts plus the generic managed-script engine are exported through `src/lib.rs`. Tasker and CRM Updater keep their PowerShell template catalogs inside their own app packages.
 
 ## Runtime responsibilities
 

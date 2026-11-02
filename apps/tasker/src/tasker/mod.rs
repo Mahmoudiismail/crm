@@ -8,4 +8,4 @@ pub mod opd_task;
 pub mod sat_figures;
 pub mod users_export;
 pub mod utils;
-pub use crm_tool::tasker::script_manager;
+pub mod script_manager;

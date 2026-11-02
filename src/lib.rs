@@ -10,5 +10,5 @@
 //! Application implementations live in their owning packages under apps/.
 
 pub mod manifest;
-pub mod tasker;
+pub mod script_manager;
 pub mod utils;

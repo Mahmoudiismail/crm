@@ -123,65 +123,6 @@ impl ScriptManager {
         }
     }
 
-    /// Materialize every built-in PowerShell template under the executable's scripts directory.
-    /// This makes the complete script set available for inspection before any task is executed.
-    pub fn install_builtin_scripts(&self) -> Result<()> {
-        let scripts: &[(&str, &str, &str)] = &[
-            (
-                "Email",
-                "outlook_mail.ps1",
-                include_str!("../../apps/tasker/src/tasker/email/outlook_mail.ps1"),
-            ),
-            (
-                "Dashboard Updater",
-                "dashboard_updater.ps1",
-                include_str!("../../apps/tasker/src/tasker/scripts/dashboard_updater.ps1"),
-            ),
-            (
-                "Department Split",
-                "department_split.ps1",
-                include_str!("../../apps/tasker/src/tasker/scripts/department_split.ps1"),
-            ),
-            (
-                "CRM Open Sohail",
-                "slicer_extract.ps1",
-                include_str!("../../apps/tasker/src/tasker/crm_open_sohail/slicer_extract.ps1"),
-            ),
-            (
-                "OPD Analysis",
-                "opd_analysis_email.ps1",
-                include_str!("../../apps/tasker/src/tasker/opd_task/opd_analysis_email.ps1"),
-            ),
-            (
-                "Sat Figures",
-                "sat_figures_email.ps1",
-                include_str!("../../apps/tasker/src/tasker/sat_figures_email.ps1"),
-            ),
-            (
-                "CRM Updater",
-                "scan_update_drafts.ps1",
-                include_str!(
-                    "../../apps/crm_updater/src/crm_updater/scripts/scan_update_drafts.ps1"
-                ),
-            ),
-            (
-                "CRM Updater",
-                "apply_update.ps1",
-                include_str!("../../apps/crm_updater/src/crm_updater/scripts/apply_update.ps1"),
-            ),
-            (
-                "CRM Updater",
-                "unblock_file.ps1",
-                include_str!("../../apps/crm_updater/src/crm_updater/scripts/unblock_file.ps1"),
-            ),
-        ];
-
-        for (task_name, logical_name, content) in scripts {
-            self.get_or_create_script(task_name, logical_name, content)?;
-        }
-        Ok(())
-    }
-
     pub fn sanitize_task_name(task_name: &str) -> String {
         let invalid_chars = ['\\', '/', ':', '*', '?', '"', '<', '>', '|'];
         let clean = task_name

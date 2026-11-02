@@ -60,7 +60,7 @@ fn main() -> Result<()> {
         .and_then(|p| p.parent().map(|p| p.to_path_buf()))
         .unwrap_or_else(|| PathBuf::from("."));
 
-    crm_tool::tasker::script_manager::ScriptManager::new().install_builtin_scripts()?;
+    crm_updater_app::crm_updater::install_builtin_scripts()?;
 
     let config_path = resolve_config_path(args.config.as_deref(), &exe_dir);
 

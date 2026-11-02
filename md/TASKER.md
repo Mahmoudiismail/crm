@@ -192,7 +192,7 @@ The `crm_open_sohail` task automates the generation and delivery of Branch & Mon
 
 ## Persistent Versioned PowerShell Scripts & Injection Safety
 
-Tasker manages PowerShell scripts strictly through `ScriptManager`, storing scripts persistently in `<exe_dir>/scripts/<Task Name>/`.
+Tasker manages PowerShell scripts strictly through `Tasker's script catalog (backed by the shared script manager)`, storing scripts persistently in `<exe_dir>/scripts/<Task Name>/`.
 
 ### Core Guarantees
 1. **Static Templates & CLI Parameterization**: All production PowerShell scripts use static canonical script templates. Runtime-controlled data (paths, subjects, HTML bodies, emails, PIDs) is passed strictly through CLI parameter flags (`param(...)`), eliminating dynamic script string interpolation.
