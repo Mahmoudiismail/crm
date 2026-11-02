@@ -139,10 +139,11 @@ fn test_empty_schedule_is_manual_persistence() {
         runner_app::runner::config::migration::RunnerTaskLegacy::from(task.clone()),
     )
     .unwrap();
-    let loaded: RunnerTask =
-        serde_json::from_value::<runner_app::runner::config::migration::RunnerTaskLegacy>(legacy_val)
-            .unwrap()
-            .into();
+    let loaded: RunnerTask = serde_json::from_value::<
+        runner_app::runner::config::migration::RunnerTaskLegacy,
+    >(legacy_val)
+    .unwrap()
+    .into();
 
     assert!(
         loaded.schedules.is_empty(),
