@@ -1,4 +1,4 @@
-use runner::runner::config::{ActionSpec, ExecutionMode, RunnerTask};
+use runner_app::runner::config::{ActionSpec, ExecutionMode, RunnerTask};
 
 #[test]
 fn test_legacy_configuration_migration() {

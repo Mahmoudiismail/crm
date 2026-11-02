@@ -1,6 +1,6 @@
 use chrono::{Local, NaiveDate, TimeZone, Timelike, Utc};
-use runner::runner::config::RunnerConfig;
-use runner::runner::config::{
+use runner_app::runner::config::RunnerConfig;
+use runner_app::runner::config::{
     generate_execution_periods, generate_upcoming_executions_for_app,
     resolve_and_generate_execution_periods, ActionSpec, ExecutionMode, ExternalAppSpec, PeriodMode,
     RunnerTask, TaskSchedule, TaskStep,
@@ -212,7 +212,7 @@ fn test_multiple_external_apps_independence_and_preview() {
         id: "multi_app_task".to_string(),
         name: "Multi App Task".to_string(),
         enabled: true,
-        repetition: runner::runner::config::Repetition::Once,
+        repetition: runner_app::runner::config::Repetition::Once,
         frequency_seconds: 0,
         next_run_at: String::new(),
         schedules: vec![],
@@ -276,7 +276,7 @@ fn test_preview_interval_grid_alignment() {
         id: "grid_task".to_string(),
         name: "Grid Task".to_string(),
         enabled: true,
-        repetition: runner::runner::config::Repetition::Repeat,
+        repetition: runner_app::runner::config::Repetition::Repeat,
         frequency_seconds: 3600,
         next_run_at: String::new(),
         schedules: vec![TaskSchedule::Interval {
@@ -618,10 +618,10 @@ fn test_loader_migration_g_save_and_reload_roundtrip() {
 
 #[tokio::test]
 async fn test_concurrent_period_execution() {
-    use runner::runner::config::RegisteredApp;
-    use runner::runner::engine::pipeline::run_task_inner;
-    use runner::runner::engine::state::RunnerStatus;
-    use runner::runner::engine::{AppLockManager, ExecutionPolicy};
+    use runner_app::runner::config::RegisteredApp;
+    use runner_app::runner::engine::pipeline::run_task_inner;
+    use runner_app::runner::engine::state::RunnerStatus;
+    use runner_app::runner::engine::{AppLockManager, ExecutionPolicy};
     use std::sync::Arc;
     use tokio::sync::Mutex;
 
@@ -658,7 +658,7 @@ async fn test_concurrent_period_execution() {
         id: "concurrent_task".to_string(),
         name: "Concurrent Task".to_string(),
         enabled: true,
-        repetition: runner::runner::config::Repetition::Once,
+        repetition: runner_app::runner::config::Repetition::Once,
         frequency_seconds: 0,
         next_run_at: String::new(),
         schedules: vec![],
@@ -718,10 +718,10 @@ fn test_beginning_of_prev_month_resolution() {
 
 #[tokio::test]
 async fn test_concurrent_period_execution_overlapping() {
-    use runner::runner::config::RegisteredApp;
-    use runner::runner::engine::pipeline::run_task_inner;
-    use runner::runner::engine::state::RunnerStatus;
-    use runner::runner::engine::{AppLockManager, ExecutionPolicy};
+    use runner_app::runner::config::RegisteredApp;
+    use runner_app::runner::engine::pipeline::run_task_inner;
+    use runner_app::runner::engine::state::RunnerStatus;
+    use runner_app::runner::engine::{AppLockManager, ExecutionPolicy};
     use std::sync::Arc;
     use tokio::sync::Mutex;
 
@@ -756,28 +756,28 @@ async fn test_concurrent_period_execution_overlapping() {
     let mut args = std::collections::HashMap::new();
     args.insert("-c".to_string(), py_script);
 
-    let spec = runner::runner::config::ExternalAppSpec {
+    let spec = runner_app::runner::config::ExternalAppSpec {
         app_id: "concurrent_app".to_string(),
         args,
-        period_mode: runner::runner::config::PeriodMode::Monthly,
+        period_mode: runner_app::runner::config::PeriodMode::Monthly,
         start_date: Some("2026-01-01".to_string()),
         end_date: Some("2026-02-28".to_string()),
         start_date_arg: Some("--start-date".to_string()),
         end_date_arg: Some("--end-date".to_string()),
     };
 
-    let mut task = runner::runner::config::RunnerTask {
+    let mut task = runner_app::runner::config::RunnerTask {
         id: "concurrent_task".to_string(),
         name: "Concurrent Task".to_string(),
         enabled: true,
-        repetition: runner::runner::config::Repetition::Once,
+        repetition: runner_app::runner::config::Repetition::Once,
         frequency_seconds: 0,
         next_run_at: String::new(),
         schedules: vec![],
-        steps: vec![runner::runner::config::TaskStep {
+        steps: vec![runner_app::runner::config::TaskStep {
             name: None,
-            mode: runner::runner::config::ExecutionMode::Parallel,
-            actions: vec![runner::runner::config::ActionSpec::ExternalApp(spec)],
+            mode: runner_app::runner::config::ExecutionMode::Parallel,
+            actions: vec![runner_app::runner::config::ActionSpec::ExternalApp(spec)],
         }],
         post_run_steps: vec![],
         last_run_at: String::new(),
@@ -839,10 +839,10 @@ async fn test_concurrent_period_execution_overlapping() {
 
 #[tokio::test]
 async fn test_sequential_period_execution() {
-    use runner::runner::config::RegisteredApp;
-    use runner::runner::engine::pipeline::run_task_inner;
-    use runner::runner::engine::state::RunnerStatus;
-    use runner::runner::engine::{AppLockManager, ExecutionPolicy};
+    use runner_app::runner::config::RegisteredApp;
+    use runner_app::runner::engine::pipeline::run_task_inner;
+    use runner_app::runner::engine::state::RunnerStatus;
+    use runner_app::runner::engine::{AppLockManager, ExecutionPolicy};
     use std::sync::Arc;
     use tokio::sync::Mutex;
 
@@ -893,7 +893,7 @@ async fn test_sequential_period_execution() {
         id: "seq_task".to_string(),
         name: "Sequential Task".to_string(),
         enabled: true,
-        repetition: runner::runner::config::Repetition::Once,
+        repetition: runner_app::runner::config::Repetition::Once,
         frequency_seconds: 0,
         next_run_at: String::new(),
         schedules: vec![],
@@ -942,10 +942,10 @@ async fn test_sequential_period_execution() {
 
 #[tokio::test]
 async fn test_concurrent_period_error_propagation() {
-    use runner::runner::config::RegisteredApp;
-    use runner::runner::engine::pipeline::run_task_inner;
-    use runner::runner::engine::state::RunnerStatus;
-    use runner::runner::engine::{AppLockManager, ExecutionPolicy};
+    use runner_app::runner::config::RegisteredApp;
+    use runner_app::runner::engine::pipeline::run_task_inner;
+    use runner_app::runner::engine::state::RunnerStatus;
+    use runner_app::runner::engine::{AppLockManager, ExecutionPolicy};
     use std::sync::Arc;
     use tokio::sync::Mutex;
 
@@ -985,7 +985,7 @@ async fn test_concurrent_period_error_propagation() {
         id: "failing_task".to_string(),
         name: "Failing Task".to_string(),
         enabled: true,
-        repetition: runner::runner::config::Repetition::Once,
+        repetition: runner_app::runner::config::Repetition::Once,
         frequency_seconds: 0,
         next_run_at: String::new(),
         schedules: vec![],
@@ -1019,10 +1019,10 @@ async fn test_concurrent_period_error_propagation() {
 
 #[tokio::test]
 async fn test_multiple_external_apps_execution_isolation() {
-    use runner::runner::config::RegisteredApp;
-    use runner::runner::engine::pipeline::run_task_inner;
-    use runner::runner::engine::state::RunnerStatus;
-    use runner::runner::engine::{AppLockManager, ExecutionPolicy};
+    use runner_app::runner::config::RegisteredApp;
+    use runner_app::runner::engine::pipeline::run_task_inner;
+    use runner_app::runner::engine::state::RunnerStatus;
+    use runner_app::runner::engine::{AppLockManager, ExecutionPolicy};
     use std::sync::Arc;
     use tokio::sync::Mutex;
 
@@ -1084,7 +1084,7 @@ async fn test_multiple_external_apps_execution_isolation() {
         id: "iso_task".to_string(),
         name: "Iso Task".to_string(),
         enabled: true,
-        repetition: runner::runner::config::Repetition::Once,
+        repetition: runner_app::runner::config::Repetition::Once,
         frequency_seconds: 0,
         next_run_at: String::new(),
         schedules: vec![],
@@ -1127,10 +1127,10 @@ async fn test_multiple_external_apps_execution_isolation() {
 
 #[tokio::test]
 async fn test_post_run_external_app_execution() {
-    use runner::runner::config::RegisteredApp;
-    use runner::runner::engine::pipeline::run_task_inner;
-    use runner::runner::engine::state::RunnerStatus;
-    use runner::runner::engine::{AppLockManager, ExecutionPolicy};
+    use runner_app::runner::config::RegisteredApp;
+    use runner_app::runner::engine::pipeline::run_task_inner;
+    use runner_app::runner::engine::state::RunnerStatus;
+    use runner_app::runner::engine::{AppLockManager, ExecutionPolicy};
     use std::sync::Arc;
     use tokio::sync::Mutex;
 
@@ -1179,7 +1179,7 @@ async fn test_post_run_external_app_execution() {
         id: "post_task".to_string(),
         name: "Post Task".to_string(),
         enabled: true,
-        repetition: runner::runner::config::Repetition::Once,
+        repetition: runner_app::runner::config::Repetition::Once,
         frequency_seconds: 0,
         next_run_at: String::new(),
         schedules: vec![],
@@ -1218,7 +1218,7 @@ async fn test_post_run_external_app_execution() {
 #[test]
 fn test_live_preview_monthly_full_year_generation() {
     use chrono::{TimeZone, Utc};
-    use runner::runner::config::{
+    use runner_app::runner::config::{
         ExternalAppSpec, PeriodMode, Repetition, RunnerTask, TaskSchedule,
     };
     use std::collections::HashMap;
@@ -1256,7 +1256,7 @@ fn test_live_preview_monthly_full_year_generation() {
         end_date_arg: None,
     };
 
-    let occs = runner::runner::config::schedule::generate_upcoming_executions_for_app(
+    let occs = runner_app::runner::config::schedule::generate_upcoming_executions_for_app(
         &task, &app_spec, now, 10,
     )
     .unwrap();
@@ -1270,7 +1270,7 @@ fn test_live_preview_monthly_full_year_generation() {
 #[test]
 fn test_live_preview_keeps_recurring_schedule_when_custom_end_date_is_past() {
     use chrono::{TimeZone, Utc};
-    use runner::runner::config::{Repetition, RunnerTask, TaskSchedule};
+    use runner_app::runner::config::{Repetition, RunnerTask, TaskSchedule};
 
     let now = Utc.with_ymd_and_hms(2026, 10, 14, 12, 0, 0).unwrap();
     let task = RunnerTask {
@@ -1317,7 +1317,7 @@ fn test_live_preview_keeps_recurring_schedule_when_custom_end_date_is_past() {
 #[test]
 fn preview_resolves_yesterday_against_each_scheduled_run_and_skips_week_offs() {
     use chrono::Datelike;
-    use runner::runner::config::{Repetition, TaskSchedule, WorkingHours};
+    use runner_app::runner::config::{Repetition, TaskSchedule, WorkingHours};
 
     let now = Local
         .with_ymd_and_hms(2026, 10, 16, 20, 0, 0)

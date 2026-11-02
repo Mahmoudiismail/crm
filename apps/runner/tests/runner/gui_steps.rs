@@ -1,7 +1,7 @@
 // Added as required by test mandate for bugfixes
 #[cfg(test)]
 mod tests {
-    use runner::runner::config::{ExecutionMode, TaskStep};
+    use runner_app::runner::config::{ExecutionMode, TaskStep};
     use std::collections::HashMap;
 
     #[test]

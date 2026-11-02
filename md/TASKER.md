@@ -213,12 +213,12 @@ PowerShell integration relies on `ScriptManager` persistence. Script generators 
 
 The PowerShell logic for the following Tasker operations is maintained in standalone `.ps1` files and embedded into the executable at build time with Rust `include_str!`:
 
-- Outlook email execution: `src/tasker/email/outlook_mail.ps1` is the single script for creating, replying, sending, displaying, and saving draft messages.
-- Dashboard refresh: `src/tasker/scripts/dashboard_updater.ps1`.
-- Department workbook split: `src/tasker/scripts/department_split.ps1`.
-- CRM Open Sohail slicer extraction: `src/tasker/crm_open_sohail/slicer_extract.ps1`.
-- OPD analysis email: `src/tasker/opd_task/opd_analysis_email.ps1`.
-- SAT figures email: `src/tasker/sat_figures_email.ps1`.
+- Outlook email execution: `apps/tasker/src/tasker/email/outlook_mail.ps1` is the single script for creating, replying, sending, displaying, and saving draft messages.
+- Dashboard refresh: `apps/tasker/src/tasker/scripts/dashboard_updater.ps1`.
+- Department workbook split: `apps/tasker/src/tasker/scripts/department_split.ps1`.
+- CRM Open Sohail slicer extraction: `apps/tasker/src/tasker/crm_open_sohail/slicer_extract.ps1`.
+- OPD analysis email: `apps/tasker/src/tasker/opd_task/opd_analysis_email.ps1`.
+- SAT figures email: `apps/tasker/src/tasker/sat_figures_email.ps1`.
 
 At startup, Tasker calls `ScriptManager::install_builtin_scripts()` to materialize all built-in PowerShell templates under `<exe_dir>/scripts/<Task Name>/`, including the shared Outlook helper and CRM Updater templates. Each script is therefore present on disk before a configured task starts, and execution continues through the managed files. The source files are also embedded in the executable at build time so they can be restored if missing.
 

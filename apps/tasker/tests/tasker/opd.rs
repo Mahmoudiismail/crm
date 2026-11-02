@@ -1,4 +1,4 @@
-use tasker::tasker::config::{TaskConfig, TaskerConfig};
+use tasker_app::tasker::config::{TaskConfig, TaskerConfig};
 
 #[test]
 fn test_opd_analysis_config_serialization() {

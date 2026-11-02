@@ -1,6 +1,6 @@
-use runner::runner::config::RunnerConfig;
-use runner::runner::gui::routes::route_request;
-use runner::runner::gui::HttpRequest;
+use runner_app::runner::config::RunnerConfig;
+use runner_app::runner::gui::routes::route_request;
+use runner_app::runner::gui::HttpRequest;
 
 #[test]
 fn test_non_loopback_gui_host_rejected() {
@@ -53,14 +53,14 @@ fn test_non_loopback_gui_host_rejected() {
 
 #[tokio::test]
 async fn test_get_mutation_rejected_405() {
-    use runner::runner::engine::RunnerHandle;
+    use runner_app::runner::engine::RunnerHandle;
     use std::sync::Arc;
     use tokio::sync::mpsc;
     use tokio::sync::Mutex;
 
     let (tx1, _rx1) = mpsc::channel(10);
     let (tx2, _rx2) = mpsc::channel(10);
-    let status = Arc::new(Mutex::new(runner::runner::engine::RunnerStatus {
+    let status = Arc::new(Mutex::new(runner_app::runner::engine::RunnerStatus {
         running_tasks_count: 0,
         queued_tasks_count: 0,
         running_task_ids: vec![],
@@ -139,7 +139,7 @@ async fn test_http_security_and_limits() {
     let (tx, _rx) = tokio::sync::mpsc::channel(1);
     let (exec_tx, _) = tokio::sync::mpsc::channel(128);
     let status = std::sync::Arc::new(tokio::sync::Mutex::new(
-        runner::runner::engine::RunnerStatus {
+        runner_app::runner::engine::RunnerStatus {
             running_tasks_count: 0,
             queued_tasks_count: 0,
             running_task_ids: Vec::new(),
@@ -151,14 +151,14 @@ async fn test_http_security_and_limits() {
         },
     ));
 
-    let handle = runner::runner::engine::RunnerHandle {
+    let handle = runner_app::runner::engine::RunnerHandle {
         command_tx: tx,
         exec_tx,
         status,
         runner_config_path: config_path,
     };
 
-    runner::runner::gui::start_gui_server(handle);
+    runner_app::runner::gui::start_gui_server(handle);
     tokio::time::sleep(std::time::Duration::from_millis(150)).await;
 
     // 1. Chunked Transfer-Encoding rejection
@@ -231,30 +231,30 @@ Host: 127.0.0.1
     }
 
     // 6. Test status reason phrases for all supported codes
-    assert_eq!(runner::runner::gui::status_reason_phrase(200), "OK");
+    assert_eq!(runner_app::runner::gui::status_reason_phrase(200), "OK");
     assert_eq!(
-        runner::runner::gui::status_reason_phrase(400),
+        runner_app::runner::gui::status_reason_phrase(400),
         "Bad Request"
     );
-    assert_eq!(runner::runner::gui::status_reason_phrase(404), "Not Found");
+    assert_eq!(runner_app::runner::gui::status_reason_phrase(404), "Not Found");
     assert_eq!(
-        runner::runner::gui::status_reason_phrase(405),
+        runner_app::runner::gui::status_reason_phrase(405),
         "Method Not Allowed"
     );
     assert_eq!(
-        runner::runner::gui::status_reason_phrase(408),
+        runner_app::runner::gui::status_reason_phrase(408),
         "Request Timeout"
     );
     assert_eq!(
-        runner::runner::gui::status_reason_phrase(413),
+        runner_app::runner::gui::status_reason_phrase(413),
         "Payload Too Large"
     );
     assert_eq!(
-        runner::runner::gui::status_reason_phrase(500),
+        runner_app::runner::gui::status_reason_phrase(500),
         "Internal Server Error"
     );
     assert_eq!(
-        runner::runner::gui::status_reason_phrase(999),
+        runner_app::runner::gui::status_reason_phrase(999),
         "Unknown Error"
     );
 }

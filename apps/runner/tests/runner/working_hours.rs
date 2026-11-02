@@ -1,4 +1,4 @@
-use runner::runner::config::{RunnerConfig, WorkingHours, WorkingHoursProfile};
+use runner_app::runner::config::{RunnerConfig, WorkingHours, WorkingHoursProfile};
 use std::collections::HashMap;
 
 #[test]

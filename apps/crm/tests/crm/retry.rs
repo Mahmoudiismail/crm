@@ -1,5 +1,5 @@
-use crm::crm::config::AppConfig;
-use crm::crm::fetcher::fetch_reports;
+use crm_app::crm::config::AppConfig;
+use crm_app::crm::fetcher::fetch_reports;
 use reqwest::Client;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;

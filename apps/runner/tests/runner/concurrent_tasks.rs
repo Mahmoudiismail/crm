@@ -1,9 +1,9 @@
-use runner::runner::config::{
+use runner_app::runner::config::{
     ActionSpec, ExecutionMode, ExternalAppSpec, RegisteredApp, Repetition, RunnerTask, TaskStep,
 };
-use runner::runner::engine::app_lock::AppLockManager;
-use runner::runner::engine::pipeline::run_task_inner;
-use runner::runner::engine::state::{ExecutionPolicy, RunnerStatus};
+use runner_app::runner::engine::app_lock::AppLockManager;
+use runner_app::runner::engine::pipeline::run_task_inner;
+use runner_app::runner::engine::state::{ExecutionPolicy, RunnerStatus};
 use std::sync::Arc;
 
 use tokio::sync::Mutex;
@@ -74,7 +74,7 @@ async fn test_different_non_concurrent_apps_do_not_block() {
         actions: vec![ActionSpec::ExternalApp(ExternalAppSpec {
             app_id: "AppA".to_string(),
             args: std::collections::HashMap::new(),
-            period_mode: runner::runner::config::PeriodMode::Custom,
+            period_mode: runner_app::runner::config::PeriodMode::Custom,
             start_date: None,
             end_date: None,
             start_date_arg: None,
@@ -89,7 +89,7 @@ async fn test_different_non_concurrent_apps_do_not_block() {
         actions: vec![ActionSpec::ExternalApp(ExternalAppSpec {
             app_id: "AppB".to_string(),
             args: std::collections::HashMap::new(),
-            period_mode: runner::runner::config::PeriodMode::Custom,
+            period_mode: runner_app::runner::config::PeriodMode::Custom,
             start_date: None,
             end_date: None,
             start_date_arg: None,
@@ -158,7 +158,7 @@ async fn test_same_non_concurrent_app_serializes() {
         actions: vec![ActionSpec::ExternalApp(ExternalAppSpec {
             app_id: "AppA".to_string(),
             args: std::collections::HashMap::new(),
-            period_mode: runner::runner::config::PeriodMode::Custom,
+            period_mode: runner_app::runner::config::PeriodMode::Custom,
             start_date: None,
             end_date: None,
             start_date_arg: None,
@@ -250,7 +250,7 @@ async fn test_same_concurrent_app_runs_concurrently() {
         actions: vec![ActionSpec::ExternalApp(ExternalAppSpec {
             app_id: "AppConcurrent".to_string(),
             args: std::collections::HashMap::new(),
-            period_mode: runner::runner::config::PeriodMode::Custom,
+            period_mode: runner_app::runner::config::PeriodMode::Custom,
             start_date: None,
             end_date: None,
             start_date_arg: None,
@@ -320,7 +320,7 @@ async fn test_multiple_actions_same_app() {
             ActionSpec::ExternalApp(ExternalAppSpec {
                 app_id: "AppA".to_string(),
                 args: std::collections::HashMap::new(),
-                period_mode: runner::runner::config::PeriodMode::Custom,
+                period_mode: runner_app::runner::config::PeriodMode::Custom,
                 start_date: None,
                 end_date: None,
                 start_date_arg: None,
@@ -329,7 +329,7 @@ async fn test_multiple_actions_same_app() {
             ActionSpec::ExternalApp(ExternalAppSpec {
                 app_id: "AppA".to_string(),
                 args: std::collections::HashMap::new(),
-                period_mode: runner::runner::config::PeriodMode::Custom,
+                period_mode: runner_app::runner::config::PeriodMode::Custom,
                 start_date: None,
                 end_date: None,
                 start_date_arg: None,
@@ -338,7 +338,7 @@ async fn test_multiple_actions_same_app() {
             ActionSpec::ExternalApp(ExternalAppSpec {
                 app_id: "AppA".to_string(),
                 args: std::collections::HashMap::new(),
-                period_mode: runner::runner::config::PeriodMode::Custom,
+                period_mode: runner_app::runner::config::PeriodMode::Custom,
                 start_date: None,
                 end_date: None,
                 start_date_arg: None,
@@ -395,7 +395,7 @@ async fn test_future_step_contention() {
         actions: vec![ActionSpec::ExternalApp(ExternalAppSpec {
             app_id: "AppA".to_string(),
             args: std::collections::HashMap::new(),
-            period_mode: runner::runner::config::PeriodMode::Custom,
+            period_mode: runner_app::runner::config::PeriodMode::Custom,
             start_date: None,
             end_date: None,
             start_date_arg: None,
@@ -408,7 +408,7 @@ async fn test_future_step_contention() {
         actions: vec![ActionSpec::ExternalApp(ExternalAppSpec {
             app_id: "AppB".to_string(),
             args: std::collections::HashMap::new(),
-            period_mode: runner::runner::config::PeriodMode::Custom,
+            period_mode: runner_app::runner::config::PeriodMode::Custom,
             start_date: None,
             end_date: None,
             start_date_arg: None,
@@ -479,7 +479,7 @@ async fn test_multiple_apps_in_one_step_dedup_and_sort() {
             ActionSpec::ExternalApp(ExternalAppSpec {
                 app_id: "AppB".to_string(),
                 args: std::collections::HashMap::new(),
-                period_mode: runner::runner::config::PeriodMode::Custom,
+                period_mode: runner_app::runner::config::PeriodMode::Custom,
                 start_date: None,
                 end_date: None,
                 start_date_arg: None,
@@ -488,7 +488,7 @@ async fn test_multiple_apps_in_one_step_dedup_and_sort() {
             ActionSpec::ExternalApp(ExternalAppSpec {
                 app_id: "AppA".to_string(),
                 args: std::collections::HashMap::new(),
-                period_mode: runner::runner::config::PeriodMode::Custom,
+                period_mode: runner_app::runner::config::PeriodMode::Custom,
                 start_date: None,
                 end_date: None,
                 start_date_arg: None,
@@ -506,7 +506,7 @@ async fn test_multiple_apps_in_one_step_dedup_and_sort() {
             ActionSpec::ExternalApp(ExternalAppSpec {
                 app_id: "AppA".to_string(),
                 args: std::collections::HashMap::new(),
-                period_mode: runner::runner::config::PeriodMode::Custom,
+                period_mode: runner_app::runner::config::PeriodMode::Custom,
                 start_date: None,
                 end_date: None,
                 start_date_arg: None,
@@ -515,7 +515,7 @@ async fn test_multiple_apps_in_one_step_dedup_and_sort() {
             ActionSpec::ExternalApp(ExternalAppSpec {
                 app_id: "AppB".to_string(),
                 args: std::collections::HashMap::new(),
-                period_mode: runner::runner::config::PeriodMode::Custom,
+                period_mode: runner_app::runner::config::PeriodMode::Custom,
                 start_date: None,
                 end_date: None,
                 start_date_arg: None,
@@ -553,9 +553,9 @@ async fn test_multiple_apps_in_one_step_dedup_and_sort() {
 
 #[tokio::test]
 async fn test_prevent_duplicate_task_execution() {
-    use runner::runner::config::{RunnerConfig, RunnerTask};
-    use runner::runner::engine::dispatcher::task_commands::run_task_by_id;
-    use runner::runner::engine::state::RunnerStatus;
+    use runner_app::runner::config::{RunnerConfig, RunnerTask};
+    use runner_app::runner::engine::dispatcher::task_commands::run_task_by_id;
+    use runner_app::runner::engine::state::RunnerStatus;
     use std::sync::Arc;
     use tempfile::tempdir;
     use tokio::sync::{mpsc, Mutex};
@@ -569,7 +569,7 @@ async fn test_prevent_duplicate_task_execution() {
         name: "Duplicate Check Task".to_string(),
         enabled: true,
         schedules: vec![],
-        repetition: runner::runner::config::Repetition::Once,
+        repetition: runner_app::runner::config::Repetition::Once,
         frequency_seconds: 0,
         next_run_at: String::new(),
         steps: vec![],

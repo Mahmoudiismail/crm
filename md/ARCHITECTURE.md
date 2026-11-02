@@ -2,17 +2,17 @@
 
 ## Repository and package structure
 
-The repository is a Cargo workspace. `crm_tool` owns the shared domain implementation and contracts; each executable is a separate package under `apps/`, so it can be built, released, and deployed independently:
+The repository is a Cargo workspace. Each executable package owns its implementation under `apps/<name>/src/`. The root `crm_tool` library provides shared manifest contracts, utilities, and managed PowerShell script infrastructure.
 
 | Binary | Main source | Responsibility |
 |---|---|---|
-| runner | apps/runner/src/main.rs, src/runner/** | Scheduling, local GUI, task admission, pipelines and child-process lifecycle |
-| crm | apps/crm/src/main.rs, src/crm/** | CRM authentication, API requests and report downloads |
-| yasweb | apps/yasweb/src/main.rs, src/yasweb/** | Headless browser report automation |
-| tasker | apps/tasker/src/main.rs, src/tasker/** | CSV/report processing, Excel automation and Outlook workflows |
-| crm_updater | apps/crm_updater/src/main.rs, src/crm_updater/** | Local diagnostics collection and application update orchestration |
+| runner | apps/runner/src/main.rs, apps/runner/src/runner/** | Scheduling, local GUI, task admission, pipelines and child-process lifecycle |
+| crm | apps/crm/src/main.rs, apps/crm/src/crm/** | CRM authentication, API requests and report downloads |
+| yasweb | apps/yasweb/src/main.rs, apps/yasweb/src/yasweb/** | Headless browser report automation |
+| tasker | apps/tasker/src/main.rs, apps/tasker/src/tasker/** | CSV/report processing, Excel automation and Outlook workflows |
+| crm_updater | apps/crm_updater/src/main.rs, apps/crm_updater/src/crm_updater/** | Local diagnostics collection and application update orchestration |
 
-Shared utilities, manifest types and common behavior are exported through src/lib.rs.
+Shared utilities, manifest types, and managed-script infrastructure are exported through `src/lib.rs`.
 
 ## Runtime responsibilities
 

@@ -1,4 +1,4 @@
-use yasweb::yasweb::browser::reports::generate_step6_js;
+use yasweb_app::yasweb::browser::reports::generate_step6_js;
 
 #[test]
 fn test_generate_step6_js_normal_timeout() {
@@ -37,7 +37,7 @@ fn test_download_wait_uses_correct_duration() {
     assert_eq!(timeout_duration.as_secs(), 360000);
 }
 
-use yasweb::yasweb::browser::reports::generate_mis_reports_wait_js;
+use yasweb_app::yasweb::browser::reports::generate_mis_reports_wait_js;
 
 #[test]
 fn test_generate_mis_reports_wait_js_normal_timeout() {
@@ -91,7 +91,7 @@ fn mis_route_wait_is_not_a_fail_fast_url_check() {
 
 #[test]
 fn runner_filter_form_supports_multiselect_dependencies_and_optional_dropdowns() {
-    let source = include_str!("../../src/runner/assets/js/forms.js");
+    let source = include_str!("../../../runner/src/runner/assets/js/forms.js");
     assert!(source.contains("input.hasAttribute(\"data-multilist\")"));
     assert!(source.contains("input.checked"));
     assert!(source.contains("-- Select --"));

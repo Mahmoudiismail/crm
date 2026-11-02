@@ -1,9 +1,9 @@
-use runner::runner::config::{
+use runner_app::runner::config::{
     ActionSpec, ExecutionMode, ExternalAppSpec, RegisteredApp, Repetition, RunnerTask, TaskStep,
 };
-use runner::runner::engine::app_lock::AppLockManager;
-use runner::runner::engine::pipeline::run_task_inner;
-use runner::runner::engine::state::{ExecutionPolicy, RunnerStatus};
+use runner_app::runner::engine::app_lock::AppLockManager;
+use runner_app::runner::engine::pipeline::run_task_inner;
+use runner_app::runner::engine::state::{ExecutionPolicy, RunnerStatus};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -60,7 +60,7 @@ async fn test_gui_status_waiting_for_app_deterministic() {
             actions: vec![ActionSpec::ExternalApp(ExternalAppSpec {
                 app_id: "App B".to_string(),
                 args: std::collections::HashMap::new(),
-                period_mode: runner::runner::config::PeriodMode::Custom,
+                period_mode: runner_app::runner::config::PeriodMode::Custom,
                 start_date: None,
                 end_date: None,
                 start_date_arg: None,

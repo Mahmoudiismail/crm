@@ -12,8 +12,8 @@ use crm_tool::utils::{
 };
 use tokio::fs;
 use tracing::{error, info};
-use yasweb::yasweb::browser::run_browser_tab;
-use yasweb::yasweb::config::{DiscoveredReportFilters, ReportConfig, YaswebConfig};
+use yasweb_app::yasweb::browser::run_browser_tab;
+use yasweb_app::yasweb::config::{DiscoveredReportFilters, ReportConfig, YaswebConfig};
 
 #[derive(Parser)]
 #[command(name = "yasweb", about = "YAS Web Scraper")]

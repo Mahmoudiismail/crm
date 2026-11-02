@@ -5,6 +5,7 @@ edition = "2021"
 autobins = false
 
 [lib]
+name = "crm_updater_app"
 path = "src/lib.rs"
 
 [[bin]]

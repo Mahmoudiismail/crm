@@ -5,6 +5,7 @@ edition = "2021"
 autobins = false
 
 [lib]
+name = "runner_app"
 path = "src/lib.rs"
 
 [[bin]]

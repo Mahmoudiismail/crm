@@ -1,9 +1,9 @@
-use runner::runner::config::{
+use runner_app::runner::config::{
     ActionSpec, ExecutionMode, ExternalAppSpec, RegisteredApp, Repetition, RunnerConfig,
     RunnerTask, ShellCommandSpec, TaskStep,
 };
-use runner::runner::engine::errors::EngineError;
-use runner::runner::engine::validation::validate_config;
+use runner_app::runner::engine::errors::EngineError;
+use runner_app::runner::engine::validation::validate_config;
 
 #[test]
 fn test_validate_config_duplicate_task_id() {
@@ -134,7 +134,7 @@ fn test_validate_config_invalid_external_app_reference() {
         actions: vec![ActionSpec::ExternalApp(ExternalAppSpec {
             app_id: "missing_app".to_string(),
             args: std::collections::HashMap::new(),
-            period_mode: runner::runner::config::PeriodMode::Custom,
+            period_mode: runner_app::runner::config::PeriodMode::Custom,
             start_date: None,
             end_date: None,
             start_date_arg: None,

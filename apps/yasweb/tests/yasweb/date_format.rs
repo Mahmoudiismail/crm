@@ -1,4 +1,4 @@
-use yasweb::yasweb::config::YaswebConfig;
+use yasweb_app::yasweb::config::YaswebConfig;
 
 #[test]
 fn test_yasweb_config_deserialization_handles_string_and_struct() {

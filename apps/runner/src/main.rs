@@ -11,9 +11,9 @@ use crm_tool::utils::{
 #[cfg(target_os = "windows")]
 use muda::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem};
 #[cfg(target_os = "windows")]
-use runner::runner::engine::RunnerHandle;
-use runner::runner::engine::{start_scheduler, RunnerCommand};
-use runner::runner::gui::start_gui_server;
+use runner_app::runner::engine::RunnerHandle;
+use runner_app::runner::engine::{start_scheduler, RunnerCommand};
+use runner_app::runner::gui::start_gui_server;
 use std::path::{Path, PathBuf};
 #[cfg(target_os = "windows")]
 use std::time::Duration;
@@ -90,7 +90,7 @@ fn redact_config_value(value: &mut serde_json::Value) {
     }
 }
 
-fn runner_config_log_snapshot(config: &runner::runner::config::RunnerConfig) -> Result<String> {
+fn runner_config_log_snapshot(config: &runner_app::runner::config::RunnerConfig) -> Result<String> {
     let mut value = serde_json::to_value(config)?;
     redact_config_value(&mut value);
     Ok(serde_json::to_string_pretty(&value)?)
@@ -117,7 +117,7 @@ async fn main() -> Result<()> {
 
     let runner_cfg = {
         let cfg = if config_exists {
-            match runner::runner::config::RunnerConfig::load(&runner_config_path_str) {
+            match runner_app::runner::config::RunnerConfig::load(&runner_config_path_str) {
                 Ok(c) => c,
                 Err(e) => {
                     eprintln!(
@@ -129,13 +129,13 @@ async fn main() -> Result<()> {
                 }
             }
         } else {
-            runner::runner::config::RunnerConfig::default()
+            runner_app::runner::config::RunnerConfig::default()
         };
         if let Err(e) = cfg.validate() {
             eprintln!("Runner configuration validation failed: {}", e);
             std::process::exit(1);
         }
-        if let Err(e) = runner::runner::engine::validation::validate_config(&cfg) {
+        if let Err(e) = runner_app::runner::engine::validation::validate_config(&cfg) {
             eprintln!("Runner configuration logic validation failed: {}", e);
             std::process::exit(1);
         }

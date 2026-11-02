@@ -1,5 +1,5 @@
-use runner::runner::engine::logging::TaskLogger;
-use runner::runner::engine::process::{run_process, ProcessContext};
+use runner_app::runner::engine::logging::TaskLogger;
+use runner_app::runner::engine::process::{run_process, ProcessContext};
 use std::time::Duration;
 
 #[tokio::test]
