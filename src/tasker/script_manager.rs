@@ -160,7 +160,9 @@ impl ScriptManager {
             (
                 "CRM Updater",
                 "scan_update_drafts.ps1",
-                include_str!("../../apps/crm_updater/src/crm_updater/scripts/scan_update_drafts.ps1"),
+                include_str!(
+                    "../../apps/crm_updater/src/crm_updater/scripts/scan_update_drafts.ps1"
+                ),
             ),
             (
                 "CRM Updater",

@@ -236,10 +236,7 @@ Host: 127.0.0.1
         runner::runner::gui::status_reason_phrase(400),
         "Bad Request"
     );
-    assert_eq!(
-        runner::runner::gui::status_reason_phrase(404),
-        "Not Found"
-    );
+    assert_eq!(runner::runner::gui::status_reason_phrase(404), "Not Found");
     assert_eq!(
         runner::runner::gui::status_reason_phrase(405),
         "Method Not Allowed"

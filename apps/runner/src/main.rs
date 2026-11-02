@@ -4,16 +4,16 @@ use anyhow::Context;
 use anyhow::Result;
 use clap::Parser;
 use crm_tool::manifest::{AppArg, AppManifest};
-#[cfg(target_os = "windows")]
-use runner::runner::engine::RunnerHandle;
-use runner::runner::engine::{start_scheduler, RunnerCommand};
-use runner::runner::gui::start_gui_server;
 use crm_tool::utils::{
     executable_dir, intercept_manifest, parse_log_level, setup_logging_with_levels_and_header,
     InterceptResult,
 };
 #[cfg(target_os = "windows")]
 use muda::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem};
+#[cfg(target_os = "windows")]
+use runner::runner::engine::RunnerHandle;
+use runner::runner::engine::{start_scheduler, RunnerCommand};
+use runner::runner::gui::start_gui_server;
 use std::path::{Path, PathBuf};
 #[cfg(target_os = "windows")]
 use std::time::Duration;

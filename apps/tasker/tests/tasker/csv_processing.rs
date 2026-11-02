@@ -196,8 +196,8 @@ fn test_csv_processing_header_only() {
 }
 
 use crate::support::tasker::csv::setup_test_dataset;
-use tasker::tasker::config::CsvAnalysisConfig;
 use std::io::Write;
+use tasker::tasker::config::CsvAnalysisConfig;
 use tempfile::NamedTempFile;
 
 #[test]
