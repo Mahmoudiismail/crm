@@ -36,6 +36,25 @@ Set these values in wxcc_config.json:
 
 V1 stores client secret and tokens in plain local JSON by explicit project decision. Protect the file using Windows account and filesystem permissions. Never commit a populated config.
 
+## Runner integration
+
+WXCC Handler supports both its interactive CLI subcommands and Runner's manifest-driven flag interface. Runner must select an operation with `--action`; the manifest exposes these values:
+
+- `config-init`, `config-check`
+- `auth-authorize-url`, `auth-exchange-code`, `auth-refresh`, `auth-status`
+- `data-collect`
+
+Examples of the equivalent Runner invocations:
+
+```powershell
+wxcc_handler.exe --action config-init
+wxcc_handler.exe --action auth-authorize-url
+wxcc_handler.exe --action auth-exchange-code --code CODE --state STATE
+wxcc_handler.exe --action data-collect --output C:\Exports\wxcc_data.csv
+```
+
+The `--code` and `--state` fields are available only for `auth-exchange-code`; `--output` is available only for `data-collect`. Runner supplies the selected action as a normal named argument, so it does not need to construct positional subcommands. Existing subcommand syntax remains supported for manual use.
+
 ## OAuth commands
 
 1. Run wxcc_handler.exe auth authorize-url.
