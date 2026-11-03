@@ -378,13 +378,34 @@ mod tests {
                 command: AuthCommand::ExchangeCode(_)
             }
         ));
-        assert!(Cli::try_parse_from([
+        let missing_state = Cli::try_parse_from([
             "wxcc_handler",
             "--action",
             "auth-exchange-code",
             "--code",
-            "c"
+            "c",
         ])
+        .unwrap();
+        assert!(command_from_runner_action(
+            missing_state.action.unwrap(),
+            missing_state.code.as_deref(),
+            missing_state.state.as_deref(),
+        )
+        .is_err());
+
+        let missing_code = Cli::try_parse_from([
+            "wxcc_handler",
+            "--action",
+            "auth-exchange-code",
+            "--state",
+            "s",
+        ])
+        .unwrap();
+        assert!(command_from_runner_action(
+            missing_code.action.unwrap(),
+            missing_code.code.as_deref(),
+            missing_code.state.as_deref(),
+        )
         .is_err());
     }
 
