@@ -15,7 +15,7 @@ struct TokenResponse {
     expires_in: i64,
 }
 
-pub fn authorization_url(config: &WxccConfig) -> Result<(String, String)> {
+pub fn authorization_url(config_path: &Path, mut config: WxccConfig) -> Result<(String, String)> {
     config.validate(true)?;
     let state = Alphanumeric.sample_string(&mut rand::rng(), 40);
     let scopes = config.scopes.join(" ");
@@ -24,6 +24,8 @@ pub fn authorization_url(config: &WxccConfig) -> Result<(String, String)> {
         urlencoding::encode(&config.client_id), urlencoding::encode(&config.redirect_uri),
         urlencoding::encode(&scopes), urlencoding::encode(&state),
     );
+    config.pending_oauth_state = Some(state.clone());
+    config.save(config_path)?;
     Ok((url, state))
 }
 
@@ -76,7 +78,7 @@ mod tests {
             redirect_uri: "https://localhost/callback".into(),
             scopes: vec!["cjp:config_read".into(), "cjp:user".into()], ..Default::default()
         };
-        let (url, state) = authorization_url(&config).unwrap();
+        let (url, state) = authorization_url(Path::new("wxcc-test-config.json"), config).unwrap();
         assert!(url.starts_with(AUTHORIZE_ENDPOINT));
         assert!(url.contains("response_type=code"));
         assert!(url.contains("scope=cjp%3Aconfig_read%20cjp%3Auser"));
