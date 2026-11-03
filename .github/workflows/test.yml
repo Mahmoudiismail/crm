@@ -235,6 +235,9 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
 
+      - name: Test Runner JavaScript validation
+        run: node --test apps/runner/tests/validation.test.js
+
       - name: Check PowerShell syntax
         shell: pwsh
         run: |
