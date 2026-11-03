@@ -48,19 +48,23 @@ impl ApiClient {
         })
     }
 
-    fn endpoint(&self, path: &str) -> String {
-        format!(
+    fn endpoint(&self, path: &str) -> Result<String> {
+        let path = path.trim_start_matches('/');
+        if !path.starts_with("v2/") {
+            bail!("Only Webex Contact Center v2 API requests are allowed (got {path})");
+        }
+        Ok(format!(
             "{}/organization/{}/{}",
             self.base_url,
             urlencoding::encode(&self.org_id),
-            path.trim_start_matches('/')
-        )
+            path
+        ))
     }
 
     async fn get(&self, path: &str) -> Result<Value> {
         let response = self
             .client
-            .get(self.endpoint(path))
+            .get(self.endpoint(path)?)
             .bearer_auth(&self.access_token)
             .header(reqwest::header::ACCEPT, "application/json")
             .send()
