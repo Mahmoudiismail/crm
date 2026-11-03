@@ -121,3 +121,9 @@ Runner passes the declared `--filter-<key>` values as separate process
 arguments; Yasweb normalizes those dynamic flags into its supported
 `--filters <JSON>` input. This preserves the manifest-driven dropdown UI
 without requiring a fixed set of filter names in the Yasweb CLI.
+
+Optional manifest text/filter fields can be cleared by removing their contents
+and saving the task. Runner persists the explicit empty string in the action's
+`args` object, so the field remains empty on the next edit instead of falling
+back to the manifest's `default_value`. This does not make structurally
+required fields (such as task/profile identifiers) optional.
