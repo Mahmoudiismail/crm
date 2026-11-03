@@ -1,10 +1,10 @@
 use crate::utils::FileCleanupGuard;
 use anyhow::{bail, Context, Result};
 use serde::Serialize;
+use std::collections::HashSet;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::collections::HashSet;
 use tracing::{info, warn};
 use zip::ZipArchive;
 
@@ -95,7 +95,8 @@ pub fn process_update_pipeline(config: &crate::crm_updater::config::UpdaterConfi
 
     // 3. Generate PowerShell script for shutdown, replace, and restart
     let parent_pid = std::process::id();
-    let (ps_script_path, args) = generate_update_script(&selected_entries, downloads_dir, parent_pid)?;
+    let (ps_script_path, args) =
+        generate_update_script(&selected_entries, downloads_dir, parent_pid)?;
 
     // Execute script as detached process
     execute_detached_powershell(&ps_script_path, &args)?;
@@ -194,25 +195,46 @@ fn select_replacements(
     downloads_dir: &Path,
     extracted_files: &[PathBuf],
 ) -> Result<Vec<crate::crm_updater::config::ReplacementMapEntry>> {
-    let configured_sources: HashSet<&Path> = config.file_replacement_map.iter()
-        .map(|entry| Path::new(&entry.source_file)).collect();
+    let configured_sources: HashSet<&Path> = config
+        .file_replacement_map
+        .iter()
+        .map(|entry| Path::new(&entry.source_file))
+        .collect();
     let mut matched = HashSet::new();
     for file in extracted_files {
-        let relative = file.strip_prefix(downloads_dir)
-            .with_context(|| format!("Update file is outside downloads directory: {}", file.display()))?;
+        let relative = file.strip_prefix(downloads_dir).with_context(|| {
+            format!(
+                "Update file is outside downloads directory: {}",
+                file.display()
+            )
+        })?;
         if !configured_sources.contains(relative) {
-            bail!("Update package contains an unconfigured file: {}", relative.display());
+            bail!(
+                "Update package contains an unconfigured file: {}",
+                relative.display()
+            );
         }
         if !matched.insert(relative.to_path_buf()) {
-            bail!("Update package contains a duplicate file: {}", relative.display());
+            bail!(
+                "Update package contains a duplicate file: {}",
+                relative.display()
+            );
         }
     }
     let mut selected = Vec::new();
     for entry in &config.file_replacement_map {
         let staged = downloads_dir.join(&entry.source_file);
         if extracted_files.iter().any(|file| file == &staged) {
-            if selected.iter().any(|item: &crate::crm_updater::config::ReplacementMapEntry| item.source_file == entry.source_file) {
-                bail!("Multiple configured applications use the same source file: {}", entry.source_file);
+            if selected
+                .iter()
+                .any(|item: &crate::crm_updater::config::ReplacementMapEntry| {
+                    item.source_file == entry.source_file
+                })
+            {
+                bail!(
+                    "Multiple configured applications use the same source file: {}",
+                    entry.source_file
+                );
             }
             selected.push(entry.clone());
         }
@@ -364,18 +386,32 @@ fn execute_detached_powershell(script_path: &Path, args: &[(String, String)]) ->
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
     use crate::crm_updater::config::{ReplacementMapEntry, UpdaterConfig};
+    use std::path::Path;
 
     #[test]
     fn selective_update_includes_only_packaged_configured_apps() {
         let config = UpdaterConfig {
-            downloads_dir: "down".into(), runner_logs_dir: "logs".into(),
-            log_recipient_email: "test@test.com".into(), log_stdout_level: "DEBUG".into(),
+            downloads_dir: "down".into(),
+            runner_logs_dir: "logs".into(),
+            log_recipient_email: "test@test.com".into(),
+            log_stdout_level: "DEBUG".into(),
             log_file_level: "TRACE".into(),
             file_replacement_map: vec![
-                ReplacementMapEntry { source_file: "runner.exe".into(), target_path: ".".into(), executable_name: "runner.exe".into(), restart_args: None, autostart: true },
-                ReplacementMapEntry { source_file: "tasker.exe".into(), target_path: ".".into(), executable_name: "tasker.exe".into(), restart_args: None, autostart: true },
+                ReplacementMapEntry {
+                    source_file: "runner.exe".into(),
+                    target_path: ".".into(),
+                    executable_name: "runner.exe".into(),
+                    restart_args: None,
+                    autostart: true,
+                },
+                ReplacementMapEntry {
+                    source_file: "tasker.exe".into(),
+                    target_path: ".".into(),
+                    executable_name: "tasker.exe".into(),
+                    restart_args: None,
+                    autostart: true,
+                },
             ],
         };
         let temp = tempfile::tempdir().unwrap();
@@ -394,14 +430,11 @@ mod tests {
         assert_eq!(payload["apps_to_stop"][0]["process_name"], "runner");
         fs::remove_file(&args[3].1).unwrap();
 
-        let both = [
-            temp.path().join("runner.exe"),
-            {
-                let tasker = temp.path().join("tasker.exe");
-                fs::write(&tasker, b"tasker").unwrap();
-                tasker
-            },
-        ];
+        let both = [temp.path().join("runner.exe"), {
+            let tasker = temp.path().join("tasker.exe");
+            fs::write(&tasker, b"tasker").unwrap();
+            tasker
+        }];
         let full_selection = select_replacements(&config, temp.path(), &both).unwrap();
         assert_eq!(full_selection.len(), 2);
     }
@@ -409,12 +442,17 @@ mod tests {
     #[test]
     fn selective_update_rejects_unconfigured_archive_files() {
         let config = UpdaterConfig {
-            downloads_dir: "down".into(), runner_logs_dir: "logs".into(),
-            log_recipient_email: "test@test.com".into(), log_stdout_level: "DEBUG".into(),
+            downloads_dir: "down".into(),
+            runner_logs_dir: "logs".into(),
+            log_recipient_email: "test@test.com".into(),
+            log_stdout_level: "DEBUG".into(),
             log_file_level: "TRACE".into(),
             file_replacement_map: vec![ReplacementMapEntry {
-                source_file: "runner.exe".into(), target_path: ".".into(),
-                executable_name: "runner.exe".into(), restart_args: None, autostart: true,
+                source_file: "runner.exe".into(),
+                target_path: ".".into(),
+                executable_name: "runner.exe".into(),
+                restart_args: None,
+                autostart: true,
             }],
         };
         let temp = tempfile::tempdir().unwrap();
@@ -504,7 +542,8 @@ mod tests {
         };
 
         let temp_dir = tempfile::tempdir().unwrap();
-        let (script_path, args) = generate_update_script(&config.file_replacement_map, temp_dir.path(), 99999).unwrap();
+        let (script_path, args) =
+            generate_update_script(&config.file_replacement_map, temp_dir.path(), 99999).unwrap();
         let script_content = std::fs::read_to_string(&script_path).unwrap();
 
         assert!(script_content.contains("param("));
