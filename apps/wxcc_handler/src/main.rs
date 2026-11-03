@@ -33,7 +33,7 @@ struct Cli {
     #[arg(long, global = true)]
     config: Option<PathBuf>,
     /// Select an operation when launched by Runner.
-    #[arg(long, value_enum, conflicts_with = "command")]
+    #[arg(long, value_enum)]
     action: Option<RunnerAction>,
     /// OAuth authorization code (Runner action: auth-exchange-code).
     #[arg(long, requires = "action")]
