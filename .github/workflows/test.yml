@@ -61,25 +61,51 @@ jobs:
       - id: detect
         shell: bash
         env:
-          BASE_REF: ${{ github.event.pull_request.base.ref || github.ref_name }}
-          BEFORE_SHA: ${{ github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          PUSH_AFTER_SHA: ${{ github.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch || 'main' }}
         run: |
           set -euo pipefail
-          git fetch origin "$BASE_REF"
-          BASE="$BEFORE_SHA"
-          if [[ -z "$BASE" || "$BASE" =~ ^0+$ ]]; then
-            BASE="$(git rev-parse HEAD^)"
+
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            BASE_SHA="$PR_BASE_SHA"
+            HEAD_SHA="$PR_HEAD_SHA"
+          elif [[ -n "$PUSH_BEFORE_SHA" && ! "$PUSH_BEFORE_SHA" =~ ^0+$ ]]; then
+            BASE_SHA="$PUSH_BEFORE_SHA"
+            HEAD_SHA="$PUSH_AFTER_SHA"
+          else
+            git fetch origin "$BASE_REF"
+            BASE_SHA="$(git merge-base "origin/$BASE_REF" "$PUSH_AFTER_SHA")"
+            HEAD_SHA="$PUSH_AFTER_SHA"
           fi
-          git diff --name-only "$BASE...HEAD" > changed-files.txt
+
+          if [[ -z "$BASE_SHA" || -z "$HEAD_SHA" ]]; then
+            echo "::error::Unable to resolve the exact base/head commits for package detection."
+            exit 1
+          fi
+
+          git diff --name-only "$BASE_SHA...$HEAD_SHA" > changed-files.txt
+          echo "Compared commits: $BASE_SHA...$HEAD_SHA"
+          echo "Changed paths:"
+          cat changed-files.txt
+
           python3 - <<'PY'
           import json
+          import os
           from pathlib import Path
+
+          all_packages = ("crm", "runner", "yasweb", "tasker", "crm_updater")
           packages = set()
-          all_packages = {"crm", "runner", "yasweb", "tasker", "crm_updater"}
           shared = False
+
           for name in Path("changed-files.txt").read_text(encoding="utf-8").splitlines():
-              if (name in {"Cargo.toml", "Cargo.lock", "deny.toml"}
-                  or name.startswith(("src/", "tests/", ".github/workflows/"))):
+              if (
+                  name in {"Cargo.toml", "Cargo.lock", "deny.toml"}
+                  or name.startswith(("src/", "tests/", ".github/workflows/"))
+              ):
                   shared = True
               elif name.startswith("apps/"):
                   parts = name.split("/")
@@ -87,12 +113,23 @@ jobs:
                       packages.add(parts[1])
                   else:
                       shared = True
+
           if shared:
-              packages = all_packages
-          ordered = [p for p in ("crm", "runner", "yasweb", "tasker", "crm_updater") if p in packages]
-          with open(__import__("os").environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
-              out.write("packages=" + json.dumps(ordered) + "\n")
-          print("Affected packages:", ", ".join(ordered) if ordered else "none (non-Rust app files only)")
+              packages = set(all_packages)
+
+          ordered = [package for package in all_packages if package in packages]
+          encoded = json.dumps(ordered, separators=(",", ":"))
+          if json.loads(encoded) != ordered:
+              raise SystemExit("Package matrix JSON failed round-trip validation.")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"packages={encoded}\\n")
+
+          print(f"Package matrix output: {encoded}")
+          print(
+              "Affected packages:",
+              ", ".join(ordered) if ordered else "none (non-Rust app files only)",
+          )
           PY
 
   format:
