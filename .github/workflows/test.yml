@@ -49,6 +49,52 @@ env:
   RUSTFLAGS: "-Dwarnings"
 
 jobs:
+  detect-packages:
+    name: Detect affected packages
+    runs-on: ubuntu-latest
+    outputs:
+      packages: ${{ steps.detect.outputs.packages }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: detect
+        shell: bash
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.ref_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          git fetch origin "$BASE_REF"
+          BASE="$BEFORE_SHA"
+          if [[ -z "$BASE" || "$BASE" =~ ^0+$ ]]; then
+            BASE="$(git rev-parse HEAD^)"
+          fi
+          git diff --name-only "$BASE...HEAD" > changed-files.txt
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          packages = set()
+          all_packages = {"crm", "runner", "yasweb", "tasker", "crm_updater"}
+          shared = False
+          for name in Path("changed-files.txt").read_text(encoding="utf-8").splitlines():
+              if (name in {"Cargo.toml", "Cargo.lock", "deny.toml"}
+                  or name.startswith(("src/", "tests/", ".github/workflows/"))):
+                  shared = True
+              elif name.startswith("apps/"):
+                  parts = name.split("/")
+                  if len(parts) > 1 and parts[1] in all_packages:
+                      packages.add(parts[1])
+                  else:
+                      shared = True
+          if shared:
+              packages = all_packages
+          ordered = [p for p in ("crm", "runner", "yasweb", "tasker", "crm_updater") if p in packages]
+          with open(__import__("os").environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write("packages=" + json.dumps(ordered) + "\\n")
+          print("Affected packages:", ", ".join(ordered) if ordered else "none (non-Rust app files only)")
+          PY
+
   format:
     name: Format and Auto-fix
     runs-on: windows-latest
@@ -96,7 +142,12 @@ jobs:
 
   clippy:
     name: Clippy Lints
-    needs: format
+    needs: [format, detect-packages]
+    if: needs.detect-packages.outputs.packages != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.detect-packages.outputs.packages) }}
     runs-on: windows-latest
 
     steps:
@@ -122,7 +173,7 @@ jobs:
           cache-on-failure: true
 
       - name: Run clippy
-        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+        run: cargo clippy -p ${{ matrix.package }} --all-targets --all-features --locked -- -D warnings
 
 
 
@@ -153,7 +204,12 @@ jobs:
 
   test:
     name: Test Suite
-    needs: [format, clippy]
+    needs: [format, clippy, detect-packages]
+    if: needs.detect-packages.outputs.packages != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.detect-packages.outputs.packages) }}
     runs-on: windows-latest
 
     steps:
@@ -202,7 +258,7 @@ jobs:
           cache-on-failure: true
 
       - name: Run tests
-        run: cargo test --workspace --all-targets --all-features --locked
+        run: cargo test -p ${{ matrix.package }} --all-targets --all-features --locked
 
       - name: Build all process packages in release mode
-        run: cargo build --workspace --release --locked
+        run: cargo build --release -p ${{ matrix.package }} --locked
