@@ -3,6 +3,9 @@ use std::process::Stdio;
 use std::time::Duration;
 use tokio::io::AsyncReadExt;
 
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
+
 use crate::runner::engine::helpers::excerpt_utf8;
 use crate::runner::engine::logging::TaskLogger;
 
@@ -30,6 +33,8 @@ pub async fn run_process(mut ctx: ProcessContext<'_>) -> Result<()> {
     ctx.cmd.stdout(Stdio::piped());
     ctx.cmd.stderr(Stdio::piped());
     ctx.cmd.kill_on_drop(true);
+    #[cfg(unix)]
+    ctx.cmd.as_std_mut().process_group(0);
 
     let mut child = ctx
         .cmd
@@ -37,6 +42,7 @@ pub async fn run_process(mut ctx: ProcessContext<'_>) -> Result<()> {
         .with_context(|| format!("Failed to spawn process for command: {}", ctx.command_str))?;
 
     let child_pid = child.id();
+    let mut process_tree_guard = ProcessTreeGuard::new(child_pid);
 
     let timeout_duration = if ctx.timeout_seconds > 0 {
         Some(Duration::from_secs(ctx.timeout_seconds))
@@ -70,6 +76,7 @@ pub async fn run_process(mut ctx: ProcessContext<'_>) -> Result<()> {
                     .await;
 
                 terminate_process_tree(child_pid, &mut child).await;
+                process_tree_guard.disarm();
 
                 return Err(anyhow::anyhow!(
                     "Command timed out after {}s: {}",
@@ -83,6 +90,7 @@ pub async fn run_process(mut ctx: ProcessContext<'_>) -> Result<()> {
         status_res.context("Failed waiting for process completion")?
     };
 
+    process_tree_guard.disarm();
     ctx.logger.log_bytes("STDOUT", &stdout_bytes).await;
     ctx.logger.log_bytes("STDERR", &stderr_bytes).await;
 
@@ -127,6 +135,50 @@ async fn read_bounded<R: AsyncReadExt + Unpin>(stream: Option<&mut R>, out: &mut
     }
 }
 
+struct ProcessTreeGuard {
+    child_pid: Option<u32>,
+    armed: bool,
+}
+
+impl ProcessTreeGuard {
+    fn new(child_pid: Option<u32>) -> Self {
+        Self {
+            child_pid,
+            armed: true,
+        }
+    }
+
+    fn disarm(&mut self) {
+        self.armed = false;
+    }
+}
+
+impl Drop for ProcessTreeGuard {
+    fn drop(&mut self) {
+        if !self.armed {
+            return;
+        }
+        if let Some(pid) = self.child_pid {
+            #[cfg(windows)]
+            {
+                let _ = std::process::Command::new("taskkill")
+                    .args(["/F", "/T", "/PID", &pid.to_string()])
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status();
+            }
+            #[cfg(unix)]
+            {
+                let _ = std::process::Command::new("kill")
+                    .args(["-KILL", "--", &format!("-{pid}")])
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status();
+            }
+        }
+    }
+}
+
 async fn terminate_process_tree(child_pid: Option<u32>, child: &mut tokio::process::Child) {
     if let Some(pid) = child_pid {
         #[cfg(target_os = "windows")]
@@ -139,10 +191,10 @@ async fn terminate_process_tree(child_pid: Option<u32>, child: &mut tokio::proce
                 .await;
         }
 
-        #[cfg(not(target_os = "windows"))]
+        #[cfg(unix)]
         {
-            let _ = tokio::process::Command::new("pkill")
-                .args(["-P", &pid.to_string()])
+            let _ = tokio::process::Command::new("kill")
+                .args(["-KILL", "--", &format!("-{pid}")])
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .status()
