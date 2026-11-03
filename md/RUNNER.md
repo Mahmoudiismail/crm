@@ -71,7 +71,7 @@ Each External Application action configures its own periodization mode alongside
 
 ### Date Input Visibility
 The GUI dynamically inspects the returned application `AppManifest` when a task action is created or an app is selected.
-If the manifest does not explicitly declare date/periodization arguments (e.g. `start_date`, `end_date`, `period_mode`, or generic `date_var` arguments), the Periodization Mode and Date inputs are completely hidden from the user interface to prevent confusion, preserving layout relevancy to the specific tool executed.
+If the manifest does not explicitly declare date/periodization arguments (e.g. `start_date`, `end_date`, `period_mode`, or generic `date_var` arguments), the Periodization Mode and Date inputs are completely hidden from the user interface to prevent confusion, preserving layout relevancy to the specific tool executed. Manifest arguments hidden because their `depends_on` conditions are not met are also excluded when the action's arguments are serialized and saved; hiding the parent field container must not leave an empty or stale argument in `runner_config.json`. Mapped date arguments are likewise omitted from the ordinary argument map because Runner supplies their resolved period values at execution time.
 
 ### Fixed Date vs Dynamic Expression UI
 For each External Application independently, Start Date and End Date support explicit selection between:
