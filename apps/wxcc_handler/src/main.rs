@@ -6,7 +6,7 @@ use crm_tool::utils::{
 };
 use std::path::{Path, PathBuf};
 use tracing::{error, info};
-use wxcc_handler::wxcc::{auth, config::WxccConfig};
+use wxcc_handler::wxcc::{auth, config::WxccConfig, data};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -51,7 +51,7 @@ struct ExchangeCodeArgs {
     state: String,
 }
 
-fn resolve_config_path(config: Option<&Path>, exe_dir: &Path) -> PathBuf {
+fn resolve_output_path(output: Option<&Path>, exe_dir: &Path) -> PathBuf {\n    match output {\n        Some(path) if path.is_absolute() => path.to_path_buf(),\n        Some(path) => exe_dir.join(path),\n        None => exe_dir.join("wxcc_data.csv"),\n    }\n}\n\nfn resolve_config_path(config: Option<&Path>, exe_dir: &Path) -> PathBuf {
     match config {
         Some(path) if path.is_absolute() => path.to_path_buf(),
         Some(path) => exe_dir.join(path),
@@ -63,7 +63,10 @@ fn get_manifest() -> AppManifest {
         plugin_api_version: Some(crm_tool::manifest::PROCESS_PLUGIN_API_VERSION),
         name: "Webex Contact Center Handler".into(),
         description: "Official-API process handler for Webex Contact Center.".into(),
-        arguments: vec![AppArg::new("--config", ArgType::String)],
+        arguments: vec![
+            AppArg::new("--config", ArgType::String),
+            AppArg::new("--output", ArgType::String),
+        ],
     }
 }
 
@@ -163,7 +166,7 @@ mod tests {
         );
     }
     #[test]
-    fn absolute_config_path_is_preserved() {
+    fn output_paths_default_to_executable_directory_and_preserve_absolute_paths() {\n        let base = Path::new("C:/apps/wxcc");\n        assert_eq!(resolve_output_path(None, base), base.join("wxcc_data.csv"));\n        assert_eq!(\n            resolve_output_path(Some(Path::new("reports/data.csv")), base),\n            base.join("reports/data.csv")\n        );\n        let absolute = PathBuf::from("C:/exports/data.csv");\n        assert_eq!(resolve_output_path(Some(&absolute), base), absolute);\n    }\n    #[test]\n    fn absolute_config_path_is_preserved() {
         let path = if cfg!(windows) {
             PathBuf::from("C:/data/wxcc.json")
         } else {
