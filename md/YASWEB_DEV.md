@@ -76,3 +76,8 @@ report titles or placeholder labels to a filter's option list: options must be
 actual values accepted by the corresponding MIS filter. If the live report
 does not expose its option values in the available DOM snapshot, discover them
 from the rendered filter control during a live run before editing the config.
+
+
+## Report download recovery
+
+If report navigation or a later SPA readiness step returns an error after export has started, Yasweb performs a short bounded recovery wait. The run is treated as recovered only when the current run creates or changes a spreadsheet file and that file remains stable with no temporary download in progress. Existing unchanged reports never satisfy recovery; when no new completed file appears, the original navigation/export error is returned.

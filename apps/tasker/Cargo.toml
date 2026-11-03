@@ -14,7 +14,7 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.102"
-calamine = "0.37.0"
+calamine = "0.38.0"
 chrono = { version = "0.4.44", default-features = false, features = ["clock", "serde", "std"] }
 clap = { version = "4.6.1", features = ["derive"] }
 crm_tool = { path = "../.." }

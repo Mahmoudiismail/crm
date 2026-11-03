@@ -21,7 +21,11 @@ pub struct TaskerCliOptions {
     pub only_call_center: bool,
     #[arg(long)]
     pub send_exceptions: bool,
-    #[arg(long, requires = "task")]
+    #[arg(
+        long,
+        requires = "task",
+        help = "Overrides the Sat Figures start date (Task 6) only."
+    )]
     pub start_date: Option<String>,
     #[arg(long, hide = true)]
     pub manifest: bool,
@@ -341,7 +345,7 @@ fn get_manifest() -> AppManifest {
             AppArg::new("--send-exceptions", ArgType::Boolean).depends_on(
                 std::collections::HashMap::from([("--task".to_string(), vec!["1".to_string()])]),
             ),
-            AppArg::new("--start-date", ArgType::String).depends_on(
+            AppArg::new("--start-date", ArgType::DateVar).depends_on(
                 std::collections::HashMap::from([("--task".to_string(), vec!["6".to_string()])]),
             ),
         ],
@@ -618,5 +622,37 @@ mod tests {
         let err = run_app(options).unwrap_err().to_string();
         assert!(err.contains("out of bounds"));
         assert!(err.contains("7 task(s)"));
+    }
+}
+
+#[cfg(test)]
+mod manifest_tests {
+    use super::*;
+    use clap::CommandFactory;
+
+    #[test]
+    fn start_date_is_a_date_input_available_only_for_sat_figures_task() {
+        let manifest = get_manifest();
+        let start_date = manifest
+            .arguments
+            .iter()
+            .find(|arg| arg.name == "--start-date")
+            .unwrap();
+        assert_eq!(start_date.arg_type, ArgType::DateVar);
+        assert_eq!(
+            start_date
+                .depends_on
+                .as_ref()
+                .unwrap()
+                .get("--task")
+                .unwrap(),
+            &vec!["6".to_string()]
+        );
+    }
+
+    #[test]
+    fn cli_help_explains_start_date_is_only_for_task_six() {
+        let help = TaskerCliOptions::command().render_help().to_string();
+        assert!(help.contains("Sat Figures start date (Task 6) only"));
     }
 }

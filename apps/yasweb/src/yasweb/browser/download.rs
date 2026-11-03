@@ -76,15 +76,30 @@ pub fn wait_for_download(
     timeout_minutes: u64,
     snapshot: &DownloadSnapshot,
 ) -> Result<()> {
-    let Some(dir) = download_dir else {
+    if download_dir.is_none() {
         return Ok(());
+    }
+    wait_for_download_with_timeout(
+        download_dir,
+        Duration::from_secs(timeout_minutes.saturating_mul(60)),
+        snapshot,
+    )
+}
+
+/// Waits for a report created by an export that may have outlived a later UI/navigation error.
+pub fn wait_for_download_with_timeout(
+    download_dir: Option<&PathBuf>,
+    timeout: Duration,
+    snapshot: &DownloadSnapshot,
+) -> Result<()> {
+    let Some(dir) = download_dir else {
+        bail!("Cannot confirm a recovered report download without a download directory");
     };
 
     info!(
         "Waiting for a new or updated report download in {:?}...",
         dir
     );
-    let timeout = Duration::from_secs(timeout_minutes.saturating_mul(60));
     let start = std::time::Instant::now();
     let mut last_candidate: Option<(PathBuf, u64, Option<SystemTime>)> = None;
     let mut stable_polls = 0u8;
@@ -147,6 +162,32 @@ mod tests {
         fs::write(&path, b"old report").unwrap();
         let snapshot = snapshot_downloads(Some(&dir.path().to_path_buf())).unwrap();
         assert!(!report_file_changed(&path, &snapshot));
+    }
+
+    #[test]
+    fn wait_with_timeout_accepts_a_new_stable_report() {
+        let dir = tempdir().unwrap();
+        let snapshot = snapshot_downloads(Some(&dir.path().to_path_buf())).unwrap();
+        fs::write(dir.path().join("recovered.csv"), b"report").unwrap();
+        assert!(wait_for_download_with_timeout(
+            Some(&dir.path().to_path_buf()),
+            Duration::from_secs(2),
+            &snapshot,
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn wait_with_timeout_does_not_accept_an_unchanged_existing_report() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("old.csv"), b"old report").unwrap();
+        let snapshot = snapshot_downloads(Some(&dir.path().to_path_buf())).unwrap();
+        assert!(wait_for_download_with_timeout(
+            Some(&dir.path().to_path_buf()),
+            Duration::from_millis(250),
+            &snapshot,
+        )
+        .is_err());
     }
 
     #[test]

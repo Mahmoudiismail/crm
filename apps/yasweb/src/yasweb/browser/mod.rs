@@ -74,7 +74,7 @@ pub fn run_browser_tab(
     // Run report extraction
     info!("YASWEB STAGE START: report_navigation_and_export");
     let report_started = Instant::now();
-    let discovered_filters = match reports::navigate_and_run_report(
+    let (discovered_filters, download_already_completed) = match reports::navigate_and_run_report(
         &tab,
         active_report_name,
         active_report_type,
@@ -82,50 +82,79 @@ pub fn run_browser_tab(
         config.timeout_minutes,
         &mut step_num,
     ) {
-        Ok(filters) => filters,
-        Err(e) => {
+        Ok(filters) => (filters, false),
+        Err(report_error) => {
             error!(
                 "YASWEB STAGE FAILED: report_navigation_and_export elapsed_ms={} error={:#}",
                 report_started.elapsed().as_millis(),
-                e
+                report_error
             );
-            debug::save_failure_diagnostics(&tab, "report_navigation_and_export");
-            if config.keep_open {
-                info!("Keeping browser open for 60 seconds after report failure because keep_open=true");
-                std::thread::sleep(Duration::from_secs(60));
+            // Export can finish even when a later SPA navigation/readiness step fails.
+            // Recover only when this run produced a new or changed stable report file.
+            match download::wait_for_download_with_timeout(
+                download_dir.as_ref(),
+                Duration::from_secs(20),
+                &download_snapshot,
+            ) {
+                Ok(()) => {
+                    tracing::warn!(
+                        "YASWEB recovered a completed report download after a report navigation/export error: report='{}'",
+                        active_report_name
+                    );
+                    (DiscoveredReportFilters::default(), true)
+                }
+                Err(download_error) => {
+                    error!(
+                        "YASWEB download recovery failed after report error: {:#}",
+                        download_error
+                    );
+                    debug::save_failure_diagnostics(&tab, "report_navigation_and_export");
+                    if config.keep_open {
+                        info!("Keeping browser open for 60 seconds after report failure because keep_open=true");
+                        std::thread::sleep(Duration::from_secs(60));
+                    }
+                    return Err(
+                        report_error.context("Yasweb stage failed: report navigation/export")
+                    );
+                }
             }
-            return Err(e.context("Yasweb stage failed: report navigation/export"));
         }
     };
-    info!("YASWEB STAGE END: report_navigation_and_export status=SUCCESS elapsed_ms={} discovered_filters={}", report_started.elapsed().as_millis(), discovered_filters.names.len());
-
-    // Wait for download if applicable
-    info!("YASWEB STAGE START: wait_for_download");
-    let download_started = Instant::now();
-    if let Err(e) = download::wait_for_download(
-        download_dir.as_ref(),
-        config.timeout_minutes,
-        &download_snapshot,
-    ) {
-        error!(
-            "YASWEB STAGE FAILED: wait_for_download elapsed_ms={} error={:#}",
-            download_started.elapsed().as_millis(),
-            e
-        );
-        debug::save_failure_diagnostics(&tab, "wait_for_download");
-        if config.keep_open {
-            info!(
-                "Keeping browser open for 60 seconds after download failure because keep_open=true"
-            );
-            std::thread::sleep(Duration::from_secs(60));
-        }
-        return Err(e.context("Yasweb stage failed: wait for download"));
-    }
     info!(
-        "YASWEB STAGE END: wait_for_download status=SUCCESS elapsed_ms={}",
-        download_started.elapsed().as_millis()
+        "YASWEB STAGE END: report_navigation_and_export status={} elapsed_ms={} discovered_filters={}",
+        if download_already_completed { "RECOVERED_DOWNLOAD" } else { "SUCCESS" },
+        report_started.elapsed().as_millis(),
+        discovered_filters.names.len()
     );
 
+    // Wait for download unless the bounded recovery wait already confirmed it.
+    if !download_already_completed {
+        info!("YASWEB STAGE START: wait_for_download");
+        let download_started = Instant::now();
+        if let Err(e) = download::wait_for_download(
+            download_dir.as_ref(),
+            config.timeout_minutes,
+            &download_snapshot,
+        ) {
+            error!(
+                "YASWEB STAGE FAILED: wait_for_download elapsed_ms={} error={:#}",
+                download_started.elapsed().as_millis(),
+                e
+            );
+            debug::save_failure_diagnostics(&tab, "wait_for_download");
+            if config.keep_open {
+                info!(
+                    "Keeping browser open for 60 seconds after download failure because keep_open=true"
+                );
+                std::thread::sleep(Duration::from_secs(60));
+            }
+            return Err(e.context("Yasweb stage failed: wait for download"));
+        }
+        info!(
+            "YASWEB STAGE END: wait_for_download status=SUCCESS elapsed_ms={}",
+            download_started.elapsed().as_millis()
+        );
+    }
     // Clean up listeners
     if let Err(e) = tab.remove_event_listener(&events) {
         tracing::error!("Failed to remove listener: {:?}", e);
