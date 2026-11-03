@@ -2,7 +2,7 @@
 
 ## Process packages
 
-The repository contains five independently selectable executable packages:
+The repository contains six independently selectable executable packages:
 
 | Executable | Cargo package |
 |---|---|
@@ -11,6 +11,7 @@ The repository contains five independently selectable executable packages:
 | yasweb.exe | yasweb |
 | tasker.exe | tasker |
 | crm_updater.exe | crm_updater |
+| wxcc_handler.exe | wxcc_handler |
 
 Build one executable from the repository root:
 
@@ -18,7 +19,7 @@ Build one executable from the repository root:
 cargo build --release -p runner --locked
 ```
 
-Replace runner with crm, yasweb, tasker, or crm_updater as needed. The shared crm_tool package is compiled only as a dependency of the selected application.
+Replace runner with crm, yasweb, tasker, crm_updater, or wxcc_handler as needed. The shared crm_tool package is compiled only as a dependency of the selected application.
 
 ## Pull request CI selection
 
@@ -27,7 +28,7 @@ The Test workflow determines which app packages are affected by the changed path
 - Changes under apps/<package>/ run Clippy, tests, and release compilation for that package.
 - The shared selector in `.github/scripts/detect_affected_packages.py` is covered by Python unit tests in `.github/scripts/test_detect_affected_packages.py`; CI runs these tests before creating the package matrix.
 - Pull request detection compares the event's exact base SHA with its exact head SHA, so it includes every change in the PR rather than only the latest commit. Push events compare the before/after SHAs.
-- Changes to shared root Rust code, root tests, Cargo manifests/lockfile, dependency policy, or anything under `.github/` select all five packages. Unknown app paths and unknown root-level code/config paths also fail closed and select all five.
+- Changes to shared root Rust code, root tests, Cargo manifests/lockfile, dependency policy, or anything under `.github/` select all six packages. Unknown app paths and unknown root-level code/config paths also fail closed and select all six.
 - Formatting and dependency security auditing remain repository-wide.
 - Changes limited to `md/` documentation do not start Rust package jobs. App-local files select their owning package. The workflow's JavaScript and PowerShell syntax checks still cover the app source trees when the Test workflow is triggered.
 
