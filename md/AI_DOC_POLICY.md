@@ -33,3 +33,11 @@ For requests to review or update repository documentation as a whole, inventory 
 - Use documented Cisco Webex / Webex Contact Center APIs only; do not introduce browser automation or undocumented endpoints.
 - Its V1 OAuth client secret and token pair are stored in a local JSON config by explicit project decision; do not introduce DPAPI without a new requirement.
 - Keep md/WXCC_HANDLER.md, md/CLI.md, md/CONFIG.md, md/ARCHITECTURE.md, and md/BUILD.md synchronized with operational changes.
+
+
+## WXCC Handler
+
+- WXCC Handler is a Windows-only command-based process package.
+- Use documented Cisco Webex / Webex Contact Center APIs only; do not introduce browser automation or undocumented endpoints.
+- Its V1 OAuth client secret and token pair are stored in local JSON by explicit project decision; do not introduce DPAPI without a new requirement.
+- Keep md/WXCC_HANDLER.md, md/CLI.md, md/CONFIG.md, md/ARCHITECTURE.md, and md/BUILD.md synchronized with operational changes.
