@@ -99,6 +99,10 @@ The preview is strictly bounded to the upcoming 10 evaluations (preventing unbou
 The frontend relies **100%** on the Rust backend API (`/api/tasks/preview`) as the authoritative source of truth. The backend API uses the exact same `generate_upcoming_executions_for_app` scheduling engine that evaluates live background tasks, meaning the GUI prediction is functionally identical to the background behavior, accurately rendering working hours blockages, week-off eliminations, and interval compounding.
 
 
+## Tasker Task-Specific Arguments
+
+Tasker's `--start-date` argument is declared as a manifest date input and depends on `--task=6` (Sat Figures). Runner must render that input only while Task 6 is selected and must omit it from invocations of every other Tasker task. This behavior is driven by the child application's manifest; Runner must not hardcode Tasker task indexes.
+
 ## External App Manifest Filters
 
 Runner renders external-app arguments from the executable's manifest. For a
