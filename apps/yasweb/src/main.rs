@@ -1097,11 +1097,11 @@ mod tests_yasweb_finalization {
 
     #[test]
     fn cli_invalid_arguments_remain_errors() {
-        let result = parse_cli_options(vec![
-            "yasweb".to_string(),
-            "--unknown-option".to_string(),
-        ]);
-        assert!(result.is_err(), "invalid CLI arguments must remain failures");
+        let result = parse_cli_options(vec!["yasweb".to_string(), "--unknown-option".to_string()]);
+        assert!(
+            result.is_err(),
+            "invalid CLI arguments must remain failures"
+        );
     }
 
     #[test]
