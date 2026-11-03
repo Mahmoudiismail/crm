@@ -85,3 +85,83 @@ async fn test_nonzero_exit_preserves_child_output_and_status() {
     assert!(error.contains("child-stdout"), "stdout was not preserved: {error}");
     assert!(error.contains("child-stderr"), "stderr was not preserved: {error}");
 }
+
+
+#[tokio::test]
+async fn test_cancelling_execution_terminates_child_process_tree() {
+    let logger = TaskLogger::new("cancel_tree_test", "cancel_tree_test");
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let pid_file = directory.path().join("child.pid");
+
+    #[cfg(target_os = "windows")]
+    let cmd = {
+        let mut command = tokio::process::Command::new("powershell");
+        let script = format!(
+            "$child = Start-Process -FilePath powershell -ArgumentList '-NoProfile','-Command','Start-Sleep -Seconds 30' -PassThru; Set-Content -Path '{}' -Value $child.Id; Start-Sleep -Seconds 30",
+            pid_file.display()
+        );
+        command.args(["-NoProfile", "-NonInteractive", "-Command", &script]);
+        command
+    };
+
+    #[cfg(unix)]
+    let cmd = {
+        let mut command = tokio::process::Command::new("sh");
+        let script = format!(
+            "sleep 30 & echo $! > '{}'; wait",
+            pid_file.display()
+        );
+        command.args(["-c", &script]);
+        command
+    };
+
+    let task = tokio::spawn(async move {
+        run_process(ProcessContext {
+            logger: &logger,
+            command_str: "cancel_tree_test".to_string(),
+            timeout_seconds: 0,
+            cmd,
+        })
+        .await
+    });
+
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while !pid_file.exists() {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .expect("child process should publish its PID");
+
+    let child_pid = std::fs::read_to_string(&pid_file)
+        .expect("read child PID")
+        .trim()
+        .to_string();
+    task.abort();
+    let _ = task.await;
+
+    #[cfg(unix)]
+    let still_running = {
+        tokio::process::Command::new("kill")
+            .args(["-0", &child_pid])
+            .status()
+            .await
+            .map(|status| status.success())
+            .unwrap_or(false)
+    };
+
+    #[cfg(windows)]
+    let still_running = {
+        let output = tokio::process::Command::new("tasklist")
+            .args(["/FI", &format!("PID eq {child_pid}"), "/NH"])
+            .output()
+            .await
+            .expect("query child process");
+        String::from_utf8_lossy(&output.stdout).contains(&child_pid)
+    };
+
+    assert!(
+        !still_running,
+        "cancelling the Runner action must terminate its child process"
+    );
+}
