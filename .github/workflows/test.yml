@@ -123,7 +123,7 @@ jobs:
               raise SystemExit("Package matrix JSON failed round-trip validation.")
 
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              output.write(f"packages={encoded}\\n")
+              output.write(f"packages={encoded}\n")
 
           print(f"Package matrix output: {encoded}")
           print(
