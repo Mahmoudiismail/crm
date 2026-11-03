@@ -12,6 +12,7 @@ pub struct WxccConfig {
     pub access_token: Option<String>,
     pub refresh_token: Option<String>,
     pub access_token_expires_at: Option<i64>,
+    pub refresh_token_expires_at: Option<i64>,
     pub pending_oauth_state: Option<String>,
     pub log_stdout_level: String,
     pub log_file_level: String,
@@ -22,7 +23,7 @@ impl Default for WxccConfig {
         Self {
             client_id: String::new(), client_secret: String::new(), redirect_uri: String::new(),
             scopes: Vec::new(), access_token: None, refresh_token: None,
-            access_token_expires_at: None, pending_oauth_state: None,
+            access_token_expires_at: None, refresh_token_expires_at: None, pending_oauth_state: None,
             log_stdout_level: "INFO".to_string(), log_file_level: "DEBUG".to_string(),
         }
     }
@@ -38,6 +39,7 @@ impl std::fmt::Debug for WxccConfig {
             .field("access_token", &self.access_token.as_ref().map(|_| "[REDACTED]"))
             .field("refresh_token", &self.refresh_token.as_ref().map(|_| "[REDACTED]"))
             .field("access_token_expires_at", &self.access_token_expires_at)
+            .field("refresh_token_expires_at", &self.refresh_token_expires_at)
             .field("pending_oauth_state", &self.pending_oauth_state.as_ref().map(|_| "[REDACTED]"))
             .field("log_stdout_level", &self.log_stdout_level)
             .field("log_file_level", &self.log_file_level).finish()
