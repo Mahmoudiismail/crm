@@ -11,6 +11,7 @@ The repository is a Cargo workspace. Each executable package owns its implementa
 | yasweb | apps/yasweb/src/main.rs, apps/yasweb/src/yasweb/** | Headless browser report automation |
 | tasker | apps/tasker/src/main.rs, apps/tasker/src/tasker/** | CSV/report processing, Excel automation and Outlook workflows |
 | crm_updater | apps/crm_updater/src/main.rs, apps/crm_updater/src/crm_updater/** | Local diagnostics collection and application update orchestration |
+| wxcc_handler | apps/wxcc_handler/src/main.rs, apps/wxcc_handler/src/wxcc/** | Official-API Webex Contact Center operations |
 
 Shared manifest and utility contracts plus the generic managed-script engine are exported through `src/lib.rs`. Tasker and CRM Updater keep their PowerShell template catalogs inside their own app packages.
 
