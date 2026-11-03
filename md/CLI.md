@@ -50,7 +50,7 @@ tasker.exe [--config <PATH>] [--task <INDEX>] [--only-call-center] [--send-excep
 - --task INDEX runs one configured task using a 1-based index.
 - --only-call-center runs the Call Center-specific email path for the selected task and skips standard team/branch email generation.
 - --send-exceptions selects the configured exception-ticket reporting path.
-- --start-date DATE overrides the selected task's start date and requires --task.
+- --start-date DATE overrides the Sat Figures start date and is valid only with --task 6.
 - --manifest is a hidden integration option.
 
 Tasker executes configured tasks in order and returns a non-zero result when a configured task fails. See [Tasker](./TASKER.md).
