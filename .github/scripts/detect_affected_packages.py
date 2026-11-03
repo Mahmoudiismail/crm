@@ -17,7 +17,9 @@ def affected_packages(changed_paths: list[str]) -> list[str]:
     shared = False
 
     for raw_path in changed_paths:
-        path = raw_path.strip().replace("\\", "/").lstrip("./")
+        path = raw_path.strip().replace("\\", "/")
+        while path.startswith("./"):
+            path = path[2:]
         if not path:
             continue
 
