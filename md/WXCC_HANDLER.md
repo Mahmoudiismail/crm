@@ -72,7 +72,7 @@ The flow uses the official Webex OAuth authorization-code and token endpoints. A
 
 ## Status
 
-Phase 1 implements the process package, local config initialization/validation, OAuth URL generation, authorization-code exchange, refresh-token handling, and token status. Data Collection, Analyzer, and User Provisioning are not yet implemented.
+Phase 1 implements the process package, local config initialization/validation, OAuth URL generation, authorization-code exchange, refresh-token handling, and token status. Phase 2 adds Data Collection and CSV export. Analyzer and User Provisioning are not yet implemented.
 
 
 ## API version and OAuth scope rules
