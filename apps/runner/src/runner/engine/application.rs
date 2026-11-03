@@ -273,6 +273,16 @@ async fn discover_date_args(
     }
 }
 
+fn validate_process_plugin_manifest_schema(manifest: &serde_json::Value) -> Result<()> {
+    let typed_manifest = serde_json::from_value::<crm_tool::manifest::AppManifest>(
+        manifest.clone(),
+    )
+    .context("Process plugin manifest does not match the AppManifest schema")?;
+    typed_manifest
+        .validate()
+        .context("Process plugin manifest failed structural validation")
+}
+
 fn validate_process_plugin_manifest(
     manifest: &serde_json::Value,
     expected_version: u32,
@@ -332,13 +342,7 @@ async fn validate_process_plugin_compatibility(
     }
     let manifest = serde_json::from_slice::<serde_json::Value>(&output.stdout)
         .context("Could not parse process plugin manifest JSON")?;
-    let typed_manifest = serde_json::from_value::<crm_tool::manifest::AppManifest>(
-        manifest.clone(),
-    )
-    .context("Process plugin manifest does not match the AppManifest schema")?;
-    typed_manifest
-        .validate()
-        .context("Process plugin manifest failed structural validation")?;
+    validate_process_plugin_manifest_schema(&manifest)?;
     validate_process_plugin_manifest(&manifest, expected_version)
         .with_context(|| format!("Process plugin '{}' is not compatible", app.name))
 }
@@ -475,7 +479,8 @@ mod tests {
     use super::{
         apply_registered_config_fallback, date_args_from_manifest, insert_period_args,
         manifest_arg_dependencies_satisfied, manifest_argument_is_available,
-        validate_process_plugin_compatibility, validate_process_plugin_manifest, RegisteredApp,
+        validate_process_plugin_compatibility, validate_process_plugin_manifest,
+        validate_process_plugin_manifest_schema, discover_date_args, RegisteredApp,
     };
     use std::collections::HashMap;
 
@@ -484,12 +489,27 @@ mod tests {
         assert!(validate_process_plugin_manifest(
             &serde_json::json!({
                 "name": "Current plugin",
+                "description": "Test plugin",
                 "plugin_api_version": 1,
                 "arguments": []
             }),
             1
         )
         .is_ok());
+    }
+
+    #[test]
+    fn rejects_invalid_manifest_structure_before_registration() {
+        let invalid = serde_json::json!({
+            "name": "",
+            "description": "Invalid plugin",
+            "plugin_api_version": 1,
+            "arguments": []
+        });
+        assert!(validate_process_plugin_manifest_schema(&invalid)
+            .unwrap_err()
+            .to_string()
+            .contains("structural validation"));
     }
 
     #[test]
@@ -521,6 +541,23 @@ mod tests {
         )
         .unwrap_err();
         assert!(malformed.to_string().contains("invalid plugin_api_version"));
+    }
+
+    #[tokio::test]
+    async fn legacy_external_apps_skip_all_manifest_discovery() {
+        let logger = crate::runner::engine::logging::TaskLogger::new(
+            "legacy_manifest_probe_test",
+            "legacy_manifest_probe_test",
+        );
+        let app = RegisteredApp {
+            id: "legacy".to_string(),
+            name: "Legacy external app".to_string(),
+            executable_path: "missing-executable-for-legacy-test".to_string(),
+            config_path: String::new(),
+            plugin_api_version: None,
+            allow_concurrent_tasks: false,
+        };
+        assert_eq!(discover_date_args(&logger, &app).await, (None, None, None));
     }
 
     #[tokio::test]
