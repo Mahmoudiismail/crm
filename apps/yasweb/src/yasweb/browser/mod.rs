@@ -153,11 +153,6 @@ pub fn run_browser_tab(
             download_started.elapsed().as_millis()
         );
     }
-    info!(
-        "YASWEB STAGE END: wait_for_download status=SUCCESS elapsed_ms={}",
-        download_started.elapsed().as_millis()
-    );
-
     // Clean up listeners
     if let Err(e) = tab.remove_event_listener(&events) {
         tracing::error!("Failed to remove listener: {:?}", e);
