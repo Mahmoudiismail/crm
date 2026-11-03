@@ -48,6 +48,10 @@ The flow uses the official Webex OAuth authorization-code and token endpoints. A
 
 ## Planned capabilities
 
+## API version policy
+
+All Webex Contact Center configuration requests made by WXCC Handler must use the documented `v2` resource endpoints. The HTTP client rejects any Contact Center request path that does not begin with `v2/`, preventing accidental use of legacy unversioned or v1 resource paths. The OAuth authorization and token exchange endpoints remain `https://webexapis.com/v1/...` because they belong to the separate Webex Platform OAuth API; they are not Contact Center configuration requests.
+
 ## Data Collection
 
 Configure `org_id` and `api_base_url`, then run:
