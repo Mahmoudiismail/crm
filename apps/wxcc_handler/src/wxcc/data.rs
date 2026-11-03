@@ -541,7 +541,7 @@ pub async fn collect_to_csv(
     for profile_id in profile_ids {
         match api
             .get(&format!(
-                "skill-profile/{}",
+                "skill-profile/{}?includeSkillDetails=true",
                 urlencoding::encode(&profile_id)
             ))
             .await
