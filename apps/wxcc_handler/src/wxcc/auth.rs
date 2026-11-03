@@ -13,6 +13,7 @@ struct TokenResponse {
     access_token: String,
     refresh_token: Option<String>,
     expires_in: i64,
+    refresh_token_expires_in: Option<i64>,
 }
 
 pub fn authorization_url(config: &WxccConfig) -> Result<(String, String)> {
@@ -70,7 +71,11 @@ pub async fn refresh_token(config_path: &Path, mut config: WxccConfig) -> Result
 fn apply_tokens(config: &mut WxccConfig, tokens: TokenResponse) {
     config.access_token = Some(tokens.access_token);
     if let Some(refresh) = tokens.refresh_token { config.refresh_token = Some(refresh); }
-    config.access_token_expires_at = Some(Utc::now().timestamp() + tokens.expires_in);
+    let now = Utc::now().timestamp();
+    config.access_token_expires_at = Some(now + tokens.expires_in);
+    if let Some(expires_in) = tokens.refresh_token_expires_in {
+        config.refresh_token_expires_at = Some(now + expires_in);
+    }
 }
 
 #[cfg(test)]
@@ -93,9 +98,10 @@ mod tests {
     #[test]
     fn token_expiry_and_refresh_rotation_are_saved_in_memory() {
         let mut config = WxccConfig::default();
-        apply_tokens(&mut config, TokenResponse { access_token: "access".into(), refresh_token: Some("refresh".into()), expires_in: 3600 });
+        apply_tokens(&mut config, TokenResponse { access_token: "access".into(), refresh_token: Some("refresh".into()), expires_in: 3600, refresh_token_expires_in: Some(86400) });
         assert_eq!(config.access_token.as_deref(), Some("access"));
         assert_eq!(config.refresh_token.as_deref(), Some("refresh"));
         assert!(config.access_token_expires_at.unwrap() > Utc::now().timestamp());
+        assert!(config.refresh_token_expires_at.unwrap() > config.access_token_expires_at.unwrap());
     }
 }
