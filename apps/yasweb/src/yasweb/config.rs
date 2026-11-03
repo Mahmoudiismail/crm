@@ -209,7 +209,11 @@ mod tests {
         assert_eq!(serde_json::to_value(config).unwrap()["concurrency"], 4);
     }
 
-    fn report_with_date_keys(report_type: &str, start_format: &str, end_format: &str) -> YaswebConfig {
+    fn report_with_date_keys(
+        report_type: &str,
+        start_format: &str,
+        end_format: &str,
+    ) -> YaswebConfig {
         let mut reports = HashMap::new();
         reports.insert(
             "Example".to_string(),
@@ -264,7 +268,10 @@ mod tests {
 
     #[test]
     fn empty_report_filter_values_survive_config_round_trip() {
-        let mut report = report_with_date_keys("Standard Report", "", "").reports.remove("Example").unwrap();
+        let mut report = report_with_date_keys("Standard Report", "", "")
+            .reports
+            .remove("Example")
+            .unwrap();
         report.filters.insert("Hospital".to_string(), String::new());
         let serialized = serde_json::to_string(&report).unwrap();
         let restored: ReportConfig = serde_json::from_str(&serialized).unwrap();
