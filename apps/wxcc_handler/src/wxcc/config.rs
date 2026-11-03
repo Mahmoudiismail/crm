@@ -9,6 +9,8 @@ pub struct WxccConfig {
     pub client_secret: String,
     pub redirect_uri: String,
     pub scopes: Vec<String>,
+    pub org_id: String,
+    pub api_base_url: String,
     pub access_token: Option<String>,
     pub refresh_token: Option<String>,
     pub access_token_expires_at: Option<i64>,
@@ -25,6 +27,8 @@ impl Default for WxccConfig {
             client_secret: String::new(),
             redirect_uri: String::new(),
             scopes: Vec::new(),
+            org_id: String::new(),
+            api_base_url: String::new(),
             access_token: None,
             refresh_token: None,
             access_token_expires_at: None,
@@ -43,6 +47,8 @@ impl std::fmt::Debug for WxccConfig {
             .field("client_secret", &"[REDACTED]")
             .field("redirect_uri", &self.redirect_uri)
             .field("scopes", &self.scopes)
+            .field("org_id", &self.org_id)
+            .field("api_base_url", &self.api_base_url)
             .field(
                 "access_token",
                 &self.access_token.as_ref().map(|_| "[REDACTED]"),
