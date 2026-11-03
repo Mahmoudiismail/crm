@@ -10,7 +10,7 @@ assert SPEC is not None and SPEC.loader is not None
 DETECTOR = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(DETECTOR)
 
-ALL = ["crm", "runner", "yasweb", "tasker", "crm_updater", "wxcc_handler"]
+ALL = ["crm_tool", "crm", "runner", "yasweb", "tasker", "crm_updater", "wxcc_handler"]
 
 
 class AffectedPackagesTests(unittest.TestCase):
