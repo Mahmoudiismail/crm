@@ -21,8 +21,12 @@ struct ApiClient {
 impl ApiClient {
     fn new(config: &WxccConfig) -> Result<Self> {
         let base_url = config.api_base_url.trim().trim_end_matches('/');
-        if !base_url.starts_with("https://") {
-            bail!("api_base_url must be an HTTPS Webex Contact Center regional API base URL");
+        let host = base_url
+            .strip_prefix("https://")
+            .and_then(|value| value.split('/').next())
+            .unwrap_or_default();
+        if !host.ends_with(".cisco.com") || host.contains('@') {
+            bail!("api_base_url must use the official HTTPS Cisco Contact Center API host for your region");
         }
         if config.org_id.trim().is_empty() {
             bail!("org_id must be configured before data collection");
@@ -64,10 +68,11 @@ impl ApiClient {
             .with_context(|| format!("Request failed for Webex API resource {path}"))?
             .error_for_status()
             .with_context(|| format!("Webex API rejected request for {path}"))?;
-        response
+        let value: Value = response
             .json()
             .await
-            .with_context(|| format!("Webex API returned invalid JSON for {path}"))
+            .with_context(|| format!("Webex API returned invalid JSON for {path}"))?;
+        Ok(response_resource(value))
     }
 
     async fn list(&self, path: &str) -> Result<Vec<Value>> {
@@ -98,6 +103,14 @@ impl ApiClient {
         }
         bail!("Webex API pagination exceeded {MAX_PAGES} pages for {path}")
     }
+}
+
+fn response_resource(value: Value) -> Value {
+    value
+        .get("data")
+        .filter(|data| data.is_object())
+        .cloned()
+        .unwrap_or(value)
 }
 
 fn response_items(value: Value) -> Option<Vec<Value>> {
@@ -187,7 +200,7 @@ fn date_value(value: &Value, keys: &[&str]) -> String {
 
 fn skill_set(value: &Value) -> String {
     let mut entries = Vec::new();
-    for skill in array_at(value, &["skills", "skillSet", "skillSets", "dynamicSkills"]) {
+    for skill in array_at(value, &["skills", "skillProfileSkills", "skillSet", "skillSets", "dynamicSkills"]) {
         let name = text_at(skill, &["skillName", "name", "label"]);
         let skill_value = text_at(skill, &["skillValue", "value", "proficiency"]);
         let kind = text_at(skill, &["skillType", "type"]);
@@ -530,6 +543,11 @@ pub async fn collect_to_csv(
     let mut output = Vec::with_capacity(csv_bytes.len() + 3);
     output.extend_from_slice(&[0xEF, 0xBB, 0xBF]);
     output.extend_from_slice(&csv_bytes);
+    if let Some(parent) = output_path.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+        tokio::fs::create_dir_all(parent)
+            .await
+            .with_context(|| format!("Failed to create output directory {}", parent.display()))?;
+    }
     tokio::fs::write(output_path, output)
         .await
         .with_context(|| format!("Failed to write CSV output to {}", output_path.display()))?;
@@ -550,6 +568,7 @@ mod tests {
         assert_eq!(response_items(json!([{"id":"1"}])).unwrap().len(), 1);
         assert_eq!(response_items(json!({"data":[{"id":"1"}]})).unwrap().len(), 1);
         assert_eq!(response_items(json!({"items":[{"id":"1"}]})).unwrap().len(), 1);
+        assert_eq!(response_resource(json!({"data":{"id":"1"}}))["id"], "1");
         assert!(response_items(json!({"error":"bad"})).is_none());
     }
 
