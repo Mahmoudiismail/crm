@@ -625,6 +625,7 @@ mod tests {
 #[cfg(test)]
 mod manifest_tests {
     use super::*;
+    use clap::CommandFactory;
 
     #[test]
     fn start_date_is_a_date_input_available_only_for_sat_figures_task() {
