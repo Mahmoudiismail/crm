@@ -91,7 +91,7 @@ jobs:
               packages = all_packages
           ordered = [p for p in ("crm", "runner", "yasweb", "tasker", "crm_updater") if p in packages]
           with open(__import__("os").environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
-              out.write("packages=" + json.dumps(ordered) + "\\n")
+              out.write("packages=" + json.dumps(ordered) + "\n")
           print("Affected packages:", ", ".join(ordered) if ordered else "none (non-Rust app files only)")
           PY
 
