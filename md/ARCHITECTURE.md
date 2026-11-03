@@ -64,4 +64,6 @@ Managed PowerShell templates are maintained as source files and embedded at buil
 
 ## Independent build and deployment
 
+See [Build and Release](./BUILD.md) for package-specific CI selection, local build commands, and Windows release verification.
+
 Each executable package can be built independently with `cargo build --release -p <package>`. The release workflow accepts one package, a comma-separated selection, or all, while preserving executable filenames in the ZIP. Updating Tasker does not require rebuilding or replacing runner.exe; the two remain separate processes. CRM Updater applies only configured executables present in an update ZIP, leaving omitted applications untouched. The shared crm_tool library is rebuilt only as a dependency of the selected package.
