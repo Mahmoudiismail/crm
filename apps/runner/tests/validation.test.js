@@ -59,6 +59,17 @@ test("manifest arguments are serialized only when available", async (t) => {
         );
     });
 
+    await t.test("persists an explicitly cleared optional text argument", () => {
+        assert.deepEqual(
+            serializeArgument({
+                value: "",
+                argType: "string",
+                dependenciesSatisfied: "true",
+            }),
+            { "--start-date": "" },
+        );
+    });
+
     await t.test("omits a date argument mapped to periodization", () => {
         assert.deepEqual(
             serializeArgument({ value: "", dependenciesSatisfied: "true", mappedDateArg: "true" }),
