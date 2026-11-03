@@ -61,7 +61,7 @@ async fn main() -> Result<()> {
             config.validate(false)?; println!("Configuration is valid."); Ok(())
         }
         Command::Auth { command: AuthCommand::AuthorizeUrl } => {
-            let (url, state) = auth::authorization_url(&config_path, config.clone())?;
+            let (url, state) = auth::create_authorization_request(&config_path, config.clone())?;
             println!("Open this URL in your browser:\n{url}\n");
             println!("OAuth state (compare with the state query parameter after redirect):\n{state}");
             Ok(())
