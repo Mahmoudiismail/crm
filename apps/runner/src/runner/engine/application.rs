@@ -658,6 +658,30 @@ mod tests {
     }
 
     #[test]
+    fn tasker_start_date_manifest_is_available_only_for_task_six() {
+        let manifest = serde_json::json!({
+            "arguments": [{
+                "name": "--start-date",
+                "arg_type": "date_var",
+                "depends_on": {"--task": ["6"]}
+            }]
+        });
+        let other_task = HashMap::from([("--task".to_string(), "5".to_string())]);
+        let sat_figures = HashMap::from([("--task".to_string(), "6".to_string())]);
+
+        assert!(!manifest_arg_dependencies_satisfied(
+            &manifest,
+            "--start-date",
+            &other_task
+        ));
+        assert!(manifest_arg_dependencies_satisfied(
+            &manifest,
+            "--start-date",
+            &sat_figures
+        ));
+    }
+
+    #[test]
     fn rejects_inverted_explicit_iso_date_args_before_launch() {
         let args = HashMap::from([
             ("--start-date".to_string(), "2026-10-18".to_string()),
