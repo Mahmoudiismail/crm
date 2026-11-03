@@ -7,7 +7,7 @@ import json
 import sys
 from pathlib import Path
 
-ALL_PACKAGES = ("crm", "runner", "yasweb", "tasker", "crm_updater", "wxcc_handler")
+ALL_PACKAGES = ("crm_tool", "crm", "runner", "yasweb", "tasker", "crm_updater", "wxcc_handler")
 SHARED_ROOT_FILES = {"Cargo.toml", "Cargo.lock", "deny.toml"}
 
 
@@ -20,7 +20,7 @@ def affected_packages(changed_paths: list[str]) -> list[str]:
         path = raw_path.strip().replace("\\", "/")
         while path.startswith("./"):
             path = path[2:]
-        if not path:
+        if not path or path.lower().endswith((".js", ".ps1", ".md")):
             continue
 
         parts = path.split("/")
@@ -42,13 +42,38 @@ def affected_packages(changed_paths: list[str]) -> list[str]:
     return [package for package in ALL_PACKAGES if package in packages]
 
 
+def change_flags(changed_paths: list[str]) -> dict[str, bool]:
+    """Identify language-specific and dependency validations required by changed paths."""
+    normalized = []
+    for raw_path in changed_paths:
+        path = raw_path.strip().replace("\\", "/")
+        while path.startswith("./"):
+            path = path[2:]
+        normalized.append(path)
+
+    return {
+        "javascript": any(path.lower().endswith(".js") for path in normalized),
+        "powershell": any(path.lower().endswith(".ps1") for path in normalized),
+        "runner_javascript": any(
+            path.startswith("apps/runner/") and path.lower().endswith(".js")
+            for path in normalized
+        ),
+        "dependencies": any(
+            path in {"Cargo.toml", "Cargo.lock", "deny.toml"}
+            or (path.startswith("apps/") and path.endswith("/Cargo.toml"))
+            for path in normalized
+        ),
+    }
+
+
 def main() -> int:
     if len(sys.argv) != 2:
         print("Usage: detect_affected_packages.py <changed-files.txt>", file=sys.stderr)
         return 2
 
     changed_paths = Path(sys.argv[1]).read_text(encoding="utf-8").splitlines()
-    print(json.dumps(affected_packages(changed_paths), separators=(",", ":")))
+    result = {"packages": affected_packages(changed_paths), **change_flags(changed_paths)}
+    print(json.dumps(result, separators=(",", ":")))
     return 0
 
 

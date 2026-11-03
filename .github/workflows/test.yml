@@ -56,6 +56,10 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       packages: ${{ steps.detect.outputs.packages }}
+      javascript: ${{ steps.detect.outputs.javascript }}
+      powershell: ${{ steps.detect.outputs.powershell }}
+      runner_javascript: ${{ steps.detect.outputs.runner_javascript }}
+      dependencies: ${{ steps.detect.outputs.dependencies }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -95,12 +99,23 @@ jobs:
           cat changed-files.txt
 
           python3 -m unittest discover -s .github/scripts -p 'test_*.py' -v
-          python3 .github/scripts/detect_affected_packages.py changed-files.txt > packages.json
-          PACKAGES="$(cat packages.json)"
+          python3 .github/scripts/detect_affected_packages.py changed-files.txt > detection.json
+          PACKAGES="$(python3 -c 'import json; print(json.dumps(json.load(open("detection.json"))["packages"], separators=(",", ":")))' )"
+          JS_CHANGED="$(python3 -c 'import json; print(str(json.load(open("detection.json"))["javascript"]).lower())')"
+          PS_CHANGED="$(python3 -c 'import json; print(str(json.load(open("detection.json"))["powershell"]).lower())')"
+          RUNNER_JS_CHANGED="$(python3 -c 'import json; print(str(json.load(open("detection.json"))["runner_javascript"]).lower())')"
+          DEPENDENCIES_CHANGED="$(python3 -c 'import json; print(str(json.load(open("detection.json"))["dependencies"]).lower())')"
           printf 'packages=%s\n' "$PACKAGES" >> "$GITHUB_OUTPUT"
+          printf 'javascript=%s\n' "$JS_CHANGED" >> "$GITHUB_OUTPUT"
+          printf 'powershell=%s\n' "$PS_CHANGED" >> "$GITHUB_OUTPUT"
+          printf 'runner_javascript=%s\n' "$RUNNER_JS_CHANGED" >> "$GITHUB_OUTPUT"
+          printf 'dependencies=%s\n' "$DEPENDENCIES_CHANGED" >> "$GITHUB_OUTPUT"
 
           echo "Package matrix output: $PACKAGES"
-          python3 -c 'import json, sys; packages=json.loads(sys.argv[1]); print("Affected packages:", ", ".join(packages) if packages else "none (documentation-only changes)")' "$PACKAGES"
+          echo "JavaScript changed: $JS_CHANGED"
+          echo "PowerShell changed: $PS_CHANGED"
+          echo "Runner JavaScript changed: $RUNNER_JS_CHANGED"
+          echo "Dependency files changed: $DEPENDENCIES_CHANGED"
 
   format:
     name: Format and Auto-fix
@@ -184,8 +199,96 @@ jobs:
 
 
 
+  test:
+    name: Rust Tests (${{ matrix.package }})
+    needs: [format, clippy, detect-packages]
+    if: needs.detect-packages.outputs.packages != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.detect-packages.outputs.packages) }}
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout formatted source
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
+          persist-credentials: false
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: rust-repo-windows
+          key: test
+          save-if: ${{ github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) }}
+          cache-on-failure: true
+
+      - name: Run package tests
+        run: cargo test -p ${{ matrix.package }} --all-targets --all-features --locked
+
+      - name: Build affected package in release mode
+        run: cargo build --release -p ${{ matrix.package }} --locked
+
+  javascript-validation:
+    name: JavaScript Validation
+    needs: [detect-packages]
+    if: needs.detect-packages.outputs.javascript == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
+          persist-credentials: false
+      - name: Check JavaScript syntax
+        shell: pwsh
+        run: |
+          Get-ChildItem -Path src,apps -Recurse -Filter *.js | ForEach-Object {
+            node --check $_.FullName
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+      - name: Test Runner JavaScript validation
+        if: needs.detect-packages.outputs.runner_javascript == 'true'
+        run: node --test apps/runner/tests/validation.test.js
+
+  powershell-validation:
+    name: PowerShell Validation
+    needs: [detect-packages]
+    if: needs.detect-packages.outputs.powershell == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          persist-credentials: false
+      - name: Check PowerShell syntax
+        shell: pwsh
+        run: |
+          $failed = $false
+          Get-ChildItem -Path src,apps -Recurse -Filter *.ps1 | ForEach-Object {
+            $tokens = $null
+            $parseErrors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$parseErrors) | Out-Null
+            if ($parseErrors.Count -gt 0) {
+              $failed = $true
+              Write-Error "PowerShell syntax errors in $($_.FullName)"
+              $parseErrors | ForEach-Object { Write-Error $_.Message }
+            }
+          }
+          if ($failed) { exit 1 }
+
   dependency-audit:
     name: Dependency Security Audit
+    needs: [detect-packages]
+    if: needs.detect-packages.outputs.dependencies == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -208,67 +311,3 @@ jobs:
 
       - name: Check configured advisory policy
         run: cargo deny check advisories
-
-  test:
-    name: Test Suite
-    needs: [format, clippy, detect-packages]
-    if: needs.detect-packages.outputs.packages != '[]'
-    strategy:
-      fail-fast: false
-      matrix:
-        package: ${{ fromJson(needs.detect-packages.outputs.packages) }}
-    runs-on: windows-latest
-
-    steps:
-      - name: Checkout formatted source
-        uses: actions/checkout@v7
-        with:
-          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
-          persist-credentials: false
-
-      - name: Check JavaScript syntax
-        shell: pwsh
-        run: |
-          Get-ChildItem -Path src,apps -Recurse -Filter *.js | ForEach-Object {
-            node --check $_.FullName
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          }
-
-      - name: Test Runner JavaScript validation
-        run: node --test apps/runner/tests/validation.test.js
-
-      - name: Check PowerShell syntax
-        shell: pwsh
-        run: |
-          $failed = $false
-          Get-ChildItem -Path src,apps -Recurse -Filter *.ps1 | ForEach-Object {
-            $tokens = $null
-            $parseErrors = $null
-            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$parseErrors) | Out-Null
-            if ($parseErrors.Count -gt 0) {
-              $failed = $true
-              Write-Error "PowerShell syntax errors in $($_.FullName)"
-              $parseErrors | ForEach-Object { Write-Error $_.Message }
-            }
-          }
-          if ($failed) { exit 1 }
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-pc-windows-msvc
-
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: rust-repo-windows
-          key: test
-          save-if: ${{ github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) }}
-          cache-on-failure: true
-
-      - name: Run tests
-        run: cargo test -p ${{ matrix.package }} --all-targets --all-features --locked
-
-      - name: Build all process packages in release mode
-        run: cargo build --release -p ${{ matrix.package }} --locked

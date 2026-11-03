@@ -10,7 +10,7 @@ assert SPEC is not None and SPEC.loader is not None
 DETECTOR = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(DETECTOR)
 
-ALL = ["crm", "runner", "yasweb", "tasker", "crm_updater", "wxcc_handler"]
+ALL = ["crm_tool", "crm", "runner", "yasweb", "tasker", "crm_updater", "wxcc_handler"]
 
 
 class AffectedPackagesTests(unittest.TestCase):
@@ -52,6 +52,16 @@ class AffectedPackagesTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertEqual(DETECTOR.affected_packages([path]), ALL)
 
+    def test_javascript_and_powershell_changes_do_not_schedule_rust_packages(self):
+        self.assertEqual(
+            DETECTOR.affected_packages([
+                "apps/runner/src/validation.js",
+                "apps/tasker/scripts/report.ps1",
+                "src/shared-helper.js",
+            ]),
+            [],
+        )
+
     def test_documentation_only_changes_select_no_packages(self):
         self.assertEqual(
             DETECTOR.affected_packages(["md/BUILD.md", "md/ARCHITECTURE.md"]), []
@@ -60,6 +70,39 @@ class AffectedPackagesTests(unittest.TestCase):
     def test_app_and_shared_change_select_all(self):
         self.assertEqual(
             DETECTOR.affected_packages(["apps/runner/src/main.rs", "Cargo.lock"]), ALL
+        )
+
+    def test_change_flags_select_only_relevant_language_and_dependency_checks(self):
+        flags = DETECTOR.change_flags([
+            "apps/runner/src/validation.js",
+            "apps/runner/tests/validation.test.js",
+            "apps/tasker/scripts/report.ps1",
+            "apps/wxcc_handler/Cargo.toml",
+        ])
+        self.assertEqual(
+            flags,
+            {
+                "javascript": True,
+                "powershell": True,
+                "runner_javascript": True,
+                "dependencies": True,
+            },
+        )
+
+    def test_rust_app_source_does_not_trigger_language_or_dependency_checks(self):
+        self.assertEqual(
+            DETECTOR.change_flags(["apps/wxcc_handler/src/wxcc/data.rs"]),
+            {
+                "javascript": False,
+                "powershell": False,
+                "runner_javascript": False,
+                "dependencies": False,
+            },
+        )
+
+    def test_nested_manifest_triggers_dependency_audit(self):
+        self.assertTrue(
+            DETECTOR.change_flags(["apps/tasker/Cargo.toml"])["dependencies"]
         )
 
     def test_dot_relative_and_windows_paths_are_normalized(self):
