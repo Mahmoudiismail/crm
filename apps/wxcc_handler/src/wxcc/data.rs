@@ -54,10 +54,9 @@ impl ApiClient {
     }
 
     async fn get(&self, path: &str) -> Result<Value> {
-        let url = self.endpoint(path);
         let response = self
             .client
-            .get(&url)
+            .get(self.endpoint(path))
             .bearer_auth(&self.access_token)
             .header(reqwest::header::ACCEPT, "application/json")
             .send()
@@ -74,10 +73,9 @@ impl ApiClient {
     async fn list(&self, path: &str) -> Result<Vec<Value>> {
         let mut all = Vec::new();
         for page in 0..MAX_PAGES {
-            let url = self.endpoint(path);
             let response = self
                 .client
-                .get(&url)
+                .get(self.endpoint(path))
                 .query(&[("page", page), ("pageSize", PAGE_SIZE)])
                 .bearer_auth(&self.access_token)
                 .header(reqwest::header::ACCEPT, "application/json")
@@ -135,7 +133,7 @@ fn id_at(value: &Value) -> String {
 }
 
 fn display_name(value: &Value) -> String {
-    let direct = text_at(value, &["name", "displayName", "userName", "agentName"]);
+    let direct = text_at(value, &["name", "displayName", "userName", "agentName", "queueName", "siteName", "teamName", "skillProfileName"]);
     if !direct.is_empty() {
         return direct;
     }
@@ -175,7 +173,7 @@ fn date_value(value: &Value, keys: &[&str]) -> String {
         return String::new();
     };
     if let Some(number) = raw.as_i64() {
-        let millis = if number.abs() < 100_000_000_000 {
+        let millis = if (-100_000_000_000..100_000_000_000).contains(&number) {
             number.saturating_mul(1000)
         } else {
             number
@@ -191,12 +189,12 @@ fn skill_set(value: &Value) -> String {
     let mut entries = Vec::new();
     for skill in array_at(value, &["skills", "skillSet", "skillSets", "dynamicSkills"]) {
         let name = text_at(skill, &["skillName", "name", "label"]);
-        let value = text_at(skill, &["skillValue", "value", "proficiency"]);
+        let skill_value = text_at(skill, &["skillValue", "value", "proficiency"]);
         let kind = text_at(skill, &["skillType", "type"]);
-        let mut entry = if name.is_empty() { value.clone() } else { name };
-        if !value.is_empty() && !entry.is_empty() {
+        let mut entry = if name.is_empty() { skill_value.clone() } else { name };
+        if !skill_value.is_empty() && !entry.is_empty() {
             entry.push('=');
-            entry.push_str(&value);
+            entry.push_str(&skill_value);
         }
         if !kind.is_empty() && !entry.is_empty() {
             entry.push_str(" [");
@@ -220,12 +218,6 @@ fn queue_team_ids(queue: &Value) -> Vec<String> {
             }
         }
         ids.extend(ids_from(group, &["teamIds", "teams"]));
-        for team in array_at(group, &["teams"]) {
-            let id = id_at(team);
-            if !id.is_empty() {
-                ids.insert(id);
-            }
-        }
     }
     ids.into_iter().collect()
 }
@@ -235,12 +227,15 @@ struct Member {
     id: String,
     email: String,
     name: String,
+    site_id: String,
+    site_name: String,
     skill_profile_id: String,
     skill_profile_name: String,
     skills: String,
     last_login: String,
     created_at: String,
     team_ids: Vec<String>,
+    skill_queue_ids: HashSet<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -253,32 +248,6 @@ struct Queue {
     member_ids: HashSet<String>,
 }
 
-fn merge_member_details(base: &Value, detail: Option<&Value>, profiles: &HashMap<String, String>) -> Member {
-    let detail = detail.unwrap_or(base);
-    let id = text_at(base, &["id", "userId", "ciUserId"]);
-    let profile_id = text_at(detail, &["skillProfileId", "skillProfileID"]);
-    let profile_name = text_at(detail, &["skillProfileName"])
-        .or_else_empty(|| profiles.get(&profile_id).cloned().unwrap_or_default());
-    Member {
-        id,
-        email: text_at(detail, &["email", "emailAddress", "mail"]),
-        name: display_name(detail).or_else_empty(|| display_name(base)),
-        skill_profile_id: profile_id,
-        skill_profile_name: profile_name,
-        skills: {
-            let direct = skill_set(detail);
-            if direct.is_empty() {
-                String::new()
-            } else {
-                direct
-            }
-        },
-        last_login: date_value(detail, &["lastLoginTime", "lastLogin", "lastLoginAt", "lastLoggedInTime"]),
-        created_at: date_value(detail, &["createdTime", "createdAt", "createdDate"]),
-        team_ids: ids_from(detail, &["teamIds", "teams"]),
-    }
-}
-
 trait OrElseEmpty {
     fn or_else_empty(self, fallback: impl FnOnce() -> String) -> String;
 }
@@ -288,8 +257,41 @@ impl OrElseEmpty for String {
     }
 }
 
-pub async fn collect_to_csv(config_path: &Path, mut config: WxccConfig, output_path: &Path) -> Result<usize> {
+fn merge_member_details(
+    base: &Value,
+    detail: Option<&Value>,
+    site_names: &HashMap<String, String>,
+    profiles: &HashMap<String, String>,
+) -> Member {
+    let detail = detail.unwrap_or(base);
+    let id = text_at(base, &["id", "userId", "ciUserId"]);
+    let site_id = text_at(detail, &["siteId", "siteID"]);
+    let profile_id = text_at(detail, &["skillProfileId", "skillProfileID"]);
+    Member {
+        id,
+        email: text_at(detail, &["email", "emailAddress", "mail"]).or_else_empty(|| text_at(base, &["email", "emailAddress", "mail"])),
+        name: display_name(detail).or_else_empty(|| display_name(base)),
+        site_id: site_id.clone(),
+        site_name: text_at(detail, &["siteName"]).or_else_empty(|| site_names.get(&site_id).cloned().unwrap_or_default()),
+        skill_profile_id: profile_id.clone(),
+        skill_profile_name: text_at(detail, &["skillProfileName"]).or_else_empty(|| profiles.get(&profile_id).cloned().unwrap_or_default()),
+        skills: skill_set(detail),
+        last_login: date_value(detail, &["lastLoginTime", "lastLogin", "lastLoginAt", "lastLoggedInTime"]),
+        created_at: date_value(detail, &["createdTime", "createdAt", "createdDate"]),
+        team_ids: ids_from(detail, &["teamIds", "teams"]),
+        skill_queue_ids: HashSet::new(),
+    }
+}
+
+pub async fn collect_to_csv(
+    config_path: &Path,
+    mut config: WxccConfig,
+    output_path: &Path,
+) -> Result<usize> {
     config.validate(true)?;
+    if !config.scopes.iter().any(|scope| scope == "cjp:config_read" || scope == "cjp:config") {
+        bail!("Add cjp:config_read to scopes in wxcc_config.json and authorize again");
+    }
     if config.org_id.trim().is_empty() {
         bail!("Set org_id in wxcc_config.json before collecting data");
     }
@@ -313,9 +315,21 @@ pub async fn collect_to_csv(config_path: &Path, mut config: WxccConfig, output_p
     let users = api.list("v2/user").await?;
     let queues = api.list("v2/contact-service-queue").await?;
 
-    let site_names: HashMap<String, String> = sites.iter().map(|site| (id_at(site), display_name(site))).filter(|(id, _)| !id.is_empty()).collect();
-    let team_names: HashMap<String, String> = teams.iter().map(|team| (id_at(team), display_name(team))).filter(|(id, _)| !id.is_empty()).collect();
-    let mut profile_names: HashMap<String, String> = profiles.iter().map(|profile| (id_at(profile), display_name(profile))).filter(|(id, _)| !id.is_empty()).collect();
+    let site_names: HashMap<String, String> = sites
+        .iter()
+        .map(|site| (id_at(site), display_name(site)))
+        .filter(|(id, _)| !id.is_empty())
+        .collect();
+    let team_names: HashMap<String, String> = teams
+        .iter()
+        .map(|team| (id_at(team), display_name(team)))
+        .filter(|(id, _)| !id.is_empty())
+        .collect();
+    let profile_names: HashMap<String, String> = profiles
+        .iter()
+        .map(|profile| (id_at(profile), display_name(profile)))
+        .filter(|(id, _)| !id.is_empty())
+        .collect();
 
     let mut members = HashMap::new();
     let mut member_by_ci_id = HashMap::new();
@@ -332,59 +346,104 @@ pub async fn collect_to_csv(config_path: &Path, mut config: WxccConfig, output_p
                 }
             }
         };
-        let member = merge_member_details(user, detail.as_ref(), &profile_names);
-        if !member.skill_profile_id.is_empty() && !member.skill_profile_name.is_empty() {
-            profile_names.entry(member.skill_profile_id.clone()).or_insert_with(|| member.skill_profile_name.clone());
-        }
+        let member = merge_member_details(user, detail.as_ref(), &site_names, &profile_names);
         let id = member.id.clone();
         if !id.is_empty() {
-            members.insert(id.clone(), member.clone());
+            members.insert(id.clone(), member);
         }
-        if !ci_id.is_empty() {
+        if !ci_id.is_empty() && !id.is_empty() {
             member_by_ci_id.insert(ci_id, id);
         }
     }
 
-    // Retrieve complete queue resources because list responses no longer include relationship arrays.
+    // Fetch profile details because List APIs intentionally omit nested skill arrays.
+    let profile_ids: HashSet<String> = members
+        .values()
+        .map(|member| member.skill_profile_id.clone())
+        .filter(|id| !id.is_empty())
+        .collect();
+    let mut profile_skills = HashMap::new();
+    for profile_id in profile_ids {
+        match api.get(&format!("skill-profile/{}", urlencoding::encode(&profile_id))).await {
+            Ok(detail) => {
+                let name = display_name(&detail);
+                let skills = skill_set(&detail);
+                if !name.is_empty() {
+                    // The user record already carries the profile ID; names are added below.
+                    profile_skills.insert(profile_id, (name, skills));
+                }
+            }
+            Err(error) => tracing::warn!("Could not retrieve skill profile details: {error:#}"),
+        }
+    }
+    for member in members.values_mut() {
+        if let Some((name, skills)) = profile_skills.get(&member.skill_profile_id) {
+            if member.skill_profile_name.is_empty() {
+                member.skill_profile_name = name.clone();
+            }
+            if member.skills.is_empty() {
+                member.skills = skills.clone();
+            }
+        }
+    }
+
+    // Retrieve complete queue resources because List responses no longer include relationship arrays.
     let mut full_queues = Vec::with_capacity(queues.len());
     for queue in &queues {
         let id = id_at(queue);
         if id.is_empty() {
             continue;
         }
-        let detail = api.get(&format!("v2/contact-service-queue/{}", urlencoding::encode(&id))).await
+        let detail = api
+            .get(&format!("v2/contact-service-queue/{}", urlencoding::encode(&id)))
+            .await
             .with_context(|| format!("Failed to retrieve complete details for queue {id}"))?;
         full_queues.push(detail);
     }
 
-    // Retrieve complete team resources; list responses no longer include their userIds arrays.
+    // Team membership is read from the full Team resource, not the reduced List response.
     let mut team_members: HashMap<String, HashSet<String>> = HashMap::new();
     for team in &teams {
         let id = id_at(team);
         if id.is_empty() {
             continue;
         }
-        let detail = api.get(&format!("team/{}", urlencoding::encode(&id))).await
+        let detail = api
+            .get(&format!("team/{}", urlencoding::encode(&id)))
+            .await
             .with_context(|| format!("Failed to retrieve complete details for team {id}"))?;
         let mut ids = ids_from(&detail, &["userIds", "users", "members"]);
         ids.extend(ids_from(team, &["userIds", "users", "members"]));
-        team_members.insert(id, ids.into_iter().collect());
+        let mapped = ids
+            .into_iter()
+            .map(|member_id| member_by_ci_id.get(&member_id).cloned().unwrap_or(member_id))
+            .filter(|member_id| members.contains_key(member_id))
+            .collect();
+        team_members.insert(id, mapped);
     }
 
-    // Skill-based queues expose a supported per-user mapping endpoint. Use it to
-    // retain the server's eligibility decision rather than reimplementing skill matching.
-    for (user, member) in users.iter().zip(members.values_mut()) {
+    // Use Cisco's per-user skill-queue mapping rather than duplicating its skill eligibility rules.
+    for user in &users {
         let user_id = text_at(user, &["id", "userId", "ciUserId"]);
-        if user_id.is_empty() {
+        let Some(member_id) = member_by_ci_id
+            .get(&text_at(user, &["ciUserId", "ciUserID"]))
+            .cloned()
+            .or_else(|| members.contains_key(&user_id).then_some(user_id))
+        else {
             continue;
-        }
-        let path = format!("v2/contact-service-queue/by-user-id/{}/skill-based-queues", urlencoding::encode(&user_id));
+        };
+        let path = format!(
+            "v2/contact-service-queue/by-user-id/{}/skill-based-queues",
+            urlencoding::encode(&text_at(user, &["id", "userId"]).or_else_empty(|| text_at(user, &["ciUserId", "ciUserID"])))
+        );
         match api.list(&path).await {
             Ok(skill_queues) => {
-                for queue in skill_queues {
-                    let queue_id = id_at(&queue);
-                    if !queue_id.is_empty() {
-                        member.team_ids.push(format!("__skill_queue__:{queue_id}"));
+                if let Some(member) = members.get_mut(&member_id) {
+                    for queue in skill_queues {
+                        let queue_id = id_at(&queue);
+                        if !queue_id.is_empty() {
+                            member.skill_queue_ids.insert(queue_id);
+                        }
                     }
                 }
             }
@@ -409,16 +468,17 @@ pub async fn collect_to_csv(config_path: &Path, mut config: WxccConfig, output_p
         }
         for team_id in queue_team_ids(&queue) {
             if let Some(ids) = team_members.get(&team_id) {
-                member_ids.extend(ids.iter().filter(|id| members.contains_key(*id)).cloned());
+                member_ids.extend(ids.iter().cloned());
             }
         }
         for member in members.values() {
-            if member.team_ids.iter().any(|value| value == &format!("__skill_queue__:{id}")) {
+            if member.skill_queue_ids.contains(&id) {
                 member_ids.insert(member.id.clone());
             }
         }
         let site_id = text_at(&queue, &["siteId", "siteID"]);
-        let site_name = text_at(&queue, &["siteName"]).or_else_empty(|| site_names.get(&site_id).cloned().unwrap_or_default());
+        let site_name = text_at(&queue, &["siteName"])
+            .or_else_empty(|| site_names.get(&site_id).cloned().unwrap_or_default());
         queue_rows.push(Queue {
             id,
             name: display_name(&queue),
@@ -447,16 +507,15 @@ pub async fn collect_to_csv(config_path: &Path, mut config: WxccConfig, output_p
         }
         for member_id in &queue.member_ids {
             let Some(member) = members.get(member_id) else { continue };
-            let site_id = if queue.site_id.is_empty() {
-                // Prefer the member's site when the queue does not explicitly expose one.
-                String::new()
+            let site_id = queue.site_id.as_str().or_else_empty(|| member.site_id.clone());
+            let site_name = if site_id.is_empty() {
+                member.site_name.as_str()
             } else {
-                queue.site_id.clone()
+                queue.site_name.as_str().or_else_empty(|| site_names.get(site_id).cloned().unwrap_or_default()).leak()
             };
-            let site_name = if site_id.is_empty() { String::new() } else { queue.site_name.clone() };
             writer.write_record([
-                site_id.as_str(), site_name.as_str(), queue.id.as_str(), queue.name.as_str(),
-                queue.queue_type.as_str(), member.id.as_str(), member.email.as_str(), member.name.as_str(),
+                site_id, site_name, queue.id.as_str(), queue.name.as_str(), queue.queue_type.as_str(),
+                member.id.as_str(), member.email.as_str(), member.name.as_str(),
                 member.skill_profile_id.as_str(), member.skill_profile_name.as_str(), member.skills.as_str(),
                 member.last_login.as_str(), member.created_at.as_str(),
             ])?;
@@ -471,8 +530,8 @@ pub async fn collect_to_csv(config_path: &Path, mut config: WxccConfig, output_p
         .await
         .with_context(|| format!("Failed to write CSV output to {}", output_path.display()))?;
     tracing::info!(
-        "Collected {} sites, {} queues, {} users; exported {} CSV rows to {}",
-        sites.len(), queues.len(), users.len(), row_count, output_path.display()
+        "Collected {} sites, {} queues, {} users; exported {} CSV rows to {} ({} teams)",
+        sites.len(), queues.len(), users.len(), row_count, output_path.display(), team_names.len()
     );
     Ok(row_count)
 }
