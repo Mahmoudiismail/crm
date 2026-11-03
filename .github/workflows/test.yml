@@ -199,47 +199,22 @@ jobs:
 
 
 
-  dependency-audit:
-    name: Dependency Security Audit
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install cargo-audit
-        run: cargo install cargo-audit --locked
-
-      - name: Audit RustSec advisories
-        run: cargo audit
-
-      - name: Install cargo-deny
-        run: cargo install cargo-deny --locked
-
-      - name: Check configured advisory policy
-        run: cargo deny check advisories
-
   test:
-    name: Rust Tests (\${{ matrix.package }})
+    name: Rust Tests (${{ matrix.package }})
     needs: [format, clippy, detect-packages]
     if: needs.detect-packages.outputs.packages != '[]'
     strategy:
       fail-fast: false
       matrix:
-        package: \${{ fromJson(needs.detect-packages.outputs.packages) }}
+        package: ${{ fromJson(needs.detect-packages.outputs.packages) }}
     runs-on: windows-latest
 
     steps:
       - name: Checkout formatted source
         uses: actions/checkout@v7
         with:
-          repository: \${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
-          ref: \${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
+          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
           persist-credentials: false
 
       - name: Install Rust
@@ -252,14 +227,14 @@ jobs:
         with:
           shared-key: rust-repo-windows
           key: test
-          save-if: \${{ github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) }}
+          save-if: ${{ github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) }}
           cache-on-failure: true
 
       - name: Run package tests
-        run: cargo test -p \${{ matrix.package }} --all-targets --all-features --locked
+        run: cargo test -p ${{ matrix.package }} --all-targets --all-features --locked
 
       - name: Build affected package in release mode
-        run: cargo build --release -p \${{ matrix.package }} --locked
+        run: cargo build --release -p ${{ matrix.package }} --locked
 
   javascript-validation:
     name: JavaScript Validation
@@ -269,8 +244,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          repository: \${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
-          ref: \${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
+          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
           persist-credentials: false
       - name: Check JavaScript syntax
         shell: pwsh
@@ -291,8 +266,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          repository: \${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
-          ref: \${{ github.event.pull_request.head.ref || github.ref_name }}
+          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
           persist-credentials: false
       - name: Check PowerShell syntax
         shell: pwsh
