@@ -159,11 +159,12 @@ async fn main() -> Result<()> {
         return Ok(());
     }
     let cli = Cli::parse();
-    let command = match (cli.action, cli.command.as_ref()) {
-        (Some(_), Some(_)) => anyhow::bail!("Use either --action or a CLI subcommand, not both"),
-        (Some(action), None) => command_from_runner_action(action, cli.code.as_deref(), cli.state.as_deref())?,
-        (None, Some(command)) => command.clone(),
-        (None, None) => anyhow::bail!("An operation is required. Use --help to see available commands."),
+    let command = match cli.action {
+        Some(action) if cli.command.is_none() => {
+            command_from_runner_action(action, cli.code.as_deref(), cli.state.as_deref())?
+        }
+        Some(_) => anyhow::bail!("Use either --action or a CLI subcommand, not both"),
+        None => cli.command.context("An operation is required. Use --help to see available commands.")?,
     };
     let exe_dir = executable_dir()?;
     let config_path = resolve_config_path(cli.config.as_deref(), &exe_dir);
