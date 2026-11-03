@@ -342,6 +342,92 @@ fn merge_member_details(
     }
 }
 
+fn build_csv(
+    queue_rows: &[Queue],
+    members: &HashMap<String, Member>,
+    site_names: &HashMap<String, String>,
+) -> Result<(Vec<u8>, usize)> {
+    let mut writer = csv::WriterBuilder::new()
+        .has_headers(true)
+        .from_writer(Vec::new());
+    writer.write_record([
+        "site_id",
+        "site_name",
+        "queue_id",
+        "queue_name",
+        "queue_type",
+        "member_id",
+        "member_email",
+        "member_name",
+        "member_skill_profile_id",
+        "member_skill_profile_name",
+        "member_skill_sets",
+        "member_last_login",
+        "member_created_at",
+    ])?;
+    let mut row_count = 0usize;
+    for queue in queue_rows {
+        if queue.member_ids.is_empty() {
+            writer.write_record([
+                queue.site_id.as_str(),
+                queue.site_name.as_str(),
+                queue.id.as_str(),
+                queue.name.as_str(),
+                queue.queue_type.as_str(),
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+            ])?;
+            row_count += 1;
+            continue;
+        }
+        for member_id in &queue.member_ids {
+            let Some(member) = members.get(member_id) else {
+                continue;
+            };
+            let site_id = if queue.site_id.is_empty() {
+                member.site_id.clone()
+            } else {
+                queue.site_id.clone()
+            };
+            let site_name = if !queue.site_name.is_empty() {
+                queue.site_name.clone()
+            } else if !member.site_name.is_empty() {
+                member.site_name.clone()
+            } else {
+                site_names.get(&site_id).cloned().unwrap_or_default()
+            };
+            writer.write_record([
+                site_id.as_str(),
+                site_name.as_str(),
+                queue.id.as_str(),
+                queue.name.as_str(),
+                queue.queue_type.as_str(),
+                member.id.as_str(),
+                member.email.as_str(),
+                member.name.as_str(),
+                member.skill_profile_id.as_str(),
+                member.skill_profile_name.as_str(),
+                member.skills.as_str(),
+                member.last_login.as_str(),
+                member.created_at.as_str(),
+            ])?;
+            row_count += 1;
+        }
+    }
+    Ok((
+        writer
+            .into_inner()
+            .context("Failed to finalize CSV output")?,
+        row_count,
+    ))
+}
+
 pub async fn collect_to_csv(
     config_path: &Path,
     mut config: WxccConfig,
@@ -584,82 +670,7 @@ pub async fn collect_to_csv(
         });
     }
 
-    let mut writer = csv::WriterBuilder::new()
-        .has_headers(true)
-        .from_writer(Vec::new());
-    writer.write_record([
-        "site_id",
-        "site_name",
-        "queue_id",
-        "queue_name",
-        "queue_type",
-        "member_id",
-        "member_email",
-        "member_name",
-        "member_skill_profile_id",
-        "member_skill_profile_name",
-        "member_skill_sets",
-        "member_last_login",
-        "member_created_at",
-    ])?;
-    let mut row_count = 0usize;
-    for queue in &queue_rows {
-        if queue.member_ids.is_empty() {
-            writer.write_record([
-                queue.site_id.as_str(),
-                queue.site_name.as_str(),
-                queue.id.as_str(),
-                queue.name.as_str(),
-                queue.queue_type.as_str(),
-                "",
-                "",
-                "",
-                "",
-                "",
-                "",
-                "",
-                "",
-            ])?;
-            row_count += 1;
-            continue;
-        }
-        for member_id in &queue.member_ids {
-            let Some(member) = members.get(member_id) else {
-                continue;
-            };
-            let site_id = if queue.site_id.is_empty() {
-                member.site_id.clone()
-            } else {
-                queue.site_id.clone()
-            };
-            let site_name = if !queue.site_name.is_empty() {
-                queue.site_name.clone()
-            } else if !member.site_name.is_empty() {
-                member.site_name.clone()
-            } else {
-                site_names.get(&site_id).cloned().unwrap_or_default()
-            };
-            writer.write_record([
-                site_id.as_str(),
-                site_name.as_str(),
-                queue.id.as_str(),
-                queue.name.as_str(),
-                queue.queue_type.as_str(),
-                member.id.as_str(),
-                member.email.as_str(),
-                member.name.as_str(),
-                member.skill_profile_id.as_str(),
-                member.skill_profile_name.as_str(),
-                member.skills.as_str(),
-                member.last_login.as_str(),
-                member.created_at.as_str(),
-            ])?;
-            row_count += 1;
-        }
-    }
-    let csv_bytes = writer
-        .into_inner()
-        .context("Failed to finalize CSV output")?;
+    let (csv_bytes, row_count) = build_csv(&queue_rows, &members, &site_names)?;
     let mut output = Vec::with_capacity(csv_bytes.len() + 3);
     output.extend_from_slice(&[0xEF, 0xBB, 0xBF]);
     output.extend_from_slice(&csv_bytes);
@@ -729,8 +740,17 @@ mod tests {
             site_name: "Cairo".into(),
             member_ids: HashSet::new(),
         };
-        assert!(queue.member_ids.is_empty());
-        assert_eq!(queue.id, "queue-1");
+        let (csv_bytes, rows) =
+            build_csv(&[queue], &HashMap::new(), &HashMap::new()).unwrap();
+        let mut reader = csv::ReaderBuilder::new().from_reader(csv_bytes.as_slice());
+        let records = reader
+            .records()
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(rows, 1);
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].get(2), Some("queue-1"));
+        assert!(records[0].iter().skip(5).all(str::is_empty));
     }
 
     #[test]
