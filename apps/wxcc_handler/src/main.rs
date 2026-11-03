@@ -132,16 +132,19 @@ fn get_manifest() -> AppManifest {
     }
 }
 
-fn command_from_runner_action(cli: &Cli) -> Result<Command> {
-    let action = cli.action.context("Runner invocation requires --action")?;
+fn command_from_runner_action(
+    action: RunnerAction,
+    code: Option<&str>,
+    state: Option<&str>,
+) -> Result<Command> {
     Ok(match action {
         RunnerAction::ConfigInit => Command::Config { command: ConfigCommand::Init },
         RunnerAction::ConfigCheck => Command::Config { command: ConfigCommand::Check },
         RunnerAction::AuthAuthorizeUrl => Command::Auth { command: AuthCommand::AuthorizeUrl },
         RunnerAction::AuthExchangeCode => Command::Auth {
             command: AuthCommand::ExchangeCode(ExchangeCodeArgs {
-                code: cli.code.clone().context("--code is required for --action auth-exchange-code")?,
-                state: cli.state.clone().context("--state is required for --action auth-exchange-code")?,
+                code: code.context("--code is required for --action auth-exchange-code")?.to_string(),
+                state: state.context("--state is required for --action auth-exchange-code")?.to_string(),
             }),
         },
         RunnerAction::AuthRefresh => Command::Auth { command: AuthCommand::Refresh },
@@ -158,7 +161,7 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
     let command = match (cli.action, cli.command.as_ref()) {
         (Some(_), Some(_)) => anyhow::bail!("Use either --action or a CLI subcommand, not both"),
-        (Some(action), None) => command_from_runner_action(&Cli { action: Some(action), ..cli.clone_for_action() })?,
+        (Some(action), None) => command_from_runner_action(action, cli.code.as_deref(), cli.state.as_deref())?,
         (None, Some(command)) => command.clone(),
         (None, None) => anyhow::bail!("An operation is required. Use --help to see available commands."),
     };
@@ -252,7 +255,7 @@ mod tests {
     #[test]
     fn runner_action_cli_parses_and_maps_to_existing_operation() {
         let cli = Cli::try_parse_from(["wxcc_handler", "--action", "data-collect", "--output", "out.csv"]).unwrap();
-        assert!(matches!(command_from_runner_action(&cli).unwrap(), Command::Data { command: DataCommand::Collect }));
+        assert!(matches!(command_from_runner_action(cli.action.unwrap(), cli.code.as_deref(), cli.state.as_deref()).unwrap(), Command::Data { command: DataCommand::Collect }));
         assert_eq!(cli.output.as_deref(), Some(Path::new("out.csv")));
     }
 
