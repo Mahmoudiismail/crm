@@ -219,6 +219,8 @@ fn skill_set(value: &Value) -> String {
     for skill in array_at(
         value,
         &[
+            "activeSkills",
+            "activeEnumSkills",
             "skills",
             "skillProfileSkills",
             "skillSet",
