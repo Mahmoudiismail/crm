@@ -41,9 +41,9 @@ Run Release Binaries from GitHub Actions with one of:
 - one package name, such as runner
 - comma-separated package names, such as runner,tasker
 
-The workflow builds only the selected packages, preserves the executable filenames, creates the existing password-protected ZIP naming format, verifies the archive and extracted executable files, and invokes each selected executable with --help as a bounded startup/CLI smoke check. The ZIP is then published as a GitHub Release asset and uploaded to paste.c-net.org.
+The workflow builds only the selected packages, preserves the executable filenames, creates the existing password-protected ZIP naming format, verifies the archive and extracted executable files, and invokes each selected executable with --help as a bounded startup/CLI smoke check. The check requires a zero exit code and non-empty help output, and captures both standard output and standard error so failures remain diagnosable under Bash strict mode. The ZIP is then published as a GitHub Release asset and uploaded to paste.c-net.org.
 
-The --help check verifies that the Windows executable starts and reaches CLI argument handling. It is not an interactive GUI, browser, Outlook, or end-to-end operational test.
+The --help check verifies that the Windows executable starts and reaches CLI argument handling. Help and version display requests must exit successfully; malformed CLI arguments must remain non-zero failures. This is not an interactive GUI, browser, Outlook, or end-to-end operational test.
 
 ## CRM Updater selection
 
