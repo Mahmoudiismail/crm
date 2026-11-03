@@ -50,7 +50,7 @@ The AppManifest describes an application's name, description and accepted CLI ar
 
 ## Logging and process management
 
-Applications use the shared tracing setup with configured stdout/file levels. Runner maintains a top-level scheduler log and per-task execution logs. Its task logger can recover after its log file is moved or deleted and writes a redacted configuration snapshot when the log is reopened. Task-specific logs contain detailed child-process output.
+Applications use the shared tracing setup with configured stdout/file levels. Runner maintains a top-level scheduler log and per-task execution logs. Its task logger can recover after its log file is moved or deleted and writes a redacted configuration snapshot when the log is reopened. Task-specific logs contain bounded child-process stdout/stderr and non-zero exit diagnostics. Runner starts Unix child actions in a dedicated process group; timeout and cancellation terminate the process group on Unix and use `taskkill /T` on Windows before reaping the direct child.
 
 Managed PowerShell templates are maintained as source files and embedded at build time where wired through include_str!. ScriptManager persists managed scripts under the executable directory and passes runtime values as separate arguments/data files rather than interpolating them into script source.
 
