@@ -2,6 +2,10 @@
 
 `tasker` is a lightweight, stateless task runner binary part of the CRM Tool suite. It is designed to be executed by the `runner` and can process various configured tasks in a single pass before exiting. Because it operates cleanly and exits, it can safely be invoked multiple times in parallel by the runner scheduler without deadlocks, provided tasks are configured with different targets.
 
+## Excel workbook dependency
+
+Tasker uses the `calamine` crate to read Excel workbooks for report processing and user/department mappings. Keep this dependency on a patched release (`0.38.0` or newer) because older releases are affected by a malformed CFB/OLE2 parser denial-of-service vulnerability. The workspace lockfile is refreshed by the dependency-lock CI step.
+
 ## Failure propagation
 
 Configured tasks are run in order. If a task fails, Tasker logs the error and returns a non-zero failure result immediately instead of continuing to later tasks and exiting successfully. This allows Runner to record a failed execution rather than showing a false success. Outlook email failures are propagated directly; Tasker does not attempt to send an error notification through the same Outlook COM transport that just failed.
