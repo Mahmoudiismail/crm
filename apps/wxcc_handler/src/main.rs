@@ -20,6 +20,7 @@ struct Cli {
     #[command(subcommand)]
     command: Command,
 }
+
 #[derive(Debug, Subcommand)]
 enum Command {
     Config {
@@ -30,12 +31,18 @@ enum Command {
         #[command(subcommand)]
         command: AuthCommand,
     },
+    Data {
+        #[command(subcommand)]
+        command: DataCommand,
+    },
 }
+
 #[derive(Debug, Subcommand)]
 enum ConfigCommand {
     Init,
     Check,
 }
+
 #[derive(Debug, Subcommand)]
 enum AuthCommand {
     AuthorizeUrl,
@@ -43,6 +50,12 @@ enum AuthCommand {
     Refresh,
     Status,
 }
+
+#[derive(Debug, Subcommand)]
+enum DataCommand {
+    Collect(CollectArgs),
+}
+
 #[derive(Debug, Args)]
 struct ExchangeCodeArgs {
     #[arg(long)]
@@ -51,13 +64,28 @@ struct ExchangeCodeArgs {
     state: String,
 }
 
-fn resolve_output_path(output: Option<&Path>, exe_dir: &Path) -> PathBuf {\n    match output {\n        Some(path) if path.is_absolute() => path.to_path_buf(),\n        Some(path) => exe_dir.join(path),\n        None => exe_dir.join("wxcc_data.csv"),\n    }\n}\n\nfn resolve_config_path(config: Option<&Path>, exe_dir: &Path) -> PathBuf {
+#[derive(Debug, Args)]
+struct CollectArgs {
+    #[arg(long)]
+    output: Option<PathBuf>,
+}
+
+fn resolve_config_path(config: Option<&Path>, exe_dir: &Path) -> PathBuf {
     match config {
         Some(path) if path.is_absolute() => path.to_path_buf(),
         Some(path) => exe_dir.join(path),
         None => exe_dir.join("wxcc_config.json"),
     }
 }
+
+fn resolve_output_path(output: Option<&Path>, exe_dir: &Path) -> PathBuf {
+    match output {
+        Some(path) if path.is_absolute() => path.to_path_buf(),
+        Some(path) => exe_dir.join(path),
+        None => exe_dir.join("wxcc_data.csv"),
+    }
+}
+
 fn get_manifest() -> AppManifest {
     AppManifest {
         plugin_api_version: Some(crm_tool::manifest::PROCESS_PLUGIN_API_VERSION),
@@ -141,6 +169,17 @@ async fn main() -> Result<()> {
             }
             Ok(())
         }
+        Command::Data {
+            command: DataCommand::Collect(args),
+        } => {
+            let output_path = resolve_output_path(args.output.as_deref(), &exe_dir);
+            let rows = data::collect_to_csv(&config_path, config, &output_path).await?;
+            println!(
+                "Data collection completed: {rows} rows exported to {}",
+                output_path.display()
+            );
+            Ok(())
+        }
     };
     if let Err(err) = result {
         error!("Command failed: {err:#}");
@@ -153,6 +192,7 @@ async fn main() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn relative_and_default_config_paths_use_executable_directory() {
         let base = Path::new("C:/apps/wxcc");
@@ -165,8 +205,21 @@ mod tests {
             base.join("wxcc_config.json")
         );
     }
+
     #[test]
-    fn output_paths_default_to_executable_directory_and_preserve_absolute_paths() {\n        let base = Path::new("C:/apps/wxcc");\n        assert_eq!(resolve_output_path(None, base), base.join("wxcc_data.csv"));\n        assert_eq!(\n            resolve_output_path(Some(Path::new("reports/data.csv")), base),\n            base.join("reports/data.csv")\n        );\n        let absolute = PathBuf::from("C:/exports/data.csv");\n        assert_eq!(resolve_output_path(Some(&absolute), base), absolute);\n    }\n    #[test]\n    fn absolute_config_path_is_preserved() {
+    fn output_paths_default_to_executable_directory_and_preserve_absolute_paths() {
+        let base = Path::new("C:/apps/wxcc");
+        assert_eq!(resolve_output_path(None, base), base.join("wxcc_data.csv"));
+        assert_eq!(
+            resolve_output_path(Some(Path::new("reports/data.csv")), base),
+            base.join("reports/data.csv")
+        );
+        let absolute = PathBuf::from("C:/exports/data.csv");
+        assert_eq!(resolve_output_path(Some(&absolute), base), absolute);
+    }
+
+    #[test]
+    fn absolute_config_path_is_preserved() {
         let path = if cfg!(windows) {
             PathBuf::from("C:/data/wxcc.json")
         } else {
