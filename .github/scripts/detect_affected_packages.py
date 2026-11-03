@@ -64,7 +64,7 @@ def main() -> int:
         ),
     }
     print(json.dumps(result, separators=(",", ":")))
-    return 00
+    return 0
 
 
 if __name__ == "__main__":
