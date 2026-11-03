@@ -384,6 +384,26 @@ mod tests {
         let selected = select_replacements(&config, temp.path(), &[runner]).unwrap();
         assert_eq!(selected.len(), 1);
         assert_eq!(selected[0].executable_name, "runner.exe");
+
+        let (_, args) = generate_update_script(&selected, temp.path(), 99999).unwrap();
+        let payload: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&args[3].1).unwrap()).unwrap();
+        assert_eq!(payload["file_replacements"].as_array().unwrap().len(), 1);
+        assert_eq!(payload["restart_apps"].as_array().unwrap().len(), 1);
+        assert_eq!(payload["apps_to_stop"].as_array().unwrap().len(), 1);
+        assert_eq!(payload["apps_to_stop"][0]["process_name"], "runner");
+        fs::remove_file(&args[3].1).unwrap();
+
+        let both = [
+            temp.path().join("runner.exe"),
+            {
+                let tasker = temp.path().join("tasker.exe");
+                fs::write(&tasker, b"tasker").unwrap();
+                tasker
+            },
+        ];
+        let full_selection = select_replacements(&config, temp.path(), &both).unwrap();
+        assert_eq!(full_selection.len(), 2);
     }
 
     #[test]
