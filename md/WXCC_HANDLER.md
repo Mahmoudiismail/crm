@@ -27,7 +27,9 @@ Set these values in wxcc_config.json:
 - client_id: Webex Integration client ID.
 - client_secret: Webex Integration client secret.
 - redirect_uri: Exact URI registered for the Integration.
-- scopes: Array of approved Webex Contact Center OAuth scopes required by enabled operations.
+- scopes: Array of approved Webex Contact Center OAuth scopes required by enabled operations. Data Collection requires `cjp:config_read`.
+- org_id: Webex Contact Center organization ID.
+- api_base_url: Regional Webex Contact Center API base URL (for example, `https://api.wxcc-us1.cisco.com` for US1; use the base URL for your tenant's actual region).
 - access_token, refresh_token, access_token_expires_at, refresh_token_expires_at: Managed by the application.
 - pending_oauth_state: Temporary OAuth state for callback validation.
 - log_stdout_level and log_file_level: Independent tracing levels.
@@ -46,13 +48,22 @@ The flow uses the official Webex OAuth authorization-code and token endpoints. A
 
 ## Planned capabilities
 
-### Data Collection
+## Data Collection
 
-- Collect Site → Queue → Member relationships.
-- Include member skill profile, skill sets, last login, and creation date where documented APIs expose them.
-- Produce one flat CSV with one member-per-queue row, retaining source IDs; skill sets occupy one delimited column.
-- CSV output uses UTF-8 with BOM.
-- The queue-without-members row policy remains to be decided before that edge case is implemented.
+Configure `org_id` and `api_base_url`, then run:
+
+```powershell
+wxcc_handler.exe data collect
+wxcc_handler.exe data collect --output C:\Exports\wxcc_data.csv
+```
+
+The default output is `wxcc_data.csv` beside the executable. Relative output paths are also resolved beside the executable. The command refreshes an access token when it is missing or expires within five minutes.
+
+Collection uses the current v2 list resources for Sites, Teams, Skill Profiles, Users, and Contact Service Queues. It retrieves full Queue and Team resources because the June 1, 2026 API change removed relationship arrays from list responses. User and skill-profile details are retrieved where an ID is available. Skill-based queue membership is taken from Cisco's per-user skill-queue mapping endpoint rather than reimplementing skill eligibility.
+
+The CSV is flat, UTF-8 with BOM, and contains one row per member-per-queue relationship. Source IDs are retained. Skill sets are serialized into one semicolon-delimited column. Last-login and creation timestamps are included when the API returns them; otherwise the corresponding field is blank. A queue with no members is still exported as one row, with all member columns blank.
+
+CSV columns: `site_id`, `site_name`, `queue_id`, `queue_name`, `queue_type`, `member_id`, `member_email`, `member_name`, `member_skill_profile_id`, `member_skill_profile_name`, `member_skill_sets`, `member_last_login`, `member_created_at`.
 
 ### Analyzer
 
