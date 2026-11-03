@@ -47,7 +47,7 @@ Each executable has a dedicated configuration file. Defaults are generally locat
 
 ## Manifest contract
 
-The AppManifest describes an application's name, description and accepted CLI arguments. First-party CRM, Tasker, Yasweb, and CRM Updater workers declare `plugin_api_version: 1`; Runner is the host process. When `registered_apps[].plugin_api_version` is configured, Runner rejects missing or incompatible manifest versions before launch. When the registry field is absent, Runner skips the compatibility probe and preserves legacy external-app behavior. Argument metadata supports data types, required flags, defaults, options, dependencies and autofill. Runner uses the manifest both to construct app forms and to avoid passing unsupported date arguments. See [Manifest Schema](./MANIFEST_SCHEMA.md).
+The AppManifest describes an application's name, description and accepted CLI arguments. First-party CRM, Tasker, Yasweb, CRM Updater, and WXCC Handler workers declare `plugin_api_version: 1`; Runner is the host process. When `registered_apps[].plugin_api_version` is configured, Runner rejects missing or incompatible manifest versions before launch. When the registry field is absent, Runner skips the compatibility probe and preserves legacy external-app behavior. Argument metadata supports data types, required flags, defaults, options, dependencies and autofill. Runner uses the manifest both to construct app forms and to avoid passing unsupported date arguments. See [Manifest Schema](./MANIFEST_SCHEMA.md).
 
 ## Logging and process management
 
