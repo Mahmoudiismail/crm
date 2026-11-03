@@ -53,7 +53,6 @@ async fn test_process_timeout_terminates_child_and_tree() {
     );
 }
 
-
 #[tokio::test]
 async fn test_nonzero_exit_preserves_child_output_and_status() {
     let logger = TaskLogger::new("nonzero_exit_test", "nonzero_exit_test");
@@ -61,7 +60,10 @@ async fn test_nonzero_exit_preserves_child_output_and_status() {
     #[cfg(target_os = "windows")]
     let cmd = {
         let mut command = tokio::process::Command::new("cmd");
-        command.args(["/C", "echo child-stdout & echo child-stderr 1>&2 & exit /b 7"]);
+        command.args([
+            "/C",
+            "echo child-stdout & echo child-stderr 1>&2 & exit /b 7",
+        ]);
         command
     };
 
@@ -80,12 +82,22 @@ async fn test_nonzero_exit_preserves_child_output_and_status() {
     })
     .await;
 
-    let error = result.expect_err("non-zero child exit must fail the action").to_string();
-    assert!(error.contains("exit code Some(7)"), "unexpected error: {error}");
-    assert!(error.contains("child-stdout"), "stdout was not preserved: {error}");
-    assert!(error.contains("child-stderr"), "stderr was not preserved: {error}");
+    let error = result
+        .expect_err("non-zero child exit must fail the action")
+        .to_string();
+    assert!(
+        error.contains("exit code Some(7)"),
+        "unexpected error: {error}"
+    );
+    assert!(
+        error.contains("child-stdout"),
+        "stdout was not preserved: {error}"
+    );
+    assert!(
+        error.contains("child-stderr"),
+        "stderr was not preserved: {error}"
+    );
 }
-
 
 #[tokio::test]
 async fn test_cancelling_execution_terminates_child_process_tree() {
@@ -107,10 +119,7 @@ async fn test_cancelling_execution_terminates_child_process_tree() {
     #[cfg(unix)]
     let cmd = {
         let mut command = tokio::process::Command::new("sh");
-        let script = format!(
-            "sleep 30 & echo $! > '{}'; wait",
-            pid_file.display()
-        );
+        let script = format!("sleep 30 & echo $! > '{}'; wait", pid_file.display());
         command.args(["-c", &script]);
         command
     };

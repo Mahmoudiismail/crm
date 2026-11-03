@@ -274,10 +274,9 @@ async fn discover_date_args(
 }
 
 fn validate_process_plugin_manifest_schema(manifest: &serde_json::Value) -> Result<()> {
-    let typed_manifest = serde_json::from_value::<crm_tool::manifest::AppManifest>(
-        manifest.clone(),
-    )
-    .context("Process plugin manifest does not match the AppManifest schema")?;
+    let typed_manifest =
+        serde_json::from_value::<crm_tool::manifest::AppManifest>(manifest.clone())
+            .context("Process plugin manifest does not match the AppManifest schema")?;
     typed_manifest
         .validate()
         .context("Process plugin manifest failed structural validation")
@@ -477,10 +476,10 @@ pub async fn run_external_app(
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_registered_config_fallback, date_args_from_manifest, insert_period_args,
-        manifest_arg_dependencies_satisfied, manifest_argument_is_available,
+        apply_registered_config_fallback, date_args_from_manifest, discover_date_args,
+        insert_period_args, manifest_arg_dependencies_satisfied, manifest_argument_is_available,
         validate_process_plugin_compatibility, validate_process_plugin_manifest,
-        validate_process_plugin_manifest_schema, discover_date_args, RegisteredApp,
+        validate_process_plugin_manifest_schema, RegisteredApp,
     };
     use std::collections::HashMap;
 
