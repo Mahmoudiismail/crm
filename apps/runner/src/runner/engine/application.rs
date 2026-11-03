@@ -513,6 +513,23 @@ mod tests {
     }
 
     #[test]
+    fn rejects_duplicate_argument_names_in_registered_plugin_manifest() {
+        let invalid = serde_json::json!({
+            "name": "Duplicate arguments",
+            "description": "Invalid plugin",
+            "plugin_api_version": 1,
+            "arguments": [
+                { "name": "--mode", "arg_type": "string", "required": false },
+                { "name": "--mode", "arg_type": "boolean", "required": false }
+            ]
+        });
+        assert!(validate_process_plugin_manifest_schema(&invalid)
+            .unwrap_err()
+            .to_string()
+            .contains("structural validation"));
+    }
+
+    #[test]
     fn rejects_missing_process_plugin_version_when_registry_opts_in() {
         let missing =
             validate_process_plugin_manifest(&serde_json::json!({"name": "Unversioned plugin"}), 1)
