@@ -52,3 +52,36 @@ async fn test_process_timeout_terminates_child_and_tree() {
         elapsed
     );
 }
+
+
+#[tokio::test]
+async fn test_nonzero_exit_preserves_child_output_and_status() {
+    let logger = TaskLogger::new("nonzero_exit_test", "nonzero_exit_test");
+
+    #[cfg(target_os = "windows")]
+    let cmd = {
+        let mut command = tokio::process::Command::new("cmd");
+        command.args(["/C", "echo child-stdout & echo child-stderr 1>&2 & exit /b 7"]);
+        command
+    };
+
+    #[cfg(not(target_os = "windows"))]
+    let cmd = {
+        let mut command = tokio::process::Command::new("sh");
+        command.args(["-c", "printf child-stdout; printf child-stderr >&2; exit 7"]);
+        command
+    };
+
+    let result = run_process(ProcessContext {
+        logger: &logger,
+        command_str: "nonzero_exit_test".to_string(),
+        timeout_seconds: 10,
+        cmd,
+    })
+    .await;
+
+    let error = result.expect_err("non-zero child exit must fail the action").to_string();
+    assert!(error.contains("exit code Some(7)"), "unexpected error: {error}");
+    assert!(error.contains("child-stdout"), "stdout was not preserved: {error}");
+    assert!(error.contains("child-stderr"), "stderr was not preserved: {error}");
+}
