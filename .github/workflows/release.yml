@@ -84,7 +84,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ALL_BINS=(crm runner yasweb tasker crm_updater)
+          ALL_BINS=(crm runner yasweb tasker crm_updater wxcc_handler)
           if [[ "$BINARY_INPUT" == "all" ]]; then
             SELECTED_BINS=("${ALL_BINS[@]}")
           else
@@ -96,7 +96,7 @@ jobs:
             for i in "${!SELECTED_BINS[@]}"; do
               bin="$(echo "${SELECTED_BINS[$i]}" | xargs)"
               case "$bin" in
-                crm|runner|yasweb|tasker|crm_updater) ;;
+                crm|runner|yasweb|tasker|crm_updater|wxcc_handler) ;;
                 *)
                   echo "Unsupported binary: '$bin'. Allowed: ${ALL_BINS[*]}" >&2
                   exit 1
