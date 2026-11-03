@@ -76,6 +76,9 @@ pub fn wait_for_download(
     timeout_minutes: u64,
     snapshot: &DownloadSnapshot,
 ) -> Result<()> {
+    if download_dir.is_none() {
+        return Ok(());
+    }
     wait_for_download_with_timeout(
         download_dir,
         Duration::from_secs(timeout_minutes.saturating_mul(60)),
@@ -90,7 +93,7 @@ pub fn wait_for_download_with_timeout(
     snapshot: &DownloadSnapshot,
 ) -> Result<()> {
     let Some(dir) = download_dir else {
-        return Ok(());
+        bail!("Cannot confirm a recovered report download without a download directory");
     };
 
     info!(
