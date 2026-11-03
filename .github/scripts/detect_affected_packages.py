@@ -42,15 +42,16 @@ def affected_packages(changed_paths: list[str]) -> list[str]:
     return [package for package in ALL_PACKAGES if package in packages]
 
 
-def main() -> int:
-    if len(sys.argv) != 2:
-        print("Usage: detect_affected_packages.py <changed-files.txt>", file=sys.stderr)
-        return 2
+def change_flags(changed_paths: list[str]) -> dict[str, bool]:
+    """Identify language-specific and dependency validations required by changed paths."""
+    normalized = []
+    for raw_path in changed_paths:
+        path = raw_path.strip().replace("\\", "/")
+        while path.startswith("./"):
+            path = path[2:]
+        normalized.append(path)
 
-    changed_paths = Path(sys.argv[1]).read_text(encoding="utf-8").splitlines()
-    normalized = [path.strip().replace("\\", "/") for path in changed_paths]
-    result = {
-        "packages": affected_packages(changed_paths),
+    return {
         "javascript": any(path.lower().endswith(".js") for path in normalized),
         "powershell": any(path.lower().endswith(".ps1") for path in normalized),
         "runner_javascript": any(
@@ -63,6 +64,15 @@ def main() -> int:
             for path in normalized
         ),
     }
+
+
+def main() -> int:
+    if len(sys.argv) != 2:
+        print("Usage: detect_affected_packages.py <changed-files.txt>", file=sys.stderr)
+        return 2
+
+    changed_paths = Path(sys.argv[1]).read_text(encoding="utf-8").splitlines()
+    result = {"packages": affected_packages(changed_paths), **change_flags(changed_paths)}
     print(json.dumps(result, separators=(",", ":")))
     return 0
 
