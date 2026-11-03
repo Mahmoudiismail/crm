@@ -21,7 +21,11 @@ pub struct TaskerCliOptions {
     pub only_call_center: bool,
     #[arg(long)]
     pub send_exceptions: bool,
-    #[arg(long, requires = "task", help = "Overrides the Sat Figures start date (Task 6) only.")]
+    #[arg(
+        long,
+        requires = "task",
+        help = "Overrides the Sat Figures start date (Task 6) only."
+    )]
     pub start_date: Option<String>,
     #[arg(long, hide = true)]
     pub manifest: bool,
@@ -621,7 +625,6 @@ mod tests {
     }
 }
 
-
 #[cfg(test)]
 mod manifest_tests {
     use super::*;
@@ -630,10 +633,19 @@ mod manifest_tests {
     #[test]
     fn start_date_is_a_date_input_available_only_for_sat_figures_task() {
         let manifest = get_manifest();
-        let start_date = manifest.arguments.iter().find(|arg| arg.name == "--start-date").unwrap();
+        let start_date = manifest
+            .arguments
+            .iter()
+            .find(|arg| arg.name == "--start-date")
+            .unwrap();
         assert_eq!(start_date.arg_type, ArgType::DateVar);
         assert_eq!(
-            start_date.depends_on.as_ref().unwrap().get("--task").unwrap(),
+            start_date
+                .depends_on
+                .as_ref()
+                .unwrap()
+                .get("--task")
+                .unwrap(),
             &vec!["6".to_string()]
         );
     }

@@ -173,7 +173,8 @@ mod tests {
             Some(&dir.path().to_path_buf()),
             Duration::from_secs(2),
             &snapshot,
-        ).is_ok());
+        )
+        .is_ok());
     }
 
     #[test]
@@ -185,7 +186,8 @@ mod tests {
             Some(&dir.path().to_path_buf()),
             Duration::from_millis(250),
             &snapshot,
-        ).is_err());
+        )
+        .is_err());
     }
 
     #[test]

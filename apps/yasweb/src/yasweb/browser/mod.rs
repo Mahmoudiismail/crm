@@ -113,7 +113,9 @@ pub fn run_browser_tab(
                         info!("Keeping browser open for 60 seconds after report failure because keep_open=true");
                         std::thread::sleep(Duration::from_secs(60));
                     }
-                    return Err(report_error.context("Yasweb stage failed: report navigation/export"));
+                    return Err(
+                        report_error.context("Yasweb stage failed: report navigation/export")
+                    );
                 }
             }
         }
