@@ -28,7 +28,7 @@ Set these values in wxcc_config.json:
 - client_secret: Webex Integration client secret.
 - redirect_uri: Exact URI registered for the Integration.
 - scopes: Array of approved Webex Contact Center OAuth scopes required by enabled operations.
-- access_token, refresh_token, access_token_expires_at: Managed by the application.
+- access_token, refresh_token, access_token_expires_at, refresh_token_expires_at: Managed by the application.
 - pending_oauth_state: Temporary OAuth state for callback validation.
 - log_stdout_level and log_file_level: Independent tracing levels.
 
