@@ -61,7 +61,7 @@ class AffectedPackagesTests(unittest.TestCase):
 
     def test_dot_relative_and_windows_paths_are_normalized(self):
         self.assertEqual(
-            DETECTOR.affected_packages([r".\\.github\\workflows\\test.yml"]), ALL
+            DETECTOR.affected_packages([r".\.github\workflows\test.yml"]), ALL
         )
 
 
