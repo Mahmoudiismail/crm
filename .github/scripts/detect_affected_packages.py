@@ -7,7 +7,7 @@ import json
 import sys
 from pathlib import Path
 
-ALL_PACKAGES = ("crm", "runner", "yasweb", "tasker", "crm_updater")
+ALL_PACKAGES = ("crm", "runner", "yasweb", "tasker", "crm_updater", "wxcc_handler")
 SHARED_ROOT_FILES = {"Cargo.toml", "Cargo.lock", "deny.toml"}
 
 
