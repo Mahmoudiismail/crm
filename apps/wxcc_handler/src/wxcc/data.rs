@@ -769,13 +769,13 @@ mod tests {
     fn skill_sets_are_serialized_in_one_delimited_column() {
         let user = json!({
             "skills": [
-                {"skillName":"English","skillValue":"10","skillType":"proficiency"}
+                {"skillName":"English","proficiencyValue":10,"skillType":"proficiency"}
             ],
             "activeSkills": [
-                {"skillName":"Arabic","skillValue":"true","skillType":"boolean"}
+                {"skillName":"Arabic","booleanValue":true,"skillType":"boolean"}
             ],
             "activeEnumSkills": [
-                {"skillName":"Language","skillValue":"English","skillType":"enum"}
+                {"enumSkillName":"Language","enumSkillValue":"English","skillType":"enum"}
             ]
         });
         assert_eq!(
