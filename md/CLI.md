@@ -1,6 +1,6 @@
 # CLI Reference
 
-This document describes the command-line options declared by the current binary entry points. Run an executable with --help for the parser help for the exact build.
+This document describes the command-line options declared by the current binary entry points. Run an executable with --help for the parser help for the exact build. Help and version display requests are successful CLI outcomes (exit code 0); malformed arguments remain errors with a non-zero exit code.
 
 ## Runner
 

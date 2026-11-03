@@ -137,9 +137,16 @@ jobs:
           done
           for exe in "${EXE_FILES[@]}"; do
             echo "Checking CLI startup: $exe --help"
-            "$VERIFY_DIR/$exe" --help > "$VERIFY_DIR/$exe.help.txt"
-            if [[ $? -ne 0 || ! -s "$VERIFY_DIR/$exe.help.txt" ]]; then
-              echo "Release binary failed its --help smoke check: $exe" >&2
+            if "$VERIFY_DIR/$exe" --help > "$VERIFY_DIR/$exe.help.txt" 2>&1; then
+              :
+            else
+              status=$?
+              cat "$VERIFY_DIR/$exe.help.txt" >&2
+              echo "Release binary failed its --help smoke check (exit $status): $exe" >&2
+              exit "$status"
+            fi
+            if [[ ! -s "$VERIFY_DIR/$exe.help.txt" ]]; then
+              echo "Release binary produced no --help output: $exe" >&2
               exit 1
             fi
           done
