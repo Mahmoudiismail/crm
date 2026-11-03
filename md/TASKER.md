@@ -19,7 +19,7 @@ Configured tasks are run in order. If a task fails, Tasker logs the error and re
 - `--task <INDEX>`: Executes only a specific task from the configuration (1-based index). For example, `--task 1` runs only the first task in the config array.
 - `--only-call-center`: When provided, the task skips standard per-team/per-branch email generation and runs the Call Center email path for the selected task.
 - `--send-exceptions`: Runs the configured exception-ticket reporting path. Exception mode bypasses standard team/branch routing and the specialized Call Center lead attachment path. The CLI flag itself does not require `--task`; Runner's manifest exposes it conditionally for task selection.
-- `--start-date <DATE>`: Overrides the configured task start date; this option requires `--task`.
+- `--start-date <DATE>`: Overrides the Sat Figures start date only (`--task 6`); it is shown in Runner's manifest-driven form only when Task 6 is selected.
 
 **Example: Scheduling in runner_config.json**
 To schedule these separately in the `runner`, you can configure two different tasks in `runner_config.json`:
