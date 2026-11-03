@@ -20,7 +20,7 @@ def affected_packages(changed_paths: list[str]) -> list[str]:
         path = raw_path.strip().replace("\\", "/")
         while path.startswith("./"):
             path = path[2:]
-        if not path:
+        if not path or path.lower().endswith((".js", ".ps1", ".md")):
             continue
 
         parts = path.split("/")
