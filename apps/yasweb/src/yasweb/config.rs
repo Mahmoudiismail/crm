@@ -37,10 +37,10 @@ impl YaswebConfig {
         let mut config_updated = false;
 
         for report in self.reports.values_mut() {
-            let (default_start_fmt, default_end_fmt) = if report.report_type == "Report Manager" {
-                ("%d-%b-%Y".to_string(), "%d-%b-%Y".to_string())
-            } else {
-                ("%d-%m-%Y 00:00".to_string(), "%d-%m-%Y 23:59".to_string())
+            let (default_start_fmt, default_end_fmt) = match report.report_type.as_str() {
+                "Report Manager" => ("%d-%b-%Y".to_string(), "%d-%b-%Y".to_string()),
+                "Standard Report" => ("%-d-%-m-%Y".to_string(), "%-d-%-m-%Y".to_string()),
+                _ => ("%d-%m-%Y 00:00".to_string(), "%d-%m-%Y 23:59".to_string()),
             };
 
             if let Some(ref mut sk) = report.start_date_key {
@@ -207,6 +207,76 @@ mod tests {
         .unwrap();
         assert_eq!(config.concurrency, 4);
         assert_eq!(serde_json::to_value(config).unwrap()["concurrency"], 4);
+    }
+
+    fn report_with_date_keys(
+        report_type: &str,
+        start_format: &str,
+        end_format: &str,
+    ) -> YaswebConfig {
+        let mut reports = HashMap::new();
+        reports.insert(
+            "Example".to_string(),
+            ReportConfig {
+                report_type: report_type.to_string(),
+                filters: HashMap::new(),
+                filter_options: HashMap::new(),
+                start_date_key: Some(DateKeyConfig {
+                    key: "FromDate".to_string(),
+                    format: start_format.to_string(),
+                }),
+                end_date_key: Some(DateKeyConfig {
+                    key: "ToDate".to_string(),
+                    format: end_format.to_string(),
+                }),
+                download_path: None,
+            },
+        );
+        YaswebConfig {
+            reports,
+            ..YaswebConfig::default()
+        }
+    }
+
+    #[test]
+    fn standard_report_defaults_to_unpadded_date_format_for_both_keys() {
+        let mut config = report_with_date_keys("Standard Report", "", "");
+        assert!(config.finalize_runtime_fields());
+        let report = &config.reports["Example"];
+        assert_eq!(report.start_date_key.as_ref().unwrap().format, "%-d-%-m-%Y");
+        assert_eq!(report.end_date_key.as_ref().unwrap().format, "%-d-%-m-%Y");
+        assert!(!config.finalize_runtime_fields());
+    }
+
+    #[test]
+    fn report_manager_keeps_abbreviated_month_date_format() {
+        let mut config = report_with_date_keys("Report Manager", "", "");
+        assert!(config.finalize_runtime_fields());
+        let report = &config.reports["Example"];
+        assert_eq!(report.start_date_key.as_ref().unwrap().format, "%d-%b-%Y");
+        assert_eq!(report.end_date_key.as_ref().unwrap().format, "%d-%b-%Y");
+    }
+
+    #[test]
+    fn explicit_date_formats_are_preserved_for_standard_report() {
+        let mut config = report_with_date_keys("Standard Report", "dd-mm-yyyy", "yyyy/mm/dd");
+        assert!(!config.finalize_runtime_fields());
+        let report = &config.reports["Example"];
+        assert_eq!(report.start_date_key.as_ref().unwrap().format, "dd-mm-yyyy");
+        assert_eq!(report.end_date_key.as_ref().unwrap().format, "yyyy/mm/dd");
+    }
+
+    #[test]
+    fn empty_report_filter_values_survive_config_round_trip() {
+        let mut report = report_with_date_keys("Standard Report", "", "")
+            .reports
+            .remove("Example")
+            .unwrap();
+        report.filters.insert("Hospital".to_string(), String::new());
+        let serialized = serde_json::to_string(&report).unwrap();
+        let restored: ReportConfig = serde_json::from_str(&serialized).unwrap();
+        assert!(restored.filters.contains_key("Hospital"));
+        assert_eq!(restored.filters["Hospital"], "");
     }
 
     #[test]

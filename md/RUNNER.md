@@ -36,6 +36,7 @@ Focused regression coverage protects three runtime guarantees:
 - Concurrent requests for the same task ID result in one execution while that task is queued or running.
 - A `TaskLogger` initialization failure remains retryable; after the filesystem failure is removed, a later log call initializes the logger and writes its message.
 - An existing malformed `runner_config.json` causes the Runner process to exit unsuccessfully without replacing the file with defaults.
+- Manifest arguments with unsatisfied `depends_on` conditions are excluded from the saved action argument map; Node's built-in test runner covers hidden, available, and period-mapped arguments.
 
 ## Task Dispatch Feedback and Config Persistence
 
@@ -71,7 +72,7 @@ Each External Application action configures its own periodization mode alongside
 
 ### Date Input Visibility
 The GUI dynamically inspects the returned application `AppManifest` when a task action is created or an app is selected.
-If the manifest does not explicitly declare date/periodization arguments (e.g. `start_date`, `end_date`, `period_mode`, or generic `date_var` arguments), the Periodization Mode and Date inputs are completely hidden from the user interface to prevent confusion, preserving layout relevancy to the specific tool executed.
+If the manifest does not explicitly declare date/periodization arguments (e.g. `start_date`, `end_date`, `period_mode`, or generic `date_var` arguments), the Periodization Mode and Date inputs are completely hidden from the user interface to prevent confusion, preserving layout relevancy to the specific tool executed. Manifest arguments hidden because their `depends_on` conditions are not met are also excluded when the action's arguments are serialized and saved; hiding the parent field container must not leave an empty or stale argument in `runner_config.json`. Mapped date arguments are likewise omitted from the ordinary argument map because Runner supplies their resolved period values at execution time.
 
 ### Fixed Date vs Dynamic Expression UI
 For each External Application independently, Start Date and End Date support explicit selection between:
@@ -120,3 +121,9 @@ Runner passes the declared `--filter-<key>` values as separate process
 arguments; Yasweb normalizes those dynamic flags into its supported
 `--filters <JSON>` input. This preserves the manifest-driven dropdown UI
 without requiring a fixed set of filter names in the Yasweb CLI.
+
+Optional manifest text/filter fields can be cleared by removing their contents
+and saving the task. Runner persists the explicit empty string in the action's
+`args` object, so the field remains empty on the next edit instead of falling
+back to the manifest's `default_value`. This does not make structurally
+required fields (such as task/profile identifiers) optional.
