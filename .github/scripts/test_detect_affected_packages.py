@@ -52,6 +52,16 @@ class AffectedPackagesTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertEqual(DETECTOR.affected_packages([path]), ALL)
 
+    def test_javascript_and_powershell_changes_do_not_schedule_rust_packages(self):
+        self.assertEqual(
+            DETECTOR.affected_packages([
+                "apps/runner/src/validation.js",
+                "apps/tasker/scripts/report.ps1",
+                "src/shared-helper.js",
+            ]),
+            [],
+        )
+
     def test_documentation_only_changes_select_no_packages(self):
         self.assertEqual(
             DETECTOR.affected_packages(["md/BUILD.md", "md/ARCHITECTURE.md"]), []
