@@ -368,7 +368,12 @@ mod tests {
         ])
         .unwrap();
         assert!(matches!(
-            command_from_runner_action(&cli).unwrap(),
+            command_from_runner_action(
+                cli.action.unwrap(),
+                cli.code.as_deref(),
+                cli.state.as_deref(),
+            )
+            .unwrap(),
             Command::Auth {
                 command: AuthCommand::ExchangeCode(_)
             }
