@@ -4,6 +4,7 @@ use serde::Serialize;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::collections::HashSet;
 use tracing::{info, warn};
 use zip::ZipArchive;
 
@@ -81,20 +82,10 @@ pub fn process_update_pipeline(config: &crate::crm_updater::config::UpdaterConfi
         existing_sources
     };
 
-    // Never launch a partial update: every configured replacement must have a staged source.
-    let missing_sources: Vec<String> = config
-        .file_replacement_map
-        .iter()
-        .map(|entry| downloads_dir.join(&entry.source_file))
-        .filter(|path| !path.is_file())
-        .map(|path| path.display().to_string())
-        .collect();
-    if !missing_sources.is_empty() {
-        bail!(
-            "Update is incomplete; missing {} configured source file(s): {}",
-            missing_sources.len(),
-            missing_sources.join(", ")
-        );
+    // Apply only configured files present in this package; reject unknown files first.
+    let selected_entries = select_replacements(config, downloads_dir, &extracted_files)?;
+    if selected_entries.is_empty() {
+        bail!("Update package did not contain any configured application binaries.");
     }
 
     // Unblock all extracted files
@@ -104,7 +95,7 @@ pub fn process_update_pipeline(config: &crate::crm_updater::config::UpdaterConfi
 
     // 3. Generate PowerShell script for shutdown, replace, and restart
     let parent_pid = std::process::id();
-    let (ps_script_path, args) = generate_update_script(config, downloads_dir, parent_pid)?;
+    let (ps_script_path, args) = generate_update_script(&selected_entries, downloads_dir, parent_pid)?;
 
     // Execute script as detached process
     execute_detached_powershell(&ps_script_path, &args)?;
@@ -198,6 +189,40 @@ fn extract_zip(zip_path: &Path, extract_dir: &Path, password: &[u8]) -> Result<V
     Ok(extracted)
 }
 
+fn select_replacements(
+    config: &crate::crm_updater::config::UpdaterConfig,
+    downloads_dir: &Path,
+    extracted_files: &[PathBuf],
+) -> Result<Vec<crate::crm_updater::config::ReplacementMapEntry>> {
+    let configured_sources: HashSet<&Path> = config.file_replacement_map.iter()
+        .map(|entry| Path::new(&entry.source_file)).collect();
+    let mut matched = HashSet::new();
+    for file in extracted_files {
+        let relative = file.strip_prefix(downloads_dir)
+            .with_context(|| format!("Update file is outside downloads directory: {}", file.display()))?;
+        if !configured_sources.contains(relative) {
+            bail!("Update package contains an unconfigured file: {}", relative.display());
+        }
+        if !matched.insert(relative.to_path_buf()) {
+            bail!("Update package contains a duplicate file: {}", relative.display());
+        }
+    }
+    let mut selected = Vec::new();
+    for entry in &config.file_replacement_map {
+        let staged = downloads_dir.join(&entry.source_file);
+        if extracted_files.iter().any(|file| file == &staged) {
+            if selected.iter().any(|item: &crate::crm_updater::config::ReplacementMapEntry| item.source_file == entry.source_file) {
+                bail!("Multiple configured applications use the same source file: {}", entry.source_file);
+            }
+            selected.push(entry.clone());
+        }
+    }
+    if selected.len() != matched.len() {
+        bail!("Update package has an ambiguous source-file mapping.");
+    }
+    Ok(selected)
+}
+
 fn unblock_file(path: &Path) {
     let path_string = path.to_string_lossy().into_owned();
     let result = crm_tool::script_manager::ScriptManager::new().run_script_with_args(
@@ -230,7 +255,7 @@ fn resolve_target_dir(exe_dir: &Path, target_path: &str) -> PathBuf {
 const UPDATE_SCRIPT_TEMPLATE: &str = include_str!("scripts/apply_update.ps1");
 
 fn generate_update_script(
-    config: &crate::crm_updater::config::UpdaterConfig,
+    entries: &[crate::crm_updater::config::ReplacementMapEntry],
     downloads_dir: &Path,
     parent_pid: u32,
 ) -> Result<(PathBuf, Vec<(String, String)>)> {
@@ -249,7 +274,7 @@ fn generate_update_script(
     let mut file_replacements = Vec::new();
     let mut restart_apps = Vec::new();
 
-    for entry in &config.file_replacement_map {
+    for entry in entries {
         let target_dir = resolve_target_dir(&exe_dir, &entry.target_path);
         let abs_target_dir = if target_dir.exists() {
             std::fs::canonicalize(&target_dir).unwrap_or_else(|_| target_dir.to_path_buf())
@@ -340,6 +365,43 @@ fn execute_detached_powershell(script_path: &Path, args: &[(String, String)]) ->
 mod tests {
     use super::*;
     use std::path::Path;
+    use crate::crm_updater::config::{ReplacementMapEntry, UpdaterConfig};
+
+    #[test]
+    fn selective_update_includes_only_packaged_configured_apps() {
+        let config = UpdaterConfig {
+            downloads_dir: "down".into(), runner_logs_dir: "logs".into(),
+            log_recipient_email: "test@test.com".into(), log_stdout_level: "DEBUG".into(),
+            log_file_level: "TRACE".into(),
+            file_replacement_map: vec![
+                ReplacementMapEntry { source_file: "runner.exe".into(), target_path: ".".into(), executable_name: "runner.exe".into(), restart_args: None, autostart: true },
+                ReplacementMapEntry { source_file: "tasker.exe".into(), target_path: ".".into(), executable_name: "tasker.exe".into(), restart_args: None, autostart: true },
+            ],
+        };
+        let temp = tempfile::tempdir().unwrap();
+        let runner = temp.path().join("runner.exe");
+        fs::write(&runner, b"runner").unwrap();
+        let selected = select_replacements(&config, temp.path(), &[runner]).unwrap();
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].executable_name, "runner.exe");
+    }
+
+    #[test]
+    fn selective_update_rejects_unconfigured_archive_files() {
+        let config = UpdaterConfig {
+            downloads_dir: "down".into(), runner_logs_dir: "logs".into(),
+            log_recipient_email: "test@test.com".into(), log_stdout_level: "DEBUG".into(),
+            log_file_level: "TRACE".into(),
+            file_replacement_map: vec![ReplacementMapEntry {
+                source_file: "runner.exe".into(), target_path: ".".into(),
+                executable_name: "runner.exe".into(), restart_args: None, autostart: true,
+            }],
+        };
+        let temp = tempfile::tempdir().unwrap();
+        let unknown = temp.path().join("unknown.exe");
+        fs::write(&unknown, b"unknown").unwrap();
+        assert!(select_replacements(&config, temp.path(), &[unknown]).is_err());
+    }
 
     #[test]
     fn test_clean_canonicalized_path() {
@@ -397,7 +459,6 @@ mod tests {
 
     #[test]
     fn test_generate_update_script_autostart_logic() {
-        use crate::crm_updater::config::{ReplacementMapEntry, UpdaterConfig};
         let config = UpdaterConfig {
             downloads_dir: "down".to_string(),
             runner_logs_dir: "logs".to_string(),
@@ -423,7 +484,7 @@ mod tests {
         };
 
         let temp_dir = tempfile::tempdir().unwrap();
-        let (script_path, args) = generate_update_script(&config, temp_dir.path(), 99999).unwrap();
+        let (script_path, args) = generate_update_script(&config.file_replacement_map, temp_dir.path(), 99999).unwrap();
         let script_content = std::fs::read_to_string(&script_path).unwrap();
 
         assert!(script_content.contains("param("));

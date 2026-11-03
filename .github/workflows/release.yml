@@ -135,6 +135,14 @@ jobs:
               exit 1
             fi
           done
+          for exe in "${EXE_FILES[@]}"; do
+            echo "Checking CLI startup: $exe --help"
+            "$VERIFY_DIR/$exe" --help > "$VERIFY_DIR/$exe.help.txt"
+            if [[ $? -ne 0 || ! -s "$VERIFY_DIR/$exe.help.txt" ]]; then
+              echo "Release binary failed its --help smoke check: $exe" >&2
+              exit 1
+            fi
+          done
       - name: Publish GitHub Release
         id: publish
         if: success()
