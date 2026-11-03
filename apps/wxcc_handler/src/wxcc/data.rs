@@ -216,37 +216,39 @@ fn date_value(value: &Value, keys: &[&str]) -> String {
 
 fn skill_set(value: &Value) -> String {
     let mut entries = Vec::new();
-    for skill in array_at(
-        value,
-        &[
-            "activeSkills",
-            "activeEnumSkills",
-            "skills",
-            "skillProfileSkills",
-            "skillSet",
-            "skillSets",
-            "dynamicSkills",
-        ],
-    ) {
-        let name = text_at(skill, &["skillName", "name", "label"]);
-        let skill_value = text_at(skill, &["skillValue", "value", "proficiency"]);
-        let kind = text_at(skill, &["skillType", "type"]);
-        let mut entry = if name.is_empty() {
-            skill_value.clone()
-        } else {
-            name
-        };
-        if !skill_value.is_empty() && !entry.is_empty() {
-            entry.push('=');
-            entry.push_str(&skill_value);
-        }
-        if !kind.is_empty() && !entry.is_empty() {
-            entry.push_str(" [");
-            entry.push_str(&kind);
-            entry.push(']');
-        }
-        if !entry.is_empty() {
-            entries.push(entry.replace(';', ","));
+    for key in [
+        "skills",
+        "skillProfileSkills",
+        "skillSet",
+        "skillSets",
+        "dynamicSkills",
+        "activeSkills",
+        "activeEnumSkills",
+    ] {
+        for skill in array_at(value, &[key]) {
+            let name = text_at(skill, &["skillName", "name", "label"]);
+            let skill_value = text_at(skill, &["skillValue", "value", "proficiency"]);
+            let kind = text_at(skill, &["skillType", "type"]);
+            let mut entry = if name.is_empty() {
+                skill_value.clone()
+            } else {
+                name
+            };
+            if !skill_value.is_empty() && !entry.is_empty() {
+                entry.push('=');
+                entry.push_str(&skill_value);
+            }
+            if !kind.is_empty() && !entry.is_empty() {
+                entry.push_str(" [");
+                entry.push_str(&kind);
+                entry.push(']');
+            }
+            if !entry.is_empty() {
+                let entry = entry.replace(';', ",");
+                if !entries.contains(&entry) {
+                    entries.push(entry);
+                }
+            }
         }
     }
     entries.join("; ")
