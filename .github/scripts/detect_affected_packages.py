@@ -48,8 +48,23 @@ def main() -> int:
         return 2
 
     changed_paths = Path(sys.argv[1]).read_text(encoding="utf-8").splitlines()
-    print(json.dumps(affected_packages(changed_paths), separators=(",", ":")))
-    return 0
+    normalized = [path.strip().replace("\\", "/") for path in changed_paths]
+    result = {
+        "packages": affected_packages(changed_paths),
+        "javascript": any(path.lower().endswith(".js") for path in normalized),
+        "powershell": any(path.lower().endswith(".ps1") for path in normalized),
+        "runner_javascript": any(
+            path.startswith("apps/runner/") and path.lower().endswith(".js")
+            for path in normalized
+        ),
+        "dependencies": any(
+            path in {"Cargo.toml", "Cargo.lock", "deny.toml"}
+            or (path.startswith("apps/") and path.endswith("/Cargo.toml"))
+            for path in normalized
+        ),
+    }
+    print(json.dumps(result, separators=(",", ":")))
+    return 00
 
 
 if __name__ == "__main__":
