@@ -752,8 +752,7 @@ mod tests {
             site_name: "Cairo".into(),
             member_ids: HashSet::new(),
         };
-        let (csv_bytes, rows) =
-            build_csv(&[queue], &HashMap::new(), &HashMap::new()).unwrap();
+        let (csv_bytes, rows) = build_csv(&[queue], &HashMap::new(), &HashMap::new()).unwrap();
         let mut reader = csv::ReaderBuilder::new().from_reader(csv_bytes.as_slice());
         let records = reader
             .records()
