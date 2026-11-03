@@ -62,6 +62,39 @@ class AffectedPackagesTests(unittest.TestCase):
             DETECTOR.affected_packages(["apps/runner/src/main.rs", "Cargo.lock"]), ALL
         )
 
+    def test_change_flags_select_only_relevant_language_and_dependency_checks(self):
+        flags = DETECTOR.change_flags([
+            "apps/runner/src/validation.js",
+            "apps/runner/tests/validation.test.js",
+            "apps/tasker/scripts/report.ps1",
+            "apps/wxcc_handler/Cargo.toml",
+        ])
+        self.assertEqual(
+            flags,
+            {
+                "javascript": True,
+                "powershell": True,
+                "runner_javascript": True,
+                "dependencies": True,
+            },
+        )
+
+    def test_rust_app_source_does_not_trigger_language_or_dependency_checks(self):
+        self.assertEqual(
+            DETECTOR.change_flags(["apps/wxcc_handler/src/wxcc/data.rs"]),
+            {
+                "javascript": False,
+                "powershell": False,
+                "runner_javascript": False,
+                "dependencies": False,
+            },
+        )
+
+    def test_nested_manifest_triggers_dependency_audit(self):
+        self.assertTrue(
+            DETECTOR.change_flags(["apps/tasker/Cargo.toml"])["dependencies"]
+        )
+
     def test_dot_relative_and_windows_paths_are_normalized(self):
         self.assertEqual(
             DETECTOR.affected_packages([r".\.github\workflows\test.yml"]), ALL
