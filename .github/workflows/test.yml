@@ -92,45 +92,13 @@ jobs:
           echo "Changed paths:"
           cat changed-files.txt
 
-          python3 - <<'PY'
-          import json
-          import os
-          from pathlib import Path
+          python3 -m unittest discover -s .github/scripts -p 'test_*.py' -v
+          python3 .github/scripts/detect_affected_packages.py changed-files.txt > packages.json
+          PACKAGES="$(cat packages.json)"
+          printf 'packages=%s\n' "$PACKAGES" >> "$GITHUB_OUTPUT"
 
-          all_packages = ("crm", "runner", "yasweb", "tasker", "crm_updater")
-          packages = set()
-          shared = False
-
-          for name in Path("changed-files.txt").read_text(encoding="utf-8").splitlines():
-              if (
-                  name in {"Cargo.toml", "Cargo.lock", "deny.toml"}
-                  or name.startswith(("src/", "tests/", ".github/workflows/"))
-              ):
-                  shared = True
-              elif name.startswith("apps/"):
-                  parts = name.split("/")
-                  if len(parts) > 1 and parts[1] in all_packages:
-                      packages.add(parts[1])
-                  else:
-                      shared = True
-
-          if shared:
-              packages = set(all_packages)
-
-          ordered = [package for package in all_packages if package in packages]
-          encoded = json.dumps(ordered, separators=(",", ":"))
-          if json.loads(encoded) != ordered:
-              raise SystemExit("Package matrix JSON failed round-trip validation.")
-
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              output.write(f"packages={encoded}\n")
-
-          print(f"Package matrix output: {encoded}")
-          print(
-              "Affected packages:",
-              ", ".join(ordered) if ordered else "none (non-Rust app files only)",
-          )
-          PY
+          echo "Package matrix output: $PACKAGES"
+          python3 -c 'import json, sys; packages=json.loads(sys.argv[1]); print("Affected packages:", ", ".join(packages) if packages else "none (documentation-only changes)")' "$PACKAGES"
 
   format:
     name: Format and Auto-fix
