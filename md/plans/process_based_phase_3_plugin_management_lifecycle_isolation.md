@@ -47,3 +47,9 @@ Update the relevant files under `md/` in the same change, including the manifest
 - No breaking change to existing CLI contracts or legacy external-app behavior.
 - Keep the work on PR #464's existing branch.
 - Do not expand into unrelated Runtime Paths work or Phase 5 CI/CD changes, except documentation/CI adjustments strictly required to verify Phases 3 and 4.
+
+## Implementation notes
+
+- Phase 3: Runner validates opted-in plugin manifests against the shared `AppManifest` structure and its validation rules before accepting the configured API version. First-party CRM Updater now declares API version 1 alongside CRM, Tasker, and Yasweb. Unversioned legacy apps are not probed for manifest/date discovery; explicit date argument mappings remain supported.
+- Phase 4: child processes are placed in a dedicated process group on Unix. A cancellation guard terminates the process group on Unix or the process tree via `taskkill /T` on Windows when the Runner action future is dropped. Timeout uses the same tree-termination behavior. Behavioral tests cover non-zero exit output and cancellation of a child process.
+- Verification remains pending GitHub Actions for the final branch head; no local Cargo commands were run.
