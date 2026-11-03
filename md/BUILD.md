@@ -25,6 +25,7 @@ Replace runner with crm, yasweb, tasker, or crm_updater as needed. The shared cr
 The Test workflow determines which app packages are affected by the changed paths:
 
 - Changes under apps/<package>/ run Clippy, tests, and release compilation for that package.
+- Pull request detection compares the event's exact base SHA with its exact head SHA, so it includes every change in the PR rather than only the latest commit. Push events compare the before/after SHAs.
 - Changes to shared root Rust code, root tests, Cargo manifests/lockfile, dependency policy, or workflow files select all five packages.
 - Formatting and dependency security auditing remain repository-wide.
 - Changes limited to documentation or non-Rust app assets do not start Rust package jobs. The workflow's JavaScript and PowerShell syntax checks still cover the app source trees when the Test workflow is triggered.
