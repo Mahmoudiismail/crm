@@ -234,7 +234,6 @@ struct Member {
     skills: String,
     last_login: String,
     created_at: String,
-    team_ids: Vec<String>,
     skill_queue_ids: HashSet<String>,
 }
 
@@ -278,7 +277,6 @@ fn merge_member_details(
         skills: skill_set(detail),
         last_login: date_value(detail, &["lastLoginTime", "lastLogin", "lastLoginAt", "lastLoggedInTime"]),
         created_at: date_value(detail, &["createdTime", "createdAt", "createdDate"]),
-        team_ids: ids_from(detail, &["teamIds", "teams"]),
         skill_queue_ids: HashSet::new(),
     }
 }
@@ -507,14 +505,20 @@ pub async fn collect_to_csv(
         }
         for member_id in &queue.member_ids {
             let Some(member) = members.get(member_id) else { continue };
-            let site_id = queue.site_id.as_str().or_else_empty(|| member.site_id.clone());
-            let site_name = if site_id.is_empty() {
-                member.site_name.as_str()
+            let site_id = if queue.site_id.is_empty() {
+                member.site_id.clone()
             } else {
-                queue.site_name.as_str().or_else_empty(|| site_names.get(site_id).cloned().unwrap_or_default()).leak()
+                queue.site_id.clone()
+            };
+            let site_name = if !queue.site_name.is_empty() {
+                queue.site_name.clone()
+            } else if !member.site_name.is_empty() {
+                member.site_name.clone()
+            } else {
+                site_names.get(&site_id).cloned().unwrap_or_default()
             };
             writer.write_record([
-                site_id, site_name, queue.id.as_str(), queue.name.as_str(), queue.queue_type.as_str(),
+                site_id.as_str(), site_name.as_str(), queue.id.as_str(), queue.name.as_str(), queue.queue_type.as_str(),
                 member.id.as_str(), member.email.as_str(), member.name.as_str(),
                 member.skill_profile_id.as_str(), member.skill_profile_name.as_str(), member.skills.as_str(),
                 member.last_login.as_str(), member.created_at.as_str(),
