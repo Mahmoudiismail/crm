@@ -502,20 +502,18 @@ pub async fn collect_to_csv(
     let mut member_by_ci_id = HashMap::new();
     for user in &users {
         let ci_id = text_at(user, &["ciUserId", "ciUserID"]);
-        let detail = if ci_id.is_empty() {
+        let user_id = id_at(user);
+        let detail = if user_id.is_empty() {
             None
         } else {
             match api
-                .get(&format!(
-                    "v2/user/by-ci-user-id/{}",
-                    urlencoding::encode(&ci_id)
-                ))
+                .get(&format!("v2/user/{}", urlencoding::encode(&user_id)))
                 .await
             {
                 Ok(detail) => Some(detail),
                 Err(error) => {
                     tracing::warn!(
-                        "Could not retrieve full details for a user; using list data: {error:#}"
+                        "Could not retrieve full details for user {user_id}; using list data: {error:#}"
                     );
                     None
                 }
@@ -541,7 +539,7 @@ pub async fn collect_to_csv(
     for profile_id in profile_ids {
         match api
             .get(&format!(
-                "skill-profile/{}?includeSkillDetails=true",
+                "v2/skill-profile/{}",
                 urlencoding::encode(&profile_id)
             ))
             .await
@@ -592,7 +590,7 @@ pub async fn collect_to_csv(
             continue;
         }
         let detail = api
-            .get(&format!("team/{}", urlencoding::encode(&id)))
+            .get(&format!("v2/team/{}", urlencoding::encode(&id)))
             .await
             .with_context(|| format!("Failed to retrieve complete details for team {id}"))?;
         let mut ids = ids_from(&detail, &["userIds", "users", "members"]);
