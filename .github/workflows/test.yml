@@ -21,6 +21,7 @@ on:
       - '.github/workflows/test.yml'
       - '.github/workflows/auto-format.yml'
       - '.github/workflows/release.yml'
+      - '.github/scripts/**'
       - '.gitignore'
       - 'deny.toml'
   push:
