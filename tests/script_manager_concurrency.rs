@@ -1,4 +1,4 @@
-use crm_tool::tasker::script_manager::{ScriptManager, TaskMetadata};
+use crm_tool::script_manager::{ScriptManager, TaskMetadata};
 use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;

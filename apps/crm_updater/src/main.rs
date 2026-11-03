@@ -6,7 +6,7 @@ use crm_tool::utils::{load_or_create_config, parse_log_level, setup_logging_with
 use std::path::PathBuf;
 use tracing::info;
 
-use crm_tool::crm_updater::config::{ReplacementMapEntry, UpdaterConfig};
+use crm_updater_app::crm_updater::config::{ReplacementMapEntry, UpdaterConfig};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -40,7 +40,7 @@ fn main() -> Result<()> {
 
     if args.manifest {
         let manifest = AppManifest {
-            plugin_api_version: None,
+            plugin_api_version: Some(crm_tool::manifest::PROCESS_PLUGIN_API_VERSION),
             name: "CRM Updater".to_string(),
             description: "Updates the CRM tool and runner, and collects logs locally".to_string(),
             arguments: vec![
@@ -60,7 +60,7 @@ fn main() -> Result<()> {
         .and_then(|p| p.parent().map(|p| p.to_path_buf()))
         .unwrap_or_else(|| PathBuf::from("."));
 
-    crm_tool::tasker::script_manager::ScriptManager::new().install_builtin_scripts()?;
+    crm_updater_app::crm_updater::install_builtin_scripts()?;
 
     let config_path = resolve_config_path(args.config.as_deref(), &exe_dir);
 
@@ -110,14 +110,14 @@ fn main() -> Result<()> {
     let run_all = !args.update_only && !args.logs_only;
 
     if run_all || args.logs_only {
-        if let Err(e) = crm_tool::crm_updater::logs::process_and_collect_logs(&config) {
+        if let Err(e) = crm_updater_app::crm_updater::logs::process_and_collect_logs(&config) {
             tracing::error!("Logs pipeline failed: {}", e);
             return Err(e);
         }
     }
 
     if run_all || args.update_only {
-        if let Err(e) = crm_tool::crm_updater::update::process_update_pipeline(&config) {
+        if let Err(e) = crm_updater_app::crm_updater::update::process_update_pipeline(&config) {
             tracing::error!("Update pipeline failed: {}", e);
             return Err(e);
         }

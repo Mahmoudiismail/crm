@@ -31,9 +31,7 @@ The `--logs-only` option creates a timestamped diagnostic ZIP under `collected_l
 - If ZIP creation or verification fails, source files remain untouched. If cleanup fails after verification, the valid ZIP is retained and the updater reports which originals could not be removed.
 
 ### 3. Update Pipeline
-When an update ZIP is found in Outlook Drafts, the updater extracts it into `downloads` and validates that every file in `file_replacement_map` is present before launching the detached replacement script.
-
-If no Outlook draft is found, the updater can apply a complete set of already-staged application files in `downloads`. It refuses to start a partial update when any configured source file is missing. The detached script preflights all sources and destinations before stopping target applications. It stages each replacement beside its destination, verifies SHA-256 hashes, and keeps a backup of each existing destination until the complete replacement set has succeeded. If a replacement fails, it attempts to roll back already-replaced files in reverse order and logs any rollback failures. After all replacements are verified, it removes backups, restarts configured applications, and logs the result in `updater_detached.log`.
+When an update ZIP is found in Outlook Drafts, the updater extracts it into `downloads` and selects only files that exactly match entries in `file_replacement_map`. Unknown archive files and ambiguous source mappings are rejected before any application is stopped. A ZIP may contain one or more selected executables; applications omitted from the ZIP are not stopped or restarted. The same selection rule applies to already-staged files when no Outlook draft is found. The detached script preflights all selected sources and destinations before stopping target applications. It stages each replacement beside its destination, verifies SHA-256 hashes, and keeps a backup of each existing destination until the complete replacement set has succeeded. If a replacement fails, it attempts to roll back already-replaced files in reverse order and logs any rollback failures. After all replacements are verified, it removes backups, restarts configured applications, and logs the result in `updater_detached.log`.
 
 ## Update Package Trust (Production Gate)
 
@@ -91,11 +89,11 @@ cargo run -p crm_updater -- --logs-only
 
 The updater PowerShell source is maintained in these standalone files and embedded into the binary at compile time:
 
-- `src/crm_updater/scripts/scan_update_drafts.ps1` — scans Outlook Drafts and writes a small result marker to a caller-provided result file so Rust can read the result through the managed script runner.
-- `src/crm_updater/scripts/apply_update.ps1` — applies the replacement map, waits for the parent updater to exit, replaces target files, restarts configured applications, and writes the detached update log.
-- `src/crm_updater/scripts/unblock_file.ps1` — unblocks extracted update files.
+- `apps/crm_updater/src/crm_updater/scripts/scan_update_drafts.ps1` — scans Outlook Drafts and writes a small result marker to a caller-provided result file so Rust can read the result through the managed script runner.
+- `apps/crm_updater/src/crm_updater/scripts/apply_update.ps1` — applies the replacement map, waits for the parent updater to exit, replaces target files, restarts configured applications, and writes the detached update log.
+- `apps/crm_updater/src/crm_updater/scripts/unblock_file.ps1` — unblocks extracted update files.
 
-At startup, `crm_updater` calls `ScriptManager::install_builtin_scripts()`, which materializes every built-in PowerShell template—including Tasker and Updater scripts—under `<exe_dir>/scripts/<Task Name>/` before the update or collection pipeline starts. The source templates remain embedded in the executable so missing files can be restored. The apply script is launched detached via `ScriptManager::execute_script_detached_with_args` so it can continue after `crm_updater` exits and replace the updater executable itself. Replacement data is passed through a temporary JSON file using `-ReplacementMapPath`, rather than interpolated into the PowerShell source. The detached script is managed persistently; it does not delete its own script file after running.
+At startup, `crm_updater` calls `crm_updater_app::crm_updater::install_builtin_scripts()`, which materializes only CRM Updater's built-in PowerShell templates under `<exe_dir>/scripts/<Task Name>/` before the update or collection pipeline starts. The source templates remain embedded in the executable so missing files can be restored. The apply script is launched detached via `crm_tool::script_manager::ScriptManager::execute_script_detached_with_args` so it can continue after `crm_updater` exits and replace the updater executable itself. Replacement data is passed through a temporary JSON file using `-ReplacementMapPath`, rather than interpolated into the PowerShell source. The detached script is managed persistently; it does not delete its own script file after running.
 
 ## Outlook Recipient Resolution
 

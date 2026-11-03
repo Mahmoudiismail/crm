@@ -21,6 +21,7 @@ on:
       - '.github/workflows/test.yml'
       - '.github/workflows/auto-format.yml'
       - '.github/workflows/release.yml'
+      - '.github/scripts/**'
       - '.gitignore'
       - 'deny.toml'
   push:
@@ -38,6 +39,7 @@ on:
       - '.github/workflows/test.yml'
       - '.github/workflows/auto-format.yml'
       - '.github/workflows/release.yml'
+      - '.github/scripts/**'
       - '.gitignore'
       - 'deny.toml'
   workflow_dispatch:
@@ -49,6 +51,57 @@ env:
   RUSTFLAGS: "-Dwarnings"
 
 jobs:
+  detect-packages:
+    name: Detect affected packages
+    runs-on: ubuntu-latest
+    outputs:
+      packages: ${{ steps.detect.outputs.packages }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: detect
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          PUSH_AFTER_SHA: ${{ github.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch || 'main' }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            BASE_SHA="$PR_BASE_SHA"
+            HEAD_SHA="$PR_HEAD_SHA"
+          elif [[ -n "$PUSH_BEFORE_SHA" && ! "$PUSH_BEFORE_SHA" =~ ^0+$ ]]; then
+            BASE_SHA="$PUSH_BEFORE_SHA"
+            HEAD_SHA="$PUSH_AFTER_SHA"
+          else
+            git fetch origin "$BASE_REF"
+            BASE_SHA="$(git merge-base "origin/$BASE_REF" "$PUSH_AFTER_SHA")"
+            HEAD_SHA="$PUSH_AFTER_SHA"
+          fi
+
+          if [[ -z "$BASE_SHA" || -z "$HEAD_SHA" ]]; then
+            echo "::error::Unable to resolve the exact base/head commits for package detection."
+            exit 1
+          fi
+
+          git diff --name-only "$BASE_SHA...$HEAD_SHA" > changed-files.txt
+          echo "Compared commits: $BASE_SHA...$HEAD_SHA"
+          echo "Changed paths:"
+          cat changed-files.txt
+
+          python3 -m unittest discover -s .github/scripts -p 'test_*.py' -v
+          python3 .github/scripts/detect_affected_packages.py changed-files.txt > packages.json
+          PACKAGES="$(cat packages.json)"
+          printf 'packages=%s\n' "$PACKAGES" >> "$GITHUB_OUTPUT"
+
+          echo "Package matrix output: $PACKAGES"
+          python3 -c 'import json, sys; packages=json.loads(sys.argv[1]); print("Affected packages:", ", ".join(packages) if packages else "none (documentation-only changes)")' "$PACKAGES"
+
   format:
     name: Format and Auto-fix
     runs-on: windows-latest
@@ -68,6 +121,9 @@ jobs:
           targets: x86_64-pc-windows-msvc
           components: rustfmt
 
+      - name: Refresh Cargo.lock for workspace manifests
+        run: cargo metadata --format-version 1 > $null
+
       - name: Format Rust files
         run: cargo fmt
 
@@ -81,8 +137,8 @@ jobs:
           if ! git diff --quiet; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add -u -- '*.rs'
-            git commit -m "style: apply cargo fmt"
+            git add -u -- '*.rs' Cargo.lock
+            git commit -m "chore: format Rust and refresh Cargo.lock"
             git push origin "HEAD:${TARGET_BRANCH}"
           else
             echo "Rust files are already formatted."
@@ -93,7 +149,12 @@ jobs:
 
   clippy:
     name: Clippy Lints
-    needs: format
+    needs: [format, detect-packages]
+    if: needs.detect-packages.outputs.packages != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.detect-packages.outputs.packages) }}
     runs-on: windows-latest
 
     steps:
@@ -119,7 +180,7 @@ jobs:
           cache-on-failure: true
 
       - name: Run clippy
-        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+        run: cargo clippy -p ${{ matrix.package }} --all-targets --all-features --locked -- -D warnings
 
 
 
@@ -150,7 +211,12 @@ jobs:
 
   test:
     name: Test Suite
-    needs: [format, clippy]
+    needs: [format, clippy, detect-packages]
+    if: needs.detect-packages.outputs.packages != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.detect-packages.outputs.packages) }}
     runs-on: windows-latest
 
     steps:
@@ -164,7 +230,7 @@ jobs:
       - name: Check JavaScript syntax
         shell: pwsh
         run: |
-          Get-ChildItem -Path src -Recurse -Filter *.js | ForEach-Object {
+          Get-ChildItem -Path src,apps -Recurse -Filter *.js | ForEach-Object {
             node --check $_.FullName
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
@@ -173,7 +239,7 @@ jobs:
         shell: pwsh
         run: |
           $failed = $false
-          Get-ChildItem -Path src -Recurse -Filter *.ps1 | ForEach-Object {
+          Get-ChildItem -Path src,apps -Recurse -Filter *.ps1 | ForEach-Object {
             $tokens = $null
             $parseErrors = $null
             [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$parseErrors) | Out-Null
@@ -199,4 +265,7 @@ jobs:
           cache-on-failure: true
 
       - name: Run tests
-        run: cargo test --workspace --all-targets --all-features
+        run: cargo test -p ${{ matrix.package }} --all-targets --all-features --locked
+
+      - name: Build all process packages in release mode
+        run: cargo build --release -p ${{ matrix.package }} --locked

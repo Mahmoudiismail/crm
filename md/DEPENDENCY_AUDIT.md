@@ -2,7 +2,19 @@
 
 This document provides a reputation and trust audit of the primary dependencies used in the CRM Tool. All identified crates are well-established, high-reputation components of the Rust ecosystem.
 
-The Cargo workspace now keeps executable-only dependencies with their owning packages: CLI parsing is declared by each app package, and Runner-only GUI dependencies (`muda`, `tray-icon`, and `winit`) live under `apps/runner`. `crm_tool` remains the shared core library. The dependency versions listed below are historical audit snapshots, not a guarantee that every crate is a direct dependency of the root package.
+The Cargo workspace now keeps executable-only dependencies with their owning packages: CLI parsing is declared by each app package, and Runner-only GUI dependencies (`muda`, `tray-icon`, and `winit`) live under `apps/runner`. `crm_tool` remains the shared contract and utility library; application implementation dependencies are declared by their owning packages. The dependency versions listed below are historical audit snapshots, not a guarantee that every crate is a direct dependency of the root package.
+
+## Process-based dependency ownership (November 2026)
+
+The workspace now enforces package ownership rather than compiling every application implementation through the shared crate:
+
+- `crm_tool` contains only the shared manifest contract, common utilities, and the generic managed-script engine.
+- CRM, Runner, Tasker, Yasweb, and CRM Updater declare their own implementation dependencies in their respective `apps/<package>/Cargo.toml` files.
+- No executable package depends on another executable package.
+- Tasker and CRM Updater own separate PowerShell template catalogs; the shared ScriptManager does not embed either application's scripts.
+- Windows-only dependencies are scoped to the owning application: CRM DPAPI integration and Runner tray/window integration.
+
+Use `cargo tree -p <package> -e normal --depth 1` to inspect a package's direct dependency boundary. Cargo manifests and the lockfile are the source of truth; the historical reputation tables below are not a current direct-dependency inventory.
 
 ## Core Infrastructure & Async Runtime
 

@@ -192,7 +192,7 @@ The `crm_open_sohail` task automates the generation and delivery of Branch & Mon
 
 ## Persistent Versioned PowerShell Scripts & Injection Safety
 
-Tasker manages PowerShell scripts strictly through `ScriptManager`, storing scripts persistently in `<exe_dir>/scripts/<Task Name>/`.
+Tasker manages PowerShell scripts strictly through `its package-owned PowerShell catalog, backed by the shared ScriptManager engine`, storing scripts persistently in `<exe_dir>/scripts/<Task Name>/`.
 
 ### Core Guarantees
 1. **Static Templates & CLI Parameterization**: All production PowerShell scripts use static canonical script templates. Runtime-controlled data (paths, subjects, HTML bodies, emails, PIDs) is passed strictly through CLI parameter flags (`param(...)`), eliminating dynamic script string interpolation.
@@ -202,7 +202,7 @@ Tasker manages PowerShell scripts strictly through `ScriptManager`, storing scri
 5. **Cross-Process File Locking**: All metadata and script operations are protected by OS-level exclusive file locks (`fs2::FileExt::lock_exclusive` on `.task.lock`) covering the complete critical section across processes.
 6. **Path Traversal Safety & Metadata Recovery**: Logical script names and active script metadata are strictly validated to prevent path traversal (`..`, `/`, `\`). Corrupted metadata JSON files are automatically backed up to `.metadata.json.corrupted_<timestamp>` and recovered cleanly.
 
-## ScriptManager Versioning & Locking
+## Script Manager Versioning & Locking
 PowerShell integration relies on `ScriptManager` persistence. Script generators define static templates parameterized solely by run-time arguments.
 - Generating the script computes a strict SHA-256 fingerprint ignoring runtime parameters.
 - When generating files across concurrent processes, an OS-level lock via `fs2` ensures metadata file updates (`.metadata.json`) are perfectly coordinated.
@@ -213,14 +213,14 @@ PowerShell integration relies on `ScriptManager` persistence. Script generators 
 
 The PowerShell logic for the following Tasker operations is maintained in standalone `.ps1` files and embedded into the executable at build time with Rust `include_str!`:
 
-- Outlook email execution: `src/tasker/email/outlook_mail.ps1` is the single script for creating, replying, sending, displaying, and saving draft messages.
-- Dashboard refresh: `src/tasker/scripts/dashboard_updater.ps1`.
-- Department workbook split: `src/tasker/scripts/department_split.ps1`.
-- CRM Open Sohail slicer extraction: `src/tasker/crm_open_sohail/slicer_extract.ps1`.
-- OPD analysis email: `src/tasker/opd_task/opd_analysis_email.ps1`.
-- SAT figures email: `src/tasker/sat_figures_email.ps1`.
+- Outlook email execution: `apps/tasker/src/tasker/email/outlook_mail.ps1` is the single script for creating, replying, sending, displaying, and saving draft messages.
+- Dashboard refresh: `apps/tasker/src/tasker/scripts/dashboard_updater.ps1`.
+- Department workbook split: `apps/tasker/src/tasker/scripts/department_split.ps1`.
+- CRM Open Sohail slicer extraction: `apps/tasker/src/tasker/crm_open_sohail/slicer_extract.ps1`.
+- OPD analysis email: `apps/tasker/src/tasker/opd_task/opd_analysis_email.ps1`.
+- SAT figures email: `apps/tasker/src/tasker/sat_figures_email.ps1`.
 
-At startup, Tasker calls `ScriptManager::install_builtin_scripts()` to materialize all built-in PowerShell templates under `<exe_dir>/scripts/<Task Name>/`, including the shared Outlook helper and CRM Updater templates. Each script is therefore present on disk before a configured task starts, and execution continues through the managed files. The source files are also embedded in the executable at build time so they can be restored if missing.
+At startup, Tasker calls `tasker_app::tasker::script_manager::install_builtin_scripts()` to materialize only Tasker's built-in PowerShell templates under `<exe_dir>/scripts/<Task Name>/`, including the Outlook helper. Each script is therefore present on disk before a configured task starts, and execution continues through the managed files. The source files are also embedded in the executable at build time so they can be restored if missing.
 
 ### Outlook recipient handling
 

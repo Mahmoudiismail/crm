@@ -11,7 +11,7 @@ The manifest defines the application's metadata and the arguments it accepts via
 | Field | Type | Description |
 | :--- | :--- | :--- |
 | `name` | String | The human-readable name of the application. |
-| `plugin_api_version` | Integer (Optional) | Process-plugin contract version. First-party CRM, Tasker, and Yasweb workers currently declare `1`. Omission means the manifest is legacy/unversioned. Runner enforces the version only when the corresponding `registered_apps[]` entry sets `plugin_api_version`. |
+| `plugin_api_version` | Integer (Optional) | Process-plugin contract version. First-party CRM, Tasker, Yasweb, and CRM Updater workers declare `1`. Runner itself is the host, not a worker plugin. Omission means the manifest is legacy/unversioned. Runner enforces the version only when the corresponding `registered_apps[]` entry sets `plugin_api_version`. |
 | `description` | String | A brief description of what the application does. |
 | `arguments` | Array of `AppArg` | The list of command-line arguments the application accepts. |
 
@@ -89,4 +89,9 @@ Applications wishing to be orchestrated via this standard must implement a `--ma
 
 ## Process plugin compatibility
 
-Runner currently supports process-plugin API version `1`. Set `registered_apps[].plugin_api_version` to `1` to opt an executable into strict compatibility checks; Runner then requires `--manifest` to return valid JSON with the same version. Unsupported configured versions, missing/malformed manifest versions, and mismatches prevent launch. When the registry field is absent, Runner skips the manifest probe entirely, preserving compatibility and startup behavior for arbitrary external executables. This is a process contract version, not the Cargo package version.
+Runner currently supports process-plugin API version `1`. Set `registered_apps[].plugin_api_version` to `1` to opt an executable into strict compatibility checks; Runner then requires `--manifest` to return valid JSON with the same version. Unsupported configured versions, missing/malformed manifest versions, and mismatches prevent launch. When the registry field is absent, Runner does not invoke `--manifest` for compatibility checks or automatic date-argument discovery. Explicit `start_date_arg` and `end_date_arg` mappings in the registered action remain available to legacy executables. This preserves compatibility and startup behavior for arbitrary external executables. This is a process contract version, not the Cargo package version.
+
+
+## Registration validation
+
+When a registered application opts into API version enforcement, Runner requires the `--manifest` command to exit successfully, emit valid JSON matching the `AppManifest` structure (`name`, `description`, and `arguments`), pass manifest validation (non-empty name and argument names, unique argument names), and declare the exact configured API version. Invalid manifests are rejected before the application is launched for its task. Applications without `registered_apps[].plugin_api_version` remain on the legacy path and are not probed.

@@ -4,16 +4,16 @@ use anyhow::Context;
 use anyhow::Result;
 use clap::Parser;
 use crm_tool::manifest::{AppArg, AppManifest};
-#[cfg(target_os = "windows")]
-use crm_tool::runner::engine::RunnerHandle;
-use crm_tool::runner::engine::{start_scheduler, RunnerCommand};
-use crm_tool::runner::gui::start_gui_server;
 use crm_tool::utils::{
     executable_dir, intercept_manifest, parse_log_level, setup_logging_with_levels_and_header,
     InterceptResult,
 };
 #[cfg(target_os = "windows")]
 use muda::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem};
+#[cfg(target_os = "windows")]
+use runner_app::runner::engine::RunnerHandle;
+use runner_app::runner::engine::{start_scheduler, RunnerCommand};
+use runner_app::runner::gui::start_gui_server;
 use std::path::{Path, PathBuf};
 #[cfg(target_os = "windows")]
 use std::time::Duration;
@@ -90,7 +90,7 @@ fn redact_config_value(value: &mut serde_json::Value) {
     }
 }
 
-fn runner_config_log_snapshot(config: &crm_tool::runner::config::RunnerConfig) -> Result<String> {
+fn runner_config_log_snapshot(config: &runner_app::runner::config::RunnerConfig) -> Result<String> {
     let mut value = serde_json::to_value(config)?;
     redact_config_value(&mut value);
     Ok(serde_json::to_string_pretty(&value)?)
@@ -117,7 +117,7 @@ async fn main() -> Result<()> {
 
     let runner_cfg = {
         let cfg = if config_exists {
-            match crm_tool::runner::config::RunnerConfig::load(&runner_config_path_str) {
+            match runner_app::runner::config::RunnerConfig::load(&runner_config_path_str) {
                 Ok(c) => c,
                 Err(e) => {
                     eprintln!(
@@ -129,13 +129,13 @@ async fn main() -> Result<()> {
                 }
             }
         } else {
-            crm_tool::runner::config::RunnerConfig::default()
+            runner_app::runner::config::RunnerConfig::default()
         };
         if let Err(e) = cfg.validate() {
             eprintln!("Runner configuration validation failed: {}", e);
             std::process::exit(1);
         }
-        if let Err(e) = crm_tool::runner::engine::validation::validate_config(&cfg) {
+        if let Err(e) = runner_app::runner::engine::validation::validate_config(&cfg) {
             eprintln!("Runner configuration logic validation failed: {}", e);
             std::process::exit(1);
         }

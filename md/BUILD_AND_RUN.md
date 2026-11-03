@@ -9,7 +9,7 @@
 
 ## Cargo workspace and independent executables
 
-The repository is a Cargo workspace. `crm_tool` is the shared core library; each process has an independent executable package under `apps/`:
+The repository is a Cargo workspace. `crm_tool` contains the shared manifest, utilities, and generic script engine; each process owns its implementation and direct dependencies in an independent package under `apps/`. No executable package depends on another executable package:
 
 | Package | Executable | Source |
 |---|---|---|
@@ -67,11 +67,11 @@ Use the core Rust checks run by the Test workflow:
 
 ```bash
 cargo fmt -- --check
-cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test --workspace --all-targets --all-features
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+cargo test --workspace --all-targets --all-features --locked
 ```
 
-The workflow additionally checks JavaScript syntax, parses PowerShell source files, and runs cargo audit and cargo deny check advisories.
+The workflow additionally checks JavaScript and PowerShell syntax, runs cargo audit and cargo deny check advisories, and builds all process packages in release mode with `--locked`.
 
 ## GitHub Actions
 
