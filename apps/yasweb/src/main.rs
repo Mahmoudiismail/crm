@@ -16,7 +16,7 @@ use yasweb_app::yasweb::browser::run_browser_tab;
 use yasweb_app::yasweb::config::{DiscoveredReportFilters, ReportConfig, YaswebConfig};
 
 #[derive(Parser)]
-#[command(name = "yasweb", about = "YAS Web Scraper")]
+#[command(name = "yasweb", about = "YAS Web Scraper", version)]
 pub struct YaswebCliOptions {
     #[arg(long, value_delimiter = ',')]
     name: Vec<String>,
@@ -257,6 +257,23 @@ fn normalize_filter_cli_args(args: Vec<String>) -> Result<Vec<String>> {
     }
 
     Ok(normalized)
+}
+
+fn parse_cli_options(args: Vec<String>) -> Result<Option<YaswebCliOptions>> {
+    let args = normalize_filter_cli_args(args)?;
+    match YaswebCliOptions::try_parse_from(args) {
+        Ok(options) => Ok(Some(options)),
+        Err(error)
+            if matches!(
+                error.kind(),
+                clap::error::ErrorKind::DisplayHelp | clap::error::ErrorKind::DisplayVersion
+            ) =>
+        {
+            error.print()?;
+            Ok(None)
+        }
+        Err(error) => Err(error.into()),
+    }
 }
 
 fn normalize_filter_key(value: &str) -> String {
@@ -556,7 +573,9 @@ async fn main() -> Result<()> {
         }
     }
 
-    let options = YaswebCliOptions::try_parse_from(normalize_filter_cli_args(args)?)?;
+    let Some(options) = parse_cli_options(args)? else {
+        return Ok(());
+    };
     // Accepted for compatibility with stored arguments; Runner owns date-range scheduling.
     let _legacy_monthly = options.monthly;
 
@@ -1064,6 +1083,26 @@ async fn main() -> Result<()> {
 mod tests_yasweb_finalization {
     use super::*;
     use std::fs::File;
+
+    #[test]
+    fn cli_help_and_version_are_successful_exit_requests() {
+        for flag in ["--help", "--version"] {
+            let result = parse_cli_options(vec!["yasweb".to_string(), flag.to_string()]);
+            assert!(
+                matches!(result, Ok(None)),
+                "{flag} should be handled as a successful display request"
+            );
+        }
+    }
+
+    #[test]
+    fn cli_invalid_arguments_remain_errors() {
+        let result = parse_cli_options(vec![
+            "yasweb".to_string(),
+            "--unknown-option".to_string(),
+        ]);
+        assert!(result.is_err(), "invalid CLI arguments must remain failures");
+    }
 
     #[test]
     fn filename_components_cannot_escape_their_directory() {
