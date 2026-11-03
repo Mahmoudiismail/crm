@@ -40,7 +40,7 @@ fn main() -> Result<()> {
 
     if args.manifest {
         let manifest = AppManifest {
-            plugin_api_version: None,
+            plugin_api_version: Some(crm_tool::manifest::PROCESS_PLUGIN_API_VERSION),
             name: "CRM Updater".to_string(),
             description: "Updates the CRM tool and runner, and collects logs locally".to_string(),
             arguments: vec![
