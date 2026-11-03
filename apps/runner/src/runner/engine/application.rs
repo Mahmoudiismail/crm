@@ -133,6 +133,38 @@ fn manifest_arg_dependencies_satisfied(
         })
 }
 
+/// Remove configured arguments whose manifest dependencies do not match this invocation.
+fn remove_unavailable_manifest_args(
+    manifest: &serde_json::Value,
+    effective_args: &mut HashMap<String, String>,
+) {
+    let Some(arguments) = manifest
+        .get("arguments")
+        .and_then(serde_json::Value::as_array)
+    else {
+        return;
+    };
+
+    let unavailable: Vec<String> = arguments
+        .iter()
+        .filter_map(|arg| {
+            let name = arg.get("name").and_then(serde_json::Value::as_str)?;
+            let has_dependencies = arg
+                .get("depends_on")
+                .and_then(serde_json::Value::as_object)
+                .is_some_and(|dependencies| !dependencies.is_empty());
+            (has_dependencies
+                && effective_args.contains_key(name)
+                && !manifest_arg_dependencies_satisfied(manifest, name, effective_args))
+            .then(|| name.to_string())
+        })
+        .collect();
+
+    for name in unavailable {
+        effective_args.remove(&name);
+    }
+}
+
 fn insert_period_args(
     effective_args: &mut HashMap<String, String>,
     start_arg: Option<String>,
@@ -380,32 +412,45 @@ pub async fn run_external_app(
 
     apply_registered_config_fallback(&mut effective_args, &app.config_path);
 
+    // Filter stale configured values too, not only arguments that Runner discovers
+    // for automatic date periodization. This prevents unavailable flags from leaking
+    // into the launched process when an old task config still contains them.
+    let discovered = discover_date_args(logger, app).await;
+    let manifest = discovered.2.as_ref();
+    if let Some(manifest) = manifest {
+        remove_unavailable_manifest_args(manifest, &mut effective_args);
+    }
+
     if period.is_some() {
         // Explicit mappings take precedence, while manifest dependencies still
         // determine whether a configured argument is valid for this invocation.
-        let discovered = discover_date_args(logger, app).await;
-        let manifest = discovered.2.as_ref();
         let start_arg = spec
             .start_date_arg
             .as_deref()
             .filter(|name| !name.is_empty())
             .map(str::to_string)
-            .or(discovered.0)
             .filter(|name| {
-                manifest
-                    .as_ref()
-                    .is_none_or(|m| manifest_argument_is_available(m, name, &effective_args))
+                manifest.is_none_or(|m| manifest_argument_is_available(m, name, &effective_args))
+            })
+            .or_else(|| {
+                discovered.0.filter(|name| {
+                    manifest
+                        .is_none_or(|m| manifest_argument_is_available(m, name, &effective_args))
+                })
             });
         let end_arg = spec
             .end_date_arg
             .as_deref()
             .filter(|name| !name.is_empty())
             .map(str::to_string)
-            .or(discovered.1)
             .filter(|name| {
-                manifest
-                    .as_ref()
-                    .is_none_or(|m| manifest_argument_is_available(m, name, &effective_args))
+                manifest.is_none_or(|m| manifest_argument_is_available(m, name, &effective_args))
+            })
+            .or_else(|| {
+                discovered.1.filter(|name| {
+                    manifest
+                        .is_none_or(|m| manifest_argument_is_available(m, name, &effective_args))
+                })
             });
 
         let start_arg_name = start_arg.clone();
@@ -478,8 +523,8 @@ mod tests {
     use super::{
         apply_registered_config_fallback, date_args_from_manifest, discover_date_args,
         insert_period_args, manifest_arg_dependencies_satisfied, manifest_argument_is_available,
-        validate_process_plugin_compatibility, validate_process_plugin_manifest,
-        validate_process_plugin_manifest_schema, RegisteredApp,
+        remove_unavailable_manifest_args, validate_process_plugin_compatibility,
+        validate_process_plugin_manifest, validate_process_plugin_manifest_schema, RegisteredApp,
     };
     use std::collections::HashMap;
 
@@ -655,6 +700,31 @@ mod tests {
             "--start-date",
             &sat_figures
         ));
+    }
+
+    #[test]
+    fn removes_configured_manifest_args_when_dependencies_are_not_satisfied() {
+        let manifest = serde_json::json!({
+            "arguments": [{
+                "name": "--start-date",
+                "arg_type": "date_var",
+                "depends_on": {"--task": ["6"]}
+            }]
+        });
+
+        let mut other_task = HashMap::from([
+            ("--task".to_string(), "5".to_string()),
+            ("--start-date".to_string(), "".to_string()),
+        ]);
+        remove_unavailable_manifest_args(&manifest, &mut other_task);
+        assert!(!other_task.contains_key("--start-date"));
+
+        let mut sat_figures = HashMap::from([
+            ("--task".to_string(), "6".to_string()),
+            ("--start-date".to_string(), "".to_string()),
+        ]);
+        remove_unavailable_manifest_args(&manifest, &mut sat_figures);
+        assert_eq!(sat_figures.get("--start-date"), Some(&"".to_string()));
     }
 
     #[test]
