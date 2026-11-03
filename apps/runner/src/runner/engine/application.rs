@@ -213,6 +213,10 @@ async fn discover_date_args(
     logger: &TaskLogger,
     app: &RegisteredApp,
 ) -> (Option<String>, Option<String>, Option<serde_json::Value>) {
+    if app.plugin_api_version.is_none() {
+        return (None, None, None);
+    }
+
     let executable = resolve_executable(&app.executable_path);
     let mut command = tokio::process::Command::new(executable);
     command
@@ -328,6 +332,13 @@ async fn validate_process_plugin_compatibility(
     }
     let manifest = serde_json::from_slice::<serde_json::Value>(&output.stdout)
         .context("Could not parse process plugin manifest JSON")?;
+    let typed_manifest = serde_json::from_value::<crm_tool::manifest::AppManifest>(
+        manifest.clone(),
+    )
+    .context("Process plugin manifest does not match the AppManifest schema")?;
+    typed_manifest
+        .validate()
+        .context("Process plugin manifest failed structural validation")?;
     validate_process_plugin_manifest(&manifest, expected_version)
         .with_context(|| format!("Process plugin '{}' is not compatible", app.name))
 }
