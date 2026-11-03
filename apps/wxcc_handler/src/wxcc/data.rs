@@ -89,12 +89,12 @@ impl ApiClient {
                 .with_context(|| format!("Request failed while listing {path}, page {page}"))?
                 .error_for_status()
                 .with_context(|| format!("Webex API rejected {path}, page {page}"))?;
-            let value: Value = response
-                .json()
-                .await
-                .with_context(|| format!("Webex API returned invalid JSON for {path}, page {page}"))?;
-            let items = response_items(value)
-                .with_context(|| format!("Unexpected list response shape for {path}, page {page}"))?;
+            let value: Value = response.json().await.with_context(|| {
+                format!("Webex API returned invalid JSON for {path}, page {page}")
+            })?;
+            let items = response_items(value).with_context(|| {
+                format!("Unexpected list response shape for {path}, page {page}")
+            })?;
             let count = items.len();
             all.extend(items);
             if count < PAGE_SIZE {
@@ -127,7 +127,8 @@ fn response_items(value: Value) -> Option<Vec<Value>> {
 }
 
 fn value_at<'a>(value: &'a Value, keys: &[&str]) -> Option<&'a Value> {
-    keys.iter().find_map(|key| value.get(*key).filter(|v| !v.is_null()))
+    keys.iter()
+        .find_map(|key| value.get(*key).filter(|v| !v.is_null()))
 }
 
 fn text_at(value: &Value, keys: &[&str]) -> String {
@@ -142,11 +143,26 @@ fn text_at(value: &Value, keys: &[&str]) -> String {
 }
 
 fn id_at(value: &Value) -> String {
-    text_at(value, &["id", "userId", "ciUserId", "queueId", "teamId", "siteId"])
+    text_at(
+        value,
+        &["id", "userId", "ciUserId", "queueId", "teamId", "siteId"],
+    )
 }
 
 fn display_name(value: &Value) -> String {
-    let direct = text_at(value, &["name", "displayName", "userName", "agentName", "queueName", "siteName", "teamName", "skillProfileName"]);
+    let direct = text_at(
+        value,
+        &[
+            "name",
+            "displayName",
+            "userName",
+            "agentName",
+            "queueName",
+            "siteName",
+            "teamName",
+            "skillProfileName",
+        ],
+    );
     if !direct.is_empty() {
         return direct;
     }
@@ -200,11 +216,24 @@ fn date_value(value: &Value, keys: &[&str]) -> String {
 
 fn skill_set(value: &Value) -> String {
     let mut entries = Vec::new();
-    for skill in array_at(value, &["skills", "skillProfileSkills", "skillSet", "skillSets", "dynamicSkills"]) {
+    for skill in array_at(
+        value,
+        &[
+            "skills",
+            "skillProfileSkills",
+            "skillSet",
+            "skillSets",
+            "dynamicSkills",
+        ],
+    ) {
         let name = text_at(skill, &["skillName", "name", "label"]);
         let skill_value = text_at(skill, &["skillValue", "value", "proficiency"]);
         let kind = text_at(skill, &["skillType", "type"]);
-        let mut entry = if name.is_empty() { skill_value.clone() } else { name };
+        let mut entry = if name.is_empty() {
+            skill_value.clone()
+        } else {
+            name
+        };
         if !skill_value.is_empty() && !entry.is_empty() {
             entry.push('=');
             entry.push_str(&skill_value);
@@ -265,7 +294,11 @@ trait OrElseEmpty {
 }
 impl OrElseEmpty for String {
     fn or_else_empty(self, fallback: impl FnOnce() -> String) -> String {
-        if self.is_empty() { fallback() } else { self }
+        if self.is_empty() {
+            fallback()
+        } else {
+            self
+        }
     }
 }
 
@@ -281,14 +314,25 @@ fn merge_member_details(
     let profile_id = text_at(detail, &["skillProfileId", "skillProfileID"]);
     Member {
         id,
-        email: text_at(detail, &["email", "emailAddress", "mail"]).or_else_empty(|| text_at(base, &["email", "emailAddress", "mail"])),
+        email: text_at(detail, &["email", "emailAddress", "mail"])
+            .or_else_empty(|| text_at(base, &["email", "emailAddress", "mail"])),
         name: display_name(detail).or_else_empty(|| display_name(base)),
         site_id: site_id.clone(),
-        site_name: text_at(detail, &["siteName"]).or_else_empty(|| site_names.get(&site_id).cloned().unwrap_or_default()),
+        site_name: text_at(detail, &["siteName"])
+            .or_else_empty(|| site_names.get(&site_id).cloned().unwrap_or_default()),
         skill_profile_id: profile_id.clone(),
-        skill_profile_name: text_at(detail, &["skillProfileName"]).or_else_empty(|| profiles.get(&profile_id).cloned().unwrap_or_default()),
+        skill_profile_name: text_at(detail, &["skillProfileName"])
+            .or_else_empty(|| profiles.get(&profile_id).cloned().unwrap_or_default()),
         skills: skill_set(detail),
-        last_login: date_value(detail, &["lastLoginTime", "lastLogin", "lastLoginAt", "lastLoggedInTime"]),
+        last_login: date_value(
+            detail,
+            &[
+                "lastLoginTime",
+                "lastLogin",
+                "lastLoginAt",
+                "lastLoggedInTime",
+            ],
+        ),
         created_at: date_value(detail, &["createdTime", "createdAt", "createdDate"]),
         skill_queue_ids: HashSet::new(),
     }
@@ -300,7 +344,11 @@ pub async fn collect_to_csv(
     output_path: &Path,
 ) -> Result<usize> {
     config.validate(true)?;
-    if !config.scopes.iter().any(|scope| scope == "cjp:config_read" || scope == "cjp:config") {
+    if !config
+        .scopes
+        .iter()
+        .any(|scope| scope == "cjp:config_read" || scope == "cjp:config")
+    {
         bail!("Add cjp:config_read to scopes in wxcc_config.json and authorize again");
     }
     if config.org_id.trim().is_empty() {
@@ -311,7 +359,13 @@ pub async fn collect_to_csv(
     }
     let now = Utc::now().timestamp();
     let token_expiry = config.access_token_expires_at.unwrap_or_default();
-    if config.access_token.as_deref().unwrap_or_default().is_empty() || token_expiry <= now + 300 {
+    if config
+        .access_token
+        .as_deref()
+        .unwrap_or_default()
+        .is_empty()
+        || token_expiry <= now + 300
+    {
         auth::refresh_token(config_path, config.clone())
             .await
             .context("Access token is missing or expires soon, and refresh failed")?;
@@ -349,10 +403,18 @@ pub async fn collect_to_csv(
         let detail = if ci_id.is_empty() {
             None
         } else {
-            match api.get(&format!("v2/user/by-ci-user-id/{}", urlencoding::encode(&ci_id))).await {
+            match api
+                .get(&format!(
+                    "v2/user/by-ci-user-id/{}",
+                    urlencoding::encode(&ci_id)
+                ))
+                .await
+            {
                 Ok(detail) => Some(detail),
                 Err(error) => {
-                    tracing::warn!("Could not retrieve full details for a user; using list data: {error:#}");
+                    tracing::warn!(
+                        "Could not retrieve full details for a user; using list data: {error:#}"
+                    );
                     None
                 }
             }
@@ -375,7 +437,13 @@ pub async fn collect_to_csv(
         .collect();
     let mut profile_skills = HashMap::new();
     for profile_id in profile_ids {
-        match api.get(&format!("skill-profile/{}", urlencoding::encode(&profile_id))).await {
+        match api
+            .get(&format!(
+                "skill-profile/{}",
+                urlencoding::encode(&profile_id)
+            ))
+            .await
+        {
             Ok(detail) => {
                 let name = display_name(&detail);
                 let skills = skill_set(&detail);
@@ -406,7 +474,10 @@ pub async fn collect_to_csv(
             continue;
         }
         let detail = api
-            .get(&format!("v2/contact-service-queue/{}", urlencoding::encode(&id)))
+            .get(&format!(
+                "v2/contact-service-queue/{}",
+                urlencoding::encode(&id)
+            ))
             .await
             .with_context(|| format!("Failed to retrieve complete details for queue {id}"))?;
         full_queues.push(detail);
@@ -427,7 +498,12 @@ pub async fn collect_to_csv(
         ids.extend(ids_from(team, &["userIds", "users", "members"]));
         let mapped = ids
             .into_iter()
-            .map(|member_id| member_by_ci_id.get(&member_id).cloned().unwrap_or(member_id))
+            .map(|member_id| {
+                member_by_ci_id
+                    .get(&member_id)
+                    .cloned()
+                    .unwrap_or(member_id)
+            })
             .filter(|member_id| members.contains_key(member_id))
             .collect();
         team_members.insert(id, mapped);
@@ -445,7 +521,10 @@ pub async fn collect_to_csv(
         };
         let path = format!(
             "v2/contact-service-queue/by-user-id/{}/skill-based-queues",
-            urlencoding::encode(&text_at(user, &["id", "userId"]).or_else_empty(|| text_at(user, &["ciUserId", "ciUserID"])))
+            urlencoding::encode(
+                &text_at(user, &["id", "userId"])
+                    .or_else_empty(|| text_at(user, &["ciUserId", "ciUserID"]))
+            )
         );
         match api.list(&path).await {
             Ok(skill_queues) => {
@@ -458,7 +537,9 @@ pub async fn collect_to_csv(
                     }
                 }
             }
-            Err(error) => tracing::warn!("Could not retrieve skill-based queue mapping for a user: {error:#}"),
+            Err(error) => {
+                tracing::warn!("Could not retrieve skill-based queue mapping for a user: {error:#}")
+            }
         }
     }
 
@@ -500,24 +581,49 @@ pub async fn collect_to_csv(
         });
     }
 
-    let mut writer = csv::WriterBuilder::new().has_headers(true).from_writer(Vec::new());
+    let mut writer = csv::WriterBuilder::new()
+        .has_headers(true)
+        .from_writer(Vec::new());
     writer.write_record([
-        "site_id", "site_name", "queue_id", "queue_name", "queue_type",
-        "member_id", "member_email", "member_name", "member_skill_profile_id",
-        "member_skill_profile_name", "member_skill_sets", "member_last_login", "member_created_at",
+        "site_id",
+        "site_name",
+        "queue_id",
+        "queue_name",
+        "queue_type",
+        "member_id",
+        "member_email",
+        "member_name",
+        "member_skill_profile_id",
+        "member_skill_profile_name",
+        "member_skill_sets",
+        "member_last_login",
+        "member_created_at",
     ])?;
     let mut row_count = 0usize;
     for queue in &queue_rows {
         if queue.member_ids.is_empty() {
             writer.write_record([
-                queue.site_id.as_str(), queue.site_name.as_str(), queue.id.as_str(),
-                queue.name.as_str(), queue.queue_type.as_str(), "", "", "", "", "", "", "", "",
+                queue.site_id.as_str(),
+                queue.site_name.as_str(),
+                queue.id.as_str(),
+                queue.name.as_str(),
+                queue.queue_type.as_str(),
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
             ])?;
             row_count += 1;
             continue;
         }
         for member_id in &queue.member_ids {
-            let Some(member) = members.get(member_id) else { continue };
+            let Some(member) = members.get(member_id) else {
+                continue;
+            };
             let site_id = if queue.site_id.is_empty() {
                 member.site_id.clone()
             } else {
@@ -531,19 +637,33 @@ pub async fn collect_to_csv(
                 site_names.get(&site_id).cloned().unwrap_or_default()
             };
             writer.write_record([
-                site_id.as_str(), site_name.as_str(), queue.id.as_str(), queue.name.as_str(), queue.queue_type.as_str(),
-                member.id.as_str(), member.email.as_str(), member.name.as_str(),
-                member.skill_profile_id.as_str(), member.skill_profile_name.as_str(), member.skills.as_str(),
-                member.last_login.as_str(), member.created_at.as_str(),
+                site_id.as_str(),
+                site_name.as_str(),
+                queue.id.as_str(),
+                queue.name.as_str(),
+                queue.queue_type.as_str(),
+                member.id.as_str(),
+                member.email.as_str(),
+                member.name.as_str(),
+                member.skill_profile_id.as_str(),
+                member.skill_profile_name.as_str(),
+                member.skills.as_str(),
+                member.last_login.as_str(),
+                member.created_at.as_str(),
             ])?;
             row_count += 1;
         }
     }
-    let csv_bytes = writer.into_inner().context("Failed to finalize CSV output")?;
+    let csv_bytes = writer
+        .into_inner()
+        .context("Failed to finalize CSV output")?;
     let mut output = Vec::with_capacity(csv_bytes.len() + 3);
     output.extend_from_slice(&[0xEF, 0xBB, 0xBF]);
     output.extend_from_slice(&csv_bytes);
-    if let Some(parent) = output_path.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+    if let Some(parent) = output_path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
         tokio::fs::create_dir_all(parent)
             .await
             .with_context(|| format!("Failed to create output directory {}", parent.display()))?;
@@ -553,7 +673,12 @@ pub async fn collect_to_csv(
         .with_context(|| format!("Failed to write CSV output to {}", output_path.display()))?;
     tracing::info!(
         "Collected {} sites, {} queues, {} users; exported {} CSV rows to {} ({} teams)",
-        sites.len(), queues.len(), users.len(), row_count, output_path.display(), team_names.len()
+        sites.len(),
+        queues.len(),
+        users.len(),
+        row_count,
+        output_path.display(),
+        team_names.len()
     );
     Ok(row_count)
 }
@@ -566,8 +691,14 @@ mod tests {
     #[test]
     fn list_response_supports_array_and_envelope_shapes() {
         assert_eq!(response_items(json!([{"id":"1"}])).unwrap().len(), 1);
-        assert_eq!(response_items(json!({"data":[{"id":"1"}]})).unwrap().len(), 1);
-        assert_eq!(response_items(json!({"items":[{"id":"1"}]})).unwrap().len(), 1);
+        assert_eq!(
+            response_items(json!({"data":[{"id":"1"}]})).unwrap().len(),
+            1
+        );
+        assert_eq!(
+            response_items(json!({"items":[{"id":"1"}]})).unwrap().len(),
+            1
+        );
         assert_eq!(response_resource(json!({"data":{"id":"1"}}))["id"], "1");
         assert!(response_items(json!({"error":"bad"})).is_none());
     }
@@ -616,6 +747,9 @@ mod tests {
     #[test]
     fn timestamps_are_exported_as_utc_iso8601_when_epoch_millis() {
         let user = json!({"createdTime": 1_700_000_000_000i64});
-        assert_eq!(date_value(&user, &["createdTime"]), "2023-11-14T22:13:20+00:00");
+        assert_eq!(
+            date_value(&user, &["createdTime"]),
+            "2023-11-14T22:13:20+00:00"
+        );
     }
 }
