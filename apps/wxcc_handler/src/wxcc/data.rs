@@ -451,8 +451,7 @@ pub async fn collect_to_csv(
             Ok(detail) => {
                 let name = display_name(&detail);
                 let skills = skill_set(&detail);
-                if !name.is_empty() {
-                    // The user record already carries the profile ID; names are added below.
+                if !name.is_empty() || !skills.is_empty() {
                     profile_skills.insert(profile_id, (name, skills));
                 }
             }
