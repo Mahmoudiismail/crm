@@ -70,3 +70,24 @@ crm_updater.exe [--config <PATH>] [--update-only] [--logs-only]
 ## AppManifest
 
 Runner-compatible applications expose a hidden --manifest option. It prints the argument schema as JSON and exits successfully. See [Manifest Schema](./MANIFEST_SCHEMA.md).
+
+
+## WXCC Handler
+
+```powershell
+wxcc_handler.exe [--config PATH] config init
+wxcc_handler.exe [--config PATH] config check
+wxcc_handler.exe [--config PATH] auth authorize-url
+wxcc_handler.exe [--config PATH] auth exchange-code --code CODE --state STATE
+wxcc_handler.exe [--config PATH] auth refresh
+wxcc_handler.exe [--config PATH] auth status
+```
+
+- Relative config paths resolve beside the executable.
+- config init creates wxcc_config.json when missing; config check validates settings.
+- auth authorize-url prints the official Webex OAuth URL and persists the generated state.
+- auth exchange-code validates state and exchanges the authorization code.
+- auth refresh refreshes the stored access token; auth status does not expose token values.
+- --manifest is a hidden Runner integration option.
+
+Data Collection, Analyzer, and User Provisioning commands will be documented as their phases are implemented.
