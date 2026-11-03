@@ -37,6 +37,10 @@ Tasker is a configured worker that processes tasks from tasker_config.json. Its 
 
 For csv_analysis, ticket output and lead output are distinct artifacts. The ticket result remains at output_file; when recent lead exports exist, lead_result.csv is written beside it. Lead team is derived from Assignee via the users mapping; only eligible Call Center leads are included in the Call Center leads attachment. Other teams remain in the durable lead result for review. See [Tasker](./TASKER.md).
 
+### WXCC Handler
+
+WXCC Handler is a Windows-only command-line process plugin. It uses official Webex OAuth and Webex Contact Center APIs, stores its OAuth client settings and token pair in wxcc_config.json for V1, and does not use browser automation. Its operational commands and feature status are documented in [WXCC Handler](./WXCC_HANDLER.md).
+
 ### CRM Updater
 
 CRM Updater supports two operational paths: collecting local logs/reports into timestamped folders and applying staged executable replacements. The replacement script runs detached so the updater process can exit before its own executable is replaced. The updater's package trust limitation is documented in [CRM Updater](./CRM_UPDATER.md) and [Production Readiness](./PRODUCTION_READINESS.md).
