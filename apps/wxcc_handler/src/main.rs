@@ -1,12 +1,27 @@
 use anyhow::{Context, Result};
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use crm_tool::manifest::{AppArg, AppManifest, ArgType};
 use crm_tool::utils::{
     executable_dir, intercept_manifest, parse_log_level, setup_logging_with_levels, InterceptResult,
 };
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 use tracing::{error, info};
 use wxcc_handler::wxcc::{auth, config::WxccConfig, data};
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+#[value(rename_all = "kebab-case")]
+enum RunnerAction {
+    ConfigInit,
+    ConfigCheck,
+    AuthAuthorizeUrl,
+    AuthExchangeCode,
+    AuthRefresh,
+    AuthStatus,
+    DataCollect,
+}
 
 #[derive(Debug, Parser)]
 #[command(
@@ -17,8 +32,20 @@ use wxcc_handler::wxcc::{auth, config::WxccConfig, data};
 struct Cli {
     #[arg(long, global = true)]
     config: Option<PathBuf>,
+    /// Select an operation when launched by Runner.
+    #[arg(long, value_enum)]
+    action: Option<RunnerAction>,
+    /// OAuth authorization code (Runner action: auth-exchange-code).
+    #[arg(long, requires = "action")]
+    code: Option<String>,
+    /// OAuth state returned with the authorization code.
+    #[arg(long, requires = "action")]
+    state: Option<String>,
+    /// CSV destination (Runner action: data-collect).
+    #[arg(long, global = true)]
+    output: Option<PathBuf>,
     #[command(subcommand)]
-    command: Command,
+    command: Option<Command>,
 }
 
 #[derive(Debug, Subcommand)]
@@ -53,7 +80,7 @@ enum AuthCommand {
 
 #[derive(Debug, Subcommand)]
 enum DataCommand {
-    Collect(CollectArgs),
+    Collect,
 }
 
 #[derive(Debug, Args)]
@@ -62,12 +89,6 @@ struct ExchangeCodeArgs {
     code: String,
     #[arg(long)]
     state: String,
-}
-
-#[derive(Debug, Args)]
-struct CollectArgs {
-    #[arg(long)]
-    output: Option<PathBuf>,
 }
 
 fn resolve_config_path(config: Option<&Path>, exe_dir: &Path) -> PathBuf {
@@ -87,15 +108,77 @@ fn resolve_output_path(output: Option<&Path>, exe_dir: &Path) -> PathBuf {
 }
 
 fn get_manifest() -> AppManifest {
+    let action_values = [
+        ("config-init", RunnerAction::ConfigInit),
+        ("config-check", RunnerAction::ConfigCheck),
+        ("auth-authorize-url", RunnerAction::AuthAuthorizeUrl),
+        ("auth-exchange-code", RunnerAction::AuthExchangeCode),
+        ("auth-refresh", RunnerAction::AuthRefresh),
+        ("auth-status", RunnerAction::AuthStatus),
+        ("data-collect", RunnerAction::DataCollect),
+    ];
+    let action_options = action_values.iter().map(|(name, _)| *name);
+    let depends_on = |values: &[&str]| {
+        HashMap::from([(
+            "--action".to_string(),
+            values.iter().map(|v| (*v).to_string()).collect(),
+        )])
+    };
     AppManifest {
         plugin_api_version: Some(crm_tool::manifest::PROCESS_PLUGIN_API_VERSION),
         name: "Webex Contact Center Handler".into(),
         description: "Official-API process handler for Webex Contact Center.".into(),
         arguments: vec![
             AppArg::new("--config", ArgType::String),
-            AppArg::new("--output", ArgType::String),
+            AppArg::new("--action", ArgType::List)
+                .required(true)
+                .options(action_options),
+            AppArg::new("--code", ArgType::String)
+                .required(true)
+                .depends_on(depends_on(&["auth-exchange-code"])),
+            AppArg::new("--state", ArgType::String)
+                .required(true)
+                .depends_on(depends_on(&["auth-exchange-code"])),
+            AppArg::new("--output", ArgType::String).depends_on(depends_on(&["data-collect"])),
         ],
     }
+}
+
+fn command_from_runner_action(
+    action: RunnerAction,
+    code: Option<&str>,
+    state: Option<&str>,
+) -> Result<Command> {
+    Ok(match action {
+        RunnerAction::ConfigInit => Command::Config {
+            command: ConfigCommand::Init,
+        },
+        RunnerAction::ConfigCheck => Command::Config {
+            command: ConfigCommand::Check,
+        },
+        RunnerAction::AuthAuthorizeUrl => Command::Auth {
+            command: AuthCommand::AuthorizeUrl,
+        },
+        RunnerAction::AuthExchangeCode => Command::Auth {
+            command: AuthCommand::ExchangeCode(ExchangeCodeArgs {
+                code: code
+                    .context("--code is required for --action auth-exchange-code")?
+                    .to_string(),
+                state: state
+                    .context("--state is required for --action auth-exchange-code")?
+                    .to_string(),
+            }),
+        },
+        RunnerAction::AuthRefresh => Command::Auth {
+            command: AuthCommand::Refresh,
+        },
+        RunnerAction::AuthStatus => Command::Auth {
+            command: AuthCommand::Status,
+        },
+        RunnerAction::DataCollect => Command::Data {
+            command: DataCommand::Collect,
+        },
+    })
 }
 
 #[tokio::main]
@@ -104,6 +187,15 @@ async fn main() -> Result<()> {
         return Ok(());
     }
     let cli = Cli::parse();
+    let command = match cli.action {
+        Some(action) if cli.command.is_none() => {
+            command_from_runner_action(action, cli.code.as_deref(), cli.state.as_deref())?
+        }
+        Some(_) => anyhow::bail!("Use either --action or a CLI subcommand, not both"),
+        None => cli
+            .command
+            .context("An operation is required. Use --help to see available commands.")?,
+    };
     let exe_dir = executable_dir()?;
     let config_path = resolve_config_path(cli.config.as_deref(), &exe_dir);
     let config = WxccConfig::load(&config_path.to_string_lossy())
@@ -116,7 +208,7 @@ async fn main() -> Result<()> {
     .context("Failed to initialize WXCC Handler logging")?;
     info!("WXCC Handler command started");
 
-    let result = match cli.command {
+    let result = match command {
         Command::Config {
             command: ConfigCommand::Init,
         } => {
@@ -170,9 +262,9 @@ async fn main() -> Result<()> {
             Ok(())
         }
         Command::Data {
-            command: DataCommand::Collect(args),
+            command: DataCommand::Collect,
         } => {
-            let output_path = resolve_output_path(args.output.as_deref(), &exe_dir);
+            let output_path = resolve_output_path(cli.output.as_deref(), &exe_dir);
             let rows = data::collect_to_csv(&config_path, config, &output_path).await?;
             println!(
                 "Data collection completed: {rows} rows exported to {}",
@@ -192,6 +284,139 @@ async fn main() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::CommandFactory;
+
+    #[test]
+    fn runner_action_manifest_exposes_flat_actions_and_conditional_arguments() {
+        let manifest = get_manifest();
+        let action = manifest
+            .arguments
+            .iter()
+            .find(|arg| arg.name == "--action")
+            .unwrap();
+        assert!(action.required);
+        assert_eq!(
+            action.options.as_ref().unwrap(),
+            &vec![
+                "config-init",
+                "config-check",
+                "auth-authorize-url",
+                "auth-exchange-code",
+                "auth-refresh",
+                "auth-status",
+                "data-collect"
+            ]
+        );
+        for name in ["--code", "--state"] {
+            let arg = manifest
+                .arguments
+                .iter()
+                .find(|arg| arg.name == name)
+                .unwrap();
+            assert!(arg.required);
+            assert_eq!(
+                arg.depends_on.as_ref().unwrap().get("--action").unwrap(),
+                &vec!["auth-exchange-code"]
+            );
+        }
+        let output = manifest
+            .arguments
+            .iter()
+            .find(|arg| arg.name == "--output")
+            .unwrap();
+        assert_eq!(
+            output.depends_on.as_ref().unwrap().get("--action").unwrap(),
+            &vec!["data-collect"]
+        );
+        assert!(manifest.validate().is_ok());
+    }
+
+    #[test]
+    fn runner_action_cli_parses_and_maps_to_existing_operation() {
+        let cli = Cli::try_parse_from([
+            "wxcc_handler",
+            "--action",
+            "data-collect",
+            "--output",
+            "out.csv",
+        ])
+        .unwrap();
+        assert!(matches!(
+            command_from_runner_action(
+                cli.action.unwrap(),
+                cli.code.as_deref(),
+                cli.state.as_deref()
+            )
+            .unwrap(),
+            Command::Data {
+                command: DataCommand::Collect
+            }
+        ));
+        assert_eq!(cli.output.as_deref(), Some(Path::new("out.csv")));
+    }
+
+    #[test]
+    fn runner_oauth_exchange_requires_code_and_state() {
+        let cli = Cli::try_parse_from([
+            "wxcc_handler",
+            "--action",
+            "auth-exchange-code",
+            "--code",
+            "c",
+            "--state",
+            "s",
+        ])
+        .unwrap();
+        assert!(matches!(
+            command_from_runner_action(
+                cli.action.unwrap(),
+                cli.code.as_deref(),
+                cli.state.as_deref(),
+            )
+            .unwrap(),
+            Command::Auth {
+                command: AuthCommand::ExchangeCode(_)
+            }
+        ));
+        let missing_state = Cli::try_parse_from([
+            "wxcc_handler",
+            "--action",
+            "auth-exchange-code",
+            "--code",
+            "c",
+        ])
+        .unwrap();
+        assert!(command_from_runner_action(
+            missing_state.action.unwrap(),
+            missing_state.code.as_deref(),
+            missing_state.state.as_deref(),
+        )
+        .is_err());
+
+        let missing_code = Cli::try_parse_from([
+            "wxcc_handler",
+            "--action",
+            "auth-exchange-code",
+            "--state",
+            "s",
+        ])
+        .unwrap();
+        assert!(command_from_runner_action(
+            missing_code.action.unwrap(),
+            missing_code.code.as_deref(),
+            missing_code.state.as_deref(),
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn help_exposes_runner_action_and_manual_subcommands() {
+        let help = Cli::command().render_help().to_string();
+        assert!(help.contains("--action"));
+        assert!(help.contains("config"));
+        assert!(help.contains("auth"));
+        assert!(help.contains("data"));
+    }
 
     #[test]
     fn relative_and_default_config_paths_use_executable_directory() {
