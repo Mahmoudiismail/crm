@@ -226,8 +226,20 @@ fn skill_set(value: &Value) -> String {
         "activeEnumSkills",
     ] {
         for skill in array_at(value, &[key]) {
-            let name = text_at(skill, &["skillName", "name", "label"]);
-            let skill_value = text_at(skill, &["skillValue", "value", "proficiency"]);
+            let name = text_at(skill, &["skillName", "enumSkillName", "name", "label"]);
+            let skill_value = text_at(
+                skill,
+                &[
+                    "skillValue",
+                    "value",
+                    "proficiency",
+                    "textValue",
+                    "booleanValue",
+                    "proficiencyValue",
+                    "enumSkillValue",
+                    "enumSkillValues",
+                ],
+            );
             let kind = text_at(skill, &["skillType", "type"]);
             let mut entry = if name.is_empty() {
                 skill_value.clone()
