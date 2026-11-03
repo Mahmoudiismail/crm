@@ -12,6 +12,17 @@ window.validation = {
         inputs.forEach((input) => {
             const argName = input.getAttribute("data-arg-name");
             const argType = input.getAttribute("data-arg-type");
+            const container = input.closest(".arg-container");
+
+            // Hidden manifest arguments must not survive in the saved action config.
+            // Dependency visibility is applied to the container, not the input itself.
+            if (
+                container &&
+                (container.dataset.dependenciesSatisfied === "false" ||
+                    container.dataset.mappedDateArg === "true")
+            ) {
+                return;
+            }
 
             if (input.required && !input.value.trim() && argType !== "boolean") {
                 hasMissingRequired = true;
