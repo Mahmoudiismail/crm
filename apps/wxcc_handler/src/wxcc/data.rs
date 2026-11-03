@@ -84,7 +84,7 @@ impl ApiClient {
         for page in 0..MAX_PAGES {
             let response = self
                 .client
-                .get(self.endpoint(path))
+                .get(self.endpoint(path)?)
                 .query(&[("page", page), ("pageSize", PAGE_SIZE)])
                 .bearer_auth(&self.access_token)
                 .header(reqwest::header::ACCEPT, "application/json")
