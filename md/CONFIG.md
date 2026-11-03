@@ -101,3 +101,6 @@ Specific to the `crm_open_sohail` task. Inherits all fields from `DashboardUpdat
 ### Process plugin compatibility
 
 CRM, Tasker, and Yasweb are first-party process plugins. Their `--manifest` JSON includes `plugin_api_version: 1`. When a registered app sets `plugin_api_version` (currently `1` for first-party workers), Runner requires the executable to return a valid `--manifest` with the matching version before launch. If the field is absent, Runner does not probe the executable and preserves legacy external-app behavior. Existing configs therefore remain compatible; add `plugin_api_version: 1` to managed first-party worker entries to enable enforcement. The registry remains explicit in `runner_config.json`; placing an executable on disk does not silently register or execute it.
+
+
+- **wxcc_config.json (WXCC Handler):** Webex Integration credentials, OAuth scopes, locally stored access/refresh tokens, token expiry, pending OAuth state, and log levels. Tokens and client secret are stored in local JSON for V1; DPAPI is not used. The file is created beside wxcc_handler.exe and can be selected with `wxcc_handler.exe --config PATH`. Do not commit a populated config file. See [WXCC Handler](./WXCC_HANDLER.md).
