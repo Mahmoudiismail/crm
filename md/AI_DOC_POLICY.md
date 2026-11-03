@@ -25,3 +25,11 @@ Any operational changes to the codebase MUST be reflected in the markdown files 
 ## Repository-wide documentation audit
 
 For requests to review or update repository documentation as a whole, inventory tracked Markdown files and compare current operational guides with the source tree, Cargo metadata, CLI parsers, and workflow YAML. Treat plans, issue reports, and audit snapshots as historical records unless they are explicitly maintained as live operational references. Do not bulk-rewrite historical findings to make them appear current. Verify links and examples after edits, and do not claim build/test/CI success unless those checks were actually run.
+
+
+## WXCC Handler
+
+- WXCC Handler is a Windows-only, command-based process package.
+- Use documented Cisco Webex / Webex Contact Center APIs only; do not introduce browser automation or undocumented endpoints.
+- Its V1 OAuth client secret and token pair are stored in a local JSON config by explicit project decision; do not introduce DPAPI without a new requirement.
+- Keep md/WXCC_HANDLER.md, md/CLI.md, md/CONFIG.md, md/ARCHITECTURE.md, and md/BUILD.md synchronized with operational changes.

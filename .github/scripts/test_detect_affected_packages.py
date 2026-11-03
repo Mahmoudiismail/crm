@@ -10,7 +10,7 @@ assert SPEC is not None and SPEC.loader is not None
 DETECTOR = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(DETECTOR)
 
-ALL = ["crm", "runner", "yasweb", "tasker", "crm_updater"]
+ALL = ["crm", "runner", "yasweb", "tasker", "crm_updater", "wxcc_handler"]
 
 
 class AffectedPackagesTests(unittest.TestCase):
@@ -18,6 +18,9 @@ class AffectedPackagesTests(unittest.TestCase):
         self.assertEqual(
             DETECTOR.affected_packages(["apps/runner/src/main.rs"]), ["runner"]
         )
+
+    def test_wxcc_handler_only_change_selects_wxcc_handler(self):
+        self.assertEqual(DETECTOR.affected_packages(["apps/wxcc_handler/src/main.rs"]), ["wxcc_handler"])
 
     def test_tasker_only_change_selects_tasker(self):
         self.assertEqual(

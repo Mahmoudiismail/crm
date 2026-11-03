@@ -49,6 +49,7 @@ members = [
     "apps/tasker",
     "apps/yasweb",
     "apps/crm_updater",
+    "apps/wxcc_handler",
 ]
 resolver = "2"
 

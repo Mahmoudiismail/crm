@@ -11,6 +11,7 @@ The repository is a Cargo workspace. Each executable package owns its implementa
 | yasweb | apps/yasweb/src/main.rs, apps/yasweb/src/yasweb/** | Headless browser report automation |
 | tasker | apps/tasker/src/main.rs, apps/tasker/src/tasker/** | CSV/report processing, Excel automation and Outlook workflows |
 | crm_updater | apps/crm_updater/src/main.rs, apps/crm_updater/src/crm_updater/** | Local diagnostics collection and application update orchestration |
+| wxcc_handler | apps/wxcc_handler/src/main.rs, apps/wxcc_handler/src/wxcc/** | Official-API Webex Contact Center operations |
 
 Shared manifest and utility contracts plus the generic managed-script engine are exported through `src/lib.rs`. Tasker and CRM Updater keep their PowerShell template catalogs inside their own app packages.
 
@@ -36,6 +37,10 @@ Tasker is a configured worker that processes tasks from tasker_config.json. Its 
 
 For csv_analysis, ticket output and lead output are distinct artifacts. The ticket result remains at output_file; when recent lead exports exist, lead_result.csv is written beside it. Lead team is derived from Assignee via the users mapping; only eligible Call Center leads are included in the Call Center leads attachment. Other teams remain in the durable lead result for review. See [Tasker](./TASKER.md).
 
+### WXCC Handler
+
+WXCC Handler is a Windows-only command-line process plugin. It uses official Webex OAuth and Webex Contact Center APIs, stores its OAuth client settings and token pair in wxcc_config.json for V1, and does not use browser automation. Its operational commands and feature status are documented in [WXCC Handler](./WXCC_HANDLER.md).
+
 ### CRM Updater
 
 CRM Updater supports two operational paths: collecting local logs/reports into timestamped folders and applying staged executable replacements. The replacement script runs detached so the updater process can exit before its own executable is replaced. The updater's package trust limitation is documented in [CRM Updater](./CRM_UPDATER.md) and [Production Readiness](./PRODUCTION_READINESS.md).
@@ -46,7 +51,7 @@ Each executable has a dedicated configuration file. Defaults are generally locat
 
 ## Manifest contract
 
-The AppManifest describes an application's name, description and accepted CLI arguments. First-party CRM, Tasker, Yasweb, and CRM Updater workers declare `plugin_api_version: 1`; Runner is the host process. When `registered_apps[].plugin_api_version` is configured, Runner rejects missing or incompatible manifest versions before launch. When the registry field is absent, Runner skips the compatibility probe and preserves legacy external-app behavior. Argument metadata supports data types, required flags, defaults, options, dependencies and autofill. Runner uses the manifest both to construct app forms and to avoid passing unsupported date arguments. See [Manifest Schema](./MANIFEST_SCHEMA.md).
+The AppManifest describes an application's name, description and accepted CLI arguments. First-party CRM, Tasker, Yasweb, CRM Updater, and WXCC Handler workers declare `plugin_api_version: 1`; Runner is the host process. When `registered_apps[].plugin_api_version` is configured, Runner rejects missing or incompatible manifest versions before launch. When the registry field is absent, Runner skips the compatibility probe and preserves legacy external-app behavior. Argument metadata supports data types, required flags, defaults, options, dependencies and autofill. Runner uses the manifest both to construct app forms and to avoid passing unsupported date arguments. See [Manifest Schema](./MANIFEST_SCHEMA.md).
 
 ## Logging and process management
 
