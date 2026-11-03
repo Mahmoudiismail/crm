@@ -430,14 +430,12 @@ pub async fn run_external_app(
             .filter(|name| !name.is_empty())
             .map(str::to_string)
             .filter(|name| {
-                manifest
-                    .is_none_or(|m| manifest_argument_is_available(m, name, &effective_args))
+                manifest.is_none_or(|m| manifest_argument_is_available(m, name, &effective_args))
             })
             .or_else(|| {
                 discovered.0.filter(|name| {
-                    manifest.is_none_or(|m| {
-                        manifest_argument_is_available(m, name, &effective_args)
-                    })
+                    manifest
+                        .is_none_or(|m| manifest_argument_is_available(m, name, &effective_args))
                 })
             });
         let end_arg = spec
@@ -446,14 +444,12 @@ pub async fn run_external_app(
             .filter(|name| !name.is_empty())
             .map(str::to_string)
             .filter(|name| {
-                manifest
-                    .is_none_or(|m| manifest_argument_is_available(m, name, &effective_args))
+                manifest.is_none_or(|m| manifest_argument_is_available(m, name, &effective_args))
             })
             .or_else(|| {
                 discovered.1.filter(|name| {
-                    manifest.is_none_or(|m| {
-                        manifest_argument_is_available(m, name, &effective_args)
-                    })
+                    manifest
+                        .is_none_or(|m| manifest_argument_is_available(m, name, &effective_args))
                 })
             });
 
@@ -527,9 +523,8 @@ mod tests {
     use super::{
         apply_registered_config_fallback, date_args_from_manifest, discover_date_args,
         insert_period_args, manifest_arg_dependencies_satisfied, manifest_argument_is_available,
-        remove_unavailable_manifest_args,
-        validate_process_plugin_compatibility, validate_process_plugin_manifest,
-        validate_process_plugin_manifest_schema, RegisteredApp,
+        remove_unavailable_manifest_args, validate_process_plugin_compatibility,
+        validate_process_plugin_manifest, validate_process_plugin_manifest_schema, RegisteredApp,
     };
     use std::collections::HashMap;
 
