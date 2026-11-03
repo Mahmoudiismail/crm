@@ -73,3 +73,10 @@ The flow uses the official Webex OAuth authorization-code and token endpoints. A
 ## Status
 
 Phase 1 implements the process package, local config initialization/validation, OAuth URL generation, authorization-code exchange, refresh-token handling, and token status. Data Collection, Analyzer, and User Provisioning are not yet implemented.
+
+
+## API version and OAuth scope rules
+
+- Use the current v2 configuration endpoints for Sites, Teams, Skill Profiles, Users, and Contact Service Queues where the v2 resource is documented. Cisco's changelog states that the listed v1 List APIs were removed on 15 October 2026; do not build new collection logic against those retired routes.
+- Configuration read operations require cjp:config_read. Configuration write operations require cjp:config_write. Search GraphQL requires cjp:config or cjp:config_read and an Administrator or Supervisor role. Request only the scopes required by the enabled commands.
+- For Contact Service Queues, the list response no longer includes the full agents array; retrieve each queue's detail resource when the collection requires that relationship.
