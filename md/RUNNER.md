@@ -36,6 +36,7 @@ Focused regression coverage protects three runtime guarantees:
 - Concurrent requests for the same task ID result in one execution while that task is queued or running.
 - A `TaskLogger` initialization failure remains retryable; after the filesystem failure is removed, a later log call initializes the logger and writes its message.
 - An existing malformed `runner_config.json` causes the Runner process to exit unsuccessfully without replacing the file with defaults.
+- Manifest arguments with unsatisfied `depends_on` conditions are excluded from the saved action argument map; Node's built-in test runner covers hidden, available, and period-mapped arguments.
 
 ## Task Dispatch Feedback and Config Persistence
 
