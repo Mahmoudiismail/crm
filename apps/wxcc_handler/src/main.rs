@@ -369,6 +369,17 @@ mod tests {
     }
 
     #[test]
+    fn runner_auth_login_action_maps_to_login_command() {
+        let cli = Cli::try_parse_from(["wxcc_handler", "--action", "auth-login"]).unwrap();
+        assert!(matches!(
+            command_from_runner_action(cli.action.unwrap(), None, None).unwrap(),
+            Command::Auth {
+                command: AuthCommand::Login
+            }
+        ));
+    }
+
+    #[test]
     fn runner_oauth_exchange_requires_code_and_state() {
         let cli = Cli::try_parse_from([
             "wxcc_handler",
