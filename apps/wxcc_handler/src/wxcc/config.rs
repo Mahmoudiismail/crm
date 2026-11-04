@@ -106,7 +106,9 @@ impl WxccConfig {
                 );
             }
             if self.callback_tls_cert_path.is_some() != self.callback_tls_key_path.is_some() {
-                anyhow::bail!("callback_tls_cert_path and callback_tls_key_path must be configured together");
+                anyhow::bail!(
+                    "callback_tls_cert_path and callback_tls_key_path must be configured together"
+                );
             }
             if self.scopes.is_empty() {
                 anyhow::bail!("At least one Webex OAuth scope must be configured");
