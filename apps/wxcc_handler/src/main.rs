@@ -17,6 +17,7 @@ enum RunnerAction {
     ConfigInit,
     ConfigCheck,
     AuthAuthorizeUrl,
+    AuthLogin,
     AuthExchangeCode,
     AuthRefresh,
     AuthStatus,
@@ -73,6 +74,7 @@ enum ConfigCommand {
 #[derive(Debug, Subcommand)]
 enum AuthCommand {
     AuthorizeUrl,
+    Login,
     ExchangeCode(ExchangeCodeArgs),
     Refresh,
     Status,
@@ -112,6 +114,7 @@ fn get_manifest() -> AppManifest {
         ("config-init", RunnerAction::ConfigInit),
         ("config-check", RunnerAction::ConfigCheck),
         ("auth-authorize-url", RunnerAction::AuthAuthorizeUrl),
+        ("auth-login", RunnerAction::AuthLogin),
         ("auth-exchange-code", RunnerAction::AuthExchangeCode),
         ("auth-refresh", RunnerAction::AuthRefresh),
         ("auth-status", RunnerAction::AuthStatus),
@@ -158,6 +161,9 @@ fn command_from_runner_action(
         },
         RunnerAction::AuthAuthorizeUrl => Command::Auth {
             command: AuthCommand::AuthorizeUrl,
+        },
+        RunnerAction::AuthLogin => Command::Auth {
+            command: AuthCommand::Login,
         },
         RunnerAction::AuthExchangeCode => Command::Auth {
             command: AuthCommand::ExchangeCode(ExchangeCodeArgs {
@@ -223,6 +229,12 @@ async fn main() -> Result<()> {
             Ok(())
         }
         Command::Auth {
+            command: AuthCommand::Login,
+        } => {
+            auth::login(&config_path, config).await?;
+            Ok(())
+        }
+        Command::Auth {
             command: AuthCommand::AuthorizeUrl,
         } => {
             let (url, state) = auth::create_authorization_request(&config_path, config.clone())?;
@@ -257,7 +269,7 @@ async fn main() -> Result<()> {
             } else if config.refresh_token.is_some() {
                 println!("Refresh token is present; an access token refresh is required.");
             } else {
-                println!("Not authorized. Run wxcc_handler auth authorize-url.");
+                println!("Not authorized. Run wxcc_handler auth login.");
             }
             Ok(())
         }
@@ -301,6 +313,7 @@ mod tests {
                 "config-init",
                 "config-check",
                 "auth-authorize-url",
+                "auth-login",
                 "auth-exchange-code",
                 "auth-refresh",
                 "auth-status",
