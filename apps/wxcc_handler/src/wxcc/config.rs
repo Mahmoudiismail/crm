@@ -8,6 +8,8 @@ pub struct WxccConfig {
     pub client_id: String,
     pub client_secret: String,
     pub redirect_uri: String,
+    pub callback_tls_cert_path: Option<String>,
+    pub callback_tls_key_path: Option<String>,
     pub scopes: Vec<String>,
     pub org_id: String,
     pub api_base_url: String,
@@ -26,6 +28,8 @@ impl Default for WxccConfig {
             client_id: String::new(),
             client_secret: String::new(),
             redirect_uri: String::new(),
+            callback_tls_cert_path: None,
+            callback_tls_key_path: None,
             scopes: Vec::new(),
             org_id: String::new(),
             api_base_url: String::new(),
@@ -46,6 +50,8 @@ impl std::fmt::Debug for WxccConfig {
             .field("client_id", &self.client_id)
             .field("client_secret", &"[REDACTED]")
             .field("redirect_uri", &self.redirect_uri)
+            .field("callback_tls_cert_path", &self.callback_tls_cert_path)
+            .field("callback_tls_key_path", &self.callback_tls_key_path)
             .field("scopes", &self.scopes)
             .field("org_id", &self.org_id)
             .field("api_base_url", &self.api_base_url)
@@ -98,6 +104,9 @@ impl WxccConfig {
                 anyhow::bail!(
                     "redirect_uri must match the URI registered in the Webex integration"
                 );
+            }
+            if self.callback_tls_cert_path.is_some() != self.callback_tls_key_path.is_some() {
+                anyhow::bail!("callback_tls_cert_path and callback_tls_key_path must be configured together");
             }
             if self.scopes.is_empty() {
                 anyhow::bail!("At least one Webex OAuth scope must be configured");
