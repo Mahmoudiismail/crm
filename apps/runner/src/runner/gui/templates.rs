@@ -945,6 +945,13 @@ pub(crate) fn render_wh_edit_page(
     layout(title, &body)
 }
 
+fn is_wxcc_handler_row(app: &crate::runner::config::RegisteredApp) -> bool {
+    std::path::Path::new(&app.executable_path)
+        .file_name()
+        .and_then(std::ffi::OsStr::to_str)
+        .is_some_and(|name| name.eq_ignore_ascii_case("wxcc_handler.exe") || name.eq_ignore_ascii_case("wxcc_handler"))
+}
+
 pub(crate) fn render_apps_page(apps: &[crate::runner::config::RegisteredApp]) -> String {
     let mut rows = String::new();
     if apps.is_empty() {
@@ -960,6 +967,7 @@ pub(crate) fn render_apps_page(apps: &[crate::runner::config::RegisteredApp]) ->
                     <td class='px-6 py-4 whitespace-nowrap text-sm font-medium'>
                         <a href='/apps/edit/{}' class='text-emerald-600 hover:text-emerald-900 mr-4 inline-flex items-center'>{} Edit</a>
                         <a href='/apps/delete/{}' class='text-red-600 hover:text-red-900 inline-flex items-center'>{} Delete</a>
+                        {}
                     </td>
                 </tr>",
                 escape_html(&app.name),
@@ -970,6 +978,11 @@ pub(crate) fn render_apps_page(apps: &[crate::runner::config::RegisteredApp]) ->
                 icon_edit("w-4 h-4 mr-1"),
                 escape_html(&app.id),
                 icon_trash("w-4 h-4 mr-1"),
+                if is_wxcc_handler_row(app) {
+                    format!("<form method='post' action='/apps/wxcc/login/{}' class='inline-block ml-3'><button type='submit' class='text-blue-600 hover:text-blue-900'>Login</button></form>", urlencoding::encode(&app.id))
+                } else {
+                    String::new()
+                },
             ));
         }
     }
@@ -1184,5 +1197,28 @@ mod run_all_button_tests {
 
         let html = render_task_row(&task, &status);
         assert!(html.contains("Waiting for CRM"));
+    }
+
+    #[test]
+    fn registered_wxcc_handler_displays_login_button_only_for_wxcc() {
+        let wxcc = crate::runner::config::RegisteredApp {
+            id: "wxcc-app".to_string(),
+            name: "Webex Contact Center Handler".to_string(),
+            executable_path: "C:/apps/wxcc_handler.exe".to_string(),
+            config_path: "C:/apps/wxcc_config.json".to_string(),
+            plugin_api_version: Some(1),
+            allow_concurrent_tasks: false,
+        };
+        let other = crate::runner::config::RegisteredApp {
+            id: "other-app".to_string(),
+            name: "Other App".to_string(),
+            executable_path: "C:/apps/other.exe".to_string(),
+            config_path: String::new(),
+            plugin_api_version: None,
+            allow_concurrent_tasks: false,
+        };
+        let html = render_apps_page(&[wxcc, other]);
+        assert!(html.contains("action='/apps/wxcc/login/wxcc-app'"));
+        assert_eq!(html.matches(">Login</button>").count(), 1);
     }
 }
