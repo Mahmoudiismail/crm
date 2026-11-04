@@ -52,7 +52,9 @@ pub async fn login(config_path: &Path, mut config: WxccConfig) -> Result<()> {
     let (port, callback_path) = parse_loopback_redirect_uri(&config.redirect_uri)?;
     let listener = TcpListener::bind(("127.0.0.1", port))
         .await
-        .with_context(|| format!("Could not listen on 127.0.0.1:{port}; the callback port may already be in use"))?;
+        .with_context(|| {
+            format!("Could not listen on 127.0.0.1:{port}; the callback port may already be in use")
+        })?;
 
     let (url, state) = create_authorization_request(config_path, config.clone())?;
     config.pending_oauth_state = Some(state.clone());
@@ -82,16 +84,18 @@ fn parse_loopback_redirect_uri(redirect_uri: &str) -> Result<(u16, String)> {
     let uri = redirect_uri
         .strip_prefix("http://")
         .context("Automatic OAuth login requires an http:// loopback redirect_uri")?;
-    let (authority, path) = uri
-        .split_once('/')
-        .context("redirect_uri must include a callback path, e.g. http://127.0.0.1:8765/callback")?;
+    let (authority, path) = uri.split_once('/').context(
+        "redirect_uri must include a callback path, e.g. http://127.0.0.1:8765/callback",
+    )?;
     let (host, port) = authority
         .rsplit_once(':')
         .context("redirect_uri must include an explicit callback port")?;
     if host != "127.0.0.1" && !host.eq_ignore_ascii_case("localhost") {
         anyhow::bail!("Automatic OAuth login only supports localhost loopback redirect URIs");
     }
-    let port = port.parse::<u16>().context("redirect_uri contains an invalid callback port")?;
+    let port = port
+        .parse::<u16>()
+        .context("redirect_uri contains an invalid callback port")?;
     if port == 0 {
         anyhow::bail!("redirect_uri callback port must be between 1 and 65535");
     }
@@ -129,8 +133,12 @@ async fn wait_for_callback(
         }
     }
 
-    let request = String::from_utf8(request).context("OAuth callback request was not valid UTF-8")?;
-    let request_line = request.lines().next().context("OAuth callback had no HTTP request line")?;
+    let request =
+        String::from_utf8(request).context("OAuth callback request was not valid UTF-8")?;
+    let request_line = request
+        .lines()
+        .next()
+        .context("OAuth callback had no HTTP request line")?;
     let mut parts = request_line.split_whitespace();
     let method = parts.next().unwrap_or_default();
     let target = parts.next().unwrap_or_default();
@@ -146,15 +154,23 @@ async fn wait_for_callback(
 
     let parameters = parse_query_parameters(query)?;
     if let Some(error) = parameters.get("error") {
-        let description = parameters.get("error_description").map(String::as_str)
+        let description = parameters
+            .get("error_description")
+            .map(String::as_str)
             .unwrap_or("No additional details were provided");
         send_callback_response(&mut stream, false).await?;
         anyhow::bail!("Webex authorization failed: {error}: {description}");
     }
-    let code = parameters.get("code").filter(|value| !value.is_empty())
-        .context("Webex callback did not contain an authorization code")?.clone();
-    let state = parameters.get("state").filter(|value| !value.is_empty())
-        .context("Webex callback did not contain OAuth state")?.clone();
+    let code = parameters
+        .get("code")
+        .filter(|value| !value.is_empty())
+        .context("Webex callback did not contain an authorization code")?
+        .clone();
+    let state = parameters
+        .get("state")
+        .filter(|value| !value.is_empty())
+        .context("Webex callback did not contain OAuth state")?
+        .clone();
     Ok((code, state, stream))
 }
 
@@ -163,9 +179,11 @@ fn parse_query_parameters(query: &str) -> Result<HashMap<String, String>> {
     for pair in query.split('&').filter(|pair| !pair.is_empty()) {
         let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
         let key = urlencoding::decode(key)
-            .context("OAuth callback contained an invalid query parameter name")?.into_owned();
+            .context("OAuth callback contained an invalid query parameter name")?
+            .into_owned();
         let value = urlencoding::decode(value)
-            .context("OAuth callback contained an invalid query parameter value")?.into_owned();
+            .context("OAuth callback contained an invalid query parameter value")?
+            .into_owned();
         if parameters.insert(key.clone(), value).is_some() {
             anyhow::bail!("OAuth callback contained a duplicate {key} parameter");
         }
@@ -183,7 +201,10 @@ async fn send_callback_response(stream: &mut TcpStream, success: bool) -> Result
         "HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
         body.len()
     );
-    stream.write_all(response.as_bytes()).await.context("Failed to send the OAuth callback response")
+    stream
+        .write_all(response.as_bytes())
+        .await
+        .context("Failed to send the OAuth callback response")
 }
 
 pub async fn exchange_code(
@@ -196,7 +217,9 @@ pub async fn exchange_code(
     if code.trim().is_empty() {
         anyhow::bail!("Authorization code cannot be empty");
     }
-    let expected = config.pending_oauth_state.as_deref()
+    let expected = config
+        .pending_oauth_state
+        .as_deref()
         .context("No pending OAuth state was saved. Generate a new authorization URL first.")?;
     if expected != state {
         anyhow::bail!("OAuth state mismatch; authorization response was not accepted");
@@ -210,9 +233,15 @@ pub async fn exchange_code(
             ("code", code),
             ("redirect_uri", config.redirect_uri.as_str()),
         ])
-        .send().await.context("Failed to exchange Webex authorization code")?
-        .error_for_status().context("Webex rejected the authorization-code exchange")?;
-    let tokens: TokenResponse = response.json().await.context("Webex returned an invalid token response")?;
+        .send()
+        .await
+        .context("Failed to exchange Webex authorization code")?
+        .error_for_status()
+        .context("Webex rejected the authorization-code exchange")?;
+    let tokens: TokenResponse = response
+        .json()
+        .await
+        .context("Webex returned an invalid token response")?;
     apply_tokens(&mut config, tokens);
     config.pending_oauth_state = None;
     config.save(config_path)
@@ -220,7 +249,10 @@ pub async fn exchange_code(
 
 pub async fn refresh_token(config_path: &Path, mut config: WxccConfig) -> Result<()> {
     config.validate(true)?;
-    let refresh = config.refresh_token.as_deref().filter(|v| !v.is_empty())
+    let refresh = config
+        .refresh_token
+        .as_deref()
+        .filter(|v| !v.is_empty())
         .context("No refresh_token is stored; authorize the integration first")?;
     let response = reqwest::Client::new()
         .post(TOKEN_ENDPOINT)
@@ -230,9 +262,15 @@ pub async fn refresh_token(config_path: &Path, mut config: WxccConfig) -> Result
             ("client_secret", config.client_secret.as_str()),
             ("refresh_token", refresh),
         ])
-        .send().await.context("Failed to refresh the Webex access token")?
-        .error_for_status().context("Webex rejected the refresh-token request")?;
-    let tokens: TokenResponse = response.json().await.context("Webex returned an invalid refresh response")?;
+        .send()
+        .await
+        .context("Failed to refresh the Webex access token")?
+        .error_for_status()
+        .context("Webex rejected the refresh-token request")?;
+    let tokens: TokenResponse = response
+        .json()
+        .await
+        .context("Webex returned an invalid refresh response")?;
     apply_tokens(&mut config, tokens);
     config.save(config_path)
 }
@@ -272,7 +310,10 @@ mod tests {
 
     #[test]
     fn parses_only_loopback_http_redirect_uri_with_explicit_port_and_path() {
-        assert_eq!(parse_loopback_redirect_uri("http://127.0.0.1:8765/callback").unwrap(), (8765, "/callback".to_string()));
+        assert_eq!(
+            parse_loopback_redirect_uri("http://127.0.0.1:8765/callback").unwrap(),
+            (8765, "/callback".to_string())
+        );
         assert_eq!(
             parse_loopback_redirect_uri("http://localhost:8765/callback").unwrap(),
             (8765, "/callback".to_string())
@@ -287,19 +328,25 @@ mod tests {
     fn decodes_callback_query_and_rejects_duplicate_parameters() {
         let parameters = parse_query_parameters("code=abc%2B123&state=state-value").unwrap();
         assert_eq!(parameters.get("code").map(String::as_str), Some("abc+123"));
-        assert_eq!(parameters.get("state").map(String::as_str), Some("state-value"));
+        assert_eq!(
+            parameters.get("state").map(String::as_str),
+            Some("state-value")
+        );
         assert!(parse_query_parameters("code=one&code=two").is_err());
     }
 
     #[test]
     fn token_expiry_and_refresh_rotation_are_saved_in_memory() {
         let mut config = WxccConfig::default();
-        apply_tokens(&mut config, TokenResponse {
-            access_token: "access".into(),
-            refresh_token: Some("refresh".into()),
-            expires_in: 3600,
-            refresh_token_expires_in: Some(86400),
-        });
+        apply_tokens(
+            &mut config,
+            TokenResponse {
+                access_token: "access".into(),
+                refresh_token: Some("refresh".into()),
+                expires_in: 3600,
+                refresh_token_expires_in: Some(86400),
+            },
+        );
         assert_eq!(config.access_token.as_deref(), Some("access"));
         assert_eq!(config.refresh_token.as_deref(), Some("refresh"));
         assert!(config.access_token_expires_at.unwrap() > Utc::now().timestamp());

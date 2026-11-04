@@ -115,9 +115,7 @@ fn get_manifest() -> AppManifest {
     }
 }
 
-fn command_from_runner_action(
-    action: RunnerAction,
-) -> Result<Command> {
+fn command_from_runner_action(action: RunnerAction) -> Result<Command> {
     Ok(match action {
         RunnerAction::ConfigInit => Command::Config {
             command: ConfigCommand::Init,
@@ -138,9 +136,7 @@ async fn main() -> Result<()> {
     }
     let cli = Cli::parse();
     let command = match cli.action {
-        Some(action) if cli.command.is_none() => {
-            command_from_runner_action(action)?
-        }
+        Some(action) if cli.command.is_none() => command_from_runner_action(action)?,
         Some(_) => anyhow::bail!("Use either --action or a CLI subcommand, not both"),
         None => cli
             .command
@@ -228,57 +224,111 @@ mod tests {
     #[test]
     fn runner_manifest_exposes_only_noninteractive_operations() {
         let manifest = get_manifest();
-        let action = manifest.arguments.iter().find(|arg| arg.name == "--action").unwrap();
+        let action = manifest
+            .arguments
+            .iter()
+            .find(|arg| arg.name == "--action")
+            .unwrap();
         assert!(action.required);
-        assert_eq!(action.options.as_ref().unwrap(), &vec!["config-init", "config-check", "data-collect"]);
-        assert!(manifest.arguments.iter().all(|arg| arg.name != "--code" && arg.name != "--state"));
+        assert_eq!(
+            action.options.as_ref().unwrap(),
+            &vec!["config-init", "config-check", "data-collect"]
+        );
+        assert!(manifest
+            .arguments
+            .iter()
+            .all(|arg| arg.name != "--code" && arg.name != "--state"));
         assert!(manifest.validate().is_ok());
     }
 
     #[test]
     fn runner_data_collection_action_maps_to_existing_operation() {
-        let cli = Cli::try_parse_from(["wxcc_handler", "--action", "data-collect", "--output", "out.csv"]).unwrap();
-        assert!(matches!(command_from_runner_action(cli.action.unwrap()).unwrap(), Command::Data { command: DataCommand::Collect }));
+        let cli = Cli::try_parse_from([
+            "wxcc_handler",
+            "--action",
+            "data-collect",
+            "--output",
+            "out.csv",
+        ])
+        .unwrap();
+        assert!(matches!(
+            command_from_runner_action(cli.action.unwrap()).unwrap(),
+            Command::Data {
+                command: DataCommand::Collect
+            }
+        ));
         assert_eq!(cli.output.as_deref(), Some(Path::new("out.csv")));
     }
 
     #[test]
     fn cli_keeps_interactive_login_command() {
         let cli = Cli::try_parse_from(["wxcc_handler", "auth", "login"]).unwrap();
-        assert!(matches!(cli.command, Some(Command::Auth { command: AuthCommand::Login })));
+        assert!(matches!(
+            cli.command,
+            Some(Command::Auth {
+                command: AuthCommand::Login
+            })
+        ));
     }
 
     #[test]
     fn cli_no_longer_exposes_manual_oauth_url_or_code_exchange_commands() {
         assert!(Cli::try_parse_from(["wxcc_handler", "auth", "authorize-url"]).is_err());
-        assert!(Cli::try_parse_from(["wxcc_handler", "auth", "exchange-code", "--code", "c", "--state", "s"]).is_err());
+        assert!(Cli::try_parse_from([
+            "wxcc_handler",
+            "auth",
+            "exchange-code",
+            "--code",
+            "c",
+            "--state",
+            "s"
+        ])
+        .is_err());
     }
 
     #[test]
     fn help_exposes_runner_action_and_cli_subcommands() {
         let help = Cli::command().render_help().to_string();
-        assert!(help.contains("--action") && help.contains("config") && help.contains("auth") && help.contains("data"));
+        assert!(
+            help.contains("--action")
+                && help.contains("config")
+                && help.contains("auth")
+                && help.contains("data")
+        );
     }
 
     #[test]
     fn relative_and_default_config_paths_use_executable_directory() {
         let base = Path::new("C:/apps/wxcc");
-        assert_eq!(resolve_config_path(Some(Path::new("settings.json")), base), base.join("settings.json"));
-        assert_eq!(resolve_config_path(None, base), base.join("wxcc_config.json"));
+        assert_eq!(
+            resolve_config_path(Some(Path::new("settings.json")), base),
+            base.join("settings.json")
+        );
+        assert_eq!(
+            resolve_config_path(None, base),
+            base.join("wxcc_config.json")
+        );
     }
 
     #[test]
     fn output_paths_default_to_executable_directory_and_preserve_absolute_paths() {
         let base = Path::new("C:/apps/wxcc");
         assert_eq!(resolve_output_path(None, base), base.join("wxcc_data.csv"));
-        assert_eq!(resolve_output_path(Some(Path::new("reports/data.csv")), base), base.join("reports/data.csv"));
+        assert_eq!(
+            resolve_output_path(Some(Path::new("reports/data.csv")), base),
+            base.join("reports/data.csv")
+        );
         let absolute = PathBuf::from("C:/exports/data.csv");
         assert_eq!(resolve_output_path(Some(&absolute), base), absolute);
     }
 
     #[test]
     fn absolute_config_path_is_preserved() {
-        let path = if cfg!(windows) { PathBuf::from("C:/data/wxcc.json") } else { PathBuf::from("/data/wxcc.json") };
+        let path = if cfg!(windows) {
+            PathBuf::from("C:/data/wxcc.json")
+        } else {
+            PathBuf::from("/data/wxcc.json")
+        };
         assert_eq!(resolve_config_path(Some(&path), Path::new(".")), path);
     }
 }

@@ -949,7 +949,10 @@ fn is_wxcc_handler_row(app: &crate::runner::config::RegisteredApp) -> bool {
     std::path::Path::new(&app.executable_path)
         .file_name()
         .and_then(std::ffi::OsStr::to_str)
-        .is_some_and(|name| name.eq_ignore_ascii_case("wxcc_handler.exe") || name.eq_ignore_ascii_case("wxcc_handler"))
+        .is_some_and(|name| {
+            name.eq_ignore_ascii_case("wxcc_handler.exe")
+                || name.eq_ignore_ascii_case("wxcc_handler")
+        })
 }
 
 pub(crate) fn render_apps_page(apps: &[crate::runner::config::RegisteredApp]) -> String {
