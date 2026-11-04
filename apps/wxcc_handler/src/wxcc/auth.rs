@@ -95,7 +95,7 @@ fn parse_loopback_redirect_uri(redirect_uri: &str) -> Result<(u16, String)> {
     if port == 0 {
         anyhow::bail!("redirect_uri callback port must be between 1 and 65535");
     }
-    if path.is_empty() || path.contains(['?', '#']) {
+    if path.is_empty() || path.contains('?') || path.contains('#') {
         anyhow::bail!("redirect_uri must contain a plain callback path without query or fragment");
     }
     Ok((port, format!("/{path}")))
