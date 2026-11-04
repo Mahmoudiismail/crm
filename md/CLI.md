@@ -77,17 +77,15 @@ Runner-compatible applications expose a hidden --manifest option. It prints the 
 ```powershell
 wxcc_handler.exe [--config PATH] config init
 wxcc_handler.exe [--config PATH] config check
-wxcc_handler.exe [--config PATH] auth authorize-url
-wxcc_handler.exe [--config PATH] auth exchange-code --code CODE --state STATE
+wxcc_handler.exe [--config PATH] auth login
 wxcc_handler.exe [--config PATH] auth refresh
 wxcc_handler.exe [--config PATH] auth status
+wxcc_handler.exe [--config PATH] data collect [--output PATH]
 ```
 
-- Relative config paths resolve beside the executable.
-- config init creates wxcc_config.json when missing; config check validates settings.
-- auth authorize-url prints the official Webex OAuth URL and persists the generated state.
-- auth exchange-code validates state and exchanges the authorization code.
-- auth refresh refreshes the stored access token; auth status does not expose token values.
-- --manifest is a hidden Runner integration option.
-
-Data Collection, Analyzer, and User Provisioning commands will be documented as their phases are implemented.
+- `config init` creates `wxcc_config.json` when missing; `config check` validates settings.
+- `auth login` opens the default browser, receives the registered localhost callback, validates OAuth state, exchanges the code, and saves tokens.
+- `auth refresh` refreshes the stored access token; `auth status` reports authorization state without exposing token values.
+- `data collect` collects Webex Contact Center configuration data and exports CSV.
+- Manual `auth authorize-url` and `auth exchange-code` commands are not exposed.
+- Runner provides a dedicated Login button for a registered `wxcc_handler.exe`; scheduled Runner tasks continue to use the manifest's non-interactive `data-collect` action.
