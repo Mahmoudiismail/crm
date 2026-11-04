@@ -88,8 +88,8 @@ fn parse_loopback_redirect_uri(redirect_uri: &str) -> Result<(u16, String)> {
     let (host, port) = authority
         .rsplit_once(':')
         .context("redirect_uri must include an explicit callback port")?;
-    if host != "127.0.0.1" {
-        anyhow::bail!("Automatic OAuth login only listens on 127.0.0.1; set redirect_uri to http://127.0.0.1:<port>/<path>");
+    if host != "127.0.0.1" && !host.eq_ignore_ascii_case("localhost") {
+        anyhow::bail!("Automatic OAuth login only supports localhost loopback redirect URIs");
     }
     let port = port.parse::<u16>().context("redirect_uri contains an invalid callback port")?;
     if port == 0 {
@@ -273,6 +273,10 @@ mod tests {
     #[test]
     fn parses_only_loopback_http_redirect_uri_with_explicit_port_and_path() {
         assert_eq!(parse_loopback_redirect_uri("http://127.0.0.1:8765/callback").unwrap(), (8765, "/callback".to_string()));
+        assert_eq!(
+            parse_loopback_redirect_uri("http://localhost:8765/callback").unwrap(),
+            (8765, "/callback".to_string())
+        );
         assert!(parse_loopback_redirect_uri("https://127.0.0.1:8765/callback").is_err());
         assert!(parse_loopback_redirect_uri("http://0.0.0.0:8765/callback").is_err());
         assert!(parse_loopback_redirect_uri("http://127.0.0.1/callback").is_err());
