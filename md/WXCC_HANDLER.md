@@ -26,7 +26,8 @@ Set these values in wxcc_config.json:
 
 - client_id: Webex Integration client ID.
 - client_secret: Webex Integration client secret.
-- redirect_uri: Exact URI registered for the Integration.
+- redirect_uri: Exact URI registered for the Integration. The handler derives the callback scheme, port, host, and path from this value; only `localhost` and `127.0.0.1` are accepted.
+- callback_tls_cert_path and callback_tls_key_path: PEM certificate chain and private key paths, required together only when `redirect_uri` uses `https://`. Relative paths resolve from the configuration file directory. The certificate must be trusted by the browser and valid for the configured loopback hostname.
 - scopes: Array of approved Webex Contact Center OAuth scopes required by enabled operations. Data Collection requires `cjp:config_read`.
 - org_id: Webex Contact Center organization ID.
 - api_base_url: Regional Webex Contact Center API base URL (for example, `https://api.wxcc-us1.cisco.com` for US1; use the base URL for your tenant's actual region).
@@ -56,13 +57,13 @@ The registered application's `config_path` is passed to the Login action when co
 
 ## OAuth login
 
-Set `redirect_uri` in `wxcc_config.json` to the exact localhost callback URI registered in the Webex Integration, for example:
+Set `redirect_uri` in `wxcc_config.json` to the exact localhost callback URI registered in the Webex Integration. The handler selects HTTP or HTTPS and binds the configured port automatically. For HTTPS, also configure `callback_tls_cert_path` and `callback_tls_key_path` to a browser-trusted PEM certificate and matching private key. For example:
 
 ```text
 http://127.0.0.1:8765/callback
 ```
 
-The handler listens only on the loopback interface and waits up to three minutes for the callback. The callback path and OAuth `state` are validated before the authorization code is exchanged. The browser shows a completion page after tokens are saved.
+The handler listens only on the loopback interface and waits up to three minutes for the callback. HTTPS callbacks use the configured TLS certificate and private key; the browser must trust the certificate. The callback path and OAuth `state` are validated before the authorization code is exchanged. The browser shows a completion page after tokens are saved.
 
 CLI login is also available:
 
