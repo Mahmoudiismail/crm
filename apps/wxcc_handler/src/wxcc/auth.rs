@@ -6,7 +6,7 @@ use serde::Deserialize;
 use std::{collections::HashMap, fs::File, io::BufReader, path::{Path, PathBuf}, sync::Arc, time::Duration};
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
-    net::{TcpListener, TcpStream},
+    net::TcpListener,
     time::timeout,
 };
 use tokio_rustls::{rustls, TlsAcceptor};
@@ -104,7 +104,8 @@ fn parse_loopback_redirect_uri(value: &str) -> Result<LoopbackRedirect> {
     if !authority.rsplit_once(':').is_some_and(|(_, p)| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit())) {
         anyhow::bail!("redirect_uri must include an explicit callback port");
     }
-    let port = uri.port().context("redirect_uri must include an explicit non-default callback port")?;
+    let (_, port_text) = authority.rsplit_once(':').context("redirect_uri must include an explicit callback port")?;
+    let port = port_text.parse::<u16>().context("redirect_uri contains an invalid callback port")?;
     if port == 0 { anyhow::bail!("redirect_uri callback port must be between 1 and 65535"); }
     if uri.query().is_some() || uri.fragment().is_some() || !uri.username().is_empty() || uri.password().is_some() {
         anyhow::bail!("redirect_uri must not contain credentials, query parameters, or a fragment");
