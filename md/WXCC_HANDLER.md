@@ -38,38 +38,39 @@ V1 stores client secret and tokens in plain local JSON by explicit project decis
 
 ## Runner integration
 
-WXCC Handler supports both its interactive CLI subcommands and Runner's manifest-driven flag interface. Runner must select an operation with `--action`; the manifest exposes these values:
+WXCC Handler is registered in Runner as a normal process application. The Runner Apps page detects `wxcc_handler.exe` and exposes a dedicated **Login** button. This is an interactive app-management action, not a scheduled task action: Runner starts `wxcc_handler.exe auth login`, the handler opens the default browser, receives the localhost OAuth callback, validates OAuth state, exchanges the authorization code, and saves tokens locally.
 
-- `config-init`, `config-check`
-- `auth-authorize-url`, `auth-exchange-code`, `auth-refresh`, `auth-status`
+Reports and data exports remain ordinary Runner tasks. The process manifest exposes only non-interactive actions:
+
+- `config-init`
+- `config-check`
 - `data-collect`
 
-Examples of the equivalent Runner invocations:
+Example Runner task arguments:
 
 ```powershell
-wxcc_handler.exe --action config-init
-wxcc_handler.exe --action auth-authorize-url
-wxcc_handler.exe --action auth-exchange-code --code CODE --state STATE
 wxcc_handler.exe --action data-collect --output C:\Exports\wxcc_data.csv
 ```
 
-The `--code` and `--state` fields are available only for `auth-exchange-code`; `--output` is available only for `data-collect`. Runner supplies the selected action as a normal named argument, so it does not need to construct positional subcommands. Existing subcommand syntax remains supported for manual use.
+The registered application's `config_path` is passed to the Login action when configured. Otherwise, WXCC Handler uses `wxcc_config.json` beside its executable.
 
-## OAuth commands
+## OAuth login
 
-1. Run wxcc_handler.exe auth authorize-url.
-2. Open the printed URL, sign in to Webex, and approve the configured scopes.
-3. After redirect, copy the code and state query values.
-4. Run wxcc_handler.exe auth exchange-code --code CODE --state STATE.
-5. Check auth status; refresh with wxcc_handler.exe auth refresh.
+Set `redirect_uri` in `wxcc_config.json` to the exact localhost callback URI registered in the Webex Integration, for example:
 
-The flow uses the official Webex OAuth authorization-code and token endpoints. A locally generated random state is validated before exchanging the authorization code. Tokens are never printed.
+```text
+http://127.0.0.1:8765/callback
+```
 
-## Planned capabilities
+The handler listens only on the loopback interface and waits up to three minutes for the callback. The callback path and OAuth `state` are validated before the authorization code is exchanged. The browser shows a completion page after tokens are saved.
 
-## API version policy
+CLI login is also available:
 
-All Webex Contact Center configuration requests made by WXCC Handler must use the documented `v2` resource endpoints. The HTTP client rejects any Contact Center request path that does not begin with `v2/`, preventing accidental use of legacy unversioned or v1 resource paths. The OAuth authorization and token exchange endpoints remain `https://webexapis.com/v1/...` because they belong to the separate Webex Platform OAuth API; they are not Contact Center configuration requests.
+```powershell
+wxcc_handler.exe auth login
+```
+
+Manual `auth authorize-url` and `auth exchange-code` commands are intentionally not exposed. Use the interactive login flow instead. Token refresh and status remain available through `auth refresh` and `auth status`.
 
 ## Data Collection
 
