@@ -3,12 +3,14 @@ use anyhow::{Context, Result};
 use chrono::Utc;
 use rand::distr::{Alphanumeric, SampleString};
 use serde::Deserialize;
-use std::{collections::HashMap, path::Path, time::Duration};
+use std::{collections::HashMap, fs::File, io::BufReader, path::{Path, PathBuf}, sync::Arc, time::Duration};
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
+    io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     net::{TcpListener, TcpStream},
     time::timeout,
 };
+use tokio_rustls::{rustls, TlsAcceptor};
+use url::Url;
 
 const AUTHORIZE_ENDPOINT: &str = "https://webexapis.com/v1/authorize";
 const TOKEN_ENDPOINT: &str = "https://webexapis.com/v1/access_token";
@@ -49,19 +51,27 @@ pub fn create_authorization_request(
 
 pub async fn login(config_path: &Path, mut config: WxccConfig) -> Result<()> {
     config.validate(true)?;
-    let (port, callback_path) = parse_loopback_redirect_uri(&config.redirect_uri)?;
-    let listener = TcpListener::bind(("127.0.0.1", port))
-        .await
-        .with_context(|| {
-            format!("Could not listen on 127.0.0.1:{port}; the callback port may already be in use")
-        })?;
+    let callback = parse_loopback_redirect_uri(&config.redirect_uri)?;
+    let listener = TcpListener::bind(("127.0.0.1", callback.port)).await
+        .with_context(|| format!("Could not listen on 127.0.0.1:{}; the callback port may already be in use", callback.port))?;
+    let tls_acceptor = if callback.https { Some(create_tls_acceptor(&config, config_path)?) } else { None };
 
     let (url, state) = create_authorization_request(config_path, config.clone())?;
     config.pending_oauth_state = Some(state.clone());
     webbrowser::open(&url).context("Failed to open the default browser")?;
 
     println!("Waiting for Webex authorization in your browser...");
-    let (code, returned_state, mut stream) = wait_for_callback(listener, &callback_path).await?;
+    let (code, returned_state, mut stream) = if let Some(acceptor) = tls_acceptor {
+        let (tcp, _) = timeout(CALLBACK_TIMEOUT, listener.accept()).await
+            .context("Timed out waiting for the Webex OAuth callback")?.context("Failed to accept the Webex OAuth callback")?;
+        let tls = timeout(Duration::from_secs(10), acceptor.accept(tcp)).await
+            .context("Timed out establishing the HTTPS callback connection")?.context("Failed to establish the HTTPS callback connection")?;
+        read_callback(tls, &callback.path).await?
+    } else {
+        let (tcp, _) = timeout(CALLBACK_TIMEOUT, listener.accept()).await
+            .context("Timed out waiting for the Webex OAuth callback")?.context("Failed to accept the Webex OAuth callback")?;
+        read_callback(tcp, &callback.path).await?
+    };
     if returned_state != state {
         send_callback_response(&mut stream, false).await?;
         anyhow::bail!("OAuth state mismatch; authorization response was not accepted");
@@ -80,97 +90,86 @@ pub async fn login(config_path: &Path, mut config: WxccConfig) -> Result<()> {
     }
 }
 
-fn parse_loopback_redirect_uri(redirect_uri: &str) -> Result<(u16, String)> {
-    let uri = redirect_uri
-        .strip_prefix("http://")
-        .context("Automatic OAuth login requires an http:// loopback redirect_uri")?;
-    let (authority, path) = uri.split_once('/').context(
-        "redirect_uri must include a callback path, e.g. http://127.0.0.1:8765/callback",
-    )?;
-    let (host, port) = authority
-        .rsplit_once(':')
-        .context("redirect_uri must include an explicit callback port")?;
+#[derive(Debug, PartialEq, Eq)]
+struct LoopbackRedirect { https: bool, port: u16, path: String }
+
+fn parse_loopback_redirect_uri(value: &str) -> Result<LoopbackRedirect> {
+    let uri = Url::parse(value).context("redirect_uri must be a valid absolute URL")?;
+    let https = match uri.scheme() { "http" => false, "https" => true, _ => anyhow::bail!("redirect_uri scheme must be http or https") };
+    let host = uri.host_str().context("redirect_uri must contain a host")?;
     if host != "127.0.0.1" && !host.eq_ignore_ascii_case("localhost") {
         anyhow::bail!("Automatic OAuth login only supports localhost loopback redirect URIs");
     }
-    let port = port
-        .parse::<u16>()
-        .context("redirect_uri contains an invalid callback port")?;
-    if port == 0 {
-        anyhow::bail!("redirect_uri callback port must be between 1 and 65535");
+    let authority = value.split_once("://").map(|(_, rest)| rest.split('/').next().unwrap_or_default()).unwrap_or_default();
+    if !authority.rsplit_once(':').is_some_and(|(_, p)| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit())) {
+        anyhow::bail!("redirect_uri must include an explicit callback port");
     }
-    if path.is_empty() || path.contains('?') || path.contains('#') {
-        anyhow::bail!("redirect_uri must contain a plain callback path without query or fragment");
+    let port = uri.port().context("redirect_uri must include an explicit non-default callback port")?;
+    if port == 0 { anyhow::bail!("redirect_uri callback port must be between 1 and 65535"); }
+    if uri.query().is_some() || uri.fragment().is_some() || !uri.username().is_empty() || uri.password().is_some() {
+        anyhow::bail!("redirect_uri must not contain credentials, query parameters, or a fragment");
     }
-    Ok((port, format!("/{path}")))
+    let path = uri.path();
+    if path == "/" || path.is_empty() { anyhow::bail!("redirect_uri must contain a callback path"); }
+    Ok(LoopbackRedirect { https, port, path: path.to_string() })
 }
 
-async fn wait_for_callback(
-    listener: TcpListener,
-    expected_path: &str,
-) -> Result<(String, String, TcpStream)> {
-    let (mut stream, _) = timeout(CALLBACK_TIMEOUT, listener.accept())
-        .await
-        .context("Timed out waiting for the Webex OAuth callback")?
-        .context("Failed to accept the Webex OAuth callback")?;
+fn create_tls_acceptor(config: &WxccConfig, config_path: &Path) -> Result<TlsAcceptor> {
+    let cert = config.callback_tls_cert_path.as_deref().filter(|v| !v.trim().is_empty())
+        .context("HTTPS redirect_uri requires callback_tls_cert_path in wxcc_config.json")?;
+    let key = config.callback_tls_key_path.as_deref().filter(|v| !v.trim().is_empty())
+        .context("HTTPS redirect_uri requires callback_tls_key_path in wxcc_config.json")?;
+    let resolve = |v: &str| {
+        let p = PathBuf::from(v);
+        if p.is_absolute() { p } else { config_path.parent().unwrap_or_else(|| Path::new(".")).join(p) }
+    };
+    let cert_path = resolve(cert);
+    let key_path = resolve(key);
+    let mut cert_reader = BufReader::new(File::open(&cert_path).with_context(|| format!("Failed to open callback TLS certificate: {cert_path:?}"))?);
+    let certs = rustls_pemfile::certs(&mut cert_reader).collect::<std::result::Result<Vec<_>, _>>()
+        .context("Failed to parse callback TLS certificate PEM")?;
+    if certs.is_empty() { anyhow::bail!("callback_tls_cert_path does not contain a PEM certificate"); }
+    let mut key_reader = BufReader::new(File::open(&key_path).with_context(|| format!("Failed to open callback TLS private key: {key_path:?}"))?);
+    let key = rustls_pemfile::private_key(&mut key_reader).context("Failed to parse callback TLS private key PEM")?
+        .context("callback_tls_key_path does not contain a supported PEM private key")?;
+    let server = rustls::ServerConfig::builder().with_no_client_auth().with_single_cert(certs, key)
+        .context("Callback TLS certificate and private key do not match or are invalid")?;
+    Ok(TlsAcceptor::from(Arc::new(server)))
+}
 
+async fn read_callback<S>(mut stream: S, expected_path: &str) -> Result<(String, String, S)>
+where S: AsyncRead + AsyncWrite + Unpin {
     let mut request = Vec::with_capacity(1024);
     let mut chunk = [0_u8; 1024];
     loop {
-        let read = timeout(Duration::from_secs(10), stream.read(&mut chunk))
-            .await
-            .context("Timed out reading the OAuth callback request")?
-            .context("Failed to read the OAuth callback request")?;
-        if read == 0 {
-            anyhow::bail!("Webex closed the OAuth callback connection unexpectedly");
-        }
+        let read = timeout(Duration::from_secs(10), stream.read(&mut chunk)).await
+            .context("Timed out reading the OAuth callback request")?.context("Failed to read the OAuth callback request")?;
+        if read == 0 { anyhow::bail!("Webex closed the OAuth callback connection unexpectedly"); }
         request.extend_from_slice(&chunk[..read]);
-        if request.len() > CALLBACK_REQUEST_LIMIT {
-            anyhow::bail!("OAuth callback request exceeded the allowed size");
-        }
-        if request.windows(4).any(|window| window == b"\r\n\r\n") {
-            break;
-        }
+        if request.len() > CALLBACK_REQUEST_LIMIT { anyhow::bail!("OAuth callback request exceeded the allowed size"); }
+        if request.windows(4).any(|w| w == b"\r\n\r\n") { break; }
     }
-
-    let request =
-        String::from_utf8(request).context("OAuth callback request was not valid UTF-8")?;
-    let request_line = request
-        .lines()
-        .next()
-        .context("OAuth callback had no HTTP request line")?;
-    let mut parts = request_line.split_whitespace();
-    let method = parts.next().unwrap_or_default();
-    let target = parts.next().unwrap_or_default();
-    if method != "GET" {
+    let request = String::from_utf8(request).context("OAuth callback request was not valid UTF-8")?;
+    let line = request.lines().next().context("OAuth callback had no HTTP request line")?;
+    let mut parts = line.split_whitespace();
+    if parts.next().unwrap_or_default() != "GET" {
         send_callback_response(&mut stream, false).await?;
         anyhow::bail!("OAuth callback must use HTTP GET");
     }
+    let target = parts.next().unwrap_or_default();
     let (path, query) = target.split_once('?').unwrap_or((target, ""));
     if path != expected_path {
         send_callback_response(&mut stream, false).await?;
         anyhow::bail!("OAuth callback path did not match the configured redirect_uri");
     }
-
-    let parameters = parse_query_parameters(query)?;
-    if let Some(error) = parameters.get("error") {
-        let description = parameters
-            .get("error_description")
-            .map(String::as_str)
-            .unwrap_or("No additional details were provided");
+    let params = parse_query_parameters(query)?;
+    if let Some(error) = params.get("error") {
+        let description = params.get("error_description").map(String::as_str).unwrap_or("No additional details were provided");
         send_callback_response(&mut stream, false).await?;
         anyhow::bail!("Webex authorization failed: {error}: {description}");
     }
-    let code = parameters
-        .get("code")
-        .filter(|value| !value.is_empty())
-        .context("Webex callback did not contain an authorization code")?
-        .clone();
-    let state = parameters
-        .get("state")
-        .filter(|value| !value.is_empty())
-        .context("Webex callback did not contain OAuth state")?
-        .clone();
+    let code = params.get("code").filter(|v| !v.is_empty()).context("Webex callback did not contain an authorization code")?.clone();
+    let state = params.get("state").filter(|v| !v.is_empty()).context("Webex callback did not contain OAuth state")?.clone();
     Ok((code, state, stream))
 }
 
@@ -191,7 +190,8 @@ fn parse_query_parameters(query: &str) -> Result<HashMap<String, String>> {
     Ok(parameters)
 }
 
-async fn send_callback_response(stream: &mut TcpStream, success: bool) -> Result<()> {
+async fn send_callback_response<S>(stream: &mut S, success: bool) -> Result<()>
+where S: AsyncWrite + Unpin {
     let (status, body) = if success {
         ("200 OK", "<!doctype html><html><body><h2>Webex authorization completed</h2><p>You can close this browser tab and return to WXCC Handler.</p></body></html>")
     } else {
@@ -309,19 +309,15 @@ mod tests {
     }
 
     #[test]
-    fn parses_only_loopback_http_redirect_uri_with_explicit_port_and_path() {
-        assert_eq!(
-            parse_loopback_redirect_uri("http://127.0.0.1:8765/callback").unwrap(),
-            (8765, "/callback".to_string())
-        );
-        assert_eq!(
-            parse_loopback_redirect_uri("http://localhost:8765/callback").unwrap(),
-            (8765, "/callback".to_string())
-        );
-        assert!(parse_loopback_redirect_uri("https://127.0.0.1:8765/callback").is_err());
+    fn parses_http_and_https_loopback_redirect_uris_from_config() {
+        assert_eq!(parse_loopback_redirect_uri("http://127.0.0.1:8765/callback").unwrap(),
+            LoopbackRedirect { https: false, port: 8765, path: "/callback".into() });
+        assert_eq!(parse_loopback_redirect_uri("https://localhost:9443/oauth/callback").unwrap(),
+            LoopbackRedirect { https: true, port: 9443, path: "/oauth/callback".into() });
         assert!(parse_loopback_redirect_uri("http://0.0.0.0:8765/callback").is_err());
         assert!(parse_loopback_redirect_uri("http://127.0.0.1/callback").is_err());
         assert!(parse_loopback_redirect_uri("http://127.0.0.1:8765/callback?x=1").is_err());
+        assert!(parse_loopback_redirect_uri("ftp://127.0.0.1:8765/callback").is_err());
     }
 
     #[test]
