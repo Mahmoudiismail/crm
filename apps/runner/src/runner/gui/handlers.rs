@@ -513,6 +513,53 @@ pub(crate) async fn handle_apps_page(handle: &RunnerHandle) -> Result<(u16, &'st
     ))
 }
 
+fn is_wxcc_handler_app(app: &RegisteredApp) -> bool {
+    std::path::Path::new(&app.executable_path)
+        .file_name()
+        .and_then(std::ffi::OsStr::to_str)
+        .is_some_and(|name| name.eq_ignore_ascii_case("wxcc_handler.exe") || name.eq_ignore_ascii_case("wxcc_handler"))
+}
+
+pub(crate) async fn handle_wxcc_login(
+    handle: &RunnerHandle,
+    app_id: &str,
+) -> Result<(u16, &'static str, String)> {
+    let app_id = urlencoding::decode(app_id).map(|value| value.into_owned()).unwrap_or_else(|_| app_id.to_string());
+    let cfg = load_runner_config(handle).await?;
+    let Some(app) = cfg.registered_apps.iter().find(|app| app.id == app_id) else {
+        return Ok((404, "text/html; charset=utf-8", render_error_page("App not found", &app_id)));
+    };
+    if !is_wxcc_handler_app(app) {
+        return Ok((400, "text/html; charset=utf-8", render_error_page("Unsupported app action", "Login is only available for WXCC Handler.")));
+    }
+
+    let executable = crate::runner::engine::validation::resolve_executable(&app.executable_path);
+    let mut command = tokio::process::Command::new(&executable);
+    if !app.config_path.trim().is_empty() {
+        command.arg("--config").arg(&app.config_path);
+    }
+    command.args(["auth", "login"])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+
+    let mut child = match command.spawn() {
+        Ok(child) => child,
+        Err(error) => return Ok((500, "text/html; charset=utf-8", render_error_page("WXCC login failed", &format!("Could not start WXCC Handler: {error}")))),
+    };
+    child.kill_on_drop(true);
+    match tokio::time::timeout(std::time::Duration::from_secs(210), child.wait_with_output()).await {
+        Ok(Ok(output)) if output.status.success() => Ok((200, "text/html; charset=utf-8", render_redirect_to_dashboard("WXCC authorization completed"))),
+        Ok(Ok(output)) => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let details = if stderr.trim().is_empty() { stdout.trim() } else { stderr.trim() };
+            Ok((500, "text/html; charset=utf-8", render_error_page("WXCC login failed", details)))
+        }
+        Ok(Err(error)) => Ok((500, "text/html; charset=utf-8", render_error_page("WXCC login failed", &format!("Failed while waiting for WXCC Handler: {error}")))),
+        Err(_) => Ok((504, "text/html; charset=utf-8", render_error_page("WXCC login timed out", "No OAuth callback was received within 210 seconds. Check the configured Webex redirect URI and try again."))),
+    }
+}
+
 pub(crate) async fn handle_app_edit_page(
     handle: &RunnerHandle,
     app_id: &str,
