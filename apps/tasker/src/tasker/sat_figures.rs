@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
-use tracing::info;
+use tracing::{info, warn};
 
 fn resolve(path: &str) -> PathBuf {
     crate::tasker::csv_task::resolve_relative_to_exe_dir(path)
