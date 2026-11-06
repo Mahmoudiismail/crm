@@ -180,7 +180,7 @@ pub struct OpdAnalysisConfig {
     pub check_current_year: bool,
 }
 
-/// Creates the Sat Figures summary from the newest OPD workbook and emails it.
+/// Creates a multi-day Sat Figures report from recently downloaded OPD workbooks and emails it.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct SatFiguresConfig {
     #[serde(default)]
