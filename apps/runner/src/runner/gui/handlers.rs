@@ -879,6 +879,7 @@ pub(crate) async fn handle_api_task_preview(
         .map(|s| s.trim().to_lowercase())
         .unwrap_or_default();
     let period_mode = match period_mode_str.as_str() {
+        "daily" => PeriodMode::Daily,
         "monthly" => PeriodMode::Monthly,
         "quarterly" => PeriodMode::Quarterly,
         "a_month" => PeriodMode::AMonth,
