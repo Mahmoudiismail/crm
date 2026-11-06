@@ -1,7 +1,7 @@
 use crate::tasker::config::{OpdAnalysisConfig, SatFiguresConfig};
 use anyhow::{Context, Result};
-use csv::WriterBuilder;
 use chrono::NaiveDate;
+use csv::WriterBuilder;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -103,7 +103,10 @@ fn recent_source_reports(
         let date = match report_date_from_filename(&path) {
             Ok(date) => date,
             Err(error) => {
-                warn!("Skipping Sat Figures workbook with an unrecognized date: {:#}", error);
+                warn!(
+                    "Skipping Sat Figures workbook with an unrecognized date: {:#}",
+                    error
+                );
                 continue;
             }
         };
@@ -165,7 +168,12 @@ pub fn run(
     let mut rows = Vec::with_capacity(reports.len());
     for (date, path) in reports {
         let totals = crate::tasker::opd_task::data_extraction::extract_slot_totals(&path, &filters)
-            .with_context(|| format!("Failed to calculate Sat Figures for {} from {:?}", date, path))?;
+            .with_context(|| {
+                format!(
+                    "Failed to calculate Sat Figures for {} from {:?}",
+                    date, path
+                )
+            })?;
         let vacant_slots = calculate_vacant_slots(totals.total_slots, totals.slots_booked)?;
         let percentage = totals.slots_booked as f64 / totals.total_slots as f64;
         rows.push((date, totals, vacant_slots, percentage));
@@ -241,7 +249,10 @@ pub fn run(
     let _ = fs::remove_file(&image_path);
     send_result?;
 
-    info!("Sat Figures completed successfully for {} report date(s).", rows.len());
+    info!(
+        "Sat Figures completed successfully for {} report date(s).",
+        rows.len()
+    );
     Ok(())
 }
 
