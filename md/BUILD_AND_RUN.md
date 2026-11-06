@@ -33,7 +33,7 @@ Each command writes the selected executable to `target/release/`; shared depende
 
 ### Enabling first-party plugin compatibility checks
 
-CRM, Tasker, and Yasweb advertise process-plugin API version `1`. To make Runner enforce the version for a registered worker, add `"plugin_api_version": 1` to that worker's entry in `runner_config.json`. If the field is omitted, Runner treats the entry as a legacy external application and skips the extra `--manifest` probe.
+CRM, Tasker, and Yasweb advertise process-plugin API version `1`. When an application is registered or updated through the Runner GUI, Runner probes its `--manifest` and automatically stores the advertised version in `runner_config.json`. Legacy executables that do not return a versioned manifest remain registered as legacy applications. For manually maintained configurations, `plugin_api_version` may still be set explicitly.
 
 ## Running
 
