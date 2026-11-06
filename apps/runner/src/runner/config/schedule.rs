@@ -846,7 +846,9 @@ pub fn resolve_and_generate_execution_periods(
         if ed_str.trim().eq_ignore_ascii_case("next week") {
             raw_start_date
                 .checked_add_signed(chrono::TimeDelta::days(6))
-                .ok_or_else(|| anyhow::anyhow!("End date expression '{}' is out of range", ed_str))?
+                .ok_or_else(|| {
+                    anyhow::anyhow!("End date expression '{}' is out of range", ed_str)
+                })?
         } else {
             crate::utils::parse_flexible_date_with_base(ed_str, Some(&raw_start_fmt))
                 .ok_or_else(|| anyhow::anyhow!("Invalid end date expression '{}'", ed_str))?
