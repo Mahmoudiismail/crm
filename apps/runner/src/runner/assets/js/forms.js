@@ -627,6 +627,7 @@
                                   <label class="block text-xs font-medium text-gray-700 mb-1">Period Mode</label>
                                   <select class="app-period-mode block w-full rounded border border-gray-300 px-2 py-1 text-sm bg-white">
                                       <option value="custom" ${periodMode === 'custom' ? 'selected' : ''}>Normal / Custom</option>
+                                      <option value="daily" ${periodMode === 'daily' ? 'selected' : ''}>Daily</option>
                                       <option value="monthly" ${periodMode === 'monthly' ? 'selected' : ''}>Monthly</option>
                                       <option value="quarterly" ${periodMode === 'quarterly' ? 'selected' : ''}>Quarterly</option>
                                       <option value="a_month" ${periodMode === 'a_month' ? 'selected' : ''}>A Month</option>
