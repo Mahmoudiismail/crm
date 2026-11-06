@@ -681,6 +681,7 @@
                                       <option value="beginning_of_month" ${endDate === 'beginning_of_month' ? 'selected' : ''}>Beginning of Month</option>
                                       <option value="beginning_of_prev_month" ${endDate === 'beginning_of_prev_month' ? 'selected' : ''}>Beginning of Previous Month</option>
                                       <option value="eomonth" ${endDate === 'eomonth' || !endDate ? 'selected' : ''}>End of Month</option>
+                                      <option value="next week" ${endDate === 'next week' ? 'selected' : ''}>Next Week (7 days from Start Date)</option>
                                       <optgroup label="Next Weekday">
                                           <option value="next mon" ${endDate === 'next mon' ? 'selected' : ''}>Next Monday</option>
                                           <option value="next tue" ${endDate === 'next tue' ? 'selected' : ''}>Next Tuesday</option>
