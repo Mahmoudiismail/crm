@@ -16,6 +16,41 @@ async fn load_runner_config(handle: &RunnerHandle) -> Result<RunnerConfig> {
     crate::runner::engine::dispatcher::helpers::load_config(&handle.runner_config_path).await
 }
 
+const APP_MANIFEST_PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+fn manifest_plugin_api_version(manifest: &serde_json::Value) -> Option<u32> {
+    manifest
+        .get("plugin_api_version")
+        .and_then(serde_json::Value::as_u64)
+        .and_then(|version| u32::try_from(version).ok())
+}
+
+async fn detect_plugin_api_version(executable_path: &str) -> Option<u32> {
+    if executable_path.trim().is_empty() {
+        return None;
+    }
+
+    let executable = crate::runner::engine::validation::resolve_executable(executable_path);
+    let mut command = tokio::process::Command::new(executable);
+    command
+        .arg("--manifest")
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .kill_on_drop(true);
+
+    let output = tokio::time::timeout(APP_MANIFEST_PROBE_TIMEOUT, command.output())
+        .await
+        .ok()?
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let manifest = serde_json::from_slice::<serde_json::Value>(&output.stdout).ok()?;
+    manifest_plugin_api_version(&manifest)
+}
+
 fn task_config_matches_readback(expected: &RunnerTask, saved: &RunnerTask) -> bool {
     fn comparable_task(task: &RunnerTask) -> Option<serde_json::Value> {
         let mut value = serde_json::to_value(task).ok()?;
@@ -642,6 +677,12 @@ pub(crate) async fn handle_apps_create(
     handle: &RunnerHandle,
     values: &HashMap<String, String>,
 ) -> Result<(u16, &'static str, String)> {
+    let executable_path = values
+        .get("executable_path")
+        .map(|s| s.trim().to_string())
+        .unwrap_or_default();
+    let plugin_api_version = detect_plugin_api_version(&executable_path).await;
+
     let app = crate::runner::config::RegisteredApp {
         id: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -652,15 +693,12 @@ pub(crate) async fn handle_apps_create(
             .get("name")
             .map(|s| s.trim().to_string())
             .unwrap_or_else(|| "New App".to_string()),
-        executable_path: values
-            .get("executable_path")
-            .map(|s| s.trim().to_string())
-            .unwrap_or_default(),
+        executable_path,
         config_path: values
             .get("config_path")
             .map(|s| s.trim().to_string())
             .unwrap_or_default(),
-        plugin_api_version: None,
+        plugin_api_version,
 
         allow_concurrent_tasks: crate::runner::gui::forms::parse_checkbox(
             values,
@@ -703,6 +741,21 @@ pub(crate) async fn handle_apps_update(
     let decoded_app_id = urlencoding::decode(app_id)
         .map(|c| c.into_owned())
         .unwrap_or_else(|_| app_id.to_string());
+    let cfg = load_runner_config(handle).await?;
+    let existing = cfg
+        .registered_apps
+        .iter()
+        .find(|registered| registered.id == decoded_app_id);
+    let executable_path = values
+        .get("executable_path")
+        .map(|s| s.trim().to_string())
+        .unwrap_or_default();
+    let detected_version = detect_plugin_api_version(&executable_path).await;
+    let plugin_api_version = detected_version.or_else(|| {
+        existing
+            .filter(|registered| registered.executable_path == executable_path)
+            .and_then(|registered| registered.plugin_api_version)
+    });
 
     let app = crate::runner::config::RegisteredApp {
         id: decoded_app_id.clone(),
@@ -710,15 +763,12 @@ pub(crate) async fn handle_apps_update(
             .get("name")
             .map(|s| s.trim().to_string())
             .unwrap_or_default(),
-        executable_path: values
-            .get("executable_path")
-            .map(|s| s.trim().to_string())
-            .unwrap_or_default(),
+        executable_path,
         config_path: values
             .get("config_path")
             .map(|s| s.trim().to_string())
             .unwrap_or_default(),
-        plugin_api_version: None,
+        plugin_api_version,
 
         allow_concurrent_tasks: crate::runner::gui::forms::parse_checkbox(
             values,
@@ -998,5 +1048,42 @@ pub(crate) async fn handle_api_apps_manifest(
             "application/json",
             "{\"error\": \"App not found\"}".to_string(),
         ))
+    }
+}
+
+
+#[cfg(test)]
+mod manifest_registration_tests {
+    use super::manifest_plugin_api_version;
+
+    #[test]
+    fn detects_versioned_process_plugin_manifests() {
+        assert_eq!(
+            manifest_plugin_api_version(&serde_json::json!({
+                "name": "Example",
+                "plugin_api_version": 1,
+                "arguments": []
+            })),
+            Some(1)
+        );
+    }
+
+    #[test]
+    fn leaves_legacy_or_invalid_manifests_unversioned() {
+        assert_eq!(
+            manifest_plugin_api_version(&serde_json::json!({
+                "name": "Legacy",
+                "arguments": []
+            })),
+            None
+        );
+        assert_eq!(
+            manifest_plugin_api_version(&serde_json::json!({
+                "name": "Invalid",
+                "plugin_api_version": "1",
+                "arguments": []
+            })),
+            None
+        );
     }
 }
