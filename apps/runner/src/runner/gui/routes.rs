@@ -31,7 +31,8 @@ pub async fn route_request(
         || route_path.starts_with("/working-hours/delete/")
         || route_path == "/apps/create"
         || route_path.starts_with("/apps/update/")
-        || route_path.starts_with("/apps/delete/");
+        || route_path.starts_with("/apps/delete/")
+        || route_path.starts_with("/apps/wxcc/login/");
 
     if request.method == "GET" && is_mutation_route {
         return Ok((
@@ -128,6 +129,10 @@ pub async fn route_request(
     if request.method == "POST" && route_path.starts_with("/apps/delete/") {
         let app_id = route_path.trim_start_matches("/apps/delete/");
         return handle_apps_delete(handle, app_id).await;
+    }
+    if request.method == "POST" && route_path.starts_with("/apps/wxcc/login/") {
+        let app_id = route_path.trim_start_matches("/apps/wxcc/login/");
+        return handle_wxcc_login(handle, app_id).await;
     }
     if request.method == "GET" && route_path == "/api/apps/list" {
         return handle_api_apps_list(handle).await;
