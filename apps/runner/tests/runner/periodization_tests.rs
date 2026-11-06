@@ -110,6 +110,23 @@ fn test_period_generation_semantics() {
     let jan15 = NaiveDate::from_ymd_opt(2026, 1, 15).unwrap();
     let sep10 = NaiveDate::from_ymd_opt(2026, 9, 10).unwrap();
 
+    // Daily: inclusive range, one period per day.
+    let daily_start = NaiveDate::from_ymd_opt(2026, 10, 6).unwrap();
+    let daily_end = NaiveDate::from_ymd_opt(2026, 10, 12).unwrap();
+    let daily = generate_execution_periods(PeriodMode::Daily, daily_start, daily_end);
+    assert_eq!(daily.len(), 7);
+    for (offset, period) in daily.iter().enumerate() {
+        let expected = daily_start + chrono::Duration::days(offset as i64);
+        assert_eq!(period.start_date, expected);
+        assert_eq!(period.end_date, expected);
+    }
+
+    // A single-day range produces exactly one daily period.
+    let single_day = generate_execution_periods(PeriodMode::Daily, daily_start, daily_start);
+    assert_eq!(single_day.len(), 1);
+    assert_eq!(single_day[0].start_date, daily_start);
+    assert_eq!(single_day[0].end_date, daily_start);
+
     // Monthly
     let monthly = generate_execution_periods(PeriodMode::Monthly, jan15, sep10);
     assert_eq!(monthly.len(), 9);
