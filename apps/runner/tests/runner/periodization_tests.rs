@@ -73,6 +73,42 @@ fn test_beginning_of_month_and_eomonth_resolution() {
 }
 
 #[test]
+fn test_next_week_end_date_is_six_days_after_start_date() {
+    let now = Utc.with_ymd_and_hms(2026, 11, 1, 12, 0, 0).unwrap();
+
+    let periods = resolve_and_generate_execution_periods(
+        PeriodMode::Daily,
+        Some("2026-11-06"),
+        Some("next week"),
+        now,
+    )
+    .unwrap();
+
+    assert_eq!(periods.len(), 7);
+    assert_eq!(
+        periods.first().unwrap().start_date,
+        NaiveDate::from_ymd_opt(2026, 11, 6).unwrap()
+    );
+    assert_eq!(
+        periods.last().unwrap().end_date,
+        NaiveDate::from_ymd_opt(2026, 11, 12).unwrap()
+    );
+
+    let custom_periods = resolve_and_generate_execution_periods(
+        PeriodMode::Custom,
+        Some("2026-11-06"),
+        Some("NEXT WEEK"),
+        now,
+    )
+    .unwrap();
+    assert_eq!(custom_periods.len(), 1);
+    assert_eq!(
+        custom_periods[0].end_date,
+        NaiveDate::from_ymd_opt(2026, 11, 12).unwrap()
+    );
+}
+
+#[test]
 fn test_invalid_date_expression_fails_explicitly() {
     let now = Utc::now();
     assert!(resolve_and_generate_execution_periods(
