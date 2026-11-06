@@ -560,7 +560,7 @@ pub(crate) async fn handle_wxcc_login(
         .stderr(std::process::Stdio::piped())
         .kill_on_drop(true);
 
-    let mut child = match command.spawn() {
+    let child = match command.spawn() {
         Ok(child) => child,
         Err(error) => {
             return Ok((
