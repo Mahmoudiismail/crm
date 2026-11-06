@@ -627,6 +627,7 @@
                                   <label class="block text-xs font-medium text-gray-700 mb-1">Period Mode</label>
                                   <select class="app-period-mode block w-full rounded border border-gray-300 px-2 py-1 text-sm bg-white">
                                       <option value="custom" ${periodMode === 'custom' ? 'selected' : ''}>Normal / Custom</option>
+                                      <option value="daily" ${periodMode === 'daily' ? 'selected' : ''}>Daily</option>
                                       <option value="monthly" ${periodMode === 'monthly' ? 'selected' : ''}>Monthly</option>
                                       <option value="quarterly" ${periodMode === 'quarterly' ? 'selected' : ''}>Quarterly</option>
                                       <option value="a_month" ${periodMode === 'a_month' ? 'selected' : ''}>A Month</option>
@@ -680,6 +681,7 @@
                                       <option value="beginning_of_month" ${endDate === 'beginning_of_month' ? 'selected' : ''}>Beginning of Month</option>
                                       <option value="beginning_of_prev_month" ${endDate === 'beginning_of_prev_month' ? 'selected' : ''}>Beginning of Previous Month</option>
                                       <option value="eomonth" ${endDate === 'eomonth' || !endDate ? 'selected' : ''}>End of Month</option>
+                                      <option value="next week" ${endDate === 'next week' ? 'selected' : ''}>Next Week (7 days from Start Date)</option>
                                       <optgroup label="Next Weekday">
                                           <option value="next mon" ${endDate === 'next mon' ? 'selected' : ''}>Next Monday</option>
                                           <option value="next tue" ${endDate === 'next tue' ? 'selected' : ''}>Next Tuesday</option>

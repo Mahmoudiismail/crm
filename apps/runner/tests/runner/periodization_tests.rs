@@ -73,6 +73,42 @@ fn test_beginning_of_month_and_eomonth_resolution() {
 }
 
 #[test]
+fn test_next_week_end_date_is_six_days_after_start_date() {
+    let now = Utc.with_ymd_and_hms(2026, 11, 1, 12, 0, 0).unwrap();
+
+    let periods = resolve_and_generate_execution_periods(
+        PeriodMode::Daily,
+        Some("2026-11-06"),
+        Some("next week"),
+        now,
+    )
+    .unwrap();
+
+    assert_eq!(periods.len(), 7);
+    assert_eq!(
+        periods.first().unwrap().start_date,
+        NaiveDate::from_ymd_opt(2026, 11, 6).unwrap()
+    );
+    assert_eq!(
+        periods.last().unwrap().end_date,
+        NaiveDate::from_ymd_opt(2026, 11, 12).unwrap()
+    );
+
+    let custom_periods = resolve_and_generate_execution_periods(
+        PeriodMode::Custom,
+        Some("2026-11-06"),
+        Some("NEXT WEEK"),
+        now,
+    )
+    .unwrap();
+    assert_eq!(custom_periods.len(), 1);
+    assert_eq!(
+        custom_periods[0].end_date,
+        NaiveDate::from_ymd_opt(2026, 11, 12).unwrap()
+    );
+}
+
+#[test]
 fn test_invalid_date_expression_fails_explicitly() {
     let now = Utc::now();
     assert!(resolve_and_generate_execution_periods(
@@ -109,6 +145,23 @@ fn test_custom_range_validation_start_after_end() {
 fn test_period_generation_semantics() {
     let jan15 = NaiveDate::from_ymd_opt(2026, 1, 15).unwrap();
     let sep10 = NaiveDate::from_ymd_opt(2026, 9, 10).unwrap();
+
+    // Daily: inclusive range, one period per day.
+    let daily_start = NaiveDate::from_ymd_opt(2026, 10, 6).unwrap();
+    let daily_end = NaiveDate::from_ymd_opt(2026, 10, 12).unwrap();
+    let daily = generate_execution_periods(PeriodMode::Daily, daily_start, daily_end);
+    assert_eq!(daily.len(), 7);
+    for (offset, period) in daily.iter().enumerate() {
+        let expected = daily_start + chrono::Duration::days(offset as i64);
+        assert_eq!(period.start_date, expected);
+        assert_eq!(period.end_date, expected);
+    }
+
+    // A single-day range produces exactly one daily period.
+    let single_day = generate_execution_periods(PeriodMode::Daily, daily_start, daily_start);
+    assert_eq!(single_day.len(), 1);
+    assert_eq!(single_day[0].start_date, daily_start);
+    assert_eq!(single_day[0].end_date, daily_start);
 
     // Monthly
     let monthly = generate_execution_periods(PeriodMode::Monthly, jan15, sep10);

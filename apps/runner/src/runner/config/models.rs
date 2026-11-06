@@ -89,6 +89,7 @@ pub struct ExternalAppSpec {
 pub enum PeriodMode {
     #[default]
     Custom,
+    Daily,
     Monthly,
     Quarterly,
     AMonth,

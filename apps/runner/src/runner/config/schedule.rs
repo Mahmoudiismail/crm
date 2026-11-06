@@ -689,6 +689,21 @@ pub fn generate_execution_periods(
                 end_date,
             }]
         }
+        PeriodMode::Daily => {
+            let mut periods = Vec::new();
+            let mut current_date = start_date;
+            while current_date <= end_date {
+                periods.push(ExecutionPeriod {
+                    start_date: current_date,
+                    end_date: current_date,
+                });
+                let Some(next_date) = current_date.succ_opt() else {
+                    break;
+                };
+                current_date = next_date;
+            }
+            periods
+        }
         PeriodMode::Monthly => {
             let mut periods = Vec::new();
             let mut cur_year = start_date.year();
@@ -828,8 +843,16 @@ pub fn resolve_and_generate_execution_periods(
 
     let raw_start_fmt = raw_start_date.format("%Y-%m-%d").to_string();
     let raw_end_date = if let Some(ed_str) = end_date_str {
-        crate::utils::parse_flexible_date_with_base(ed_str, Some(&raw_start_fmt))
-            .ok_or_else(|| anyhow::anyhow!("Invalid end date expression '{}'", ed_str))?
+        if ed_str.trim().eq_ignore_ascii_case("next week") {
+            raw_start_date
+                .checked_add_signed(chrono::TimeDelta::days(6))
+                .ok_or_else(|| {
+                    anyhow::anyhow!("End date expression '{}' is out of range", ed_str)
+                })?
+        } else {
+            crate::utils::parse_flexible_date_with_base(ed_str, Some(&raw_start_fmt))
+                .ok_or_else(|| anyhow::anyhow!("Invalid end date expression '{}'", ed_str))?
+        }
     } else {
         raw_start_date
     };
