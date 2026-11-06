@@ -1051,7 +1051,6 @@ pub(crate) async fn handle_api_apps_manifest(
     }
 }
 
-
 #[cfg(test)]
 mod manifest_registration_tests {
     use super::manifest_plugin_api_version;
