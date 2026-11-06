@@ -689,6 +689,21 @@ pub fn generate_execution_periods(
                 end_date,
             }]
         }
+        PeriodMode::Daily => {
+            let mut periods = Vec::new();
+            let mut current_date = start_date;
+            while current_date <= end_date {
+                periods.push(ExecutionPeriod {
+                    start_date: current_date,
+                    end_date: current_date,
+                });
+                let Some(next_date) = current_date.succ_opt() else {
+                    break;
+                };
+                current_date = next_date;
+            }
+            periods
+        }
         PeriodMode::Monthly => {
             let mut periods = Vec::new();
             let mut cur_year = start_date.year();
