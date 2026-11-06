@@ -557,7 +557,8 @@ pub(crate) async fn handle_wxcc_login(
     command
         .args(["auth", "login"])
         .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped());
+        .stderr(std::process::Stdio::piped())
+        .kill_on_drop(true);
 
     let mut child = match command.spawn() {
         Ok(child) => child,
@@ -572,7 +573,6 @@ pub(crate) async fn handle_wxcc_login(
             ))
         }
     };
-    child.kill_on_drop(true);
     match tokio::time::timeout(std::time::Duration::from_secs(210), child.wait_with_output()).await {
         Ok(Ok(output)) if output.status.success() => Ok((200, "text/html; charset=utf-8", render_redirect_to_dashboard("WXCC authorization completed"))),
         Ok(Ok(output)) => {

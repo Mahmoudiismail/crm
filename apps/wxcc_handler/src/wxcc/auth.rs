@@ -56,6 +56,11 @@ pub fn create_authorization_request(
     Ok((url, state))
 }
 
+trait CallbackStream: AsyncRead + AsyncWrite + Unpin + Send {}
+impl<T> CallbackStream for T where T: AsyncRead + AsyncWrite + Unpin + Send {}
+
+type BoxedCallbackStream = Box<dyn CallbackStream>;
+
 pub async fn login(config_path: &Path, mut config: WxccConfig) -> Result<()> {
     config.validate(true)?;
     let callback = parse_loopback_redirect_uri(&config.redirect_uri)?;
@@ -216,9 +221,12 @@ fn create_tls_acceptor(config: &WxccConfig, config_path: &Path) -> Result<TlsAcc
     Ok(TlsAcceptor::from(Arc::new(server)))
 }
 
-async fn read_callback<S>(mut stream: S, expected_path: &str) -> Result<(String, String, S)>
+async fn read_callback<S>(
+    mut stream: S,
+    expected_path: &str,
+) -> Result<(String, String, BoxedCallbackStream)>
 where
-    S: AsyncRead + AsyncWrite + Unpin,
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
     let mut request = Vec::with_capacity(1024);
     let mut chunk = [0_u8; 1024];
@@ -274,7 +282,7 @@ where
         .filter(|v| !v.is_empty())
         .context("Webex callback did not contain OAuth state")?
         .clone();
-    Ok((code, state, stream))
+    Ok((code, state, Box::new(stream)))
 }
 
 fn parse_query_parameters(query: &str) -> Result<HashMap<String, String>> {
