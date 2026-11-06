@@ -4,7 +4,7 @@ All applications manage their own specific configuration files but work in tande
 
 ## `runner_config.json`
 
-This file controls the GUI, global timing, task scheduling, and process-plugin registry. The `registered_apps` array is the explicit registry for managed first-party workers and arbitrary external executables. Each entry retains its existing `id`, executable path, config path, and concurrency policy; no migration is required. The optional `plugin_api_version` field opts an entry into strict process-plugin compatibility checks.
+This file controls the GUI, global timing, task scheduling, and process-plugin registry. The `registered_apps` array is the explicit registry for managed first-party workers and arbitrary external executables. Each entry retains its existing `id`, executable path, config path, and concurrency policy; no migration is required. The optional `plugin_api_version` field opts an entry into strict process-plugin compatibility checks. When an application is registered or updated through the Runner GUI, Runner probes its `--manifest` and stores the advertised version automatically; legacy executables that do not expose a versioned manifest remain unchanged. For manually maintained configuration files, the field can still be set explicitly.
 
 ```json
 {
