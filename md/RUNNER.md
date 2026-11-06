@@ -63,8 +63,9 @@ Periodization and dates (`period_mode`, `start_date`, `end_date`) belong exclusi
 
 When an external application runs with a period, Runner passes date arguments only when their names are explicitly configured in the action's `start_date_arg`/`end_date_arg` mappings or discovered from the application's manifest. It does not inject generic `--start-date` or `--end-date` flags when the target application does not declare them. The `{start_date}` and `{end_date}` placeholders in explicitly configured argument values continue to be substituted. Before launch, Runner also removes any preconfigured argument whose manifest `depends_on` conditions are not satisfied by that action's effective arguments. This prevents stale or empty conditional flags (for example Tasker's `--start-date` when `--task` is not `6`) from leaking into the process command line, even when they remain in an older saved task configuration. Legacy applications without a manifest keep their existing argument behavior.
 
-Each External Application action configures its own periodization mode alongside Start Date and End Date inputs:
+Each External Application action configures its own periodization mode alongside Start Date and End Date inputs. Daily periods use the existing application concurrency setting: enabled applications run their daily periods concurrently; otherwise Runner executes those periods sequentially.
 - **Normal / Custom**: Standard single date range without period transformation (`[Start, End]`). Invalid/inverted date ranges (`start_date > end_date`) produce explicit errors.
+- **Daily**: Generates one execution period per calendar day, inclusive of Start Date and End Date. Each period passes the same date as both its start and end.
 - **Monthly**: Normalizes date range to complete calendar months from 1st of Start month to last day of End month.
 - **Quarterly**: Normalizes date range to complete calendar quarters (Q1: Jan-Mar, Q2: Apr-Jun, Q3: Jul-Sep, Q4: Oct-Dec).
 - **A Month**: Repeats the month determined by Start Date for each year between Start Year and End Year.
