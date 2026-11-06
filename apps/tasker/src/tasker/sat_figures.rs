@@ -1,9 +1,11 @@
 use crate::tasker::config::{OpdAnalysisConfig, SatFiguresConfig};
 use anyhow::{Context, Result};
 use csv::WriterBuilder;
+use chrono::NaiveDate;
+use std::collections::BTreeMap;
 use std::fs;
-use std::path::PathBuf;
-use std::time::SystemTime;
+use std::path::{Path, PathBuf};
+use std::time::{Duration, SystemTime};
 use tracing::info;
 
 fn resolve(path: &str) -> PathBuf {
@@ -51,8 +53,29 @@ fn is_source_report(path: &std::path::Path) -> bool {
             .any(|supported| extension.eq_ignore_ascii_case(supported))
 }
 
-fn latest_source_report(download_dir: &std::path::Path) -> Result<PathBuf> {
-    let mut latest: Option<(SystemTime, PathBuf)> = None;
+fn report_date_from_filename(path: &Path) -> Result<NaiveDate> {
+    let filename = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .context("Sat Figures source filename is not valid UTF-8")?;
+    let base = filename.rsplit_once('.').map_or(filename, |(name, _)| name);
+    let parts: Vec<&str> = base.split('_').collect();
+    let date_text = parts
+        .get(parts.len().saturating_sub(2))
+        .context("Sat Figures filename must end with _DD-MM-YYYY_HHMMSS")?;
+    NaiveDate::parse_from_str(date_text, "%d-%m-%Y")
+        .with_context(|| format!("Invalid report date '{}' in filename {:?}", date_text, path))
+}
+
+/// Select the newest recently modified workbook for each report date.
+fn recent_source_reports(
+    download_dir: &Path,
+    minutes_ago: u64,
+) -> Result<Vec<(NaiveDate, PathBuf)>> {
+    let cutoff = SystemTime::now()
+        .checked_sub(Duration::from_secs(minutes_ago.saturating_mul(60)))
+        .unwrap_or(SystemTime::UNIX_EPOCH);
+    let mut reports: BTreeMap<NaiveDate, (SystemTime, PathBuf)> = BTreeMap::new();
 
     for entry in walkdir::WalkDir::new(download_dir)
         .into_iter()
@@ -68,21 +91,41 @@ fn latest_source_report(download_dir: &std::path::Path) -> Result<PathBuf> {
         let metadata = entry
             .metadata()
             .with_context(|| format!("Failed to read metadata for {:?}", path))?;
-        let created = metadata
-            .created()
-            .or_else(|_| metadata.modified())
-            .with_context(|| format!("Could not determine creation time for {:?}", path))?;
-        if latest
-            .as_ref()
-            .is_none_or(|(timestamp, _)| created > *timestamp)
-        {
-            latest = Some((created, path));
+        // Use the filesystem modification timestamp, not the date embedded in the report name,
+        // to determine whether Yasweb downloaded the file within the configured lookback.
+        let modified = metadata
+            .modified()
+            .with_context(|| format!("Could not determine modification time for {:?}", path))?;
+        if modified < cutoff {
+            continue;
+        }
+
+        let date = match report_date_from_filename(&path) {
+            Ok(date) => date,
+            Err(error) => {
+                warn!("Skipping Sat Figures workbook with an unrecognized date: {:#}", error);
+                continue;
+            }
+        };
+
+        let replace = reports
+            .get(&date)
+            .is_none_or(|(existing_modified, _)| modified > *existing_modified);
+        if replace {
+            reports.insert(date, (modified, path));
         }
     }
 
-    latest
-        .map(|(_, path)| path)
-        .context("No OPD Average Patients Seen workbook matching the Sat Figures prefix was found")
+    let selected: Vec<_> = reports
+        .into_iter()
+        .map(|(date, (_, path))| (date, path))
+        .collect();
+    info!(
+        "Found {} recent Sat Figures report date(s) within the last {} minute(s)",
+        selected.len(),
+        minutes_ago
+    );
+    Ok(selected)
 }
 
 fn get_email_script() -> &'static str {
@@ -110,14 +153,32 @@ pub fn run(
         );
     }
 
-    // Match the workbook query: select the newest-created file with the exact report prefix.
-    let latest = latest_source_report(&download_dir)?;
-    let filters = crate::tasker::opd_task::data_extraction::OpdFilters::from(opd_config);
-    let totals = crate::tasker::opd_task::data_extraction::extract_slot_totals(&latest, &filters)
-        .with_context(|| format!("Failed to calculate Sat Figures from {:?}", latest))?;
+    let reports = recent_source_reports(&download_dir, config.minutes_ago)?;
+    if reports.is_empty() {
+        anyhow::bail!(
+            "No OPD Average Patients Seen workbooks were modified within the last {} minute(s)",
+            config.minutes_ago
+        );
+    }
 
-    let vacant_slots = calculate_vacant_slots(totals.total_slots, totals.slots_booked)?;
-    let percentage = totals.slots_booked as f64 / totals.total_slots as f64;
+    let filters = crate::tasker::opd_task::data_extraction::OpdFilters::from(opd_config);
+    let mut rows = Vec::with_capacity(reports.len());
+    for (date, path) in reports {
+        let totals = crate::tasker::opd_task::data_extraction::extract_slot_totals(&path, &filters)
+            .with_context(|| format!("Failed to calculate Sat Figures for {} from {:?}", date, path))?;
+        let vacant_slots = calculate_vacant_slots(totals.total_slots, totals.slots_booked)?;
+        let percentage = totals.slots_booked as f64 / totals.total_slots as f64;
+        rows.push((date, totals, vacant_slots, percentage));
+        info!(
+            "Sat Figures source {:?}: booked={}, total={}, vacant={}, percentage={:.2}%",
+            path,
+            totals.slots_booked,
+            totals.total_slots,
+            vacant_slots,
+            percentage * 100.0
+        );
+    }
+
     let output_path = resolve(&config.output_file);
     if let Some(parent) = output_path.parent().filter(|p| !p.as_os_str().is_empty()) {
         fs::create_dir_all(parent).with_context(|| {
@@ -128,13 +189,16 @@ pub fn run(
     let mut writer = WriterBuilder::new()
         .from_path(&output_path)
         .with_context(|| format!("Failed to create Sat Figures CSV {:?}", output_path))?;
-    writer.write_record(["Slots Booked", "Total Slots", "Vacant Slots", "%"])?;
-    writer.write_record([
-        totals.slots_booked.to_string(),
-        totals.total_slots.to_string(),
-        vacant_slots.to_string(),
-        format!("{percentage:.10}"),
-    ])?;
+    writer.write_record(["Date", "Slots Booked", "Total Slots", "Vacant Slots", "%"])?;
+    for (date, totals, vacant_slots, percentage) in &rows {
+        writer.write_record([
+            date.format("%d-%b-%Y").to_string(),
+            totals.slots_booked.to_string(),
+            totals.total_slots.to_string(),
+            vacant_slots.to_string(),
+            format!("{percentage:.10}"),
+        ])?;
+    }
     writer.flush()?;
 
     let csv_path = output_path.to_string_lossy().into_owned();
@@ -148,17 +212,22 @@ pub fn run(
         &[("-CsvPath", &csv_path), ("-ImagePath", &image_path_string)],
     )?;
 
-    let body = match start_date {
-        Some(value) => {
-            let date = chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d").with_context(|| {
-                format!(
-                    "Invalid Sat Figures start date '{}'; expected YYYY-MM-DD",
-                    value
-                )
-            })?;
-            booking_email_body(date)
+    // Preserve the existing booking-date email body for a single-day report only.
+    let body = if rows.len() == 1 {
+        match start_date {
+            Some(value) => {
+                let date = NaiveDate::parse_from_str(value, "%Y-%m-%d").with_context(|| {
+                    format!(
+                        "Invalid Sat Figures start date '{}'; expected YYYY-MM-DD",
+                        value
+                    )
+                })?;
+                booking_email_body(date)
+            }
+            None => String::new(),
         }
-        None => String::new(),
+    } else {
+        String::new()
     };
     let attachment_paths = [image_path_string.as_str()];
     let send_result = crate::tasker::email::outlook::send_email_with_attachments(
@@ -172,20 +241,28 @@ pub fn run(
     let _ = fs::remove_file(&image_path);
     send_result?;
 
-    info!(
-        "Sat Figures completed from {:?}: booked={}, total={}, vacant={}, percentage={:.2}%",
-        latest,
-        totals.slots_booked,
-        totals.total_slots,
-        vacant_slots,
-        percentage * 100.0
-    );
+    info!("Sat Figures completed successfully for {} report date(s).", rows.len());
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn report_date_is_read_from_the_filename_date_segment() {
+        let path = Path::new("OPD- Average Patients seen No of Schedule_06-11-2026_143015.xlsx");
+        assert_eq!(
+            report_date_from_filename(path).unwrap(),
+            NaiveDate::from_ymd_opt(2026, 11, 6).unwrap()
+        );
+    }
+
+    #[test]
+    fn report_date_rejects_unrecognized_filename_dates() {
+        let path = Path::new("OPD- Average Patients seen No of Schedule_not-a-date_143015.xlsx");
+        assert!(report_date_from_filename(path).is_err());
+    }
 
     #[test]
     fn vacant_slot_calculation_rejects_invalid_totals() {
