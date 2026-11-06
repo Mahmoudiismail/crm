@@ -175,6 +175,7 @@ pub fn run_app(options: TaskerCliOptions) -> Result<()> {
       "type": "sat_figures",
       "enabled": false,
       "download_path": "../yasweb_windows/downloads/Sat figures",
+      "minutes_ago": 10,
       "output_file": "./sat_figures.csv",
       "email_to": "dd@merrywillow.mailk.us",
       "email_cc": "",

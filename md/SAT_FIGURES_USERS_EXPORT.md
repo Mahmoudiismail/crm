@@ -7,6 +7,7 @@ These jobs replace the Excel/VBS processing paths with native Tasker processing.
   "type": "sat_figures",
   "enabled": true,
   "download_path": "../yasweb_windows/downloads/Sat figures",
+  "minutes_ago": 10,
   "output_file": "./sat_figures.csv",
   "email_to": "dd@merrywillow.mailk.us",
   "email_cc": "",
@@ -25,9 +26,11 @@ These jobs replace the Excel/VBS processing paths with native Tasker processing.
 ## Sat Figures
 
 - Reuses OPD's exact row-filter implementation and the workbook's filename prefix and supported extensions.
-- Processes only the newest-created `OPD- Average Patients seen No of Schedule_` workbook in the configured folder.
+- Processes matching workbooks whose filesystem modification time is within `minutes_ago` (10 minutes by default), selecting the newest file when more than one workbook has the same report date.
+- Uses the `DD-MM-YYYY` date segment in each report filename as the row's report date.
 - Calculates Slots Booked from the source `Slots Booked` column, Total Slots from `Total Slot`, Vacant Slots as Total Slots minus Slots Booked, and the percentage as Slots Booked divided by Total Slots.
-- Writes a one-row CSV summary, creates a report image using PowerShell, and sends it with Outlook using the configured recipient and subject.
+- Writes one CSV row and one image row per report date, with columns `Date`, `Slots Booked`, `Total Slots`, `Vacant Slots`, and `%`. No grand-total row is added. The image is sent with Outlook using the configured recipient and subject.
+- Includes the existing booking date in the email body only when exactly one report date is processed; multi-day emails have no date in the body.
 - Fails instead of sending a report if the source workbook is missing, filtering leaves no rows, or Total Slots is zero.
 
 ## Users Export
