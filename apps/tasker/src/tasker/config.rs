@@ -186,6 +186,8 @@ pub struct SatFiguresConfig {
     #[serde(default)]
     pub enabled: bool,
     pub download_path: String,
+    #[serde(default = "default_sat_figures_minutes")]
+    pub minutes_ago: u64,
     pub output_file: String,
     #[serde(default = "default_sat_figures_email_to")]
     pub email_to: String,
@@ -193,6 +195,10 @@ pub struct SatFiguresConfig {
     pub email_cc: String,
     #[serde(default = "default_sat_figures_subject")]
     pub email_subject: String,
+}
+
+fn default_sat_figures_minutes() -> u64 {
+    10
 }
 
 fn default_sat_figures_email_to() -> String {
@@ -393,6 +399,7 @@ mod tests {
                 );
                 assert_eq!(task.email_to, "dd@merrywillow.mailk.us");
                 assert_eq!(task.email_subject, "201009977888-1576573266@g.us");
+                assert_eq!(task.minutes_ago, 10);
             }
             _ => panic!("Expected SatFigures task"),
         }
