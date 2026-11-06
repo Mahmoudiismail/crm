@@ -78,12 +78,12 @@ If the manifest does not explicitly declare date/periodization arguments (e.g. `
 ### Fixed Date vs Dynamic Expression UI
 For each External Application independently, Start Date and End Date support explicit selection between:
 - **Fixed Date**: Specific calendar dates (e.g. `2026-01-01`).
-- **Dynamic Expression**: Relative dynamic expressions (`today`, `yesterday`, `tomorrow`, `beginning_of_month`, `eomonth`, and `next <weekday>`).
+- **Dynamic Expression**: Relative dynamic expressions (`today`, `yesterday`, `tomorrow`, `beginning_of_month`, `eomonth`, `next week`, and `next <weekday>`). For End Date, `next week` means six days after the resolved Start Date (a seven-day inclusive range). Example: Start Date `2026-11-06` resolves End Date to `2026-11-12`.
 
 ### Start-Before-End Resolution Semantics
 Date expressions are evaluated sequentially:
 1. Start Date is resolved first relative to current time.
-2. End Date is then resolved using the resolved Start Date as its contextual base date.
+2. End Date is then resolved using the resolved Start Date as its contextual base date. The special End Date expression `next week` resolves to Start Date + 6 calendar days, inclusive.
 3. For relative weekday expressions (e.g. `next sat` for both Start and End), date resolution evaluates both to the exact same upcoming occurrence rather than advancing the End Date to the subsequent week.
 
 ## Explicit CLI Date-Range Validation
