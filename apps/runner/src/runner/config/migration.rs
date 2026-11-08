@@ -4,9 +4,7 @@ use crate::runner::config::defaults::*;
 use crate::runner::config::models::*;
 
 fn option_string_is_none_or_empty(value: &Option<String>) -> bool {
-    value
-        .as_deref()
-        .is_none_or(|value| value.trim().is_empty())
+    value.as_deref().is_none_or(|value| value.trim().is_empty())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
