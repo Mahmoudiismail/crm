@@ -146,84 +146,79 @@ pub async fn route_request(
         return handle_api_apps_manifest(handle, app_id).await;
     }
     if request.method == "GET" && route_path == "/assets/js/common.js" {
-        return Ok((
-            200,
-            "application/javascript",
-            {
-                let script_path = crm_tool::script_manager::ScriptManager::new()
-                    .get_or_create_script(
-                        "Runner",
-                        "common.js",
-                        include_str!("../assets/js/common.js"),
-                    )?;
-                std::fs::read_to_string(&script_path)
-                    .with_context(|| format!("Failed to read managed Runner script: {}", script_path.display()))?
-            },
-        ));
+        return Ok((200, "application/javascript", {
+            let script_path = crm_tool::script_manager::ScriptManager::new().get_or_create_script(
+                "Runner",
+                "common.js",
+                include_str!("../assets/js/common.js"),
+            )?;
+            std::fs::read_to_string(&script_path).with_context(|| {
+                format!(
+                    "Failed to read managed Runner script: {}",
+                    script_path.display()
+                )
+            })?
+        }));
     }
     if request.method == "GET" && route_path == "/assets/js/api.js" {
-        return Ok((
-            200,
-            "application/javascript",
-            {
-                let script_path = crm_tool::script_manager::ScriptManager::new()
-                    .get_or_create_script(
-                        "Runner",
-                        "api.js",
-                        include_str!("../assets/js/api.js"),
-                    )?;
-                std::fs::read_to_string(&script_path)
-                    .with_context(|| format!("Failed to read managed Runner script: {}", script_path.display()))?
-            },
-        ));
+        return Ok((200, "application/javascript", {
+            let script_path = crm_tool::script_manager::ScriptManager::new().get_or_create_script(
+                "Runner",
+                "api.js",
+                include_str!("../assets/js/api.js"),
+            )?;
+            std::fs::read_to_string(&script_path).with_context(|| {
+                format!(
+                    "Failed to read managed Runner script: {}",
+                    script_path.display()
+                )
+            })?
+        }));
     }
     if request.method == "GET" && route_path == "/assets/js/validation.js" {
-        return Ok((
-            200,
-            "application/javascript",
-            {
-                let script_path = crm_tool::script_manager::ScriptManager::new()
-                    .get_or_create_script(
-                        "Runner",
-                        "validation.js",
-                        include_str!("../assets/js/validation.js"),
-                    )?;
-                std::fs::read_to_string(&script_path)
-                    .with_context(|| format!("Failed to read managed Runner script: {}", script_path.display()))?
-            },
-        ));
+        return Ok((200, "application/javascript", {
+            let script_path = crm_tool::script_manager::ScriptManager::new().get_or_create_script(
+                "Runner",
+                "validation.js",
+                include_str!("../assets/js/validation.js"),
+            )?;
+            std::fs::read_to_string(&script_path).with_context(|| {
+                format!(
+                    "Failed to read managed Runner script: {}",
+                    script_path.display()
+                )
+            })?
+        }));
     }
     if request.method == "GET" && route_path == "/assets/js/notifications.js" {
-        return Ok((
-            200,
-            "application/javascript",
-            {
-                let script_path = crm_tool::script_manager::ScriptManager::new()
-                    .get_or_create_script(
-                        "Runner",
-                        "notifications.js",
-                        include_str!("../assets/js/notifications.js"),
-                    )?;
-                std::fs::read_to_string(&script_path)
-                    .with_context(|| format!("Failed to read managed Runner script: {}", script_path.display()))?
-            },
-        ));
+        return Ok((200, "application/javascript", {
+            let script_path = crm_tool::script_manager::ScriptManager::new().get_or_create_script(
+                "Runner",
+                "notifications.js",
+                include_str!("../assets/js/notifications.js"),
+            )?;
+            std::fs::read_to_string(&script_path).with_context(|| {
+                format!(
+                    "Failed to read managed Runner script: {}",
+                    script_path.display()
+                )
+            })?
+        }));
     }
     if request.method == "GET" && route_path == "/assets/js/forms.js" {
-        return Ok((
-            200,
-            "application/javascript",
-            {
-                let script_path = crm_tool::script_manager::ScriptManager::new()
-                    .get_or_create_script(
-                        "Runner",
-                        "forms.js",
-                        include_str!("../assets/js/forms.js"),
-                    )?;
-                std::fs::read_to_string(&script_path)
-                    .with_context(|| format!("Failed to read managed Runner script: {}", script_path.display()))?
-            },
-        ));
+        return Ok((200, "application/javascript", {
+            let script_path = crm_tool::script_manager::ScriptManager::new().get_or_create_script(
+                "Runner",
+                "forms.js",
+                include_str!("../assets/js/forms.js"),
+            )?;
+            std::fs::read_to_string(&script_path).with_context(|| {
+                format!(
+                    "Failed to read managed Runner script: {}",
+                    script_path.display()
+                )
+            })?
+        }));
     }
 
     if is_mutation_route {
