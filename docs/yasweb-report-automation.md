@@ -188,7 +188,7 @@ Network logs are emitted by `client::enable_network_logging`; request URLs are s
 - Step 4 logs the visible filter-field inventory before and after filling, including on failure. Explicit empty filter values clear controls; omitted filter keys remain untouched.
 - Standard Report default date boundaries use `%d-%b-%Y 00:00` and `%d-%b-%Y 23:59`. Report Manager formatting and behavior are unchanged.
 - Authenticated HTML and field values can contain user/session/customer data. Keep TRACE disabled during routine production runs; sanitize snapshots before sharing them.
-- On a frame-specific failure, prefer the structured frame-readiness logs first. If a frame snapshot is later added, it must use CDP frame context and follow the same TRACE-only privacy gate.
+- On a frame-specific failure, inspect the per-step frame snapshot result and structured frame-readiness logs. The live DOM fallback uses an isolated CDP execution context and remains behind the TRACE-only privacy gate.
 
 ## 7. Change checklist
 
