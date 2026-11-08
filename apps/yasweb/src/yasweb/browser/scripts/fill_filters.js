@@ -178,4 +178,4 @@
                                                 return JSON.stringify({ status: "ERROR", msg: "One or more requested filters could not be applied: " + failedFilters.join(", "), failed_filters: failedFilters, discovered_filters: discoveredFilters, discovered_filter_options: discoveredFilterOptions, logs });
                                             }
                                             return JSON.stringify({ status: "SUCCESS", discovered_filters: discoveredFilters, discovered_filter_options: discoveredFilterOptions, logs });
-                                        })(__FILTERS_JSON__, __TIMEOUT_MINUTES__, __TRACE_ENABLED__);
+                                        })(__FILTERS_JSON__, __TIMEOUT_MINUTES__);
