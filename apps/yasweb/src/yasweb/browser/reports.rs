@@ -602,7 +602,6 @@ mod select_report_js_tests {
     fn report_selection_replaces_all_runtime_arguments() {
         let js = generate_step2_js("Standard Report", "Appointment List", 5).unwrap();
 
-        assert!(js.ends_with(r#"} )("Standard Report", "Appointment List", 5);"#) == false);
         assert!(js.contains(r#"})("Standard Report", "Appointment List", 5);"#));
         assert!(!js.contains("__REPORT_TYPE_JSON__"));
         assert!(!js.contains("__REPORT_NAME_JSON__"));
@@ -614,7 +613,7 @@ mod select_report_js_tests {
         let js = generate_step2_js("Standard Report", r#"Doctor's "List""#, 3).unwrap();
 
         assert!(js.contains(r#""Doctor's \"List\"""#));
-        assert!(js.contains("})(3);") == false);
+        assert!(js.contains(r#", 3);"#));
         assert!(!js.contains("__TIMEOUT_MINUTES__"));
     }
 }
