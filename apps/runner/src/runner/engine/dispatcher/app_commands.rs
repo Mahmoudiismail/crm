@@ -14,6 +14,7 @@ pub async fn update_registered_app(path: &str, app: RegisteredApp) -> anyhow::Re
             existing.name = app.name;
             existing.executable_path = app.executable_path;
             existing.config_path = app.config_path;
+            existing.plugin_api_version = app.plugin_api_version;
             existing.allow_concurrent_tasks = app.allow_concurrent_tasks;
             Ok(())
         } else {
@@ -39,7 +40,7 @@ mod tests {
     use tempfile::tempdir;
 
     #[tokio::test]
-    async fn update_registered_app_preserves_plugin_api_version() {
+    async fn update_registered_app_persists_detected_plugin_api_version() {
         let temp_dir = tempdir().unwrap();
         let config_path = temp_dir.path().join("runner.json");
         let path_str = config_path.to_str().unwrap();
@@ -50,7 +51,7 @@ mod tests {
             name: "Managed plugin".to_string(),
             executable_path: "plugin.exe".to_string(),
             config_path: "plugin.json".to_string(),
-            plugin_api_version: Some(1),
+            plugin_api_version: None,
             allow_concurrent_tasks: false,
         });
         cfg.save(path_str).unwrap();
@@ -60,7 +61,7 @@ mod tests {
             name: "Renamed plugin".to_string(),
             executable_path: "plugin.exe".to_string(),
             config_path: "plugin.json".to_string(),
-            plugin_api_version: None,
+            plugin_api_version: Some(1),
             allow_concurrent_tasks: true,
         };
         update_registered_app(path_str, edited).await.unwrap();
