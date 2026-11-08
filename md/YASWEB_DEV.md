@@ -19,7 +19,7 @@ fails.
 
 For production privacy, authenticated page HTML and iframe DOM snapshots are persisted locally only when TRACE logging is enabled. Each browser-step snapshot attempts to capture the top-level document and the current document frames through CDP. Frame-capture failures are logged with the frame URL and reason. TRACE artifacts can contain credentials, session data, and customer information; keep TRACE disabled during routine production runs and sanitize artifacts before sharing them.
 
-During `Step 4 (Fill Filters)`, TRACE logs include the visible filter-field inventory before and after filling (label, control type, current value, placeholder, accessible label, form-control name, and element ID). The inventory is included even when one or more requested filters fail. An explicitly supplied empty filter value means clear that field; a filter omitted from the request remains unspecified.
+During `Step 4 (Fill Filters)`, TRACE logs include the visible filter-field inventory before and after filling (label, control type, current value, placeholder, accessible label, form-control name, and element ID). The inventory is included even when one or more requested filters fail. An explicitly supplied empty filter value clears only a matching `input[type="text"]`; other control types are left unchanged. A filter omitted from the request remains unspecified.
 
 For Standard Reports, date formats are enforced as `DD-MMM-YYYY 00:00` for the start boundary and `DD-MMM-YYYY 23:59` for the end boundary (for example, `08-Nov-2026 00:00` and `08-Nov-2026 23:59`). Report Manager date formatting and behavior remain unchanged.
 
