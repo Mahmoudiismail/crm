@@ -61,15 +61,14 @@ pub fn generate_html_report(
 
         // Header Row (Blue)
         sections_html.push_str(&format!(
-            "<tr style=\"background-color: #4472C4; color: white; font-weight: bold; text-align: center; vertical-align: middle;\">
+            "<tr style=\"height:28px; background-color: #4472C4; color: white; font-weight: bold; text-align: center; vertical-align: middle;\">
                 <th width=\"{w0}\" style=\"border: 1px solid #8EA9DB; padding: 5px;\">Team</th>
                 <th width=\"{w1}\" style=\"border: 1px solid #8EA9DB; padding: 5px;\">closed</th>
                 <th width=\"{w2}\" style=\"border: 1px solid #8EA9DB; padding: 5px;\">open</th>
                 <th width=\"{w3}\" style=\"border: 1px solid #8EA9DB; padding: 5px;\">% of closed</th>
                 <th width=\"{w4}\" style=\"border: 1px solid #8EA9DB; padding: 5px;\">% of open</th>
                 <th width=\"{w5}\" style=\"border: 1px solid #8EA9DB; padding: 5px;\">Grand Total</th>
-                <th width=\"{w6}\" style=\"border: 1px solid #8EA9DB; padding: 5px;\">OUL</th>
-            </tr>",
+                <th width=\"{w6}\" style=\"border: 1px solid #8EA9DB; padding: 5px;\">OUL</th>",
             w0 = escape_html(&safe_widths[0]),
             w1 = escape_html(&safe_widths[1]),
             w2 = escape_html(&safe_widths[2]),
@@ -122,15 +121,14 @@ pub fn generate_html_report(
             };
 
             sections_html.push_str(&format!(
-                "<tr style=\"color: black;\">
+                "<tr style=\"height:28px; color: black;\">
                     <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
                     <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
                     <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
                     <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
                     <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
                     <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
-                    <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
-                </tr>",
+                    <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>",
                 escape_html(&row.team),
                 closed_str,
                 open_str,
@@ -188,15 +186,14 @@ pub fn generate_html_report(
         };
 
         sections_html.push_str(&format!(
-            "<tr style=\"background-color: #C00000; color: white; font-weight: bold;\">
+            "<tr style=\"height:28px; background-color: #C00000; color: white; font-weight: bold;\">
                 <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">Grand Total</td>
                 <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
                 <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
                 <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
                 <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
                 <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
-                <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\"></td>
-            </tr>",
+                <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\"></td>",
             total_closed_str, total_open_str, total_perc_closed_str, total_perc_open_str, total_grand_str
         ));
         for _ in &dynamic_columns {
