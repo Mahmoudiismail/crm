@@ -97,7 +97,7 @@ fn create_verified_archive(files: &[CollectedFile], temp_path: &Path) -> Result<
     let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
 
     for file in files {
-        let archive_name = file.relative_path.to_string_lossy().replace('\\\\', "/");
+        let archive_name = file.relative_path.to_string_lossy().replace('\\', "/");
         let mut input = File::open(&file.path)
             .with_context(|| format!("Could not open {}", file.path.display()))?;
         writer
@@ -123,7 +123,7 @@ fn create_verified_archive(files: &[CollectedFile], temp_path: &Path) -> Result<
     }
 
     for file in files {
-        let archive_name = file.relative_path.to_string_lossy().replace('\\\\', "/");
+        let archive_name = file.relative_path.to_string_lossy().replace('\\', "/");
         let mut entry = archive
             .by_name(&archive_name)
             .with_context(|| format!("Verified ZIP is missing {}", archive_name))?;
