@@ -21,7 +21,7 @@ For production privacy, authenticated page HTML and iframe DOM snapshots are per
 
 During `Step 4 (Fill Filters)`, TRACE logs include the visible filter-field inventory before and after filling (label, control type, current value, placeholder, accessible label, form-control name, and element ID). The inventory is included even when one or more requested filters fail. An explicitly supplied empty filter value means clear that field; a filter omitted from the request remains unspecified.
 
-For Standard Reports, default date formats are `DD-MMM-YYYY 00:00` for the start boundary and `DD-MMM-YYYY 23:59` for the end boundary (for example, `08-Nov-2026 00:00` and `08-Nov-2026 23:59`). Report Manager date formatting and behavior remain unchanged.
+For Standard Reports, date formats are enforced as `DD-MMM-YYYY 00:00` for the start boundary and `DD-MMM-YYYY 23:59` for the end boundary (for example, `08-Nov-2026 00:00` and `08-Nov-2026 23:59`). Report Manager date formatting and behavior remain unchanged.
 
 Set `keep_open` to `true` in `yasweb_config.json` when you need the visible
 browser to remain open for up to 60 seconds after a failure. This keeps the
