@@ -2,6 +2,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::runner::config::defaults::*;
 
+fn option_string_is_none_or_empty(value: &Option<String>) -> bool {
+    value.as_deref().is_none_or(|value| value.trim().is_empty())
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct RunnerConfig {
     #[serde(default = "default_gui_host")]
@@ -74,9 +78,9 @@ pub struct ExternalAppSpec {
     pub args: std::collections::HashMap<String, String>,
     #[serde(default)]
     pub period_mode: PeriodMode,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "option_string_is_none_or_empty")]
     pub start_date: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "option_string_is_none_or_empty")]
     pub end_date: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub start_date_arg: Option<String>,
@@ -289,5 +293,37 @@ impl std::fmt::Debug for RunnerConfig {
             .field("log_file_level", &self.log_file_level)
             .field("log_retention_days", &self.log_retention_days)
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod external_app_date_serialization_tests {
+    use super::{ExternalAppSpec, PeriodMode};
+    use std::collections::HashMap;
+
+    fn spec(start_date: Option<&str>, end_date: Option<&str>) -> ExternalAppSpec {
+        ExternalAppSpec {
+            app_id: "test".to_string(),
+            args: HashMap::new(),
+            period_mode: PeriodMode::Custom,
+            start_date: start_date.map(str::to_string),
+            end_date: end_date.map(str::to_string),
+            start_date_arg: None,
+            end_date_arg: None,
+        }
+    }
+
+    #[test]
+    fn omits_empty_period_dates_from_json() {
+        let json = serde_json::to_value(spec(Some(""), Some("   "))).unwrap();
+        assert!(json.get("start_date").is_none());
+        assert!(json.get("end_date").is_none());
+    }
+
+    #[test]
+    fn preserves_configured_period_dates_in_json() {
+        let json = serde_json::to_value(spec(Some("2026-10-01"), None)).unwrap();
+        assert_eq!(json["start_date"], "2026-10-01");
+        assert!(json.get("end_date").is_none());
     }
 }
