@@ -493,14 +493,14 @@ pub fn navigate_and_run_report(
                                                 inputElem.dispatchEvent(new Event('blur', {{ bubbles: true }}));
                                             }}
 
-                                            const labels = doc.querySelectorAll('mat-label');
+                                            const labels = Array.from(doc.querySelectorAll('mat-label')).filter(label => label.getClientRects().length > 0);
                                             const discoveredFilters = [];
                                             const discoveredFilterOptions = {{}};
                                             const failedFilters = [];
                                             const normalize = value => (value || '').replace(/\s+/g, ' ').trim().toLowerCase();
 
                                             function visibleFieldSnapshot() {{
-                                                return Array.from(doc.querySelectorAll('mat-label')).map(label => {{
+                                                return Array.from(doc.querySelectorAll('mat-label')).filter(label => label.getClientRects().length > 0).map(label => {{
                                                     const control = findFilterControl(label);
                                                     if (!control) return {{ label: (label.innerText || label.textContent || '').trim(), control_found: false }};
                                                     return {{ label: (label.innerText || label.textContent || '').trim(), control_found: true, tag: control.tagName, type: control.getAttribute('type') || '', value: control.value ?? control.innerText ?? '', placeholder: control.getAttribute('placeholder') || '', ariaLabel: control.getAttribute('aria-label') || '', formControlName: control.getAttribute('formcontrolname') || '', id: control.id || '' }};
