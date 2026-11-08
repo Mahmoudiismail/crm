@@ -1,5 +1,8 @@
 use base64::Engine;
-use headless_chrome::{protocol::cdp::{Page, Runtime}, Tab};
+use headless_chrome::{
+    protocol::cdp::{Page, Runtime},
+    Tab,
+};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -190,7 +193,9 @@ fn persist_frame_resources(
                         grant_univeral_access: Some(false),
                     })?;
                     let response = tab.call_method(Runtime::Evaluate {
-                        expression: "document.documentElement ? document.documentElement.outerHTML : ''".to_string(),
+                        expression:
+                            "document.documentElement ? document.documentElement.outerHTML : ''"
+                                .to_string(),
                         object_group: None,
                         include_command_line_api: None,
                         silent: Some(true),
@@ -207,7 +212,9 @@ fn persist_frame_resources(
                         unique_context_id: None,
                         serialization_options: None,
                     })?;
-                    response.result.value
+                    response
+                        .result
+                        .value
                         .and_then(|value| value.as_str().map(str::to_owned))
                         .filter(|html| !html.is_empty())
                         .ok_or_else(|| anyhow::anyhow!("frame DOM evaluation returned no HTML"))
@@ -239,7 +246,7 @@ fn persist_frame_resources(
                         frame_id, frame_url, capture_error
                     ),
                 }
-            },
+            }
         }
     }
 }

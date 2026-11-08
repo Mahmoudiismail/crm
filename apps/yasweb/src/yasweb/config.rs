@@ -40,10 +40,7 @@ impl YaswebConfig {
             let force_standard_report_format = report.report_type == "Standard Report";
             let (default_start_fmt, default_end_fmt) = match report.report_type.as_str() {
                 "Report Manager" => ("%d-%b-%Y".to_string(), "%d-%b-%Y".to_string()),
-                "Standard Report" => (
-                    "%d-%b-%Y 00:00".to_string(),
-                    "%d-%b-%Y 23:59".to_string(),
-                ),
+                "Standard Report" => ("%d-%b-%Y 00:00".to_string(), "%d-%b-%Y 23:59".to_string()),
                 _ => ("%d-%m-%Y 00:00".to_string(), "%d-%m-%Y 23:59".to_string()),
             };
 
@@ -251,8 +248,14 @@ mod tests {
         let mut config = report_with_date_keys("Standard Report", "", "");
         assert!(config.finalize_runtime_fields());
         let report = &config.reports["Example"];
-        assert_eq!(report.start_date_key.as_ref().unwrap().format, "%d-%b-%Y 00:00");
-        assert_eq!(report.end_date_key.as_ref().unwrap().format, "%d-%b-%Y 23:59");
+        assert_eq!(
+            report.start_date_key.as_ref().unwrap().format,
+            "%d-%b-%Y 00:00"
+        );
+        assert_eq!(
+            report.end_date_key.as_ref().unwrap().format,
+            "%d-%b-%Y 23:59"
+        );
         assert!(!config.finalize_runtime_fields());
     }
 
@@ -261,8 +264,14 @@ mod tests {
         let mut config = report_with_date_keys("Standard Report", "%d-%b-%Y", "%d-%b-%Y");
         assert!(config.finalize_runtime_fields());
         let report = &config.reports["Example"];
-        assert_eq!(report.start_date_key.as_ref().unwrap().format, "%d-%b-%Y 00:00");
-        assert_eq!(report.end_date_key.as_ref().unwrap().format, "%d-%b-%Y 23:59");
+        assert_eq!(
+            report.start_date_key.as_ref().unwrap().format,
+            "%d-%b-%Y 00:00"
+        );
+        assert_eq!(
+            report.end_date_key.as_ref().unwrap().format,
+            "%d-%b-%Y 23:59"
+        );
     }
 
     #[test]
@@ -288,8 +297,14 @@ mod tests {
         let mut config = report_with_date_keys("Standard Report", "", "");
         assert!(config.finalize_runtime_fields());
         let report = config.reports.get("Example").unwrap();
-        assert_eq!(report.start_date_key.as_ref().unwrap().format, "%d-%b-%Y 00:00");
-        assert_eq!(report.end_date_key.as_ref().unwrap().format, "%d-%b-%Y 23:59");
+        assert_eq!(
+            report.start_date_key.as_ref().unwrap().format,
+            "%d-%b-%Y 00:00"
+        );
+        assert_eq!(
+            report.end_date_key.as_ref().unwrap().format,
+            "%d-%b-%Y 23:59"
+        );
     }
 
     #[test]
