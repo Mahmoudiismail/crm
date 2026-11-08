@@ -45,6 +45,20 @@ try {
 
     Write-Host "PS: Workbook opened successfully."
 
+    # Refresh every workbook connection before refreshing the target PivotTable.
+    # RefreshAll may start asynchronous Power Query/Data Model work, so wait before
+    # calling PivotTable.RefreshTable() and before saving the dashboard.
+    Write-Host "PS: Refreshing all workbook connections and the Data Model..."
+    $workbook.RefreshAll()
+
+    try {
+        $excel.CalculateUntilAsyncQueriesDone()
+        Write-Host "PS: All asynchronous workbook queries completed."
+    }
+    catch {
+        throw "Dashboard data refresh did not complete: $($_.Exception.Message)"
+    }
+
     # Changing Excel calculation mode can fail with HRESULT 0x800A03EC.
     # Therefore, calculation mode is treated as an optional optimization.
     try {
@@ -184,26 +198,6 @@ try {
         }
     }
 
-    # Refresh every workbook connection before refreshing the target PivotTable.
-    # RefreshAll may start asynchronous Power Query/Data Model work, so wait before
-    # calling PivotTable.RefreshTable() and before saving the dashboard.
-    Write-Host "PS: Refreshing all workbook connections and the Data Model..."
-    $workbook.RefreshAll()
-
-    try {
-        $excel.CalculateUntilAsyncQueriesDone()
-        Write-Host "PS: All asynchronous workbook queries completed."
-    }
-    catch {
-        throw "Dashboard data refresh did not complete: $($_.Exception.Message)"
-    }
-
-    if (-not $pivotFound) {
-        Write-Host "PS: Target PivotTable2 wasn't found; workbook connections were refreshed."
-    }
-    else {
-        Write-Host "PS: Target PivotTable2 was refreshed after workbook connections."
-    }
 
     Write-Host "PS: Starting workbook calculation..."
 
