@@ -3,7 +3,10 @@
   }
 
   function normalizeDateExpression(value) {
-      const normalized = (value || "").trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
+      const trimmed = (value || "").trim();
+      // Keep fixed ISO dates intact; hyphens are part of the date, not separators.
+      if (isFixedDate(trimmed)) return trimmed;
+      const normalized = trimmed.toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
       const aliases = {
           "end of month": "eomonth",
           "end of current month": "eomonth",
@@ -30,12 +33,16 @@
       const startDateArg = contentDiv.querySelector(".app-start-date-arg");
       const endDateArg = contentDiv.querySelector(".app-end-date-arg");
 
+      const periodization = contentDiv.querySelector(".app-periodization-container");
+      const periodizationVisible = periodization &&
+          !periodization.classList.contains("hidden") &&
+          periodization.style.display !== "none";
       let startDateVal = "";
-      if (sdModeSelect) {
+      if (periodizationVisible && sdModeSelect) {
           startDateVal = sdModeSelect.value === "fixed" ? (sdFixed ? sdFixed.value : "") : (sdDyn ? sdDyn.value : "");
       }
       let endDateVal = "";
-      if (edModeSelect) {
+      if (periodizationVisible && edModeSelect) {
           endDateVal = edModeSelect.value === "fixed" ? (edFixed ? edFixed.value : "") : (edDyn ? edDyn.value : "");
       }
 
@@ -891,8 +898,12 @@
                       const sdModeEl = actionBlock.querySelector(".app-start-date-mode");
                       const sdFixedEl = actionBlock.querySelector(".app-start-date-fixed");
                       const sdDynEl = actionBlock.querySelector(".app-start-date-dyn");
+                      const periodization = actionBlock.querySelector(".app-periodization-container");
+                      const periodizationVisible = periodization &&
+                          !periodization.classList.contains("hidden") &&
+                          periodization.style.display !== "none";
                       let startDateVal = "";
-                      if (sdModeEl) {
+                      if (periodizationVisible && sdModeEl) {
                           startDateVal = sdModeEl.value === "fixed" ? (sdFixedEl ? sdFixedEl.value : "") : (sdDynEl ? sdDynEl.value : "");
                       }
 
@@ -900,7 +911,7 @@
                       const edFixedEl = actionBlock.querySelector(".app-end-date-fixed");
                       const edDynEl = actionBlock.querySelector(".app-end-date-dyn");
                       let endDateVal = "";
-                      if (edModeEl) {
+                      if (periodizationVisible && edModeEl) {
                           endDateVal = edModeEl.value === "fixed" ? (edFixedEl ? edFixedEl.value : "") : (edDynEl ? edDynEl.value : "");
                       }
 
