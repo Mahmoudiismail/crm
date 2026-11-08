@@ -110,7 +110,7 @@ try {
     Write-Log "Total data rows in OPD Report: $lastRow"
 
     $startRow = $headerRow + 1
-    $totalDataRows = $lastRow - $headerRow
+    $usedColumnCount = $Sheet.UsedRange.Columns.Count
 
     Write-Log "Scanning DEPT column..."
     $readTimer = [System.Diagnostics.Stopwatch]::StartNew()
@@ -139,7 +139,19 @@ try {
             }
             $null = $targetDeptsMap[$targetChir].Add($deptVal)
         }
+    } else {
+        $val = [string]$deptRangeValues
+        if (-not [string]::IsNullOrWhiteSpace($val)) {
+            $deptVal = $val.Trim().ToUpper()
+            $targetChir = "OTHERS"
+            if ($mappingHash.ContainsKey($deptVal)) { $targetChir = $mappingHash[$deptVal] }
+            if (-not $targetDeptsMap.ContainsKey($targetChir)) {
+                $targetDeptsMap[$targetChir] = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+            }
+            $null = $targetDeptsMap[$targetChir].Add($deptVal)
+        }
     }
+    if ($targetDeptsMap.Count -eq 0) { throw "No department values found; no output files generated" }
 
     $templateTimer = [System.Diagnostics.Stopwatch]::StartNew()
     $templatePath = Join-Path $env:TEMP "OPD_Template_$([Guid]::NewGuid().ToString('N')).xlsm"
