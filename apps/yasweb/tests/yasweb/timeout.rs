@@ -46,7 +46,7 @@ fn test_generate_mis_reports_wait_js_normal_timeout() {
     assert!(js.contains("})(10);"));
     assert!(js
         .trim_start()
-        .starts_with("return await (async function(timeoutSeconds)"));
+        .starts_with("(async function(timeoutSeconds)"));
     // The script executes in the report-frame context; it must not traverse
     // iframe documents from the parent page.
     assert!(!js.contains("frame.contentDocument"));
