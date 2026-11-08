@@ -580,18 +580,13 @@ fn generate_step1_js(report_type: &str) -> Result<String> {
     .replace("__REPORT_TYPE_JSON__", &serde_json::to_string(report_type)?))
 }
 
-fn generate_step2_js(
-    report_type: &str,
-    report_name: &str,
-    timeout_minutes: u64,
-) -> Result<String> {
-    Ok(load_managed_browser_script(
-        "select_report.js",
-        include_str!("scripts/select_report.js"),
-    )?
-    .replace("__REPORT_TYPE_JSON__", &serde_json::to_string(report_type)?)
-    .replace("__REPORT_NAME_JSON__", &serde_json::to_string(report_name)?)
-    .replace("__TIMEOUT_MINUTES__", &timeout_minutes.to_string()))
+fn generate_step2_js(report_type: &str, report_name: &str, timeout_minutes: u64) -> Result<String> {
+    Ok(
+        load_managed_browser_script("select_report.js", include_str!("scripts/select_report.js"))?
+            .replace("__REPORT_TYPE_JSON__", &serde_json::to_string(report_type)?)
+            .replace("__REPORT_NAME_JSON__", &serde_json::to_string(report_name)?)
+            .replace("__TIMEOUT_MINUTES__", &timeout_minutes.to_string()),
+    )
 }
 
 #[cfg(test)]
