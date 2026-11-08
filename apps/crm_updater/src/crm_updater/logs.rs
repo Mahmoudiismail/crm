@@ -141,7 +141,11 @@ fn create_verified_archive(files: &[CollectedFile], temp_path: &Path) -> Result<
     Ok(())
 }
 
-fn collect_files(exe_dir: &Path, legacy_logs_dir: &Path, config: &UpdaterConfig) -> Vec<CollectedFile> {
+fn collect_files(
+    exe_dir: &Path,
+    legacy_logs_dir: &Path,
+    config: &UpdaterConfig,
+) -> Vec<CollectedFile> {
     let mut files = Vec::new();
     let mut seen = HashSet::new();
 
@@ -187,7 +191,12 @@ fn collect_files(exe_dir: &Path, legacy_logs_dir: &Path, config: &UpdaterConfig)
             .file_name()
             .filter(|name| !name.is_empty())
             .unwrap_or_else(|| std::ffi::OsStr::new("logs"));
-        collect_log_tree(legacy_logs_dir, Path::new("legacy_runner_logs").join(prefix).as_path(), &mut files, &mut seen);
+        collect_log_tree(
+            legacy_logs_dir,
+            Path::new("legacy_runner_logs").join(prefix).as_path(),
+            &mut files,
+            &mut seen,
+        );
     } else {
         warn!(
             "Configured legacy Runner logs directory is missing: {}",
@@ -215,7 +224,12 @@ fn collect_files(exe_dir: &Path, legacy_logs_dir: &Path, config: &UpdaterConfig)
                 continue;
             }
             let relative = path.strip_prefix(exe_dir).unwrap_or(path);
-            add_file(&mut files, &mut seen, path.to_path_buf(), relative.to_path_buf());
+            add_file(
+                &mut files,
+                &mut seen,
+                path.to_path_buf(),
+                relative.to_path_buf(),
+            );
         }
     }
 
@@ -247,12 +261,7 @@ fn collect_root_logs(
             let Some(file_name) = path.file_name() else {
                 continue;
             };
-            add_file(
-                files,
-                seen,
-                path,
-                archive_prefix.join(file_name),
-            );
+            add_file(files, seen, path, archive_prefix.join(file_name));
         }
     }
 }
@@ -388,11 +397,18 @@ mod tests {
         fs::write(diagnostics.join("sent").join("sent.html"), "<html/>").unwrap();
 
         let files = collect_files(&exe, &logs, &test_config("."));
-        let names: HashSet<_> = files.iter().map(|file| file.relative_path.clone()).collect();
+        let names: HashSet<_> = files
+            .iter()
+            .map(|file| file.relative_path.clone())
+            .collect();
         assert!(names.contains(&PathBuf::from("applications/runner_1/yasweb.log")));
         assert!(names.contains(&PathBuf::from("debug_html/failure.html")));
-        assert!(!names.iter().any(|name| name.ends_with("yasweb_config.json")));
-        assert!(!names.iter().any(|name| name.ends_with("config_snapshot.json")));
+        assert!(!names
+            .iter()
+            .any(|name| name.ends_with("yasweb_config.json")));
+        assert!(!names
+            .iter()
+            .any(|name| name.ends_with("config_snapshot.json")));
         assert!(!names.iter().any(|name| name.ends_with("sent.html")));
     }
 
@@ -417,10 +433,15 @@ mod tests {
         let relative_app_dir = app_dir.strip_prefix(&updater_dir).unwrap();
         let config = test_config(&relative_app_dir.to_string_lossy());
         let files = collect_files(&updater_dir, &legacy_logs, &config);
-        let names: HashSet<_> = files.iter().map(|file| file.relative_path.clone()).collect();
+        let names: HashSet<_> = files
+            .iter()
+            .map(|file| file.relative_path.clone())
+            .collect();
 
         assert!(names.contains(&PathBuf::from("applications/runner_1/runner.log")));
         assert!(names.contains(&PathBuf::from("applications/runner_1/logs/daily/task.log")));
-        assert!(names.contains(&PathBuf::from("legacy_runner_logs/legacy_runner_logs/old_task.log")));
+        assert!(names.contains(&PathBuf::from(
+            "legacy_runner_logs/legacy_runner_logs/old_task.log"
+        )));
     }
 }
