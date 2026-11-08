@@ -455,7 +455,7 @@ pub fn navigate_and_run_report(
                         tracing::debug!("Executing JavaScript to apply filters...");
                         let step4_fill_js = format!(
                             r#"
-                                        (async function(filters, timeoutMinutes) {{
+                                        (async function(filters, timeoutMinutes, traceEnabled) {{
                                             function sleep(ms) {{ return new Promise(r => setTimeout(r, ms)); }}
                                             let logs = [];
                                             let doc = document;
@@ -574,8 +574,8 @@ pub fn navigate_and_run_report(
                                             logs.push("Discovered filters count: " + discoveredFilters.length);
                                             logs.push("Discovered dropdown lists: " + Object.keys(discoveredFilterOptions).length);
 
-                                            const fieldsBeforeFill = visibleFieldSnapshot();
-                                            logs.push("Visible fields before Fill Filters: " + JSON.stringify(fieldsBeforeFill));
+                                            const fieldsBeforeFill = traceEnabled ? visibleFieldSnapshot() : [];
+                                            if (traceEnabled) logs.push("Visible fields before Fill Filters: " + JSON.stringify(fieldsBeforeFill));
                                             for (const [key, value] of Object.entries(filters)) {{
                                                 const clearRequested = value === null || value === undefined || String(value).trim() === '';
                                                 logs.push((clearRequested ? "Clearing filter: " : "Applying filter: ") + key + (clearRequested ? " (explicit empty value)" : " = " + value));
@@ -662,15 +662,17 @@ pub fn navigate_and_run_report(
                                                     failedFilters.push(key);
                                                 }}
                                             }}
-                                            const fieldsAfterFill = visibleFieldSnapshot();
-                                            logs.push("Visible fields after Fill Filters: " + JSON.stringify(fieldsAfterFill));
+                                            const fieldsAfterFill = traceEnabled ? visibleFieldSnapshot() : [];
+                                            if (traceEnabled) logs.push("Visible fields after Fill Filters: " + JSON.stringify(fieldsAfterFill));
                                             if (failedFilters.length > 0) {{
                                                 return JSON.stringify({{ status: "ERROR", msg: "One or more requested filters could not be applied: " + failedFilters.join(", "), failed_filters: failedFilters, discovered_filters: discoveredFilters, discovered_filter_options: discoveredFilterOptions, visible_fields_before: fieldsBeforeFill, visible_fields_after: fieldsAfterFill, logs }});
                                             }}
                                             return JSON.stringify({{ status: "SUCCESS", discovered_filters: discoveredFilters, discovered_filter_options: discoveredFilterOptions, visible_fields_before: fieldsBeforeFill, visible_fields_after: fieldsAfterFill, logs }});
-                                        }})({});
+                                        }})({}, {}, {});
                                         "#,
-                            filters_json
+                            filters_json,
+                            timeout_minutes,
+                            tracing::enabled!(tracing::Level::TRACE)
                         );
 
                         info!("Applying Filters...");
