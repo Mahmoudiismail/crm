@@ -9,13 +9,14 @@ pub fn generate_html_report(
 ) -> String {
     let mut sections_html = String::new();
     // Use one shared column set so every branch/month table has identical dimensions.
-    let mut dynamic_columns: Vec<String> = final_datasets
-        .iter()
-        .flat_map(|dataset| dataset.data.iter())
-        .flat_map(|row| row.extra_columns.keys().cloned())
-        .collect();
-    dynamic_columns.sort();
-    dynamic_columns.dedup();
+    let mut dynamic_columns: Vec<String> = Vec::new();
+    for row in final_datasets.iter().flat_map(|dataset| dataset.data.iter()) {
+        for column in &row.extra_columns {
+            if !dynamic_columns.contains(&column.name) {
+                dynamic_columns.push(column.name.clone());
+            }
+        }
+    }
 
     for dataset in final_datasets {
         // Table Title
@@ -68,8 +69,7 @@ pub fn generate_html_report(
                 <th width=\"{w2}\" style=\"border: 1px solid #8EA9DB; height:28px; padding:5px;\">open</th>
                 <th width=\"{w3}\" style=\"border: 1px solid #8EA9DB; height:28px; padding:5px;\">% of closed</th>
                 <th width=\"{w4}\" style=\"border: 1px solid #8EA9DB; height:28px; padding:5px;\">% of open</th>
-                <th width=\"{w5}\" style=\"border: 1px solid #8EA9DB; height:28px; padding:5px;\">Grand Total</th>
-                <th width=\"{w6}\" style=\"border: 1px solid #8EA9DB; height:28px; padding:5px;\">OUL</th>",
+                <th width=\"{w5}\" style=\"border: 1px solid #8EA9DB; height:28px; padding:5px;\">Grand Total</th>",
             w0 = escape_html(&safe_widths[0]),
             w1 = escape_html(&safe_widths[1]),
             w2 = escape_html(&safe_widths[2]),
@@ -84,6 +84,10 @@ pub fn generate_html_report(
                 escape_html(column)
             ));
         }
+        sections_html.push_str(&format!(
+            "<th width=\"{w6}\" style=\"border:1px solid #8EA9DB; height:28px; padding:5px;\">OUL</th>",
+            w6 = escape_html(&safe_widths[6]),
+        ));
         sections_html.push_str("</tr>");
 
         let mut ds_closed_total = 0.0;
@@ -128,27 +132,28 @@ pub fn generate_html_report(
                     <td style=\"border: 1px solid #8EA9DB; height:28px; padding:5px; text-align: center; vertical-align: middle;\">{}</td>
                     <td style=\"border: 1px solid #8EA9DB; height:28px; padding:5px; text-align: center; vertical-align: middle;\">{}</td>
                     <td style=\"border: 1px solid #8EA9DB; height:28px; padding:5px; text-align: center; vertical-align: middle;\">{}</td>
-                    <td style=\"border: 1px solid #8EA9DB; height:28px; padding:5px; text-align: center; vertical-align: middle;\">{}</td>
                     <td style=\"border: 1px solid #8EA9DB; height:28px; padding:5px; text-align: center; vertical-align: middle;\">{}</td>",
                 escape_html(&row.team),
                 closed_str,
                 open_str,
                 perc_closed_str,
                 perc_open_str,
-                grand_total_str,
-                row.oul
+                grand_total_str
             ));
             for column in &dynamic_columns {
-                let value = row
-                    .extra_columns
-                    .get(column)
-                    .map(String::as_str)
+                let value = row.extra_columns.iter()
+                    .find(|item| item.name == *column)
+                    .map(|item| item.value.as_str())
                     .unwrap_or("");
                 sections_html.push_str(&format!(
                     "<td style=\"height:28px; border:1px solid #8EA9DB; padding:5px; text-align:center; vertical-align:middle;\">{}</td>",
                     escape_html(value)
                 ));
             }
+            sections_html.push_str(&format!(
+                "<td style=\"height:28px; border:1px solid #8EA9DB; padding:5px; text-align:center; vertical-align:middle;\">{}</td>",
+                row.oul
+            ));
             sections_html.push_str("</tr>");
         }
 
@@ -204,6 +209,7 @@ pub fn generate_html_report(
         for _ in &dynamic_columns {
             sections_html.push_str("<td style=\"height:28px; border:1px solid #8EA9DB; padding:5px; text-align:center; vertical-align:middle;\"></td>");
         }
+        sections_html.push_str("<td style=\"height:28px; border:1px solid #8EA9DB; padding:5px; text-align:center; vertical-align:middle;\"></td>");
         sections_html.push_str("</tr>");
 
         sections_html.push_str("</table><br/>");
