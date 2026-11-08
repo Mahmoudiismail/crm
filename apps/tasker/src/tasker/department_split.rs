@@ -186,24 +186,27 @@ mod tests {
 }
 
 #[test]
-fn test_special_cells_and_com_cleanup() {
+fn test_department_split_uses_single_source_read_and_bulk_transfer() {
     let src = include_str!("scripts/department_split.ps1");
 
-    // Verify SpecialCells is wrapped properly
-    // Use replace to strip out \r on windows for consistent matching
-    let src_norm = src.replace("\r\n", "\n");
     assert!(
-            src_norm.contains("try {\n                $visibleRows = $dataBodyRange.SpecialCells(12) # xlCellTypeVisible\n            } catch {\n                # This is normal if 0 rows matched the AutoFilter criteria\n                $visibleRows = $null\n            }"),
-            "Should contain specific try/catch for SpecialCells"
-        );
-
-    // Verify counts are checked
+        src.contains("$sourceValues = $sourceRange.Value2"),
+        "Should read the OPD data range once"
+    );
     assert!(
-        src.contains("if ($count -gt 0)"),
-        "Should verify row count before copying"
+        src.contains("$targetRowsMap[$targetChair].Add($r)"),
+        "Should group source row indexes by target"
+    );
+    assert!(
+        src.contains("$destinationRange.Value2 = $outputValues"),
+        "Should write each target data matrix in one COM operation"
+    );
+    assert!(
+        !src.contains(".AutoFilter(") && !src.contains(".SpecialCells(12)"),
+        "Should not filter and transfer source rows separately for each target"
     );
 
-    // Verify thorough COM cleanup is performed
+    // Verify thorough COM cleanup is performed.
     assert!(
         src.contains("[System.Runtime.InteropServices.Marshal]::ReleaseComObject($TargetWB)"),
         "Should release TargetWB"

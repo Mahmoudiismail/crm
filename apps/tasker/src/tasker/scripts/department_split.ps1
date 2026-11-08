@@ -112,46 +112,42 @@ try {
     $startRow = $headerRow + 1
     $usedColumnCount = $Sheet.UsedRange.Columns.Count
 
-    Write-Log "Scanning DEPT column..."
+    Write-Log "Reading OPD Report data once for all output groups..."
     $readTimer = [System.Diagnostics.Stopwatch]::StartNew()
-    $deptRangeValues = $Sheet.Range($Sheet.Cells.Item($startRow, $deptCol), $Sheet.Cells.Item($lastRow, $deptCol)).Value2
+    $sourceRange = $Sheet.Range(
+        $Sheet.Cells.Item($startRow, 1),
+        $Sheet.Cells.Item($lastRow, $usedColumnCount)
+    )
+    $sourceValues = $sourceRange.Value2
     $readTimer.Stop()
+    Write-Log "  -> Read source data in $($readTimer.ElapsedMilliseconds) ms"
 
-    $targetDeptsMap = @{}
-    $allRawDepts = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-
-    if ($deptRangeValues -is [System.Array]) {
-        $numRows = $deptRangeValues.GetLength(0)
-        for ($r = 1; $r -le $numRows; $r++) {
-            $val = [string]$deptRangeValues.GetValue($r, 1)
-            if ([string]::IsNullOrWhiteSpace($val)) { continue }
-
-            $deptVal = $val.Trim().ToUpper()
-            $null = $allRawDepts.Add($deptVal)
-
-            $targetChir = "OTHERS"
-            if ($mappingHash.ContainsKey($deptVal)) {
-                $targetChir = $mappingHash[$deptVal]
-            }
-
-            if (-not $targetDeptsMap.ContainsKey($targetChir)) {
-                $targetDeptsMap[$targetChir] = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-            }
-            $null = $targetDeptsMap[$targetChir].Add($deptVal)
+    # Store source row indexes per output group. This preserves source order and
+    # avoids repeating AutoFilter/SpecialCells COM calls for every department.
+    $targetRowsMap = @{}
+    $rowCount = $lastRow - $startRow + 1
+    for ($r = 1; $r -le $rowCount; $r++) {
+        if ($sourceValues -is [System.Array]) {
+            $val = [string]$sourceValues.GetValue($r, $deptCol)
+        } else {
+            $val = [string]$sourceValues
         }
-    } else {
-        $val = [string]$deptRangeValues
-        if (-not [string]::IsNullOrWhiteSpace($val)) {
-            $deptVal = $val.Trim().ToUpper()
-            $targetChir = "OTHERS"
-            if ($mappingHash.ContainsKey($deptVal)) { $targetChir = $mappingHash[$deptVal] }
-            if (-not $targetDeptsMap.ContainsKey($targetChir)) {
-                $targetDeptsMap[$targetChir] = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-            }
-            $null = $targetDeptsMap[$targetChir].Add($deptVal)
+        if ([string]::IsNullOrWhiteSpace($val)) { continue }
+
+        $deptVal = $val.Trim().ToUpper()
+        # Match the previous AutoFilter behavior: do not include source cells
+        # whose surrounding whitespace would prevent an exact filter match.
+        if ($val -ne $val.Trim()) { continue }
+        $targetChair = "OTHERS"
+        if ($mappingHash.ContainsKey($deptVal)) { $targetChair = $mappingHash[$deptVal] }
+
+        if (-not $targetRowsMap.ContainsKey($targetChair)) {
+            $targetRowsMap[$targetChair] = [System.Collections.Generic.List[int]]::new()
         }
+        $targetRowsMap[$targetChair].Add($r)
     }
-    if ($targetDeptsMap.Count -eq 0) { throw "No department values found; no output files generated" }
+    if ($targetRowsMap.Count -eq 0) { throw "No department values found; no output files generated" }
+    Write-Log "Grouped $rowCount source rows into $($targetRowsMap.Count) output groups"
 
     $templateTimer = [System.Diagnostics.Stopwatch]::StartNew()
     $templatePath = Join-Path $env:TEMP "OPD_Template_$([Guid]::NewGuid().ToString('N')).xlsm"
@@ -179,41 +175,32 @@ try {
         $TargetWB = $Excel.Workbooks.Open($targetPath)
         $TargetSheet = $TargetWB.Worksheets.Item("OPD Report")
 
-        $rawDeptsList = @($targetDeptsMap[$target])
+        $sourceRowIndexes = $targetRowsMap[$target]
+        $copiedRows = $sourceRowIndexes.Count
+        if ($copiedRows -le 0) { throw "No source rows found for department group '${target}'" }
 
-        Write-Log "  -> Filtering source rows for ${target}..."
-        if ($Sheet.AutoFilterMode) { $Sheet.AutoFilterMode = $false }
-        $opdRange = $Sheet.Range($Sheet.Cells.Item($headerRow, 1), $Sheet.Cells.Item($lastRow, $usedColumnCount))
-        if ($rawDeptsList.Count -eq 1) {
-            $opdRange.AutoFilter($deptCol, $rawDeptsList[0]) | Out-Null
-        } else {
-            $opdRange.AutoFilter($deptCol, [string[]]$rawDeptsList, 7) | Out-Null
+        Write-Log "  -> Building one $copiedRows x $usedColumnCount output matrix..."
+        $transferTimer = [System.Diagnostics.Stopwatch]::StartNew()
+        $outputValues = [System.Array]::CreateInstance([object], @($copiedRows, $usedColumnCount), @(1, 1))
+        for ($destinationIndex = 0; $destinationIndex -lt $copiedRows; $destinationIndex++) {
+            $sourceIndex = $sourceRowIndexes[$destinationIndex]
+            for ($column = 1; $column -le $usedColumnCount; $column++) {
+                if ($sourceValues -is [System.Array]) {
+                    $outputValues.SetValue($sourceValues.GetValue($sourceIndex, $column), ($destinationIndex + 1), $column)
+                } else {
+                    $outputValues.SetValue($sourceValues, ($destinationIndex + 1), $column)
+                }
+            }
         }
 
-        $dataBodyRange = $Sheet.Range($Sheet.Cells.Item($startRow, 1), $Sheet.Cells.Item($lastRow, $usedColumnCount))
-        $visibleRows = $null
-        try { $visibleRows = $dataBodyRange.SpecialCells(12) } catch { $visibleRows = $null }
-        if ($null -eq $visibleRows) { throw "No visible rows matched department group '${target}'" }
-
-        # Transfer each visible area through Value2; avoid the Range.Copy/clipboard API.
-        $destinationRow = $startRow
-        $copiedRows = 0
-        foreach ($area in $visibleRows.Areas) {
-            $areaRowCount = [int]$area.Rows.Count
-            $areaColumnCount = [int]$area.Columns.Count
-            if ($areaRowCount -le 0 -or $areaColumnCount -le 0) { continue }
-
-            $areaValues = $area.Value2
-            $destinationRange = $TargetSheet.Range(
-                $TargetSheet.Cells.Item($destinationRow, 1),
-                $TargetSheet.Cells.Item(($destinationRow + $areaRowCount - 1), $areaColumnCount)
-            )
-            $destinationRange.Value2 = $areaValues
-            $copiedRows += $areaRowCount
-            $destinationRow += $areaRowCount
-            Write-Log "  -> Transferred visible area ($areaRowCount rows) using Value2"
-        }
-        if ($copiedRows -le 0) { throw "No rows were transferred for department group '${target}'" }
+        # One COM write per output workbook instead of one write per visible area.
+        $destinationRange = $TargetSheet.Range(
+            $TargetSheet.Cells.Item($startRow, 1),
+            $TargetSheet.Cells.Item(($startRow + $copiedRows - 1), $usedColumnCount)
+        )
+        $destinationRange.Value2 = $outputValues
+        $transferTimer.Stop()
+        Write-Log "  -> Bulk data transfer completed in $($transferTimer.ElapsedMilliseconds) ms"
 
         $destinationDeptValues = $TargetSheet.Range(
             $TargetSheet.Cells.Item($startRow, $deptCol),
@@ -230,7 +217,6 @@ try {
         if ($verifiedRows -ne $copiedRows) {
             throw "Copy verification failed for '${target}': expected $copiedRows rows, found $verifiedRows non-empty DEPT values"
         }
-        if ($Sheet.AutoFilterMode) { $Sheet.AutoFilterMode = $false }
         Write-Log "  -> Verified $verifiedRows copied rows for ${target}"
 
         $refreshTimer = [System.Diagnostics.Stopwatch]::StartNew()
@@ -274,7 +260,6 @@ try {
 
 } catch {
     Write-Error "Failed to process dashboard (target: ${target}): $_"
-    if ($TargetWB) { try { $TargetWB.Close($false) } catch {} }
     if ($TargetWB) { try { $TargetWB.Close($false) } catch {} }
     if ($Workbook) { try { $Workbook.Close($false) } catch {} }
     [System.Environment]::ExitCode = 1
