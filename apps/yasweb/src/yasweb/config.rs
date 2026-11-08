@@ -275,8 +275,8 @@ mod tests {
     }
 
     #[test]
-    fn explicit_date_formats_are_preserved_for_standard_report() {
-        let mut config = report_with_date_keys("Standard Report", "dd-mm-yyyy", "yyyy/mm/dd");
+    fn explicit_date_formats_are_preserved_for_other_report_types() {
+        let mut config = report_with_date_keys("Custom Report", "dd-mm-yyyy", "yyyy/mm/dd");
         assert!(!config.finalize_runtime_fields());
         let report = &config.reports["Example"];
         assert_eq!(report.start_date_key.as_ref().unwrap().format, "dd-mm-yyyy");
