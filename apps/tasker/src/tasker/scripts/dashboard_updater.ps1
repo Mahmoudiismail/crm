@@ -184,25 +184,25 @@ try {
         }
     }
 
+    # Refresh every workbook connection before refreshing the target PivotTable.
+    # RefreshAll may start asynchronous Power Query/Data Model work, so wait before
+    # calling PivotTable.RefreshTable() and before saving the dashboard.
+    Write-Host "PS: Refreshing all workbook connections and the Data Model..."
+    $workbook.RefreshAll()
+
+    try {
+        $excel.CalculateUntilAsyncQueriesDone()
+        Write-Host "PS: All asynchronous workbook queries completed."
+    }
+    catch {
+        throw "Dashboard data refresh did not complete: $($_.Exception.Message)"
+    }
+
     if (-not $pivotFound) {
-        Write-Host (
-            "PS: PivotTable2 wasn't found. " +
-            "Refreshing all workbook connections..."
-        )
-
-        $workbook.RefreshAll()
-
-        try {
-            $excel.CalculateUntilAsyncQueriesDone()
-
-            Write-Host "PS: Async queries completed."
-        }
-        catch {
-            Write-Host (
-                "PS: CalculateUntilAsyncQueriesDone warning: " +
-                "$($_.Exception.Message)"
-            )
-        }
+        Write-Host "PS: Target PivotTable2 wasn't found; workbook connections were refreshed."
+    }
+    else {
+        Write-Host "PS: Target PivotTable2 was refreshed after workbook connections."
     }
 
     Write-Host "PS: Starting workbook calculation..."
@@ -231,11 +231,14 @@ try {
         }
     }
 
-    Write-Host "PS: Saving dashboard..."
+    Write-Host "PS: Saving refreshed dashboard..."
 
     $workbook.Save()
+    if (-not $workbook.Saved) {
+        throw "Excel did not confirm that the refreshed dashboard was saved."
+    }
 
-    Write-Host "PS: Dashboard updated successfully."
+    Write-Host "PS: Refreshed dashboard saved successfully before email generation."
 }
 catch {
     Write-Host "PS ERROR: $($_.Exception.Message)"
