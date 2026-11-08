@@ -122,7 +122,7 @@ This task is designed to process multiple ticket report CSV files and augment th
 
 ### `dashboard_updater` Task
 
-This task is similar to `csv_analysis`, in that it processes raw ticket CSVs to generate an `output_file` (`results.csv`), but instead of emailing multiple pivot reports, it relies on Data Model connections inside an existing Microsoft Excel dashboard file. It uses COM automation to open the Excel file, refresh its PowerQuery data connections and Pivot Tables, save the workbook, and email the updated dashboard to specified stakeholders via Outlook.
+This task is similar to `csv_analysis`, in that it processes raw ticket CSVs to generate an `output_file` (`results.csv`), but instead of emailing multiple pivot reports, it relies on Data Model connections inside an existing Microsoft Excel dashboard file. It uses COM automation to open the Excel file, refresh all workbook connections (including Power Query/Data Model), wait for asynchronous refresh completion, refresh the target PivotTable, calculate the workbook, and save it. The dashboard update step must complete successfully before any following email or slicer extraction step is allowed to proceed. A failed asynchronous refresh or an unconfirmed workbook save fails the task rather than emailing stale dashboard data.
 
 #### Example Configuration
 ```json
@@ -163,8 +163,8 @@ The email pivot HTML renderer sorts borrowed ticket-row references instead of cl
 The `crm_open_sohail` task automates the generation and delivery of Branch & Month dashboard email summaries based on Excel slicer iterations. It acts as an orchestrator around the standard `dashboard_updater`.
 
 ### Workflow
-1. Executes the standard `dashboard_updater` task using its nested `dashboard_config`.
-2. Generates and executes a PowerShell COM script to open the target Dashboard Excel workbook.
+1. Executes the standard `dashboard_updater` task using its nested `dashboard_config`. This refreshes all workbook connections, waits for asynchronous queries, refreshes the dashboard PivotTable, calculates, and saves the original dashboard workbook before continuing.
+2. Generates and executes a PowerShell COM script to open the target Dashboard Excel workbook for slicer-driven extraction.
 3. Automatically maps and iterates over Slicer Items for "Branch" and "Month" slicers.
 4. Extracts tabular data dynamically from `PivotTable1` in the `TKT - Dashboard` worksheet.
 5. Loads data from `team_mapping_file` (a CSV) to associate team names with owners and target email addresses, mapping these to an `OUL` HTML hyperlink (`<a href="mailto:...">@Owner</a>`) or falling back to plain text mention or default string.
