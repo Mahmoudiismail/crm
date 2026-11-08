@@ -6,6 +6,10 @@ use std::io::Write;
 use std::path::PathBuf;
 use tracing::info;
 
+fn normalize_windows_path_for_excel(path: &str) -> &str {
+    path.strip_prefix(r"\\?\").unwrap_or(path)
+}
+
 fn write_mapping_temp_file(mapping: &HashMap<String, String>) -> Result<PathBuf> {
     let mapping_json = serde_json::to_vec(mapping)?;
     let mut file = tempfile::Builder::new()
@@ -73,7 +77,7 @@ pub fn run(config: &DepartmentSplitConfig) -> Result<()> {
         let path_str = dashboard_path
             .to_str()
             .context("Failed to convert dashboard_path to string")?;
-        path_str.strip_prefix(r"\?\").unwrap_or(path_str)
+        normalize_windows_path_for_excel(path_str)
     };
 
     let out_dir = crate::tasker::csv_task::resolve_relative_to_exe_dir(&config.output_dir);
@@ -88,7 +92,7 @@ pub fn run(config: &DepartmentSplitConfig) -> Result<()> {
         let path_str = out_dir_canon
             .to_str()
             .context("Failed to convert out_dir_canon to string")?;
-        path_str.strip_prefix(r"\?\").unwrap_or(path_str)
+        normalize_windows_path_for_excel(path_str)
     };
 
     // Use a unique path so concurrent task runs cannot overwrite each other's mapping.
@@ -119,6 +123,18 @@ pub fn run(config: &DepartmentSplitConfig) -> Result<()> {
 #[cfg(test)]
 #[allow(unused_imports)]
 mod tests {
+    #[test]
+    fn excel_path_normalization_removes_windows_extended_prefix() {
+        assert_eq!(
+            super::normalize_windows_path_for_excel(r"\\?\C:\Reports\10-OP.xlsm"),
+            r"C:\Reports\10-OP.xlsm"
+        );
+        assert_eq!(
+            super::normalize_windows_path_for_excel(r"C:\Reports\10-OP.xlsm"),
+            r"C:\Reports\10-OP.xlsm"
+        );
+    }
+
     #[test]
     fn mapping_temp_files_are_unique_and_contain_json() {
         use super::write_mapping_temp_file;
