@@ -88,14 +88,18 @@ mod tests {
     #[test]
     fn dashboard_refreshes_all_connections_then_saves_before_returning() {
         let src = include_str!("scripts/dashboard_updater.ps1");
-        let refresh_all = src.find("$workbook.RefreshAll()").expect("RefreshAll must run");
+        let refresh_all = src
+            .find("$workbook.RefreshAll()")
+            .expect("RefreshAll must run");
         let wait_for_queries = src
             .find("$excel.CalculateUntilAsyncQueriesDone()")
             .expect("Async refresh must complete before save");
         let pivot_refresh = src
             .find("$pivotTable.RefreshTable()")
             .expect("Target PivotTable must be refreshed");
-        let save = src.find("$workbook.Save()").expect("Dashboard must be saved");
+        let save = src
+            .find("$workbook.Save()")
+            .expect("Dashboard must be saved");
         assert!(refresh_all < wait_for_queries);
         assert!(wait_for_queries < pivot_refresh);
         assert!(pivot_refresh < save);

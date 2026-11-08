@@ -9,7 +9,8 @@ pub fn generate_html_report(
 ) -> String {
     let mut sections_html = String::new();
     // Use one shared column set so every branch/month table has identical dimensions.
-    let mut dynamic_columns: Vec<String> = final_datasets.iter()
+    let mut dynamic_columns: Vec<String> = final_datasets
+        .iter()
         .flat_map(|dataset| dataset.data.iter())
         .flat_map(|row| row.extra_columns.keys().cloned())
         .collect();
@@ -138,7 +139,11 @@ pub fn generate_html_report(
                 row.oul
             ));
             for column in &dynamic_columns {
-                let value = row.extra_columns.get(column).map(String::as_str).unwrap_or("");
+                let value = row
+                    .extra_columns
+                    .get(column)
+                    .map(String::as_str)
+                    .unwrap_or("");
                 sections_html.push_str(&format!(
                     "<td style=\"height:28px; border:1px solid #8EA9DB; padding:5px; text-align:center; vertical-align:middle;\">{}</td>",
                     escape_html(value)
