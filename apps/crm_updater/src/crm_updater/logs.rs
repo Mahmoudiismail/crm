@@ -258,7 +258,7 @@ fn collect_root_logs(
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_file() && has_extension(&path, &["log"]) {
-            let Some(file_name) = path.file_name() else {
+            let Some(file_name) = path.file_name().map(PathBuf::from) else {
                 continue;
             };
             add_file(files, seen, path, archive_prefix.join(file_name));
