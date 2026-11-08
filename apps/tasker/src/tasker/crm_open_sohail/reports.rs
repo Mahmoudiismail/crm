@@ -203,14 +203,17 @@ pub fn generate_html_report(
                 <td style=\"border: 1px solid #8EA9DB; height:28px; padding:5px; text-align: center; vertical-align: middle;\">{}</td>
                 <td style=\"border: 1px solid #8EA9DB; height:28px; padding:5px; text-align: center; vertical-align: middle;\">{}</td>
                 <td style=\"border: 1px solid #8EA9DB; height:28px; padding:5px; text-align: center; vertical-align: middle;\">{}</td>
-                <td style=\"border: 1px solid #8EA9DB; height:28px; padding:5px; text-align: center; vertical-align: middle;\">{}</td>
-                <td style=\"border: 1px solid #8EA9DB; height:28px; padding:5px; text-align: center; vertical-align: middle;\"></td>",
-            total_closed_str, total_open_str, total_perc_closed_str, total_perc_open_str, total_grand_str
+                <td style=\"border: 1px solid #8EA9DB; height:28px; padding:5px; text-align: center; vertical-align: middle;\">{}</td>",
+            total_closed_str, total_open_str, total_perc_closed_str, total_perc_open_str
         ));
         for _ in &dynamic_columns {
             sections_html.push_str("<td style=\"height:28px; border:1px solid #8EA9DB; padding:5px; text-align:center; vertical-align:middle;\"></td>");
         }
-        sections_html.push_str("<td style=\"height:28px; border:1px solid #8EA9DB; padding:5px; text-align:center; vertical-align:middle;\"></td>");
+        sections_html.push_str(&format!(
+            "<td style=\"height:28px; border:1px solid #8EA9DB; padding:5px; text-align:center; vertical-align:middle;\">{}</td>
+             <td style=\"height:28px; border:1px solid #8EA9DB; padding:5px; text-align:center; vertical-align:middle;\"></td>",
+            total_grand_str
+        ));
         sections_html.push_str("</tr>");
 
         sections_html.push_str("</table><br/>");
