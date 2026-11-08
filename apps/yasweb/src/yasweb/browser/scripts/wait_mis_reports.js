@@ -1,4 +1,5 @@
-(async function(timeoutSeconds) {
+
+        return await (async function(timeoutSeconds) {
             function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
             const logs = [];
             const deadline = Date.now() + timeoutSeconds * 1000;
@@ -45,3 +46,4 @@
             return JSON.stringify({ status: "ERROR", msg: "Report frame did not expose visible Standard Report, Report Manager, and Search controls before timeout",
                 logs: logs.concat(["Report-frame readiness timeout diagnostics: " + JSON.stringify(inspect())]) });
         })(__TIMEOUT_SECONDS__);
+        
