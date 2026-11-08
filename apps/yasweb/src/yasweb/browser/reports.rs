@@ -282,8 +282,7 @@ pub fn navigate_and_run_report(
                         );
                         let step2_js = load_managed_browser_script("select_report.js", include_str!("scripts/select_report.js"))?
                             .replace("__REPORT_TYPE_JSON__", &serde_json::to_string(&active_report_type)?)
-                            .replace("__REPORT_NAME_JSON__", &serde_json::to_string(&active_report_name)?)
-                            .replace("__TIMEOUT_MINUTES__", &timeout_minutes.to_string());
+                            .replace("__REPORT_NAME_JSON__", &serde_json::to_string(&active_report_name)?);
 
                         info!("Searching & Selecting Report: {}", active_report_name);
                         evaluate_report_frame_step(tab, &step2_js, "Step 2 (Select Report)")?;
@@ -315,8 +314,7 @@ pub fn navigate_and_run_report(
                         tracing::debug!("Executing JavaScript to apply filters...");
                         let step4_fill_js = load_managed_browser_script("fill_filters.js", include_str!("scripts/fill_filters.js"))?
                             .replace("__FILTERS_JSON__", &filters_json)
-                            .replace("__TIMEOUT_MINUTES__", &timeout_minutes.to_string())
-                            .replace("__TRACE_ENABLED__", if tracing::enabled!(tracing::Level::TRACE) { "true" } else { "false" });
+                            .replace("__TIMEOUT_MINUTES__", &timeout_minutes.to_string());
 
                         info!("Applying Filters...");
                         let step4_res = evaluate_report_frame_step(
