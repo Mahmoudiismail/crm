@@ -1,4 +1,5 @@
-(async function(filters, timeoutMinutes) {
+
+                                        (async function(filters, timeoutMinutes, traceEnabled) {
                                             function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
                                             let logs = [];
                                             let doc = document;
@@ -26,6 +27,7 @@
                                             async function simulateTyping(inputElem, text) {
                                                 inputElem.focus();
                                                 inputElem.value = '';
+                                                inputElem.dispatchEvent(new Event('input', { bubbles: true }));
                                                 for (let i = 0; i < text.length; i++) {
                                                     inputElem.value += text[i];
                                                     inputElem.dispatchEvent(new Event('input', { bubbles: true }));
@@ -36,11 +38,27 @@
                                                 inputElem.dispatchEvent(new Event('blur', { bubbles: true }));
                                             }
 
-                                            const labels = doc.querySelectorAll('mat-label');
+                                            const labels = Array.from(doc.querySelectorAll('mat-label')).filter(label => label.getClientRects().length > 0);
                                             const discoveredFilters = [];
                                             const discoveredFilterOptions = {};
                                             const failedFilters = [];
                                             const normalize = value => (value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+
+                                            function visibleFieldSnapshot() {
+                                                return Array.from(doc.querySelectorAll('mat-label')).filter(label => label.getClientRects().length > 0).map(label => {
+                                                    const control = findFilterControl(label);
+                                                    if (!control) return { label: (label.innerText || label.textContent || '').trim(), control_found: false };
+                                                    return { label: (label.innerText || label.textContent || '').trim(), control_found: true, tag: control.tagName, type: control.getAttribute('type') || '', value: control.value ?? control.innerText ?? '', placeholder: control.getAttribute('placeholder') || '', ariaLabel: control.getAttribute('aria-label') || '', formControlName: control.getAttribute('formcontrolname') || '', id: control.id || '' };
+                                                });
+                                            }
+                                            function matchesLabel(key, labelText) {
+                                                const keyNorm = normalize(key.replace(/_/g, ' '));
+                                                const labelNorm = normalize(labelText.replace(/_/g, ' '));
+                                                if (keyNorm === labelNorm) return true;
+                                                if (/allocation[_ ]date[_ ]from/i.test(key)) return /(^|\s)from date$/.test(labelNorm);
+                                                if (/allocation[_ ]date[_ ]to/i.test(key)) return /(^|\s)to date$/.test(labelNorm);
+                                                return false;
+                                            }
 
                                             function findFilterControl(label) {
                                                 const field = label.closest('mat-form-field');
@@ -101,21 +119,30 @@
                                             logs.push("Discovered filters count: " + discoveredFilters.length);
                                             logs.push("Discovered dropdown lists: " + Object.keys(discoveredFilterOptions).length);
 
+                                            const fieldsBeforeFill = traceEnabled ? visibleFieldSnapshot() : [];
+                                            if (traceEnabled) logs.push("Visible fields before Fill Filters: " + JSON.stringify(fieldsBeforeFill));
                                             for (const [key, value] of Object.entries(filters)) {
-                                                if (!value || value.trim() === '') {
-                                                    logs.push("Skipping empty filter: " + key);
-                                                    continue;
-                                                }
-                                                logs.push("Applying filter: " + key + " = " + value);
-                                                let normalizedKey = key.toLowerCase().replace(/_/g, ' ');
+                                                const clearRequested = value === null || value === undefined || String(value).trim() === '';
+                                                logs.push((clearRequested ? "Clearing filter: " : "Applying filter: ") + key + (clearRequested ? " (explicit empty value)" : " = " + value));
                                                 let filterFilled = false;
 
                                                 for (let lbl of labels) {
-                                                    let labelText = lbl.innerText.trim().toLowerCase().replace(/_/g, ' ');
-                                                    if (labelText === normalizedKey) {
+                                                    let labelText = (lbl.innerText || lbl.textContent || '').trim();
+                                                    if (matchesLabel(key, labelText)) {
                                                         const input = findFilterControl(lbl);
                                                         if (input) {
+                                                            if (clearRequested && !(input.tagName === 'INPUT' && input.type === 'text')) {
+                                                                logs.push("Ignoring empty value for non-text filter control: " + key);
+                                                                filterFilled = true;
+                                                                break;
+                                                            }
                                                             if (input.tagName === 'INPUT') {
+                                                                if (clearRequested) {
+                                                                    await simulateTyping(input, '');
+                                                                    filterFilled = input.value === '';
+                                                                    logs.push((filterFilled ? "Cleared text input for " : "Failed to clear text input for ") + key);
+                                                                    break;
+                                                                }
                                                                 let v = value;
                                                                 if (key.toLowerCase().includes('date') && v.includes('-')) {
                                                                     const parts = v.split(' ')[0].split('-');
@@ -174,8 +201,11 @@
                                                     failedFilters.push(key);
                                                 }
                                             }
+                                            const fieldsAfterFill = traceEnabled ? visibleFieldSnapshot() : [];
+                                            if (traceEnabled) logs.push("Visible fields after Fill Filters: " + JSON.stringify(fieldsAfterFill));
                                             if (failedFilters.length > 0) {
-                                                return JSON.stringify({ status: "ERROR", msg: "One or more requested filters could not be applied: " + failedFilters.join(", "), failed_filters: failedFilters, discovered_filters: discoveredFilters, discovered_filter_options: discoveredFilterOptions, logs });
+                                                return JSON.stringify({ status: "ERROR", msg: "One or more requested filters could not be applied: " + failedFilters.join(", "), failed_filters: failedFilters, discovered_filters: discoveredFilters, discovered_filter_options: discoveredFilterOptions, visible_fields_before: fieldsBeforeFill, visible_fields_after: fieldsAfterFill, logs });
                                             }
-                                            return JSON.stringify({ status: "SUCCESS", discovered_filters: discoveredFilters, discovered_filter_options: discoveredFilterOptions, logs });
-                                        })(__FILTERS_JSON__, __TIMEOUT_MINUTES__);
+                                            return JSON.stringify({ status: "SUCCESS", discovered_filters: discoveredFilters, discovered_filter_options: discoveredFilterOptions, visible_fields_before: fieldsBeforeFill, visible_fields_after: fieldsAfterFill, logs });
+                                        })(__FILTERS_JSON__, __TIMEOUT_MINUTES__, __TRACE_ENABLED__);
+                                        
