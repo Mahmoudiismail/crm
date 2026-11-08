@@ -242,12 +242,12 @@ mod tests {
     }
 
     #[test]
-    fn standard_report_defaults_to_unpadded_date_format_for_both_keys() {
+    fn standard_report_defaults_to_full_day_abbreviated_month_format_for_both_keys() {
         let mut config = report_with_date_keys("Standard Report", "", "");
         assert!(config.finalize_runtime_fields());
         let report = &config.reports["Example"];
-        assert_eq!(report.start_date_key.as_ref().unwrap().format, "%-d-%-m-%Y");
-        assert_eq!(report.end_date_key.as_ref().unwrap().format, "%-d-%-m-%Y");
+        assert_eq!(report.start_date_key.as_ref().unwrap().format, "%d-%b-%Y 00:00");
+        assert_eq!(report.end_date_key.as_ref().unwrap().format, "%d-%b-%Y 23:59");
         assert!(!config.finalize_runtime_fields());
     }
 
