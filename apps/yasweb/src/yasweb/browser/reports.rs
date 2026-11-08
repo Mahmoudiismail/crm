@@ -314,7 +314,8 @@ pub fn navigate_and_run_report(
                         tracing::debug!("Executing JavaScript to apply filters...");
                         let step4_fill_js = load_managed_browser_script("fill_filters.js", include_str!("scripts/fill_filters.js"))?
                             .replace("__FILTERS_JSON__", &filters_json)
-                            .replace("__TIMEOUT_MINUTES__", &timeout_minutes.to_string());
+                            .replace("__TIMEOUT_MINUTES__", &timeout_minutes.to_string())
+                            .replace("__TRACE_ENABLED__", &tracing::enabled!(tracing::Level::TRACE).to_string());
 
                         info!("Applying Filters...");
                         let step4_res = evaluate_report_frame_step(
@@ -597,6 +598,38 @@ fn retry_mis_navigation(tab: &Arc<Tab>) -> Result<bool> {
 pub fn generate_mis_reports_wait_js(timeout_seconds: u64) -> Result<String> {
     Ok(load_managed_browser_script("wait_mis_reports.js", include_str!("scripts/wait_mis_reports.js"))?
         .replace("__TIMEOUT_SECONDS__", &timeout_seconds.to_string()))
+}
+
+#[cfg(test)]
+mod step4_filter_regression_tests {
+    const STEP4_SCRIPT: &str = include_str!("scripts/fill_filters.js");
+
+    #[test]
+    fn allocation_date_keys_match_visible_from_and_to_date_labels() {
+        assert!(STEP4_SCRIPT.contains("allocation[_ ]date[_ ]from"));
+        assert!(STEP4_SCRIPT.contains("allocation[_ ]date[_ ]to"));
+        assert!(STEP4_SCRIPT.contains("from date$"));
+        assert!(STEP4_SCRIPT.contains("to date$"));
+    }
+
+    #[test]
+    fn trace_field_inventory_is_gated_by_trace_flag() {
+        assert!(STEP4_SCRIPT.contains("traceEnabled ? visibleFieldSnapshot() : []"));
+        assert!(STEP4_SCRIPT.contains("Visible fields before Fill Filters"));
+        assert!(STEP4_SCRIPT.contains("Visible fields after Fill Filters"));
+    }
+
+    #[test]
+    fn explicit_empty_values_clear_only_text_inputs() {
+        assert!(STEP4_SCRIPT.contains("clearRequested && !(input.tagName === 'INPUT' && input.type === 'text')"));
+        assert!(STEP4_SCRIPT.contains("await simulateTyping(input, '')"));
+        assert!(STEP4_SCRIPT.contains("input.value === ''"));
+    }
+
+    #[test]
+    fn omitted_filter_keys_remain_untouched() {
+        assert!(STEP4_SCRIPT.contains("Object.entries(filters)"));
+    }
 }
 
 #[cfg(test)]
