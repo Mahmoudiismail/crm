@@ -125,7 +125,6 @@ try {
     # Store source row indexes per output group. This preserves source order and
     # avoids repeating AutoFilter/SpecialCells COM calls for every department.
     $targetRowsMap = @{}
-    $targetDeptsMap = @{}
     $rowCount = $lastRow - $startRow + 1
     for ($r = 1; $r -le $rowCount; $r++) {
         if ($sourceValues -is [System.Array]) {
@@ -144,10 +143,8 @@ try {
 
         if (-not $targetRowsMap.ContainsKey($targetChair)) {
             $targetRowsMap[$targetChair] = [System.Collections.Generic.List[int]]::new()
-            $targetDeptsMap[$targetChair] = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
         }
         $targetRowsMap[$targetChair].Add($r)
-        $null = $targetDeptsMap[$targetChair].Add($deptVal)
     }
     if ($targetRowsMap.Count -eq 0) { throw "No department values found; no output files generated" }
     Write-Log "Grouped $rowCount source rows into $($targetRowsMap.Count) output groups"
