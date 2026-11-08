@@ -55,6 +55,11 @@ try {
     }
     if (-not $Pivot) { throw "PivotTable '$targetPivotName' not found in '$targetSheetName'" }
 
+    # A separate temporary workbook keeps the source dashboard read-only while preserving
+    # the exact PivotTable range (including its current dynamic columns and formatting).
+    $SnapshotWorkbook = $Excel.Workbooks.Add()
+    $SnapshotSheet = $SnapshotWorkbook.Worksheets.Item(1)
+
     # Identify slicer caches
     $branchSlicerCache = $null
     $monthSlicerCache = $null
@@ -140,6 +145,16 @@ try {
         param($PivotTable, [string]$BranchCaption, [string]$MonthTitle, [ref]$Collector)
 
         $PivotTable.RefreshTable()
+
+        # Copy the complete visible PivotTable after every slicer selection. The copied
+        # range is the extraction snapshot, so columns added/removed by the slicer are retained.
+        $SnapshotSheet.Cells.Clear()
+        $PivotRange = $PivotTable.TableRange1
+        $PivotRange.Copy()
+        $SnapshotSheet.Range("A1").PasteSpecial(-4104) # xlPasteAll
+        $Excel.CutCopyMode = $false
+        $snapshotRange = $SnapshotSheet.Range("A1").Resize($PivotRange.Rows.Count, $PivotRange.Columns.Count)
+
         $dataBody = $PivotTable.DataBodyRange
         if ($null -eq $dataBody) { return }
 
@@ -154,12 +169,15 @@ try {
         }
 
         $rowCount = $dataBody.Rows.Count
+        $snapshotRowOffset = $PivotTable.DataBodyRange.Row - $PivotRange.Row
+        $snapshotColumnOffset = $PivotTable.DataBodyRange.Column - $PivotRange.Column
         $dataset = [System.Collections.Generic.List[object]]::new()
         $rowOffset = $rowRange.Rows.Count - $rowCount
         for ($r = 1; $r -le $rowCount; $r++) {
             $teamName = $rowRange.Cells.Item($r + $rowOffset, 1).Text
             if ($teamName -eq "Grand Total") { continue }
 
+            $extraColumns = [ordered]@{}
             $row = [PSCustomObject]@{
                 team = $teamName
                 closed = 0
@@ -167,10 +185,12 @@ try {
                 "% of closed" = "0%"
                 "% of open" = "0%"
                 "Grand Total" = 0
+                extra_columns = $null
             }
             for ($c = 1; $c -le $columnCount; $c++) {
-                $header = $headers[$c]
+                $header = [string]$headers[$c]
                 $value = if ($values -is [System.Array]) { $values[$r, $c] } else { $values }
+                if ([string]::IsNullOrWhiteSpace($header)) { continue }
                 if ($header -eq "% of closed" -or $header -eq "% of open") {
                     $text = $dataBody.Cells.Item($r, $c).Text
                     if ($header -eq "% of closed") { $row."% of closed" = if ($text) { $text } else { "0%" } }
@@ -181,8 +201,11 @@ try {
                     $row.open = if ($value -as [double]) { $value -as [double] } elseif ([double]::TryParse($value, [ref]$null)) { [double]$value } else { 0 }
                 } elseif ($header -match "Grand Total") {
                     $row."Grand Total" = if ($value -as [double]) { $value -as [double] } elseif ([double]::TryParse($value, [ref]$null)) { [double]$value } else { 0 }
+                } else {
+                    $extraColumns[$header] = [string]$snapshotRange.Cells.Item($snapshotRowOffset + $r, $snapshotColumnOffset + $c).Text
                 }
             }
+            $row.extra_columns = $extraColumns
             $dataset.Add($row)
         }
         if ($dataset.Count -gt 0) {
@@ -340,6 +363,8 @@ try {
     }
 
     Write-Output "Table extraction completed. Total combinations extracted: $($AllData.Count)"
+    $SnapshotWorkbook.Close($false)
+    $SnapshotWorkbook = $null
     $Workbook.Close($false)
 
     Write-Output "Converting AllData to JSON..."
@@ -347,6 +372,7 @@ try {
     Write-Output "JSON saved to $jsonOutputPath"
 } catch {
     Write-Error $_.Exception.Message
+    if ($SnapshotWorkbook) { $SnapshotWorkbook.Close($false) }
     if ($Workbook) { $Workbook.Close($false) }
     throw $_
 } finally {

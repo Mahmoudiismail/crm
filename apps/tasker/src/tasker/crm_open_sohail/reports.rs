@@ -8,6 +8,14 @@ pub fn generate_html_report(
     final_datasets: &[EnrichedDataset],
 ) -> String {
     let mut sections_html = String::new();
+    // Use one shared column set so every branch/month table has identical dimensions.
+    let mut dynamic_columns: Vec<String> = final_datasets
+        .iter()
+        .flat_map(|dataset| dataset.data.iter())
+        .flat_map(|row| row.extra_columns.keys().cloned())
+        .collect();
+    dynamic_columns.sort();
+    dynamic_columns.dedup();
 
     for dataset in final_datasets {
         // Table Title
@@ -31,8 +39,8 @@ pub fn generate_html_report(
             escape_html(&title)
         ));
 
-        // Start Table
-        sections_html.push_str("<table style=\"table-layout: fixed; border-collapse: collapse; font-family: Calibri, sans-serif; font-size: 14px; border: 1px solid #8EA9DB;\">");
+        // Start Table with a constrained width; fixed layout prevents Outlook from stretching it.
+        sections_html.push_str("<table width=\"900\" style=\"width:900px; max-width:900px; table-layout:fixed; border-collapse:collapse; font-family:Calibri,sans-serif; font-size:14px; border:1px solid #8EA9DB;\">");
 
         // Header widths from config
         let widths = config.table_column_widths.clone().unwrap_or_else(|| {
@@ -54,15 +62,14 @@ pub fn generate_html_report(
 
         // Header Row (Blue)
         sections_html.push_str(&format!(
-            "<tr style=\"background-color: #4472C4; color: white; font-weight: bold; text-align: center; vertical-align: middle;\">
-                <th width=\"{w0}\" style=\"border: 1px solid #8EA9DB; padding: 5px;\">Team</th>
-                <th width=\"{w1}\" style=\"border: 1px solid #8EA9DB; padding: 5px;\">closed</th>
-                <th width=\"{w2}\" style=\"border: 1px solid #8EA9DB; padding: 5px;\">open</th>
-                <th width=\"{w3}\" style=\"border: 1px solid #8EA9DB; padding: 5px;\">% of closed</th>
-                <th width=\"{w4}\" style=\"border: 1px solid #8EA9DB; padding: 5px;\">% of open</th>
-                <th width=\"{w5}\" style=\"border: 1px solid #8EA9DB; padding: 5px;\">Grand Total</th>
-                <th width=\"{w6}\" style=\"border: 1px solid #8EA9DB; padding: 5px;\">OUL</th>
-            </tr>",
+            "<tr style=\"height:28px; background-color: #4472C4; color: white; font-weight: bold; text-align: center; vertical-align: middle;\">
+                <th width=\"{w0}\" style=\"border: 1px solid #8EA9DB; height:28px; padding:5px;\">Team</th>
+                <th width=\"{w1}\" style=\"border: 1px solid #8EA9DB; height:28px; padding:5px;\">closed</th>
+                <th width=\"{w2}\" style=\"border: 1px solid #8EA9DB; height:28px; padding:5px;\">open</th>
+                <th width=\"{w3}\" style=\"border: 1px solid #8EA9DB; height:28px; padding:5px;\">% of closed</th>
+                <th width=\"{w4}\" style=\"border: 1px solid #8EA9DB; height:28px; padding:5px;\">% of open</th>
+                <th width=\"{w5}\" style=\"border: 1px solid #8EA9DB; height:28px; padding:5px;\">Grand Total</th>
+                <th width=\"{w6}\" style=\"border: 1px solid #8EA9DB; height:28px; padding:5px;\">OUL</th>",
             w0 = escape_html(&safe_widths[0]),
             w1 = escape_html(&safe_widths[1]),
             w2 = escape_html(&safe_widths[2]),
@@ -71,6 +78,13 @@ pub fn generate_html_report(
             w5 = escape_html(&safe_widths[5]),
             w6 = escape_html(&safe_widths[6]),
         ));
+        for column in &dynamic_columns {
+            sections_html.push_str(&format!(
+                "<th width=\"100\" style=\"width:100px; height:28px; border:1px solid #8EA9DB; padding:5px;\">{}</th>",
+                escape_html(column)
+            ));
+        }
+        sections_html.push_str("</tr>");
 
         let mut ds_closed_total = 0.0;
         let mut ds_open_total = 0.0;
@@ -108,15 +122,14 @@ pub fn generate_html_report(
             };
 
             sections_html.push_str(&format!(
-                "<tr style=\"color: black;\">
-                    <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
-                    <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
-                    <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
-                    <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
-                    <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
-                    <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
-                    <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
-                </tr>",
+                "<tr style=\"height:28px; color: black;\">
+                    <td style=\"border: 1px solid #8EA9DB; height:28px; padding:5px; text-align: center; vertical-align: middle;\">{}</td>
+                    <td style=\"border: 1px solid #8EA9DB; height:28px; padding:5px; text-align: center; vertical-align: middle;\">{}</td>
+                    <td style=\"border: 1px solid #8EA9DB; height:28px; padding:5px; text-align: center; vertical-align: middle;\">{}</td>
+                    <td style=\"border: 1px solid #8EA9DB; height:28px; padding:5px; text-align: center; vertical-align: middle;\">{}</td>
+                    <td style=\"border: 1px solid #8EA9DB; height:28px; padding:5px; text-align: center; vertical-align: middle;\">{}</td>
+                    <td style=\"border: 1px solid #8EA9DB; height:28px; padding:5px; text-align: center; vertical-align: middle;\">{}</td>
+                    <td style=\"border: 1px solid #8EA9DB; height:28px; padding:5px; text-align: center; vertical-align: middle;\">{}</td>",
                 escape_html(&row.team),
                 closed_str,
                 open_str,
@@ -125,6 +138,18 @@ pub fn generate_html_report(
                 grand_total_str,
                 row.oul
             ));
+            for column in &dynamic_columns {
+                let value = row
+                    .extra_columns
+                    .get(column)
+                    .map(String::as_str)
+                    .unwrap_or("");
+                sections_html.push_str(&format!(
+                    "<td style=\"height:28px; border:1px solid #8EA9DB; padding:5px; text-align:center; vertical-align:middle;\">{}</td>",
+                    escape_html(value)
+                ));
+            }
+            sections_html.push_str("</tr>");
         }
 
         // Grand Total row (Red) for each table
@@ -166,17 +191,20 @@ pub fn generate_html_report(
         };
 
         sections_html.push_str(&format!(
-            "<tr style=\"background-color: #C00000; color: white; font-weight: bold;\">
-                <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">Grand Total</td>
-                <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
-                <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
-                <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
-                <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
-                <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\">{}</td>
-                <td style=\"border: 1px solid #8EA9DB; padding: 5px; text-align: center; vertical-align: middle;\"></td>
-            </tr>",
+            "<tr style=\"height:28px; background-color: #C00000; color: white; font-weight: bold;\">
+                <td style=\"border: 1px solid #8EA9DB; height:28px; padding:5px; text-align: center; vertical-align: middle;\">Grand Total</td>
+                <td style=\"border: 1px solid #8EA9DB; height:28px; padding:5px; text-align: center; vertical-align: middle;\">{}</td>
+                <td style=\"border: 1px solid #8EA9DB; height:28px; padding:5px; text-align: center; vertical-align: middle;\">{}</td>
+                <td style=\"border: 1px solid #8EA9DB; height:28px; padding:5px; text-align: center; vertical-align: middle;\">{}</td>
+                <td style=\"border: 1px solid #8EA9DB; height:28px; padding:5px; text-align: center; vertical-align: middle;\">{}</td>
+                <td style=\"border: 1px solid #8EA9DB; height:28px; padding:5px; text-align: center; vertical-align: middle;\">{}</td>
+                <td style=\"border: 1px solid #8EA9DB; height:28px; padding:5px; text-align: center; vertical-align: middle;\"></td>",
             total_closed_str, total_open_str, total_perc_closed_str, total_perc_open_str, total_grand_str
         ));
+        for _ in &dynamic_columns {
+            sections_html.push_str("<td style=\"height:28px; border:1px solid #8EA9DB; padding:5px; text-align:center; vertical-align:middle;\"></td>");
+        }
+        sections_html.push_str("</tr>");
 
         sections_html.push_str("</table><br/>");
     }

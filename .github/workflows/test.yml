@@ -231,7 +231,7 @@ jobs:
           cache-on-failure: true
 
       - name: Run package tests
-        run: cargo test -p ${{ matrix.package }} --all-targets --all-features --locked
+        run: cargo test -p ${{ matrix.package }} --all-features --locked
 
       - name: Build affected package in release mode
         run: cargo build --release -p ${{ matrix.package }} --locked

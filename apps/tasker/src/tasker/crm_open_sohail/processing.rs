@@ -265,6 +265,7 @@ fn enrich_dataset(
                 perc_open: row.perc_open,
                 grand_total: row.grand_total,
                 oul,
+                extra_columns: row.extra_columns,
             });
         }
 

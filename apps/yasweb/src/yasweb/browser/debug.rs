@@ -1,5 +1,8 @@
 use base64::Engine;
-use headless_chrome::{protocol::cdp::Page, Tab};
+use headless_chrome::{
+    protocol::cdp::{Page, Runtime},
+    Tab,
+};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -139,7 +142,7 @@ fn persist_frame_resources(
         };
 
         match tab.call_method(Page::GetResourceContent {
-            frame_id: frame_id_value,
+            frame_id: frame_id_value.clone(),
             url: frame_url.clone(),
         }) {
             Ok(resource) => {
@@ -178,10 +181,72 @@ fn persist_frame_resources(
                     ),
                 }
             }
-            Err(error) => warn!(
-                "Could not capture frame HTML: frame_id={} url={} error={:#}",
-                frame_id, frame_url, error
-            ),
+            Err(error) => {
+                warn!(
+                    "Could not capture frame resource HTML; trying live frame DOM: frame_id={} url={} error={:#}",
+                    frame_id, frame_url, error
+                );
+                let capture = (|| -> anyhow::Result<String> {
+                    let world = tab.call_method(Page::CreateIsolatedWorld {
+                        frame_id: frame_id_value.clone(),
+                        world_name: Some("crm-yasweb-frame-diagnostics".to_string()),
+                        grant_univeral_access: Some(false),
+                    })?;
+                    let response = tab.call_method(Runtime::Evaluate {
+                        expression:
+                            "document.documentElement ? document.documentElement.outerHTML : ''"
+                                .to_string(),
+                        object_group: None,
+                        include_command_line_api: None,
+                        silent: Some(true),
+                        context_id: Some(world.execution_context_id),
+                        return_by_value: Some(true),
+                        generate_preview: None,
+                        user_gesture: None,
+                        await_promise: Some(false),
+                        throw_on_side_effect: None,
+                        timeout: None,
+                        disable_breaks: None,
+                        repl_mode: None,
+                        allow_unsafe_eval_blocked_by_csp: None,
+                        unique_context_id: None,
+                        serialization_options: None,
+                    })?;
+                    response
+                        .result
+                        .value
+                        .and_then(|value| value.as_str().map(str::to_owned))
+                        .filter(|html| !html.is_empty())
+                        .ok_or_else(|| anyhow::anyhow!("frame DOM evaluation returned no HTML"))
+                })();
+                match capture {
+                    Ok(html) => {
+                        let filename = format!(
+                            "{}_{}_frame{}_{}_{}.html",
+                            sanitize_filename(report_name),
+                            step,
+                            index,
+                            std::process::id(),
+                            timestamp
+                        );
+                        let path = debug_dir.join(filename);
+                        match std::fs::write(&path, html) {
+                            Ok(()) => info!(
+                                "Saved live browser frame DOM: frame_id={} url={} path={:?}",
+                                frame_id, frame_url, path
+                            ),
+                            Err(write_error) => warn!(
+                                "Failed to save live frame DOM for {}: {}",
+                                frame_url, write_error
+                            ),
+                        }
+                    }
+                    Err(capture_error) => warn!(
+                        "Could not capture frame HTML through live DOM fallback: frame_id={} url={} error={:#}",
+                        frame_id, frame_url, capture_error
+                    ),
+                }
+            }
         }
     }
 }
