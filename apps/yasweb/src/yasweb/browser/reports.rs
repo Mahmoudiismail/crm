@@ -510,8 +510,8 @@ pub fn navigate_and_run_report(
                                                 const keyNorm = normalize(key.replace(/_/g, ' '));
                                                 const labelNorm = normalize(labelText.replace(/_/g, ' '));
                                                 if (keyNorm === labelNorm) return true;
-                                                if (/allocation[_ ]date[_ ]from/i.test(key)) return /(^|\\s)from date$/.test(labelNorm);
-                                                if (/allocation[_ ]date[_ ]to/i.test(key)) return /(^|\\s)to date$/.test(labelNorm);
+                                                if (/allocation[_ ]date[_ ]from/i.test(key)) return /(^|\s)from date$/.test(labelNorm);
+                                                if (/allocation[_ ]date[_ ]to/i.test(key)) return /(^|\s)to date$/.test(labelNorm);
                                                 return false;
                                             }}
 
