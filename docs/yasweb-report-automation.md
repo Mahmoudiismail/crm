@@ -184,9 +184,11 @@ Network logs are emitted by `client::enable_network_logging`; request URLs are s
 
 - `debug::save_html_state` and `debug::save_failure_diagnostics` persist HTML only when TRACE logging is enabled.
 - Files are saved under `debug_html/` next to the executable. Filenames include step number/name and timestamp; unsafe filename characters are sanitized.
-- HTML snapshots currently capture the top-level tab content. They do **not** automatically serialize the cross-origin report frame's DOM.
-- Authenticated HTML can contain user/session/customer data. Keep TRACE disabled during routine production runs; sanitize snapshots before sharing them.
-- On a frame-specific failure, prefer the structured frame-readiness logs first. If a frame snapshot is later added, it must use CDP frame context and follow the same TRACE-only privacy gate.
+- Each step snapshot captures the top-level tab and attempts to save every current document frame through CDP, including cross-origin report frames. A frame resource may no longer be available; such failures are logged with the frame URL and CDP error.
+- Step 4 logs the visible filter-field inventory before and after filling, including on failure. Explicit empty filter values clear only matching `input[type="text"]` controls; other control types are left unchanged, and omitted filter keys remain untouched.
+- Standard Report date boundaries are enforced as `%d-%b-%Y 00:00` and `%d-%b-%Y 23:59`, overriding older per-report formats. Report Manager formatting and behavior are unchanged.
+- Authenticated HTML and field values can contain user/session/customer data. Keep TRACE disabled during routine production runs; sanitize snapshots before sharing them.
+- On a frame-specific failure, inspect the per-step frame snapshot result and structured frame-readiness logs. The live DOM fallback uses an isolated CDP execution context and remains behind the TRACE-only privacy gate.
 
 ## 7. Change checklist
 

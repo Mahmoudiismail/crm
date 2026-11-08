@@ -455,7 +455,7 @@ pub fn navigate_and_run_report(
                         tracing::debug!("Executing JavaScript to apply filters...");
                         let step4_fill_js = format!(
                             r#"
-                                        (async function(filters, timeoutMinutes) {{
+                                        (async function(filters, timeoutMinutes, traceEnabled) {{
                                             function sleep(ms) {{ return new Promise(r => setTimeout(r, ms)); }}
                                             let logs = [];
                                             let doc = document;
@@ -483,6 +483,7 @@ pub fn navigate_and_run_report(
                                             async function simulateTyping(inputElem, text) {{
                                                 inputElem.focus();
                                                 inputElem.value = '';
+                                                inputElem.dispatchEvent(new Event('input', {{ bubbles: true }}));
                                                 for (let i = 0; i < text.length; i++) {{
                                                     inputElem.value += text[i];
                                                     inputElem.dispatchEvent(new Event('input', {{ bubbles: true }}));
@@ -493,11 +494,27 @@ pub fn navigate_and_run_report(
                                                 inputElem.dispatchEvent(new Event('blur', {{ bubbles: true }}));
                                             }}
 
-                                            const labels = doc.querySelectorAll('mat-label');
+                                            const labels = Array.from(doc.querySelectorAll('mat-label')).filter(label => label.getClientRects().length > 0);
                                             const discoveredFilters = [];
                                             const discoveredFilterOptions = {{}};
                                             const failedFilters = [];
                                             const normalize = value => (value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+
+                                            function visibleFieldSnapshot() {{
+                                                return Array.from(doc.querySelectorAll('mat-label')).filter(label => label.getClientRects().length > 0).map(label => {{
+                                                    const control = findFilterControl(label);
+                                                    if (!control) return {{ label: (label.innerText || label.textContent || '').trim(), control_found: false }};
+                                                    return {{ label: (label.innerText || label.textContent || '').trim(), control_found: true, tag: control.tagName, type: control.getAttribute('type') || '', value: control.value ?? control.innerText ?? '', placeholder: control.getAttribute('placeholder') || '', ariaLabel: control.getAttribute('aria-label') || '', formControlName: control.getAttribute('formcontrolname') || '', id: control.id || '' }};
+                                                }});
+                                            }}
+                                            function matchesLabel(key, labelText) {{
+                                                const keyNorm = normalize(key.replace(/_/g, ' '));
+                                                const labelNorm = normalize(labelText.replace(/_/g, ' '));
+                                                if (keyNorm === labelNorm) return true;
+                                                if (/allocation[_ ]date[_ ]from/i.test(key)) return /(^|\s)from date$/.test(labelNorm);
+                                                if (/allocation[_ ]date[_ ]to/i.test(key)) return /(^|\s)to date$/.test(labelNorm);
+                                                return false;
+                                            }}
 
                                             function findFilterControl(label) {{
                                                 const field = label.closest('mat-form-field');
@@ -558,21 +575,30 @@ pub fn navigate_and_run_report(
                                             logs.push("Discovered filters count: " + discoveredFilters.length);
                                             logs.push("Discovered dropdown lists: " + Object.keys(discoveredFilterOptions).length);
 
+                                            const fieldsBeforeFill = traceEnabled ? visibleFieldSnapshot() : [];
+                                            if (traceEnabled) logs.push("Visible fields before Fill Filters: " + JSON.stringify(fieldsBeforeFill));
                                             for (const [key, value] of Object.entries(filters)) {{
-                                                if (!value || value.trim() === '') {{
-                                                    logs.push("Skipping empty filter: " + key);
-                                                    continue;
-                                                }}
-                                                logs.push("Applying filter: " + key + " = " + value);
-                                                let normalizedKey = key.toLowerCase().replace(/_/g, ' ');
+                                                const clearRequested = value === null || value === undefined || String(value).trim() === '';
+                                                logs.push((clearRequested ? "Clearing filter: " : "Applying filter: ") + key + (clearRequested ? " (explicit empty value)" : " = " + value));
                                                 let filterFilled = false;
 
                                                 for (let lbl of labels) {{
-                                                    let labelText = lbl.innerText.trim().toLowerCase().replace(/_/g, ' ');
-                                                    if (labelText === normalizedKey) {{
+                                                    let labelText = (lbl.innerText || lbl.textContent || '').trim();
+                                                    if (matchesLabel(key, labelText)) {{
                                                         const input = findFilterControl(lbl);
                                                         if (input) {{
+                                                            if (clearRequested && !(input.tagName === 'INPUT' && input.type === 'text')) {{
+                                                                logs.push("Ignoring empty value for non-text filter control: " + key);
+                                                                filterFilled = true;
+                                                                break;
+                                                            }}
                                                             if (input.tagName === 'INPUT') {{
+                                                                if (clearRequested) {{
+                                                                    await simulateTyping(input, '');
+                                                                    filterFilled = input.value === '';
+                                                                    logs.push((filterFilled ? "Cleared text input for " : "Failed to clear text input for ") + key);
+                                                                    break;
+                                                                }}
                                                                 let v = value;
                                                                 if (key.toLowerCase().includes('date') && v.includes('-')) {{
                                                                     const parts = v.split(' ')[0].split('-');
@@ -631,13 +657,17 @@ pub fn navigate_and_run_report(
                                                     failedFilters.push(key);
                                                 }}
                                             }}
+                                            const fieldsAfterFill = traceEnabled ? visibleFieldSnapshot() : [];
+                                            if (traceEnabled) logs.push("Visible fields after Fill Filters: " + JSON.stringify(fieldsAfterFill));
                                             if (failedFilters.length > 0) {{
-                                                return JSON.stringify({{ status: "ERROR", msg: "One or more requested filters could not be applied: " + failedFilters.join(", "), failed_filters: failedFilters, discovered_filters: discoveredFilters, discovered_filter_options: discoveredFilterOptions, logs }});
+                                                return JSON.stringify({{ status: "ERROR", msg: "One or more requested filters could not be applied: " + failedFilters.join(", "), failed_filters: failedFilters, discovered_filters: discoveredFilters, discovered_filter_options: discoveredFilterOptions, visible_fields_before: fieldsBeforeFill, visible_fields_after: fieldsAfterFill, logs }});
                                             }}
-                                            return JSON.stringify({{ status: "SUCCESS", discovered_filters: discoveredFilters, discovered_filter_options: discoveredFilterOptions, logs }});
-                                        }})({});
+                                            return JSON.stringify({{ status: "SUCCESS", discovered_filters: discoveredFilters, discovered_filter_options: discoveredFilterOptions, visible_fields_before: fieldsBeforeFill, visible_fields_after: fieldsAfterFill, logs }});
+                                        }})({}, {}, {});
                                         "#,
-                            filters_json
+                            filters_json,
+                            timeout_minutes,
+                            tracing::enabled!(tracing::Level::TRACE)
                         );
 
                         info!("Applying Filters...");
@@ -1267,6 +1297,72 @@ pub fn generate_mis_reports_wait_js(timeout_seconds: u64) -> String {
         "##,
         timeout_seconds
     )
+}
+
+#[cfg(test)]
+mod step4_filter_regression_tests {
+    // Step 4 is currently an inline JavaScript template. These assertions protect
+    // its key filter contracts without introducing a separate JS test runtime.
+    const STEP4_SOURCE: &str = include_str!("reports.rs");
+
+    #[test]
+    fn allocation_date_keys_match_the_visible_from_and_to_date_labels() {
+        assert!(STEP4_SOURCE.contains(
+            "if (/allocation[_ ]date[_ ]from/i.test(key)) return /(^|\\s)from date$/.test(labelNorm);"
+        ));
+        assert!(STEP4_SOURCE.contains(
+            "if (/allocation[_ ]date[_ ]to/i.test(key)) return /(^|\\s)to date$/.test(labelNorm);"
+        ));
+    }
+
+    #[test]
+    fn clearing_text_inputs_dispatches_input_even_when_no_characters_are_typed() {
+        let clear_start = STEP4_SOURCE
+            .find("async function simulateTyping(inputElem, text)")
+            .expect("Step 4 typing helper should exist");
+        let clear_end = STEP4_SOURCE[clear_start..]
+            .find("const labels =")
+            .map(|offset| clear_start + offset)
+            .expect("Step 4 label discovery should follow the typing helper");
+        let helper = &STEP4_SOURCE[clear_start..clear_end];
+        let empty_assignment = helper
+            .find("inputElem.value = '';")
+            .expect("typing helper should clear before typing");
+        let input_event = helper
+            .find("inputElem.dispatchEvent(new Event('input', {{ bubbles: true }}));")
+            .expect("typing helper should dispatch input");
+        assert!(input_event > empty_assignment);
+        assert!(
+            input_event
+                < helper
+                    .find("for (let i = 0; i < text.length; i++)")
+                    .unwrap()
+        );
+    }
+
+    #[test]
+    fn explicit_empty_values_only_clear_text_inputs_and_leave_other_controls_untouched() {
+        assert!(STEP4_SOURCE
+            .contains("clearRequested && !(input.tagName === 'INPUT' && input.type === 'text')"));
+        assert!(STEP4_SOURCE.contains("Ignoring empty value for non-text filter control: "));
+        assert!(STEP4_SOURCE.contains("await simulateTyping(input, '');"));
+        assert!(STEP4_SOURCE.contains("filterFilled = input.value === '';"));
+        let step4_start = STEP4_SOURCE
+            .find("let step4_fill_js = format!(")
+            .expect("Step 4 script should exist");
+        let step4_end = STEP4_SOURCE[step4_start..]
+            .find("info!(\"Applying Filters...\");")
+            .map(|offset| step4_start + offset)
+            .expect("Step 4 script should end before filter evaluation");
+        let step4_script = &STEP4_SOURCE[step4_start..step4_end];
+        assert!(!step4_script.contains("mat-form-field-suffix button"));
+    }
+
+    #[test]
+    fn omitted_filter_keys_are_not_modified() {
+        assert!(STEP4_SOURCE.contains("for (const [key, value] of Object.entries(filters))"));
+        assert!(!STEP4_SOURCE.contains("for (const label of labels) {\n                                                if (!(label"));
+    }
 }
 
 #[cfg(test)]

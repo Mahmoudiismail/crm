@@ -37,20 +37,25 @@ impl YaswebConfig {
         let mut config_updated = false;
 
         for report in self.reports.values_mut() {
+            let force_standard_report_format = report.report_type == "Standard Report";
             let (default_start_fmt, default_end_fmt) = match report.report_type.as_str() {
                 "Report Manager" => ("%d-%b-%Y".to_string(), "%d-%b-%Y".to_string()),
-                "Standard Report" => ("%-d-%-m-%Y".to_string(), "%-d-%-m-%Y".to_string()),
+                "Standard Report" => ("%d-%b-%Y 00:00".to_string(), "%d-%b-%Y 23:59".to_string()),
                 _ => ("%d-%m-%Y 00:00".to_string(), "%d-%m-%Y 23:59".to_string()),
             };
 
             if let Some(ref mut sk) = report.start_date_key {
-                if sk.format.is_empty() {
+                if (force_standard_report_format || sk.format.is_empty())
+                    && sk.format != default_start_fmt
+                {
                     sk.format = default_start_fmt.clone();
                     config_updated = true;
                 }
             }
             if let Some(ref mut ek) = report.end_date_key {
-                if ek.format.is_empty() {
+                if (force_standard_report_format || ek.format.is_empty())
+                    && ek.format != default_end_fmt
+                {
                     ek.format = default_end_fmt.clone();
                     config_updated = true;
                 }
@@ -239,13 +244,34 @@ mod tests {
     }
 
     #[test]
-    fn standard_report_defaults_to_unpadded_date_format_for_both_keys() {
+    fn standard_report_defaults_to_full_day_abbreviated_month_format_for_both_keys() {
         let mut config = report_with_date_keys("Standard Report", "", "");
         assert!(config.finalize_runtime_fields());
         let report = &config.reports["Example"];
-        assert_eq!(report.start_date_key.as_ref().unwrap().format, "%-d-%-m-%Y");
-        assert_eq!(report.end_date_key.as_ref().unwrap().format, "%-d-%-m-%Y");
+        assert_eq!(
+            report.start_date_key.as_ref().unwrap().format,
+            "%d-%b-%Y 00:00"
+        );
+        assert_eq!(
+            report.end_date_key.as_ref().unwrap().format,
+            "%d-%b-%Y 23:59"
+        );
         assert!(!config.finalize_runtime_fields());
+    }
+
+    #[test]
+    fn standard_report_overrides_custom_date_formats_with_full_day_boundaries() {
+        let mut config = report_with_date_keys("Standard Report", "%d-%b-%Y", "%d-%b-%Y");
+        assert!(config.finalize_runtime_fields());
+        let report = &config.reports["Example"];
+        assert_eq!(
+            report.start_date_key.as_ref().unwrap().format,
+            "%d-%b-%Y 00:00"
+        );
+        assert_eq!(
+            report.end_date_key.as_ref().unwrap().format,
+            "%d-%b-%Y 23:59"
+        );
     }
 
     #[test]
@@ -258,12 +284,27 @@ mod tests {
     }
 
     #[test]
-    fn explicit_date_formats_are_preserved_for_standard_report() {
-        let mut config = report_with_date_keys("Standard Report", "dd-mm-yyyy", "yyyy/mm/dd");
+    fn explicit_date_formats_are_preserved_for_other_report_types() {
+        let mut config = report_with_date_keys("Custom Report", "dd-mm-yyyy", "yyyy/mm/dd");
         assert!(!config.finalize_runtime_fields());
         let report = &config.reports["Example"];
         assert_eq!(report.start_date_key.as_ref().unwrap().format, "dd-mm-yyyy");
         assert_eq!(report.end_date_key.as_ref().unwrap().format, "yyyy/mm/dd");
+    }
+
+    #[test]
+    fn standard_report_uses_day_abbreviated_month_and_full_day_time_boundaries() {
+        let mut config = report_with_date_keys("Standard Report", "", "");
+        assert!(config.finalize_runtime_fields());
+        let report = config.reports.get("Example").unwrap();
+        assert_eq!(
+            report.start_date_key.as_ref().unwrap().format,
+            "%d-%b-%Y 00:00"
+        );
+        assert_eq!(
+            report.end_date_key.as_ref().unwrap().format,
+            "%d-%b-%Y 23:59"
+        );
     }
 
     #[test]
