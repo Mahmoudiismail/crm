@@ -6,9 +6,16 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$dashboardPath = $DashboardPath
-$outDir = $OutputDir
-$mappingFile = $MappingFile
+
+function ConvertTo-ExcelCompatiblePath {
+    param([string]$Path)
+    if ([string]::IsNullOrWhiteSpace($Path)) { return $Path }
+    if ($Path.StartsWith('\\?\', [System.StringComparison]::OrdinalIgnoreCase)) { return $Path.Substring(4) }
+    return $Path
+}
+$dashboardPath = ConvertTo-ExcelCompatiblePath $DashboardPath
+$outDir = ConvertTo-ExcelCompatiblePath $OutputDir
+$mappingFile = ConvertTo-ExcelCompatiblePath $MappingFile
 
 function Write-Log {
     param([string]$message)
@@ -31,6 +38,12 @@ $comTimer.Stop()
 Write-Log "Excel COM Object launched in $($comTimer.ElapsedMilliseconds) ms"
 
 $processId = $null
+$Workbook = $null
+$TargetWB = $null
+$TargetSheet = $null
+$Sheet = $null
+$templatePath = $null
+$target = $null
 
 try {
     try {
@@ -97,7 +110,7 @@ try {
     Write-Log "Total data rows in OPD Report: $lastRow"
 
     $startRow = $headerRow + 1
-    $totalDataRows = $lastRow - $headerRow
+    $usedColumnCount = $Sheet.UsedRange.Columns.Count
 
     Write-Log "Scanning DEPT column..."
     $readTimer = [System.Diagnostics.Stopwatch]::StartNew()
@@ -126,7 +139,19 @@ try {
             }
             $null = $targetDeptsMap[$targetChir].Add($deptVal)
         }
+    } else {
+        $val = [string]$deptRangeValues
+        if (-not [string]::IsNullOrWhiteSpace($val)) {
+            $deptVal = $val.Trim().ToUpper()
+            $targetChir = "OTHERS"
+            if ($mappingHash.ContainsKey($deptVal)) { $targetChir = $mappingHash[$deptVal] }
+            if (-not $targetDeptsMap.ContainsKey($targetChir)) {
+                $targetDeptsMap[$targetChir] = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+            }
+            $null = $targetDeptsMap[$targetChir].Add($deptVal)
+        }
     }
+    if ($targetDeptsMap.Count -eq 0) { throw "No department values found; no output files generated" }
 
     $templateTimer = [System.Diagnostics.Stopwatch]::StartNew()
     $templatePath = Join-Path $env:TEMP "OPD_Template_$([Guid]::NewGuid().ToString('N')).xlsm"
@@ -156,78 +181,91 @@ try {
 
         $rawDeptsList = @($targetDeptsMap[$target])
 
-        Write-Log "  -> Filtering and copying matching rows in bulk..."
-        $copyRowsTimer = [System.Diagnostics.Stopwatch]::StartNew()
-
-        if ($Sheet.AutoFilterMode) {
-            $Sheet.AutoFilterMode = $false
-        }
-
-        $opdRange = $Sheet.Range($Sheet.Cells.Item($headerRow, 1), $Sheet.Cells.Item($lastRow, $Sheet.UsedRange.Columns.Count))
-
+        Write-Log "  -> Filtering source rows for ${target}..."
+        if ($Sheet.AutoFilterMode) { $Sheet.AutoFilterMode = $false }
+        $opdRange = $Sheet.Range($Sheet.Cells.Item($headerRow, 1), $Sheet.Cells.Item($lastRow, $usedColumnCount))
         if ($rawDeptsList.Count -eq 1) {
             $opdRange.AutoFilter($deptCol, $rawDeptsList[0]) | Out-Null
         } else {
-            $opdRange.AutoFilter($deptCol, [string[]]$rawDeptsList, 7) | Out-Null # 7 = xlFilterValues
+            $opdRange.AutoFilter($deptCol, [string[]]$rawDeptsList, 7) | Out-Null
         }
 
-        try {
-            $dataBodyRange = $Sheet.Range($Sheet.Cells.Item($startRow, 1), $Sheet.Cells.Item($lastRow, $Sheet.UsedRange.Columns.Count))
-            $visibleRows = $null
+        $dataBodyRange = $Sheet.Range($Sheet.Cells.Item($startRow, 1), $Sheet.Cells.Item($lastRow, $usedColumnCount))
+        $visibleRows = $null
+        try { $visibleRows = $dataBodyRange.SpecialCells(12) } catch { $visibleRows = $null }
+        if ($null -eq $visibleRows) { throw "No visible rows matched department group '${target}'" }
 
-            # Explicit try/catch specifically for the SpecialCells call to avoid terminating the script
-            try {
-                $visibleRows = $dataBodyRange.SpecialCells(12) # xlCellTypeVisible
-            } catch {
-                # This is normal if 0 rows matched the AutoFilter criteria
-                $visibleRows = $null
+        # Transfer each visible area through Value2; avoid the Range.Copy/clipboard API.
+        $destinationRow = $startRow
+        $copiedRows = 0
+        foreach ($area in $visibleRows.Areas) {
+            $areaRowCount = [int]$area.Rows.Count
+            $areaColumnCount = [int]$area.Columns.Count
+            if ($areaRowCount -le 0 -or $areaColumnCount -le 0) { continue }
+
+            $areaValues = $area.Value2
+            $destinationRange = $TargetSheet.Range(
+                $TargetSheet.Cells.Item($destinationRow, 1),
+                $TargetSheet.Cells.Item(($destinationRow + $areaRowCount - 1), $areaColumnCount)
+            )
+            $destinationRange.Value2 = $areaValues
+            $copiedRows += $areaRowCount
+            $destinationRow += $areaRowCount
+            Write-Log "  -> Transferred visible area ($areaRowCount rows) using Value2"
+        }
+        if ($copiedRows -le 0) { throw "No rows were transferred for department group '${target}'" }
+
+        $destinationDeptValues = $TargetSheet.Range(
+            $TargetSheet.Cells.Item($startRow, $deptCol),
+            $TargetSheet.Cells.Item(($startRow + $copiedRows - 1), $deptCol)
+        ).Value2
+        $verifiedRows = 0
+        if ($destinationDeptValues -is [System.Array]) {
+            for ($i = 1; $i -le $destinationDeptValues.GetLength(0); $i++) {
+                if (-not [string]::IsNullOrWhiteSpace([string]$destinationDeptValues.GetValue($i, 1))) { $verifiedRows++ }
             }
-
-            if ($null -ne $visibleRows) {
-                # Ensure we actually have rows before copying, sometimes COM returns a 1x1 empty range
-                $count = 0
-                try { $count = $visibleRows.Rows.Count } catch {}
-                if ($count -gt 0) {
-                    $null = $visibleRows.Copy($TargetSheet.Cells.Item($startRow, 1))
-                } else {
-                    Write-Log "  -> Warning: VisibleRows returned but Count is 0 for ${target}"
-                }
-            } else {
-                Write-Log "  -> Warning: No visible rows found for ${target} (Empty Result)"
-            }
-        } catch {
-            Write-Log "  -> Warning: Failed during row copy for ${target}: $_"
+        } elseif (-not [string]::IsNullOrWhiteSpace([string]$destinationDeptValues)) {
+            $verifiedRows = 1
         }
-
-        if ($Sheet.AutoFilterMode) {
-            $Sheet.AutoFilterMode = $false
+        if ($verifiedRows -ne $copiedRows) {
+            throw "Copy verification failed for '${target}': expected $copiedRows rows, found $verifiedRows non-empty DEPT values"
         }
-        $copyRowsTimer.Stop()
-        Write-Log "  -> Filtered and copied all matching rows in $($copyRowsTimer.ElapsedMilliseconds) ms"
+        if ($Sheet.AutoFilterMode) { $Sheet.AutoFilterMode = $false }
+        Write-Log "  -> Verified $verifiedRows copied rows for ${target}"
 
         $refreshTimer = [System.Diagnostics.Stopwatch]::StartNew()
-        try {
-            foreach ($pc in $TargetWB.PivotCaches()) {
-                try { $null = $pc.Refresh() } catch {}
-            }
-        } catch {
-            foreach ($sht in $TargetWB.Worksheets) {
-                foreach ($pt in $sht.PivotTables()) {
-                    try { $null = $pt.RefreshTable() } catch {}
-                }
+        foreach ($pc in $TargetWB.PivotCaches()) {
+            # xlMissingItemsNone = 0: do not retain deleted source items.
+            $pc.MissingItemsLimit = 0
+            Write-Log "  -> PivotCache MissingItemsLimit set to None"
+            try {
+                $null = $pc.Refresh()
+            } catch {
+                Write-Log "  -> Warning: PivotCache refresh failed: $_"
             }
         }
         $refreshTimer.Stop()
         Write-Log "  -> PivotCaches refreshed in $($refreshTimer.ElapsedMilliseconds) ms"
 
+        $CoverSheet = $TargetWB.Worksheets.Item("Cover")
+        $CoverSheet.Activate()
+        $TargetWB.Windows.Item(1).DisplayWorkbookTabs = $false
+        Write-Log "  -> Worksheet tabs hidden for ${target}"
+
         $saveTimer = [System.Diagnostics.Stopwatch]::StartNew()
+        [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($CoverSheet)
+        $CoverSheet = $null
         $TargetWB.Save()
         $TargetWB.Close($true)
         $saveTimer.Stop()
         Write-Log "  -> Saved and closed in $($saveTimer.ElapsedMilliseconds) ms"
 
+        [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($TargetSheet)
+        [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($TargetWB)
+        $TargetSheet = $null
+        $TargetWB = $null
         $deptTimer.Stop()
-        Write-Log "  => Target ${target} total processing time: $($deptTimer.ElapsedMilliseconds) ms"
+        Write-Log "  => Target ${target} processed and saved ($copiedRows rows) in $($deptTimer.ElapsedMilliseconds) ms"
     }
 
     $Workbook.Close($false)
@@ -236,6 +274,7 @@ try {
 
 } catch {
     Write-Error "Failed to process dashboard (target: ${target}): $_"
+    if ($TargetWB) { try { $TargetWB.Close($false) } catch {} }
     if ($TargetWB) { try { $TargetWB.Close($false) } catch {} }
     if ($Workbook) { try { $Workbook.Close($false) } catch {} }
     [System.Environment]::ExitCode = 1
