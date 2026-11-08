@@ -24,4 +24,4 @@
                                             }
                                             if (!reportBound) return JSON.stringify({ status: "ERROR", msg: "Binding timeout.", logs });
                                             return JSON.stringify({ status: "SUCCESS", logs });
-                                        })(__REPORT_NAME_JSON__, __TIMEOUT_MINUTES__);
+                                        })(__REPORT_NAME_JSON__);
