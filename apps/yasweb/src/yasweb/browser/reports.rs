@@ -1332,17 +1332,19 @@ mod step4_filter_regression_tests {
             .find("inputElem.dispatchEvent(new Event('input', {{ bubbles: true }}));")
             .expect("typing helper should dispatch input");
         assert!(input_event > empty_assignment);
-        assert!(input_event < helper.find("for (let i = 0; i < text.length; i++)").unwrap());
+        assert!(
+            input_event
+                < helper
+                    .find("for (let i = 0; i < text.length; i++)")
+                    .unwrap()
+        );
     }
 
     #[test]
     fn explicit_empty_values_only_clear_text_inputs_and_leave_other_controls_untouched() {
-        assert!(STEP4_SOURCE.contains(
-            "clearRequested && !(input.tagName === 'INPUT' && input.type === 'text')"
-        ));
-        assert!(STEP4_SOURCE.contains(
-            "Ignoring empty value for non-text filter control: "
-        ));
+        assert!(STEP4_SOURCE
+            .contains("clearRequested && !(input.tagName === 'INPUT' && input.type === 'text')"));
+        assert!(STEP4_SOURCE.contains("Ignoring empty value for non-text filter control: "));
         assert!(STEP4_SOURCE.contains("await simulateTyping(input, '');"));
         assert!(STEP4_SOURCE.contains("filterFilled = input.value === '';"));
         assert!(!STEP4_SOURCE.contains("mat-form-field-suffix button"));
