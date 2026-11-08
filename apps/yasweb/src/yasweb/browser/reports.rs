@@ -84,7 +84,7 @@ pub fn navigate_and_run_report(
                         "check_menu_state.js",
                         include_str!("scripts/check_menu_state.js"),
                     )?;
-                    if let Ok(eval_result) = tab.evaluate(check_js_eval, true) {
+                    if let Ok(eval_result) = tab.evaluate(&check_js_eval, true) {
                         if let Some(val) = eval_result.value {
                             sidebar_toggled = val.as_bool().unwrap_or(false);
                         }
@@ -96,7 +96,7 @@ pub fn navigate_and_run_report(
                             "read_menu_classes.js",
                             include_str!("scripts/read_menu_classes.js"),
                         )?;
-                        if let Ok(eval_result) = tab.evaluate(log_classes_js, true) {
+                        if let Ok(eval_result) = tab.evaluate(&log_classes_js, true) {
                             if let Some(val) = eval_result.value {
                                 if let Some(classes) = val.as_str() {
                                     warn!("Current .menuModules classes: {}", classes);
