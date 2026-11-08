@@ -499,6 +499,22 @@ pub fn navigate_and_run_report(
                                             const failedFilters = [];
                                             const normalize = value => (value || '').replace(/\s+/g, ' ').trim().toLowerCase();
 
+                                            function visibleFieldSnapshot() {{
+                                                return Array.from(doc.querySelectorAll('mat-label')).map(label => {{
+                                                    const control = findFilterControl(label);
+                                                    if (!control) return {{ label: (label.innerText || label.textContent || '').trim(), control_found: false }};
+                                                    return {{ label: (label.innerText || label.textContent || '').trim(), control_found: true, tag: control.tagName, type: control.getAttribute('type') || '', value: control.value ?? control.innerText ?? '', placeholder: control.getAttribute('placeholder') || '', ariaLabel: control.getAttribute('aria-label') || '', formControlName: control.getAttribute('formcontrolname') || '', id: control.id || '' }};
+                                                }});
+                                            }}
+                                            function matchesLabel(key, labelText) {{
+                                                const keyNorm = normalize(key.replace(/_/g, ' '));
+                                                const labelNorm = normalize(labelText.replace(/_/g, ' '));
+                                                if (keyNorm === labelNorm) return true;
+                                                if (/allocation[_ ]date[_ ]from/i.test(key)) return /(^|\\s)from date$/.test(labelNorm);
+                                                if (/allocation[_ ]date[_ ]to/i.test(key)) return /(^|\\s)to date$/.test(labelNorm);
+                                                return false;
+                                            }}
+
                                             function findFilterControl(label) {{
                                                 const field = label.closest('mat-form-field');
                                                 if (field) {{
@@ -558,21 +574,26 @@ pub fn navigate_and_run_report(
                                             logs.push("Discovered filters count: " + discoveredFilters.length);
                                             logs.push("Discovered dropdown lists: " + Object.keys(discoveredFilterOptions).length);
 
+                                            const fieldsBeforeFill = visibleFieldSnapshot();
+                                            logs.push("Visible fields before Fill Filters: " + JSON.stringify(fieldsBeforeFill));
                                             for (const [key, value] of Object.entries(filters)) {{
-                                                if (!value || value.trim() === '') {{
-                                                    logs.push("Skipping empty filter: " + key);
-                                                    continue;
-                                                }}
-                                                logs.push("Applying filter: " + key + " = " + value);
+                                                const clearRequested = value === null || value === undefined || String(value).trim() === '';
+                                                logs.push((clearRequested ? "Clearing filter: " : "Applying filter: ") + key + (clearRequested ? " (explicit empty value)" : " = " + value));
                                                 let normalizedKey = key.toLowerCase().replace(/_/g, ' ');
                                                 let filterFilled = false;
 
                                                 for (let lbl of labels) {{
-                                                    let labelText = lbl.innerText.trim().toLowerCase().replace(/_/g, ' ');
-                                                    if (labelText === normalizedKey) {{
+                                                    let labelText = (lbl.innerText || lbl.textContent || '').trim();
+                                                    if (matchesLabel(key, labelText)) {{                                                    if (labelText === normalizedKey) {{
                                                         const input = findFilterControl(lbl);
                                                         if (input) {{
                                                             if (input.tagName === 'INPUT') {{
+                                                                if (clearRequested) {{
+                                                                    await simulateTyping(input, '');
+                                                                    logs.push("Cleared INPUT for " + key);
+                                                                    filterFilled = true;
+                                                                    break;
+                                                                }}
                                                                 let v = value;
                                                                 if (key.toLowerCase().includes('date') && v.includes('-')) {{
                                                                     const parts = v.split(' ')[0].split('-');
@@ -631,10 +652,12 @@ pub fn navigate_and_run_report(
                                                     failedFilters.push(key);
                                                 }}
                                             }}
+                                            const fieldsAfterFill = visibleFieldSnapshot();
+                                            logs.push("Visible fields after Fill Filters: " + JSON.stringify(fieldsAfterFill));
                                             if (failedFilters.length > 0) {{
-                                                return JSON.stringify({{ status: "ERROR", msg: "One or more requested filters could not be applied: " + failedFilters.join(", "), failed_filters: failedFilters, discovered_filters: discoveredFilters, discovered_filter_options: discoveredFilterOptions, logs }});
+                                                return JSON.stringify({{ status: "ERROR", msg: "One or more requested filters could not be applied: " + failedFilters.join(", "), failed_filters: failedFilters, discovered_filters: discoveredFilters, discovered_filter_options: discoveredFilterOptions, visible_fields_before: fieldsBeforeFill, visible_fields_after: fieldsAfterFill, logs }});
                                             }}
-                                            return JSON.stringify({{ status: "SUCCESS", discovered_filters: discoveredFilters, discovered_filter_options: discoveredFilterOptions, logs }});
+                                            return JSON.stringify({{ status: "SUCCESS", discovered_filters: discoveredFilters, discovered_filter_options: discoveredFilterOptions, visible_fields_before: fieldsBeforeFill, visible_fields_after: fieldsAfterFill, logs }});
                                         }})({});
                                         "#,
                             filters_json
