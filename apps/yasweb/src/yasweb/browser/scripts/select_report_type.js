@@ -1,4 +1,5 @@
-(async function(reportType) {
+
+        (async function(reportType) {
             function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
             const logs = [];
             const doc = document;
@@ -46,3 +47,4 @@
 
             return JSON.stringify({ status: "ERROR", msg: "Report type not found: " + reportType, logs });
         })(__REPORT_TYPE_JSON__);
+    
