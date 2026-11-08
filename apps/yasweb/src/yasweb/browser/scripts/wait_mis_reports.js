@@ -1,4 +1,4 @@
-return await (async function(timeoutSeconds) {
+(async function(timeoutSeconds) {
             function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
             const logs = [];
             const deadline = Date.now() + timeoutSeconds * 1000;
