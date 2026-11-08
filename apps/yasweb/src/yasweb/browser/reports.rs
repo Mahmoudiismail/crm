@@ -1347,7 +1347,15 @@ mod step4_filter_regression_tests {
         assert!(STEP4_SOURCE.contains("Ignoring empty value for non-text filter control: "));
         assert!(STEP4_SOURCE.contains("await simulateTyping(input, '');"));
         assert!(STEP4_SOURCE.contains("filterFilled = input.value === '';"));
-        assert!(!STEP4_SOURCE.contains("mat-form-field-suffix button"));
+        let step4_start = STEP4_SOURCE
+            .find("let step4_fill_js = format!(")
+            .expect("Step 4 script should exist");
+        let step4_end = STEP4_SOURCE[step4_start..]
+            .find("info!(\"Applying Filters...\");")
+            .map(|offset| step4_start + offset)
+            .expect("Step 4 script should end before filter evaluation");
+        let step4_script = &STEP4_SOURCE[step4_start..step4_end];
+        assert!(!step4_script.contains("mat-form-field-suffix button"));
     }
 
     #[test]
