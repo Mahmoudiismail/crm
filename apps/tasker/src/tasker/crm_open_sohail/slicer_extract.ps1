@@ -55,6 +55,11 @@ try {
     }
     if (-not $Pivot) { throw "PivotTable '$targetPivotName' not found in '$targetSheetName'" }
 
+    # A separate temporary workbook keeps the source dashboard read-only while preserving
+    # the exact PivotTable range (including its current dynamic columns and formatting).
+    $SnapshotWorkbook = $Excel.Workbooks.Add()
+    $SnapshotSheet = $SnapshotWorkbook.Worksheets.Item(1)
+
     # Identify slicer caches
     $branchSlicerCache = $null
     $monthSlicerCache = $null
@@ -140,6 +145,16 @@ try {
         param($PivotTable, [string]$BranchCaption, [string]$MonthTitle, [ref]$Collector)
 
         $PivotTable.RefreshTable()
+
+        # Copy the complete visible PivotTable after every slicer selection. The copied
+        # range is the extraction snapshot, so columns added/removed by the slicer are retained.
+        $SnapshotSheet.Cells.Clear()
+        $PivotRange = $PivotTable.TableRange1
+        $PivotRange.Copy()
+        $SnapshotSheet.Range("A1").PasteSpecial(-4104) # xlPasteAll
+        $Excel.CutCopyMode = $false
+        $snapshotRange = $SnapshotSheet.Range("A1").Resize($PivotRange.Rows.Count, $PivotRange.Columns.Count)
+
         $dataBody = $PivotTable.DataBodyRange
         if ($null -eq $dataBody) { return }
 
@@ -154,6 +169,8 @@ try {
         }
 
         $rowCount = $dataBody.Rows.Count
+        $snapshotRowOffset = $PivotTable.DataBodyRange.Row - $PivotRange.Row
+        $snapshotColumnOffset = $PivotTable.DataBodyRange.Column - $PivotRange.Column
         $dataset = [System.Collections.Generic.List[object]]::new()
         $rowOffset = $rowRange.Rows.Count - $rowCount
         for ($r = 1; $r -le $rowCount; $r++) {
@@ -185,7 +202,7 @@ try {
                 } elseif ($header -match "Grand Total") {
                     $row."Grand Total" = if ($value -as [double]) { $value -as [double] } elseif ([double]::TryParse($value, [ref]$null)) { [double]$value } else { 0 }
                 } else {
-                    $extraColumns[$header] = [string]$dataBody.Cells.Item($r, $c).Text
+                    $extraColumns[$header] = [string]$snapshotRange.Cells.Item($snapshotRowOffset + $r, $snapshotColumnOffset + $c).Text
                 }
             }
             $row.extra_columns = $extraColumns
@@ -346,6 +363,8 @@ try {
     }
 
     Write-Output "Table extraction completed. Total combinations extracted: $($AllData.Count)"
+    $SnapshotWorkbook.Close($false)
+    $SnapshotWorkbook = $null
     $Workbook.Close($false)
 
     Write-Output "Converting AllData to JSON..."
@@ -353,6 +372,7 @@ try {
     Write-Output "JSON saved to $jsonOutputPath"
 } catch {
     Write-Error $_.Exception.Message
+    if ($SnapshotWorkbook) { $SnapshotWorkbook.Close($false) }
     if ($Workbook) { $Workbook.Close($false) }
     throw $_
 } finally {
