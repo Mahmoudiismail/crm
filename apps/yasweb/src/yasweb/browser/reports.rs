@@ -280,18 +280,11 @@ pub fn navigate_and_run_report(
                             "Executing JavaScript to search & select report: {}",
                             active_report_name
                         );
-                        let step2_js = load_managed_browser_script(
-                            "select_report.js",
-                            include_str!("scripts/select_report.js"),
-                        )?
-                        .replace(
-                            "__REPORT_TYPE_JSON__",
-                            &serde_json::to_string(&active_report_type)?,
-                        )
-                        .replace(
-                            "__REPORT_NAME_JSON__",
-                            &serde_json::to_string(&active_report_name)?,
-                        );
+                        let step2_js = generate_step2_js(
+                            active_report_type,
+                            active_report_name,
+                            timeout_minutes,
+                        )?;
 
                         info!("Searching & Selecting Report: {}", active_report_name);
                         evaluate_report_frame_step(tab, &step2_js, "Step 2 (Select Report)")?;
@@ -585,6 +578,45 @@ fn generate_step1_js(report_type: &str) -> Result<String> {
         include_str!("scripts/select_report_type.js"),
     )?
     .replace("__REPORT_TYPE_JSON__", &serde_json::to_string(report_type)?))
+}
+
+fn generate_step2_js(
+    report_type: &str,
+    report_name: &str,
+    timeout_minutes: u64,
+) -> Result<String> {
+    Ok(load_managed_browser_script(
+        "select_report.js",
+        include_str!("scripts/select_report.js"),
+    )?
+    .replace("__REPORT_TYPE_JSON__", &serde_json::to_string(report_type)?)
+    .replace("__REPORT_NAME_JSON__", &serde_json::to_string(report_name)?)
+    .replace("__TIMEOUT_MINUTES__", &timeout_minutes.to_string()))
+}
+
+#[cfg(test)]
+mod select_report_js_tests {
+    use super::generate_step2_js;
+
+    #[test]
+    fn report_selection_replaces_all_runtime_arguments() {
+        let js = generate_step2_js("Standard Report", "Appointment List", 5).unwrap();
+
+        assert!(js.ends_with(r#"} )("Standard Report", "Appointment List", 5);"#) == false);
+        assert!(js.contains(r#"})("Standard Report", "Appointment List", 5);"#));
+        assert!(!js.contains("__REPORT_TYPE_JSON__"));
+        assert!(!js.contains("__REPORT_NAME_JSON__"));
+        assert!(!js.contains("__TIMEOUT_MINUTES__"));
+    }
+
+    #[test]
+    fn report_selection_serializes_report_names_safely() {
+        let js = generate_step2_js("Standard Report", r#"Doctor's "List""#, 3).unwrap();
+
+        assert!(js.contains(r#""Doctor's \"List\"""#));
+        assert!(js.contains("})(3);") == false);
+        assert!(!js.contains("__TIMEOUT_MINUTES__"));
+    }
 }
 
 #[cfg(test)]
