@@ -25,9 +25,9 @@ pub fn process_and_collect_logs(config: &UpdaterConfig) -> Result<()> {
         exe_dir.join(configured_logs_dir)
     };
 
-    let files = collect_files(&exe_dir, &logs_dir);
+    let files = collect_files(&exe_dir, &logs_dir, config);
     if files.is_empty() {
-        info!("No Runner/Yasweb log or diagnostic files found. Nothing to archive.");
+        info!("No application log or diagnostic files found. Nothing to archive.");
         return Ok(());
     }
 
@@ -141,49 +141,67 @@ fn create_verified_archive(files: &[CollectedFile], temp_path: &Path) -> Result<
     Ok(())
 }
 
-fn collect_files(exe_dir: &Path, logs_dir: &Path) -> Vec<CollectedFile> {
+fn collect_files(
+    exe_dir: &Path,
+    legacy_logs_dir: &Path,
+    config: &UpdaterConfig,
+) -> Vec<CollectedFile> {
     let mut files = Vec::new();
     let mut seen = HashSet::new();
 
-    // Root-level application logs, including yasweb.log and timestamped task logs.
-    if let Ok(entries) = fs::read_dir(exe_dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_file() && has_extension(&path, &["log"]) {
-                add_file(
-                    &mut files,
-                    &mut seen,
-                    path.clone(),
-                    PathBuf::from(path.file_name().unwrap_or_default()),
-                );
-            }
+    // Keep collecting Updater logs beside crm_updater.exe.
+    collect_root_logs(exe_dir, Path::new("updater"), &mut files, &mut seen);
+
+    // Collect each configured application's root-level logs and its logs/ tree.
+    // target_path uses the same base as the updater's replacement logic.
+    for (index, app) in config.file_replacement_map.iter().enumerate() {
+        let target_dir = resolve_target_dir(exe_dir, &app.target_path);
+        if !target_dir.is_dir() {
+            warn!(
+                "Configured application directory is missing; skipping its logs: app={}, path={}",
+                app.executable_name,
+                target_dir.display()
+            );
+            continue;
+        }
+
+        let app_name = Path::new(&app.executable_name)
+            .file_stem()
+            .and_then(|name| name.to_str())
+            .filter(|name| !name.is_empty())
+            .unwrap_or("application");
+        let archive_prefix = PathBuf::from(format!("applications/{}_{}", app_name, index + 1));
+
+        collect_root_logs(&target_dir, &archive_prefix, &mut files, &mut seen);
+
+        let app_logs_dir = target_dir.join("logs");
+        if app_logs_dir.is_dir() {
+            collect_log_tree(
+                &app_logs_dir,
+                &archive_prefix.join("logs"),
+                &mut files,
+                &mut seen,
+            );
         }
     }
 
-    // Runner task logs retain their relative directory structure under logs/.
-    if logs_dir.is_dir() {
-        let prefix = logs_dir
+    // Backward compatibility: collect the previously configured Runner logs directory.
+    if legacy_logs_dir.is_dir() {
+        let prefix = legacy_logs_dir
             .file_name()
             .filter(|name| !name.is_empty())
             .unwrap_or_else(|| std::ffi::OsStr::new("logs"));
-        for entry in walkdir::WalkDir::new(logs_dir)
-            .into_iter()
-            .filter_map(|entry| entry.ok())
-        {
-            let path = entry.path();
-            if !path.is_file() || !has_extension(path, &["log"]) {
-                continue;
-            }
-            let relative = path.strip_prefix(logs_dir).unwrap_or(path);
-            add_file(
-                &mut files,
-                &mut seen,
-                path.to_path_buf(),
-                PathBuf::from(prefix).join(relative),
-            );
-        }
+        collect_log_tree(
+            legacy_logs_dir,
+            Path::new("legacy_runner_logs").join(prefix).as_path(),
+            &mut files,
+            &mut seen,
+        );
     } else {
-        warn!("Configured Runner logs directory is missing; no task logs were collected.");
+        warn!(
+            "Configured legacy Runner logs directory is missing: {}",
+            legacy_logs_dir.display()
+        );
     }
 
     // Include HTML/JSON browser diagnostics, but never config files or sent artifacts.
@@ -217,6 +235,59 @@ fn collect_files(exe_dir: &Path, logs_dir: &Path) -> Vec<CollectedFile> {
 
     files.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
     files
+}
+
+fn resolve_target_dir(exe_dir: &Path, target_path: &str) -> PathBuf {
+    let target = Path::new(target_path);
+    if target.is_absolute() {
+        target.to_path_buf()
+    } else {
+        exe_dir.join(target)
+    }
+}
+
+fn collect_root_logs(
+    directory: &Path,
+    archive_prefix: &Path,
+    files: &mut Vec<CollectedFile>,
+    seen: &mut HashSet<PathBuf>,
+) {
+    let Ok(entries) = fs::read_dir(directory) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_file() && has_extension(&path, &["log"]) {
+            let Some(file_name) = path.file_name().map(PathBuf::from) else {
+                continue;
+            };
+            add_file(files, seen, path, archive_prefix.join(file_name));
+        }
+    }
+}
+
+fn collect_log_tree(
+    logs_dir: &Path,
+    archive_prefix: &Path,
+    files: &mut Vec<CollectedFile>,
+    seen: &mut HashSet<PathBuf>,
+) {
+    for entry in walkdir::WalkDir::new(logs_dir)
+        .into_iter()
+        .filter_map(|entry| entry.ok())
+    {
+        let path = entry.path();
+        if !path.is_file() || !has_extension(path, &["log"]) {
+            continue;
+        }
+        let relative = path.strip_prefix(logs_dir).unwrap_or(path);
+        add_file(
+            files,
+            seen,
+            path.to_path_buf(),
+            archive_prefix.join(relative),
+        );
+    }
 }
 
 fn add_file(
@@ -255,6 +326,24 @@ fn has_extension(path: &Path, extensions: &[&str]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::crm_updater::config::{ReplacementMapEntry, UpdaterConfig};
+
+    fn test_config(target_path: &str) -> UpdaterConfig {
+        UpdaterConfig {
+            downloads_dir: "downloads".into(),
+            runner_logs_dir: "logs".into(),
+            log_recipient_email: "test@example.com".into(),
+            file_replacement_map: vec![ReplacementMapEntry {
+                source_file: "runner.exe".into(),
+                target_path: target_path.into(),
+                executable_name: "runner.exe".into(),
+                restart_args: None,
+                autostart: true,
+            }],
+            log_stdout_level: "INFO".into(),
+            log_file_level: "INFO".into(),
+        }
+    }
 
     #[test]
     fn archive_preserves_layout_and_removes_sources_only_after_verification() {
@@ -301,21 +390,59 @@ mod tests {
         let diagnostics = exe.join("debug_html");
         fs::create_dir_all(&logs).unwrap();
         fs::create_dir_all(diagnostics.join("sent")).unwrap();
-        fs::write(exe.join("yasweb.log"), "").unwrap();
-        fs::write(exe.join("yasweb_config.json"), "{}").unwrap();
+        let app_dir = exe.join("application");
+        fs::create_dir_all(&app_dir).unwrap();
+        fs::write(app_dir.join("yasweb.log"), "").unwrap();
+        fs::write(app_dir.join("yasweb_config.json"), "{}").unwrap();
         fs::write(diagnostics.join("failure.html"), "<html/>").unwrap();
         fs::write(diagnostics.join("config_snapshot.json"), "{}").unwrap();
         fs::write(diagnostics.join("sent").join("sent.html"), "<html/>").unwrap();
 
-        let files = collect_files(&exe, &logs);
+        let files = collect_files(&exe, &logs, &test_config("application"));
         let names: HashSet<_> = files
             .iter()
             .map(|file| file.relative_path.clone())
             .collect();
-        assert!(names.contains(&PathBuf::from("yasweb.log")));
+        assert!(names.contains(&PathBuf::from("applications/runner_1/yasweb.log")));
         assert!(names.contains(&PathBuf::from("debug_html/failure.html")));
-        assert!(!names.contains(&PathBuf::from("yasweb_config.json")));
-        assert!(!names.contains(&PathBuf::from("debug_html/config_snapshot.json")));
-        assert!(!names.contains(&PathBuf::from("debug_html/sent/sent.html")));
+        assert!(!names
+            .iter()
+            .any(|name| name.ends_with("yasweb_config.json")));
+        assert!(!names
+            .iter()
+            .any(|name| name.ends_with("config_snapshot.json")));
+        assert!(!names.iter().any(|name| name.ends_with("sent.html")));
+    }
+
+    #[test]
+    fn collection_uses_configured_application_paths_and_keeps_legacy_runner_logs() {
+        let temp = tempfile::tempdir().unwrap();
+        let updater_dir = temp.path().join("Updater");
+        let app_dir = temp.path().join("SeparateApps").join("Runner");
+        let app_logs = app_dir.join("logs").join("daily");
+        let legacy_logs = temp.path().join("legacy_runner_logs");
+        fs::create_dir_all(&updater_dir).unwrap();
+        fs::create_dir_all(&app_logs).unwrap();
+        fs::create_dir_all(&legacy_logs).unwrap();
+
+        let root_log = app_dir.join("runner.log");
+        let nested_log = app_logs.join("task.log");
+        let legacy_log = legacy_logs.join("old_task.log");
+        fs::write(&root_log, "runner root").unwrap();
+        fs::write(&nested_log, "runner task").unwrap();
+        fs::write(&legacy_log, "legacy task").unwrap();
+
+        let config = test_config("../SeparateApps/Runner");
+        let files = collect_files(&updater_dir, &legacy_logs, &config);
+        let names: HashSet<_> = files
+            .iter()
+            .map(|file| file.relative_path.clone())
+            .collect();
+
+        assert!(names.contains(&PathBuf::from("applications/runner_1/runner.log")));
+        assert!(names.contains(&PathBuf::from("applications/runner_1/logs/daily/task.log")));
+        assert!(names.contains(&PathBuf::from(
+            "legacy_runner_logs/legacy_runner_logs/old_task.log"
+        )));
     }
 }
