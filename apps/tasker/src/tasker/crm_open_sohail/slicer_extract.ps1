@@ -152,7 +152,6 @@ try {
         $PivotRange = $PivotTable.TableRange1
         $PivotRange.Copy()
         $SnapshotSheet.Range("A1").PasteSpecial(-4104) # xlPasteAll
-        $Excel.CutCopyMode = 0
         $snapshotRange = $SnapshotSheet.Range("A1").Resize($PivotRange.Rows.Count, $PivotRange.Columns.Count)
 
         $dataBody = $PivotTable.DataBodyRange
