@@ -1300,6 +1300,62 @@ pub fn generate_mis_reports_wait_js(timeout_seconds: u64) -> String {
 }
 
 #[cfg(test)]
+mod step4_filter_regression_tests {
+    // Step 4 is currently an inline JavaScript template. These assertions protect
+    // its key filter contracts without introducing a separate JS test runtime.
+    const STEP4_SOURCE: &str = include_str!("reports.rs");
+
+    #[test]
+    fn allocation_date_keys_match_the_visible_from_and_to_date_labels() {
+        assert!(STEP4_SOURCE.contains(
+            "if (/allocation[_ ]date[_ ]from/i.test(key)) return /(^|\\s)from date$/.test(labelNorm);"
+        ));
+        assert!(STEP4_SOURCE.contains(
+            "if (/allocation[_ ]date[_ ]to/i.test(key)) return /(^|\\s)to date$/.test(labelNorm);"
+        ));
+    }
+
+    #[test]
+    fn clearing_text_inputs_dispatches_input_even_when_no_characters_are_typed() {
+        let clear_start = STEP4_SOURCE
+            .find("async function simulateTyping(inputElem, text)")
+            .expect("Step 4 typing helper should exist");
+        let clear_end = STEP4_SOURCE[clear_start..]
+            .find("const labels =")
+            .map(|offset| clear_start + offset)
+            .expect("Step 4 label discovery should follow the typing helper");
+        let helper = &STEP4_SOURCE[clear_start..clear_end];
+        let empty_assignment = helper
+            .find("inputElem.value = '';")
+            .expect("typing helper should clear before typing");
+        let input_event = helper
+            .find("inputElem.dispatchEvent(new Event('input', {{ bubbles: true }}));")
+            .expect("typing helper should dispatch input");
+        assert!(input_event > empty_assignment);
+        assert!(input_event < helper.find("for (let i = 0; i < text.length; i++)").unwrap());
+    }
+
+    #[test]
+    fn explicit_empty_values_only_clear_text_inputs_and_leave_other_controls_untouched() {
+        assert!(STEP4_SOURCE.contains(
+            "clearRequested && !(input.tagName === 'INPUT' && input.type === 'text')"
+        ));
+        assert!(STEP4_SOURCE.contains(
+            "Ignoring empty value for non-text filter control: "
+        ));
+        assert!(STEP4_SOURCE.contains("await simulateTyping(input, '');"));
+        assert!(STEP4_SOURCE.contains("filterFilled = input.value === '';"));
+        assert!(!STEP4_SOURCE.contains("mat-form-field-suffix button"));
+    }
+
+    #[test]
+    fn omitted_filter_keys_are_not_modified() {
+        assert!(STEP4_SOURCE.contains("for (const [key, value] of Object.entries(filters))"));
+        assert!(!STEP4_SOURCE.contains("for (const label of labels) {\n                                                if (!(label"));
+    }
+}
+
+#[cfg(test)]
 mod mis_route_tests {
     use super::is_mis_reports_route;
 
