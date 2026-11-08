@@ -483,6 +483,7 @@ pub fn navigate_and_run_report(
                                             async function simulateTyping(inputElem, text) {{
                                                 inputElem.focus();
                                                 inputElem.value = '';
+                                                inputElem.dispatchEvent(new Event('input', {{ bubbles: true }}));
                                                 for (let i = 0; i < text.length; i++) {{
                                                     inputElem.value += text[i];
                                                     inputElem.dispatchEvent(new Event('input', {{ bubbles: true }}));
