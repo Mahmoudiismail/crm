@@ -139,7 +139,7 @@ fn persist_frame_resources(
         };
 
         match tab.call_method(Page::GetResourceContent {
-            frame_id: frame_id_value,
+            frame_id: frame_id_value.clone(),
             url: frame_url.clone(),
         }) {
             Ok(resource) => {
