@@ -1,4 +1,5 @@
-(async function(timeoutMinutes) {
+
+        (async function(timeoutMinutes) {
             function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
             const logs = [];
             const timeoutMs = timeoutMinutes * 60 * 1000;
@@ -116,3 +117,4 @@
                 logs
             });
         })(__TIMEOUT_MINUTES__);
+        
