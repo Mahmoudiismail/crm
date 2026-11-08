@@ -163,7 +163,17 @@ mod tests {
             3
         );
         assert!(script.contains("$values = $dataBody.Value2"));
-        assert!(script.contains("$dataBody.Cells.Item($r, $c).Text"));
+        assert!(script.contains("$snapshotRange.Cells.Item($snapshotRowOffset + $r, $snapshotColumnOffset + $c).Text"));
+    }
+
+    #[test]
+    fn test_pivot_snapshot_preserves_dynamic_columns_after_each_slicer_selection() {
+        let script = include_str!("slicer_extract.ps1");
+        assert!(script.contains("$PivotTable.TableRange1"));
+        assert!(script.contains("$PivotRange.Copy()"));
+        assert!(script.contains("$SnapshotSheet.Range(\"A1\").PasteSpecial(-4104)"));
+        assert!(script.contains("$extraColumns[$header]"));
+        assert!(script.contains("$row.extra_columns = $extraColumns"));
     }
 
     #[test]
