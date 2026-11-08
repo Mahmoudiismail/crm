@@ -37,6 +37,7 @@ impl YaswebConfig {
         let mut config_updated = false;
 
         for report in self.reports.values_mut() {
+            let force_standard_report_format = report.report_type == "Standard Report";
             let (default_start_fmt, default_end_fmt) = match report.report_type.as_str() {
                 "Report Manager" => ("%d-%b-%Y".to_string(), "%d-%b-%Y".to_string()),
                 "Standard Report" => (
@@ -47,15 +48,19 @@ impl YaswebConfig {
             };
 
             if let Some(ref mut sk) = report.start_date_key {
-                if sk.format.is_empty() {
-                    sk.format = default_start_fmt.clone();
-                    config_updated = true;
+                if force_standard_report_format || sk.format.is_empty() {
+                    if sk.format != default_start_fmt {
+                        sk.format = default_start_fmt.clone();
+                        config_updated = true;
+                    }
                 }
             }
             if let Some(ref mut ek) = report.end_date_key {
-                if ek.format.is_empty() {
-                    ek.format = default_end_fmt.clone();
-                    config_updated = true;
+                if force_standard_report_format || ek.format.is_empty() {
+                    if ek.format != default_end_fmt {
+                        ek.format = default_end_fmt.clone();
+                        config_updated = true;
+                    }
                 }
             }
         }
@@ -249,6 +254,15 @@ mod tests {
         assert_eq!(report.start_date_key.as_ref().unwrap().format, "%d-%b-%Y 00:00");
         assert_eq!(report.end_date_key.as_ref().unwrap().format, "%d-%b-%Y 23:59");
         assert!(!config.finalize_runtime_fields());
+    }
+
+    #[test]
+    fn standard_report_overrides_custom_date_formats_with_full_day_boundaries() {
+        let mut config = report_with_date_keys("Standard Report", "%d-%b-%Y", "%d-%b-%Y");
+        assert!(config.finalize_runtime_fields());
+        let report = &config.reports["Example"];
+        assert_eq!(report.start_date_key.as_ref().unwrap().format, "%d-%b-%Y 00:00");
+        assert_eq!(report.end_date_key.as_ref().unwrap().format, "%d-%b-%Y 23:59");
     }
 
     #[test]
