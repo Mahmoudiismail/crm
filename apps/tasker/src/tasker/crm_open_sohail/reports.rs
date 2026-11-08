@@ -8,6 +8,13 @@ pub fn generate_html_report(
     final_datasets: &[EnrichedDataset],
 ) -> String {
     let mut sections_html = String::new();
+    // Use one shared column set so every branch/month table has identical dimensions.
+    let mut dynamic_columns: Vec<String> = final_datasets.iter()
+        .flat_map(|dataset| dataset.data.iter())
+        .flat_map(|row| row.extra_columns.keys().cloned())
+        .collect();
+    dynamic_columns.sort();
+    dynamic_columns.dedup();
 
     for dataset in final_datasets {
         // Table Title
@@ -30,13 +37,6 @@ pub fn generate_html_report(
             "<div style=\"font-family: Calibri, sans-serif; font-size: 14px; font-weight: bold; color: #44546A;\">{}</div>",
             escape_html(&title)
         ));
-
-        // Keep the same column set and dimensions for every table in this email.
-        let mut dynamic_columns: Vec<String> = dataset.data.iter()
-            .flat_map(|row| row.extra_columns.keys().cloned())
-            .collect();
-        dynamic_columns.sort();
-        dynamic_columns.dedup();
 
         // Start Table with a constrained width; fixed layout prevents Outlook from stretching it.
         sections_html.push_str("<table width=\"900\" style=\"width:900px; max-width:900px; table-layout:fixed; border-collapse:collapse; font-family:Calibri,sans-serif; font-size:14px; border:1px solid #8EA9DB;\">");
