@@ -39,7 +39,10 @@ impl YaswebConfig {
         for report in self.reports.values_mut() {
             let (default_start_fmt, default_end_fmt) = match report.report_type.as_str() {
                 "Report Manager" => ("%d-%b-%Y".to_string(), "%d-%b-%Y".to_string()),
-                "Standard Report" => ("%-d-%-m-%Y".to_string(), "%-d-%-m-%Y".to_string()),
+                "Standard Report" => (
+                    "%d-%b-%Y 00:00".to_string(),
+                    "%d-%b-%Y 23:59".to_string(),
+                ),
                 _ => ("%d-%m-%Y 00:00".to_string(), "%d-%m-%Y 23:59".to_string()),
             };
 
@@ -264,6 +267,15 @@ mod tests {
         let report = &config.reports["Example"];
         assert_eq!(report.start_date_key.as_ref().unwrap().format, "dd-mm-yyyy");
         assert_eq!(report.end_date_key.as_ref().unwrap().format, "yyyy/mm/dd");
+    }
+
+    #[test]
+    fn standard_report_uses_day_abbreviated_month_and_full_day_time_boundaries() {
+        let mut config = report_with_date_keys("Standard Report", "", "");
+        assert!(config.finalize_runtime_fields());
+        let report = config.reports.get("Example").unwrap();
+        assert_eq!(report.start_date_key.as_ref().unwrap().format, "%d-%b-%Y 00:00");
+        assert_eq!(report.end_date_key.as_ref().unwrap().format, "%d-%b-%Y 23:59");
     }
 
     #[test]
