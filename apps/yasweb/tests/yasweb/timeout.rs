@@ -2,7 +2,7 @@ use yasweb_app::yasweb::browser::reports::generate_step6_js;
 
 #[test]
 fn test_generate_step6_js_normal_timeout() {
-    let js = generate_step6_js(60);
+    let js = generate_step6_js(60).unwrap();
     assert!(js.contains("const timeoutMs = timeoutMinutes * 60 * 1000;"));
     assert!(js.contains("const deadline = Date.now() + timeoutMs;"));
     assert!(js.contains("const pollMs = 1000;"));
@@ -17,13 +17,13 @@ fn test_generate_step6_js_normal_timeout() {
 
 #[test]
 fn test_generate_step6_js_large_timeout() {
-    let js = generate_step6_js(6000);
+    let js = generate_step6_js(6000).unwrap();
     assert!(js.contains("})(6000);"));
 }
 
 #[test]
 fn test_generate_step6_js_zero_timeout() {
-    let js = generate_step6_js(0);
+    let js = generate_step6_js(0).unwrap();
     assert!(js.contains("})(0);"));
     assert!(js
         .trim_start()
@@ -41,7 +41,7 @@ use yasweb_app::yasweb::browser::reports::generate_mis_reports_wait_js;
 
 #[test]
 fn test_generate_mis_reports_wait_js_normal_timeout() {
-    let js = generate_mis_reports_wait_js(10);
+    let js = generate_mis_reports_wait_js(10).unwrap();
     assert!(js.contains("const deadline = Date.now() + timeoutSeconds * 1000;"));
     assert!(js.contains("})(10);"));
     assert!(js
@@ -67,7 +67,7 @@ fn test_generate_mis_reports_wait_js_normal_timeout() {
 
 #[test]
 fn test_generate_mis_reports_wait_js_large_timeout() {
-    let js = generate_mis_reports_wait_js(120);
+    let js = generate_mis_reports_wait_js(120).unwrap();
     assert!(js.contains("})(120);"));
     assert!(js
         .trim_start()
@@ -76,7 +76,7 @@ fn test_generate_mis_reports_wait_js_large_timeout() {
 
 #[test]
 fn test_generate_mis_reports_wait_js_zero_timeout() {
-    let js = generate_mis_reports_wait_js(0);
+    let js = generate_mis_reports_wait_js(0).unwrap();
     assert!(js.contains("})(0);"));
 }
 
