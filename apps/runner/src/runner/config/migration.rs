@@ -4,7 +4,9 @@ use crate::runner::config::defaults::*;
 use crate::runner::config::models::*;
 
 fn option_string_is_none_or_empty(value: &Option<String>) -> bool {
-    value.as_deref().map_or(true, |value| value.trim().is_empty())
+    value
+        .as_deref()
+        .map_or(true, |value| value.trim().is_empty())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -416,7 +418,6 @@ impl RunnerTask {
         }
     }
 }
-
 
 #[cfg(test)]
 mod external_app_legacy_date_serialization_tests {

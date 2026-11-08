@@ -292,7 +292,6 @@ impl std::fmt::Debug for RunnerConfig {
     }
 }
 
-
 #[cfg(test)]
 mod external_app_date_serialization_tests {
     use super::{ExternalAppSpec, PeriodMode};
