@@ -160,6 +160,7 @@ try {
             $teamName = $rowRange.Cells.Item($r + $rowOffset, 1).Text
             if ($teamName -eq "Grand Total") { continue }
 
+            $extraColumns = [ordered]@{}
             $row = [PSCustomObject]@{
                 team = $teamName
                 closed = 0
@@ -167,10 +168,12 @@ try {
                 "% of closed" = "0%"
                 "% of open" = "0%"
                 "Grand Total" = 0
+                extra_columns = $null
             }
             for ($c = 1; $c -le $columnCount; $c++) {
-                $header = $headers[$c]
+                $header = [string]$headers[$c]
                 $value = if ($values -is [System.Array]) { $values[$r, $c] } else { $values }
+                if ([string]::IsNullOrWhiteSpace($header)) { continue }
                 if ($header -eq "% of closed" -or $header -eq "% of open") {
                     $text = $dataBody.Cells.Item($r, $c).Text
                     if ($header -eq "% of closed") { $row."% of closed" = if ($text) { $text } else { "0%" } }
@@ -181,8 +184,11 @@ try {
                     $row.open = if ($value -as [double]) { $value -as [double] } elseif ([double]::TryParse($value, [ref]$null)) { [double]$value } else { 0 }
                 } elseif ($header -match "Grand Total") {
                     $row."Grand Total" = if ($value -as [double]) { $value -as [double] } elseif ([double]::TryParse($value, [ref]$null)) { [double]$value } else { 0 }
+                } else {
+                    $extraColumns[$header] = [string]$dataBody.Cells.Item($r, $c).Text
                 }
             }
+            $row.extra_columns = $extraColumns
             $dataset.Add($row)
         }
         if ($dataset.Count -gt 0) {
