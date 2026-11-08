@@ -2,6 +2,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::runner::config::defaults::*;
 
+fn option_string_is_none_or_empty(value: &Option<String>) -> bool {
+    value.as_deref().is_none_or(|value| value.trim().is_empty())
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct RunnerConfig {
     #[serde(default = "default_gui_host")]
@@ -74,9 +78,9 @@ pub struct ExternalAppSpec {
     pub args: std::collections::HashMap<String, String>,
     #[serde(default)]
     pub period_mode: PeriodMode,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "option_string_is_none_or_empty")]
     pub start_date: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "option_string_is_none_or_empty")]
     pub end_date: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub start_date_arg: Option<String>,
