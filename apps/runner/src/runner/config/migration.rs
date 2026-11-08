@@ -3,6 +3,10 @@ use serde::{Deserialize, Serialize};
 use crate::runner::config::defaults::*;
 use crate::runner::config::models::*;
 
+fn option_string_is_none_or_empty(value: &Option<String>) -> bool {
+    value.as_deref().map_or(true, |value| value.trim().is_empty())
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExternalAppSpecLegacy {
     pub app_id: String,
@@ -10,9 +14,9 @@ pub struct ExternalAppSpecLegacy {
     pub args: std::collections::HashMap<String, String>,
     #[serde(default)]
     pub period_mode: Option<PeriodMode>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "option_string_is_none_or_empty")]
     pub start_date: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "option_string_is_none_or_empty")]
     pub end_date: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub start_date_arg: Option<String>,
@@ -410,5 +414,45 @@ impl RunnerTask {
                 });
             }
         }
+    }
+}
+
+
+#[cfg(test)]
+mod external_app_legacy_date_serialization_tests {
+    use super::ExternalAppSpecLegacy;
+    use crate::runner::config::PeriodMode;
+    use std::collections::HashMap;
+
+    #[test]
+    fn omits_empty_period_dates_from_persisted_legacy_json() {
+        let spec = ExternalAppSpecLegacy {
+            app_id: "test".to_string(),
+            args: HashMap::new(),
+            period_mode: Some(PeriodMode::Custom),
+            start_date: Some(String::new()),
+            end_date: Some("   ".to_string()),
+            start_date_arg: None,
+            end_date_arg: None,
+        };
+        let json = serde_json::to_value(spec).unwrap();
+        assert!(json.get("start_date").is_none());
+        assert!(json.get("end_date").is_none());
+    }
+
+    #[test]
+    fn preserves_non_empty_start_date_in_persisted_legacy_json() {
+        let spec = ExternalAppSpecLegacy {
+            app_id: "test".to_string(),
+            args: HashMap::new(),
+            period_mode: Some(PeriodMode::Custom),
+            start_date: Some("2026-10-01".to_string()),
+            end_date: None,
+            start_date_arg: None,
+            end_date_arg: None,
+        };
+        let json = serde_json::to_value(spec).unwrap();
+        assert_eq!(json["start_date"], "2026-10-01");
+        assert!(json.get("end_date").is_none());
     }
 }
