@@ -414,7 +414,8 @@ mod tests {
         fs::write(&nested_log, "runner task").unwrap();
         fs::write(&legacy_log, "legacy task").unwrap();
 
-        let config = test_config(r"..\SeparateApps\Runner");
+        let relative_app_dir = app_dir.strip_prefix(&updater_dir).unwrap();
+        let config = test_config(&relative_app_dir.to_string_lossy());
         let files = collect_files(&updater_dir, &legacy_logs, &config);
         let names: HashSet<_> = files.iter().map(|file| file.relative_path.clone()).collect();
 
