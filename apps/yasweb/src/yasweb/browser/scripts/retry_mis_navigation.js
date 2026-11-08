@@ -1,4 +1,5 @@
-(async function() {
+
+        (async function() {
             const routePattern = /\/home\/mis-report\/module\//i;
             if (routePattern.test(location.href)) return JSON.stringify({ status: "SUCCESS", clicked: false });
 
@@ -31,3 +32,4 @@
             }
             return JSON.stringify({ status: "ERROR", msg: "MIS navigation recovery could not find a visible MIS module." });
         })()
+    
