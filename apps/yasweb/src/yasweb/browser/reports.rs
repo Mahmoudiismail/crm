@@ -586,11 +586,16 @@ pub fn navigate_and_run_report(
                                                     if (matchesLabel(key, labelText)) {{
                                                         const input = findFilterControl(lbl);
                                                         if (input) {{
+                                                            if (clearRequested && !(input.tagName === 'INPUT' && input.type === 'text')) {{
+                                                                logs.push("Ignoring empty value for non-text filter control: " + key);
+                                                                filterFilled = true;
+                                                                break;
+                                                            }}
                                                             if (input.tagName === 'INPUT') {{
                                                                 if (clearRequested) {{
                                                                     await simulateTyping(input, '');
-                                                                    logs.push("Cleared INPUT for " + key);
-                                                                    filterFilled = true;
+                                                                    filterFilled = input.value === '';
+                                                                    logs.push((filterFilled ? "Cleared text input for " : "Failed to clear text input for ") + key);
                                                                     break;
                                                                 }}
                                                                 let v = value;
@@ -605,17 +610,6 @@ pub fn navigate_and_run_report(
                                                                 filterFilled = true;
                                                                 break;
                                                             }} else if (input.tagName === 'MAT-SELECT' || input.getAttribute('role') === 'combobox') {{
-                                                                if (clearRequested) {{
-                                                                    const clearButton = input.closest('mat-form-field')?.querySelector('button[aria-label*="clear" i], button[title*="clear" i], .mat-form-field-suffix button');
-                                                                    if (clearButton) {{
-                                                                        clearButton.click();
-                                                                        logs.push("Cleared dropdown using its clear control for " + key);
-                                                                        filterFilled = true;
-                                                                    }} else {{
-                                                                        logs.push("No clear control found for empty dropdown filter: " + key);
-                                                                    }}
-                                                                    break;
-                                                                }}
                                                                 input.click();
                                                                 const optionDeadline = Date.now() + 2500;
                                                                 let options = [];
