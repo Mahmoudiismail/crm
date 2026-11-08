@@ -579,12 +579,11 @@ pub fn navigate_and_run_report(
                                             for (const [key, value] of Object.entries(filters)) {{
                                                 const clearRequested = value === null || value === undefined || String(value).trim() === '';
                                                 logs.push((clearRequested ? "Clearing filter: " : "Applying filter: ") + key + (clearRequested ? " (explicit empty value)" : " = " + value));
-                                                let normalizedKey = key.toLowerCase().replace(/_/g, ' ');
                                                 let filterFilled = false;
 
                                                 for (let lbl of labels) {{
                                                     let labelText = (lbl.innerText || lbl.textContent || '').trim();
-                                                    if (matchesLabel(key, labelText)) {{                                                    if (labelText === normalizedKey) {{
+                                                    if (matchesLabel(key, labelText)) {{
                                                         const input = findFilterControl(lbl);
                                                         if (input) {{
                                                             if (input.tagName === 'INPUT') {{
