@@ -390,13 +390,15 @@ mod tests {
         let diagnostics = exe.join("debug_html");
         fs::create_dir_all(&logs).unwrap();
         fs::create_dir_all(diagnostics.join("sent")).unwrap();
-        fs::write(exe.join("yasweb.log"), "").unwrap();
-        fs::write(exe.join("yasweb_config.json"), "{}").unwrap();
+        let app_dir = exe.join("application");
+        fs::create_dir_all(&app_dir).unwrap();
+        fs::write(app_dir.join("yasweb.log"), "").unwrap();
+        fs::write(app_dir.join("yasweb_config.json"), "{}").unwrap();
         fs::write(diagnostics.join("failure.html"), "<html/>").unwrap();
         fs::write(diagnostics.join("config_snapshot.json"), "{}").unwrap();
         fs::write(diagnostics.join("sent").join("sent.html"), "<html/>").unwrap();
 
-        let files = collect_files(&exe, &logs, &test_config("."));
+        let files = collect_files(&exe, &logs, &test_config("application"));
         let names: HashSet<_> = files
             .iter()
             .map(|file| file.relative_path.clone())
@@ -430,8 +432,7 @@ mod tests {
         fs::write(&nested_log, "runner task").unwrap();
         fs::write(&legacy_log, "legacy task").unwrap();
 
-        let relative_app_dir = app_dir.strip_prefix(&updater_dir).unwrap();
-        let config = test_config(&relative_app_dir.to_string_lossy());
+        let config = test_config("../SeparateApps/Runner");
         let files = collect_files(&updater_dir, &legacy_logs, &config);
         let names: HashSet<_> = files
             .iter()
