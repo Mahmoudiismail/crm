@@ -6,7 +6,7 @@ use crate::runner::config::models::*;
 fn option_string_is_none_or_empty(value: &Option<String>) -> bool {
     value
         .as_deref()
-        .map_or(true, |value| value.trim().is_empty())
+        .is_none_or(|value| value.trim().is_empty())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
