@@ -136,6 +136,9 @@ try {
         if ([string]::IsNullOrWhiteSpace($val)) { continue }
 
         $deptVal = $val.Trim().ToUpper()
+        # Match the previous AutoFilter behavior: do not include source cells
+        # whose surrounding whitespace would prevent an exact filter match.
+        if ($val -cne $deptVal) { continue }
         $targetChair = "OTHERS"
         if ($mappingHash.ContainsKey($deptVal)) { $targetChair = $mappingHash[$deptVal] }
 
