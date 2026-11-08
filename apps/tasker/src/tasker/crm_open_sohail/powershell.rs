@@ -150,10 +150,12 @@ mod tests {
     }
 
     #[test]
-    fn test_excel_cut_copy_mode_is_reset_with_enum_value() {
+    fn test_pivot_snapshot_does_not_assign_excel_cut_copy_mode() {
         let script = include_str!("slicer_extract.ps1");
-        assert!(script.contains("$Excel.CutCopyMode = 0"));
-        assert!(!script.contains("$Excel.CutCopyMode = $false"));
+        // CutCopyMode is an Excel COM enum property. PowerShell COM assignment
+        // rejects Boolean and numeric literals on some Office installations.
+        // The copy mode ends when the Excel instance is closed.
+        assert!(!script.contains("CutCopyMode"));
     }
 
     #[test]
