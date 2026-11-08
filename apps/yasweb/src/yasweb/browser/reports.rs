@@ -280,9 +280,18 @@ pub fn navigate_and_run_report(
                             "Executing JavaScript to search & select report: {}",
                             active_report_name
                         );
-                        let step2_js = load_managed_browser_script("select_report.js", include_str!("scripts/select_report.js"))?
-                            .replace("__REPORT_TYPE_JSON__", &serde_json::to_string(&active_report_type)?)
-                            .replace("__REPORT_NAME_JSON__", &serde_json::to_string(&active_report_name)?);
+                        let step2_js = load_managed_browser_script(
+                            "select_report.js",
+                            include_str!("scripts/select_report.js"),
+                        )?
+                        .replace(
+                            "__REPORT_TYPE_JSON__",
+                            &serde_json::to_string(&active_report_type)?,
+                        )
+                        .replace(
+                            "__REPORT_NAME_JSON__",
+                            &serde_json::to_string(&active_report_name)?,
+                        );
 
                         info!("Searching & Selecting Report: {}", active_report_name);
                         evaluate_report_frame_step(tab, &step2_js, "Step 2 (Select Report)")?;
@@ -296,9 +305,15 @@ pub fn navigate_and_run_report(
 
                         // STEP 3: Wait for binding
                         tracing::debug!("Executing JavaScript to wait for binding...");
-                        let step3_js = load_managed_browser_script("wait_report_binding.js", include_str!("scripts/wait_report_binding.js"))?
-                            .replace("__REPORT_NAME_JSON__", &serde_json::to_string(&active_report_name)?)
-                            .replace("__TIMEOUT_MINUTES__", &timeout_minutes.to_string());
+                        let step3_js = load_managed_browser_script(
+                            "wait_report_binding.js",
+                            include_str!("scripts/wait_report_binding.js"),
+                        )?
+                        .replace(
+                            "__REPORT_NAME_JSON__",
+                            &serde_json::to_string(&active_report_name)?,
+                        )
+                        .replace("__TIMEOUT_MINUTES__", &timeout_minutes.to_string());
 
                         info!("Waiting for Report Binding...");
                         evaluate_report_frame_step(tab, &step3_js, "Step 3 (Binding)")?;
@@ -312,10 +327,16 @@ pub fn navigate_and_run_report(
 
                         // STEP 3.5 & 4: Wait for Loader to disappear, then fill filters
                         tracing::debug!("Executing JavaScript to apply filters...");
-                        let step4_fill_js = load_managed_browser_script("fill_filters.js", include_str!("scripts/fill_filters.js"))?
-                            .replace("__FILTERS_JSON__", &filters_json)
-                            .replace("__TIMEOUT_MINUTES__", &timeout_minutes.to_string())
-                            .replace("__TRACE_ENABLED__", &tracing::enabled!(tracing::Level::TRACE).to_string());
+                        let step4_fill_js = load_managed_browser_script(
+                            "fill_filters.js",
+                            include_str!("scripts/fill_filters.js"),
+                        )?
+                        .replace("__FILTERS_JSON__", &filters_json)
+                        .replace("__TIMEOUT_MINUTES__", &timeout_minutes.to_string())
+                        .replace(
+                            "__TRACE_ENABLED__",
+                            &tracing::enabled!(tracing::Level::TRACE).to_string(),
+                        );
 
                         info!("Applying Filters...");
                         let step4_res = evaluate_report_frame_step(
@@ -361,8 +382,11 @@ pub fn navigate_and_run_report(
 
                         // STEP 5: Search Click
                         tracing::debug!("Executing JavaScript to click search...");
-                        let step5_search_js = load_managed_browser_script("click_search.js", include_str!("scripts/click_search.js"))?
-                            .replace("__TIMEOUT_MINUTES__", &timeout_minutes.to_string());
+                        let step5_search_js = load_managed_browser_script(
+                            "click_search.js",
+                            include_str!("scripts/click_search.js"),
+                        )?
+                        .replace("__TIMEOUT_MINUTES__", &timeout_minutes.to_string());
 
                         info!("Clicking Search...");
                         evaluate_report_frame_step(tab, &step5_search_js, "Step 5 (Search Click)")?;
@@ -396,8 +420,11 @@ pub fn navigate_and_run_report(
 
                         // STEP 7: Click XLSX
                         tracing::debug!("Executing JavaScript to click XLSX export option...");
-                        let step7_xlsx_js = load_managed_browser_script("select_xlsx.js", include_str!("scripts/select_xlsx.js"))?
-                            .replace("__TIMEOUT_MINUTES__", &timeout_minutes.to_string());
+                        let step7_xlsx_js = load_managed_browser_script(
+                            "select_xlsx.js",
+                            include_str!("scripts/select_xlsx.js"),
+                        )?
+                        .replace("__TIMEOUT_MINUTES__", &timeout_minutes.to_string());
 
                         info!("Clicking XLSX...");
                         evaluate_report_frame_step(tab, &step7_xlsx_js, "Step 7 (XLSX)")?;
@@ -553,8 +580,11 @@ fn collect_child_frames<'a>(tree: &'a Page::FrameTree, frames: &mut Vec<&'a Page
 }
 
 fn generate_step1_js(report_type: &str) -> Result<String> {
-    Ok(load_managed_browser_script("select_report_type.js", include_str!("scripts/select_report_type.js"))?
-        .replace("__REPORT_TYPE_JSON__", &serde_json::to_string(report_type)?))
+    Ok(load_managed_browser_script(
+        "select_report_type.js",
+        include_str!("scripts/select_report_type.js"),
+    )?
+    .replace("__REPORT_TYPE_JSON__", &serde_json::to_string(report_type)?))
 }
 
 #[cfg(test)]
@@ -574,30 +604,47 @@ mod report_type_js_tests {
 }
 
 pub fn generate_step6_js(timeout_minutes: u64) -> Result<String> {
-    Ok(load_managed_browser_script("wait_export.js", include_str!("scripts/wait_export.js"))?
-        .replace("__TIMEOUT_MINUTES__", &timeout_minutes.to_string()))
+    Ok(
+        load_managed_browser_script("wait_export.js", include_str!("scripts/wait_export.js"))?
+            .replace("__TIMEOUT_MINUTES__", &timeout_minutes.to_string()),
+    )
 }
 
 /// Recovers a missed MIS navigation click without disturbing a route that already changed.
 /// Returns true when the MIS module was clicked, false when the MIS route was already reached.
 fn retry_mis_navigation(tab: &Arc<Tab>) -> Result<bool> {
-    let script = load_managed_browser_script("retry_mis_navigation.js", include_str!("scripts/retry_mis_navigation.js"))?;
-    let result = tab.evaluate(&script, true).context("Failed to evaluate MIS navigation recovery")?;
-    let value = result.value.and_then(|value| value.as_str().map(str::to_owned))
+    let script = load_managed_browser_script(
+        "retry_mis_navigation.js",
+        include_str!("scripts/retry_mis_navigation.js"),
+    )?;
+    let result = tab
+        .evaluate(&script, true)
+        .context("Failed to evaluate MIS navigation recovery")?;
+    let value = result
+        .value
+        .and_then(|value| value.as_str().map(str::to_owned))
         .ok_or_else(|| anyhow::anyhow!("MIS navigation recovery returned no result"))?;
-    let parsed: serde_json::Value = serde_json::from_str(&value)
-        .context("MIS navigation recovery returned invalid JSON")?;
+    let parsed: serde_json::Value =
+        serde_json::from_str(&value).context("MIS navigation recovery returned invalid JSON")?;
     if parsed.get("status").and_then(serde_json::Value::as_str) != Some("SUCCESS") {
-        let message = parsed.get("msg").and_then(serde_json::Value::as_str)
+        let message = parsed
+            .get("msg")
+            .and_then(serde_json::Value::as_str)
             .unwrap_or("MIS navigation recovery failed");
         anyhow::bail!("{message}");
     }
-    Ok(parsed.get("clicked").and_then(serde_json::Value::as_bool).unwrap_or(false))
+    Ok(parsed
+        .get("clicked")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false))
 }
 
 pub fn generate_mis_reports_wait_js(timeout_seconds: u64) -> Result<String> {
-    Ok(load_managed_browser_script("wait_mis_reports.js", include_str!("scripts/wait_mis_reports.js"))?
-        .replace("__TIMEOUT_SECONDS__", &timeout_seconds.to_string()))
+    Ok(load_managed_browser_script(
+        "wait_mis_reports.js",
+        include_str!("scripts/wait_mis_reports.js"),
+    )?
+    .replace("__TIMEOUT_SECONDS__", &timeout_seconds.to_string()))
 }
 
 #[cfg(test)]
@@ -621,7 +668,8 @@ mod step4_filter_regression_tests {
 
     #[test]
     fn explicit_empty_values_clear_only_text_inputs() {
-        assert!(STEP4_SCRIPT.contains("clearRequested && !(input.tagName === 'INPUT' && input.type === 'text')"));
+        assert!(STEP4_SCRIPT
+            .contains("clearRequested && !(input.tagName === 'INPUT' && input.type === 'text')"));
         assert!(STEP4_SCRIPT.contains("await simulateTyping(input, '')"));
         assert!(STEP4_SCRIPT.contains("input.value === ''"));
     }
