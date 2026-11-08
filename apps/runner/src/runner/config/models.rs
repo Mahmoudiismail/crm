@@ -291,3 +291,36 @@ impl std::fmt::Debug for RunnerConfig {
             .finish()
     }
 }
+
+
+#[cfg(test)]
+mod external_app_date_serialization_tests {
+    use super::{ExternalAppSpec, PeriodMode};
+    use std::collections::HashMap;
+
+    fn spec(start_date: Option<&str>, end_date: Option<&str>) -> ExternalAppSpec {
+        ExternalAppSpec {
+            app_id: "test".to_string(),
+            args: HashMap::new(),
+            period_mode: PeriodMode::Custom,
+            start_date: start_date.map(str::to_string),
+            end_date: end_date.map(str::to_string),
+            start_date_arg: None,
+            end_date_arg: None,
+        }
+    }
+
+    #[test]
+    fn omits_empty_period_dates_from_json() {
+        let json = serde_json::to_value(spec(Some(""), Some("   "))).unwrap();
+        assert!(json.get("start_date").is_none());
+        assert!(json.get("end_date").is_none());
+    }
+
+    #[test]
+    fn preserves_configured_period_dates_in_json() {
+        let json = serde_json::to_value(spec(Some("2026-10-01"), None)).unwrap();
+        assert_eq!(json["start_date"], "2026-10-01");
+        assert!(json.get("end_date").is_none());
+    }
+}
