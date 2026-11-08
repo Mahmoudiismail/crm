@@ -651,7 +651,7 @@ mod mis_reports_wait_tests {
 
     #[test]
     fn wait_script_checks_accessible_iframes_and_reports_diagnostics() {
-        let js = generate_mis_reports_wait_js(30);
+        let js = generate_mis_reports_wait_js(30).unwrap();
         assert!(!js.contains("contentWindow.document"));
         assert!(js.contains("Waiting inside the report-frame execution context"));
         assert!(js.contains("Report-frame readiness timeout diagnostics"));
