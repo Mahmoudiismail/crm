@@ -724,7 +724,7 @@ mod mis_reports_wait_tests {
         let js = generate_mis_reports_wait_js(30).unwrap();
         assert!(js
             .trim_start()
-            .starts_with("(async function(timeoutSeconds)"));
+            .starts_with("return await (async function(timeoutSeconds)"));
         assert!(js.contains("})(30);"));
     }
 
