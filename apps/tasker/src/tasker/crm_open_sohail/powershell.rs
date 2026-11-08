@@ -150,6 +150,13 @@ mod tests {
     }
 
     #[test]
+    fn test_excel_cut_copy_mode_is_reset_with_enum_value() {
+        let script = include_str!("slicer_extract.ps1");
+        assert!(script.contains("$Excel.CutCopyMode = 0"));
+        assert!(!script.contains("$Excel.CutCopyMode = $false"));
+    }
+
+    #[test]
     fn test_pivot_extraction_uses_bulk_values_and_shared_extractor() {
         let script = include_str!("slicer_extract.ps1");
         assert_eq!(
