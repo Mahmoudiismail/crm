@@ -606,6 +606,17 @@ pub fn navigate_and_run_report(
                                                                 filterFilled = true;
                                                                 break;
                                                             }} else if (input.tagName === 'MAT-SELECT' || input.getAttribute('role') === 'combobox') {{
+                                                                if (clearRequested) {{
+                                                                    const clearButton = input.closest('mat-form-field')?.querySelector('button[aria-label*="clear" i], button[title*="clear" i], .mat-form-field-suffix button');
+                                                                    if (clearButton) {{
+                                                                        clearButton.click();
+                                                                        logs.push("Cleared dropdown using its clear control for " + key);
+                                                                        filterFilled = true;
+                                                                    }} else {{
+                                                                        logs.push("No clear control found for empty dropdown filter: " + key);
+                                                                    }}
+                                                                    break;
+                                                                }}
                                                                 input.click();
                                                                 const optionDeadline = Date.now() + 2500;
                                                                 let options = [];
