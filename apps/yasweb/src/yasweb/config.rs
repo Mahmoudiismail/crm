@@ -45,19 +45,19 @@ impl YaswebConfig {
             };
 
             if let Some(ref mut sk) = report.start_date_key {
-                if force_standard_report_format || sk.format.is_empty() {
-                    if sk.format != default_start_fmt {
-                        sk.format = default_start_fmt.clone();
-                        config_updated = true;
-                    }
+                if (force_standard_report_format || sk.format.is_empty())
+                    && sk.format != default_start_fmt
+                {
+                    sk.format = default_start_fmt.clone();
+                    config_updated = true;
                 }
             }
             if let Some(ref mut ek) = report.end_date_key {
-                if force_standard_report_format || ek.format.is_empty() {
-                    if ek.format != default_end_fmt {
-                        ek.format = default_end_fmt.clone();
-                        config_updated = true;
-                    }
+                if (force_standard_report_format || ek.format.is_empty())
+                    && ek.format != default_end_fmt
+                {
+                    ek.format = default_end_fmt.clone();
+                    config_updated = true;
                 }
             }
         }
