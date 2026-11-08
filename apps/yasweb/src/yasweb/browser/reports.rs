@@ -80,18 +80,10 @@ pub fn navigate_and_run_report(
                     error!("Failed to click menu button: {:?}", e);
                     debug::save_failure_diagnostics(tab, "menu_button_click");
                 } else {
-                    let check_js_eval = r#"
-                        new Promise(resolve => {
-                            let attempts = 0;
-                            let check = () => {
-                                let m = document.querySelector('.menuModules');
-                                if (m && m.classList.contains('show-modules')) { resolve(true); }
-                                else if (attempts > 50) { resolve(false); }
-                                else { attempts++; setTimeout(check, 100); }
-                            };
-                            check();
-                        })
-                    "#;
+                    let check_js_eval = load_managed_browser_script(
+                        "check_menu_state.js",
+                        include_str!("scripts/check_menu_state.js"),
+                    )?;
                     if let Ok(eval_result) = tab.evaluate(check_js_eval, true) {
                         if let Some(val) = eval_result.value {
                             sidebar_toggled = val.as_bool().unwrap_or(false);
@@ -100,7 +92,10 @@ pub fn navigate_and_run_report(
 
                     if !sidebar_toggled {
                         warn!("Menu '.menuModules' did not receive 'show-modules' class after waiting. MIS Reports might be inaccessible.");
-                        let log_classes_js = "document.querySelector('.menuModules') ? document.querySelector('.menuModules').className : 'NOT_FOUND'";
+                        let log_classes_js = load_managed_browser_script(
+                            "read_menu_classes.js",
+                            include_str!("scripts/read_menu_classes.js"),
+                        )?;
                         if let Ok(eval_result) = tab.evaluate(log_classes_js, true) {
                             if let Some(val) = eval_result.value {
                                 if let Some(classes) = val.as_str() {
@@ -834,6 +829,14 @@ pub fn navigate_and_run_report(
 
     info!("YASWEB STAGE END: navigate_and_run_report status=SUCCESS elapsed_ms={} discovered_filters={}", report_started.elapsed().as_millis(), discovered_filters.len());
     Ok(discovered_filters)
+}
+
+fn load_managed_browser_script(logical_name: &str, source: &str) -> Result<String> {
+    let path = crm_tool::script_manager::ScriptManager::new()
+        .get_or_create_script("Yasweb", logical_name, source)
+        .with_context(|| format!("Failed to install managed Yasweb script '{}'", logical_name))?;
+    std::fs::read_to_string(&path)
+        .with_context(|| format!("Failed to read managed Yasweb script '{}'", path.display()))
 }
 
 /// Waits for the Angular SPA to finish routing into the MIS report module.
