@@ -181,14 +181,14 @@ try {
 
         Write-Log "  -> Building one $copiedRows x $usedColumnCount output matrix..."
         $transferTimer = [System.Diagnostics.Stopwatch]::StartNew()
-        $outputValues = [System.Array]::CreateInstance([object], $copiedRows, $usedColumnCount)
+        $outputValues = [System.Array]::CreateInstance([object], @($copiedRows, $usedColumnCount), @(1, 1))
         for ($destinationIndex = 0; $destinationIndex -lt $copiedRows; $destinationIndex++) {
             $sourceIndex = $sourceRowIndexes[$destinationIndex]
             for ($column = 1; $column -le $usedColumnCount; $column++) {
                 if ($sourceValues -is [System.Array]) {
-                    $outputValues.SetValue($sourceValues.GetValue($sourceIndex, $column), $destinationIndex, ($column - 1))
+                    $outputValues.SetValue($sourceValues.GetValue($sourceIndex, $column), ($destinationIndex + 1), $column)
                 } else {
-                    $outputValues.SetValue($sourceValues, $destinationIndex, ($column - 1))
+                    $outputValues.SetValue($sourceValues, ($destinationIndex + 1), $column)
                 }
             }
         }
