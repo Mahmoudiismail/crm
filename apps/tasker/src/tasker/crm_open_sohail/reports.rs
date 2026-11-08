@@ -68,8 +68,7 @@ pub fn generate_html_report(
                 <th width=\"{w1}\" style=\"border: 1px solid #8EA9DB; height:28px; padding:5px;\">closed</th>
                 <th width=\"{w2}\" style=\"border: 1px solid #8EA9DB; height:28px; padding:5px;\">open</th>
                 <th width=\"{w3}\" style=\"border: 1px solid #8EA9DB; height:28px; padding:5px;\">% of closed</th>
-                <th width=\"{w4}\" style=\"border: 1px solid #8EA9DB; height:28px; padding:5px;\">% of open</th>
-                <th width=\"{w5}\" style=\"border: 1px solid #8EA9DB; height:28px; padding:5px;\">Grand Total</th>",
+                <th width=\"{w4}\" style=\"border: 1px solid #8EA9DB; height:28px; padding:5px;\">% of open</th>",
             w0 = escape_html(&safe_widths[0]),
             w1 = escape_html(&safe_widths[1]),
             w2 = escape_html(&safe_widths[2]),
@@ -85,7 +84,9 @@ pub fn generate_html_report(
             ));
         }
         sections_html.push_str(&format!(
-            "<th width=\"{w6}\" style=\"border:1px solid #8EA9DB; height:28px; padding:5px;\">OUL</th>",
+            "<th width=\"{w5}\" style=\"border:1px solid #8EA9DB; height:28px; padding:5px;\">Grand Total</th>
+             <th width=\"{w6}\" style=\"border:1px solid #8EA9DB; height:28px; padding:5px;\">OUL</th>",
+            w5 = escape_html(&safe_widths[5]),
             w6 = escape_html(&safe_widths[6]),
         ));
         sections_html.push_str("</tr>");
@@ -131,14 +132,12 @@ pub fn generate_html_report(
                     <td style=\"border: 1px solid #8EA9DB; height:28px; padding:5px; text-align: center; vertical-align: middle;\">{}</td>
                     <td style=\"border: 1px solid #8EA9DB; height:28px; padding:5px; text-align: center; vertical-align: middle;\">{}</td>
                     <td style=\"border: 1px solid #8EA9DB; height:28px; padding:5px; text-align: center; vertical-align: middle;\">{}</td>
-                    <td style=\"border: 1px solid #8EA9DB; height:28px; padding:5px; text-align: center; vertical-align: middle;\">{}</td>
                     <td style=\"border: 1px solid #8EA9DB; height:28px; padding:5px; text-align: center; vertical-align: middle;\">{}</td>",
                 escape_html(&row.team),
                 closed_str,
                 open_str,
                 perc_closed_str,
-                perc_open_str,
-                grand_total_str
+                perc_open_str
             ));
             for column in &dynamic_columns {
                 let value = row.extra_columns.iter()
@@ -151,7 +150,9 @@ pub fn generate_html_report(
                 ));
             }
             sections_html.push_str(&format!(
-                "<td style=\"height:28px; border:1px solid #8EA9DB; padding:5px; text-align:center; vertical-align:middle;\">{}</td>",
+                "<td style=\"height:28px; border:1px solid #8EA9DB; padding:5px; text-align:center; vertical-align:middle;\">{}</td>
+                 <td style=\"height:28px; border:1px solid #8EA9DB; padding:5px; text-align:center; vertical-align:middle;\">{}</td>",
+                grand_total_str,
                 row.oul
             ));
             sections_html.push_str("</tr>");
