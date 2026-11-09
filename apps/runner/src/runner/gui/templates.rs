@@ -154,7 +154,7 @@ pub(crate) fn render_task_groups_page(cfg: &RunnerConfig) -> String {
                     <td class='px-4 py-3 whitespace-nowrap text-sm'>
                         <a class='text-blue-600 hover:text-blue-800 mr-3' href='/groups/preview/{}'>Preview</a>
                         <form class='inline' method='POST' action='/groups/run/{}'><button class='text-emerald-600 hover:text-emerald-800 mr-3' type='submit'>Run</button></form>
-                        <form class='inline' method='POST' action='/groups/delete/{}' onsubmit='return confirm("Delete this group?")'><button class='text-red-600 hover:text-red-800' type='submit'>Delete</button></form>
+                        <form class='inline' method='POST' action='/groups/delete/{}' onsubmit='return confirm(\"Delete this group?\")'><button class='text-red-600 hover:text-red-800' type='submit'>Delete</button></form>
                     </td>
                 </tr>",
                 escape_html(&group.name), escape_html(&group.id),
@@ -164,10 +164,6 @@ pub(crate) fn render_task_groups_page(cfg: &RunnerConfig) -> String {
             ));
         }
     }
-
-    let task_options = cfg.tasks.iter().map(|task| {
-        format!("<option value='{}'>{} ({})</option>", escape_html(&task.id), escape_html(&task.name), escape_html(&task.id))
-    }).collect::<Vec<_>>().join("");
 
     let body = format!(
         "<div class='space-y-8'>
@@ -179,7 +175,7 @@ pub(crate) fn render_task_groups_page(cfg: &RunnerConfig) -> String {
                 <h2 class='font-semibold text-gray-900 mb-4'>Create Task Group</h2>
                 <form method='POST' action='/groups/create' class='space-y-4'>
                     <div><label class='block text-sm font-medium text-gray-700 mb-1'>Group name</label><input name='name' required maxlength='100' class='w-full border border-gray-300 rounded-md p-2' placeholder='e.g. Failed CRM reports'></div>
-                    <div><label class='block text-sm font-medium text-gray-700 mb-1'>Select specific tasks (optional)</label><select name='task_ids' multiple size='5' class='w-full border border-gray-300 rounded-md p-2'>{}</select><p class='text-xs text-gray-500 mt-1'>Use Ctrl/Command to select multiple tasks. These IDs are included in addition to matching filters.</p></div>
+                    <div><label class='block text-sm font-medium text-gray-700 mb-1'>Select specific tasks (optional)</label><input name='task_ids' class='w-full border border-gray-300 rounded-md p-2' placeholder='Optional: task_id_1, task_id_2'><p class='text-xs text-gray-500 mt-1'>Enter comma-separated task IDs. These are included in addition to matching filters.</p></div>
                     <div class='grid grid-cols-1 md:grid-cols-3 gap-4'>
                         <div><label class='block text-sm font-medium text-gray-700 mb-1'>Name contains</label><input name='name_contains' class='w-full border border-gray-300 rounded-md p-2' placeholder='Optional text'></div>
                         <div><label class='block text-sm font-medium text-gray-700 mb-1'>Enabled state</label><select name='enabled_filter' class='w-full border border-gray-300 rounded-md p-2'><option value='any'>Any</option><option value='enabled'>Enabled</option><option value='disabled'>Disabled</option></select></div>
@@ -194,7 +190,7 @@ pub(crate) fn render_task_groups_page(cfg: &RunnerConfig) -> String {
                 <div class='overflow-x-auto'><table class='min-w-full divide-y divide-gray-200'><thead class='bg-gray-50'><tr><th class='px-4 py-3 text-left text-xs uppercase text-gray-500'>Group</th><th class='px-4 py-3 text-left text-xs uppercase text-gray-500'>Matching rules</th><th class='px-4 py-3 text-left text-xs uppercase text-gray-500'>Preview count</th><th class='px-4 py-3 text-left text-xs uppercase text-gray-500'>Actions</th></tr></thead><tbody class='divide-y divide-gray-200'>{}</tbody></table></div>
             </div>
         </div>",
-        task_options, rows
+        rows
     );
     layout("Task Groups", &body)
 }
