@@ -36,6 +36,45 @@ pub struct RunnerConfig {
     pub log_retention_days: u64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskGroup {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub task_ids: Vec<String>,
+    #[serde(default)]
+    pub filters: Vec<TaskFilter>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum TaskFilter {
+    NameContains { value: String },
+    Enabled { value: bool },
+    LastFailed,
+}
+
+impl TaskGroup {
+    /// Explicit task IDs and saved filters are combined with OR semantics.
+    pub fn matches(&self, task: &RunnerTask) -> bool {
+        if self.task_ids.iter().any(|id| id == &task.id) {
+            return true;
+        }
+
+        self.filters.iter().any(|filter| match filter {
+            TaskFilter::NameContains { value } => {
+                !value.trim().is_empty()
+                    && task.name.to_lowercase().contains(&value.trim().to_lowercase())
+            }
+            TaskFilter::Enabled { value } => task.enabled == *value,
+            TaskFilter::LastFailed => {
+                let status = task.last_status.to_lowercase();
+                status.contains("fail") || status.contains("error")
+            }
+        })
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegisteredApp {
     pub id: String,
@@ -266,7 +305,7 @@ impl Default for RunnerConfig {
             post_run_timeout_seconds: default_post_run_timeout(),
             min_task_interval_seconds: default_min_task_interval(),
             registered_apps: Vec::new(),
-            tasks: Vec::new(),
+            tasks: Vec::new(),\n            task_groups: Vec::new(),
             working_hours_profiles: Vec::new(),
             log_stdout_level: default_stdout_log_level(),
             log_file_level: default_file_log_level(),
@@ -286,7 +325,7 @@ impl std::fmt::Debug for RunnerConfig {
             .field("shell_timeout_seconds", &self.shell_timeout_seconds)
             .field("post_run_timeout_seconds", &self.post_run_timeout_seconds)
             .field("min_task_interval_seconds", &self.min_task_interval_seconds)
-            .field("tasks", &self.tasks)
+            .field("tasks", &self.tasks)\n            .field("task_groups", &self.task_groups)
             .field("working_hours_profiles", &self.working_hours_profiles)
             .field("registered_apps", &self.registered_apps)
             .field("log_stdout_level", &self.log_stdout_level)
