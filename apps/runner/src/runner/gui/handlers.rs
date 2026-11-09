@@ -111,7 +111,7 @@ pub(crate) async fn handle_task_group_create(
 
     let cfg = load_runner_config(handle).await?;
     let mut task_ids = values.get("task_ids").map(String::as_str).unwrap_or("")
-        .split(|character| character == ',' || character == ';' || character == '\\n' || character == '\\r')
+        .split(|character| character == ',' || character == ';' || character == '\n' || character == '\r')
         .map(str::trim)
         .filter(|id| !id.is_empty())
         .map(str::to_string)
