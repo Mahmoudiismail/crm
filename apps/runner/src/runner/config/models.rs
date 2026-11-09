@@ -339,6 +339,70 @@ impl std::fmt::Debug for RunnerConfig {
     }
 }
 
+
+#[cfg(test)]
+mod task_group_tests {
+    use super::*;
+
+    fn task(id: &str, name: &str, enabled: bool, last_status: &str) -> RunnerTask {
+        RunnerTask {
+            id: id.to_string(),
+            name: name.to_string(),
+            enabled,
+            repetition: Repetition::Once,
+            frequency_seconds: 0,
+            next_run_at: String::new(),
+            schedules: Vec::new(),
+            steps: Vec::new(),
+            post_run_steps: Vec::new(),
+            last_run_at: String::new(),
+            last_status: last_status.to_string(),
+            timeout_seconds: 0,
+        }
+    }
+
+    #[test]
+    fn task_group_matches_explicit_ids_or_any_filter() {
+        let group = TaskGroup {
+            id: "g".to_string(),
+            name: "Group".to_string(),
+            task_ids: vec!["manual".to_string()],
+            filters: vec![
+                TaskFilter::NameContains { value: "crm".to_string() },
+                TaskFilter::LastFailed,
+            ],
+        };
+
+        assert!(group.matches(&task("manual", "Other", true, "SUCCESS")));
+        assert!(group.matches(&task("named", "CRM Daily", true, "SUCCESS")));
+        assert!(group.matches(&task("failed", "Other", false, "FAILED")));
+        assert!(!group.matches(&task("unmatched", "Other", false, "SUCCESS")));
+    }
+
+    #[test]
+    fn task_group_name_filter_is_case_insensitive_and_blank_filter_is_ignored() {
+        let group = TaskGroup {
+            id: "g".to_string(),
+            name: "Group".to_string(),
+            task_ids: Vec::new(),
+            filters: vec![TaskFilter::NameContains { value: "  ".to_string() }],
+        };
+        assert!(!group.matches(&task("one", "Any name", true, "")));
+
+        let group = TaskGroup {
+            filters: vec![TaskFilter::NameContains { value: "cRm".to_string() }],
+            ..group
+        };
+        assert!(group.matches(&task("two", "Daily CRM Report", true, "")));
+    }
+
+    #[test]
+    fn old_runner_config_without_task_groups_still_deserializes() {
+        let config: RunnerConfig = serde_json::from_str(r#"{"tasks":[]}"#).unwrap();
+        assert!(config.task_groups.is_empty());
+    }
+}
+
 #[cfg(test)]
 mod external_app_date_serialization_tests {
     use super::{ExternalAppSpec, PeriodMode};
