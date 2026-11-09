@@ -25,6 +25,8 @@ pub struct RunnerConfig {
     #[serde(default)]
     pub tasks: Vec<RunnerTask>,
     #[serde(default)]
+    pub task_groups: Vec<TaskGroup>,
+    #[serde(default)]
     pub working_hours_profiles: Vec<WorkingHoursProfile>,
     #[serde(default)]
     pub registered_apps: Vec<RegisteredApp>,
@@ -305,7 +307,8 @@ impl Default for RunnerConfig {
             post_run_timeout_seconds: default_post_run_timeout(),
             min_task_interval_seconds: default_min_task_interval(),
             registered_apps: Vec::new(),
-            tasks: Vec::new(),\n            task_groups: Vec::new(),
+            tasks: Vec::new(),
+            task_groups: Vec::new(),\n            task_groups: Vec::new(),
             working_hours_profiles: Vec::new(),
             log_stdout_level: default_stdout_log_level(),
             log_file_level: default_file_log_level(),
@@ -325,7 +328,8 @@ impl std::fmt::Debug for RunnerConfig {
             .field("shell_timeout_seconds", &self.shell_timeout_seconds)
             .field("post_run_timeout_seconds", &self.post_run_timeout_seconds)
             .field("min_task_interval_seconds", &self.min_task_interval_seconds)
-            .field("tasks", &self.tasks)\n            .field("task_groups", &self.task_groups)
+            .field("tasks", &self.tasks)
+            .field("task_groups", &self.task_groups)\n            .field("task_groups", &self.task_groups)
             .field("working_hours_profiles", &self.working_hours_profiles)
             .field("registered_apps", &self.registered_apps)
             .field("log_stdout_level", &self.log_stdout_level)
