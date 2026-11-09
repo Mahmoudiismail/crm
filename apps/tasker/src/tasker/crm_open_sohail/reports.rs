@@ -77,8 +77,6 @@ pub fn generate_html_report(
             w2 = escape_html(&safe_widths[2]),
             w3 = escape_html(&safe_widths[3]),
             w4 = escape_html(&safe_widths[4]),
-            w5 = escape_html(&safe_widths[5]),
-            w6 = escape_html(&safe_widths[6]),
         ));
         for column in &dynamic_columns {
             sections_html.push_str(&format!(
