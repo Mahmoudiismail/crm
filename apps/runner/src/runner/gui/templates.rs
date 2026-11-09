@@ -127,7 +127,6 @@ fn run_all_now_button() -> String {
     )
 }
 
-
 pub(crate) fn render_task_groups_page(cfg: &RunnerConfig) -> String {
     let mut rows = String::new();
     if cfg.task_groups.is_empty() {
@@ -135,18 +134,29 @@ pub(crate) fn render_task_groups_page(cfg: &RunnerConfig) -> String {
     } else {
         for group in &cfg.task_groups {
             let matched = cfg.tasks.iter().filter(|task| group.matches(task)).count();
-            let filters = group.filters.iter().map(|filter| match filter {
-                TaskFilter::NameContains { value } => format!("Name contains “{}”", escape_html(value)),
-                TaskFilter::Enabled { value: true } => "Enabled".to_string(),
-                TaskFilter::Enabled { value: false } => "Disabled".to_string(),
-                TaskFilter::LastFailed => "Last Failed".to_string(),
-            }).collect::<Vec<_>>().join(" OR ");
+            let filters = group
+                .filters
+                .iter()
+                .map(|filter| match filter {
+                    TaskFilter::NameContains { value } => {
+                        format!("Name contains “{}”", escape_html(value))
+                    }
+                    TaskFilter::Enabled { value: true } => "Enabled".to_string(),
+                    TaskFilter::Enabled { value: false } => "Disabled".to_string(),
+                    TaskFilter::LastFailed => "Last Failed".to_string(),
+                })
+                .collect::<Vec<_>>()
+                .join(" OR ");
             let explicit = if group.task_ids.is_empty() {
                 String::new()
             } else {
                 format!("{} selected task ID(s)", group.task_ids.len())
             };
-            let description = [explicit, filters].into_iter().filter(|part| !part.is_empty()).collect::<Vec<_>>().join(" OR ");
+            let description = [explicit, filters]
+                .into_iter()
+                .filter(|part| !part.is_empty())
+                .collect::<Vec<_>>()
+                .join(" OR ");
             rows.push_str(&format!(
                 "<tr>
                     <td class='px-4 py-3'><div class='font-medium text-gray-900'>{}</div><div class='text-xs text-gray-500'>{}</div></td>
@@ -198,7 +208,11 @@ pub(crate) fn render_task_groups_page(cfg: &RunnerConfig) -> String {
 
 pub(crate) fn render_task_group_preview(cfg: &RunnerConfig, group: &TaskGroup) -> String {
     let mut rows = String::new();
-    let matched: Vec<_> = cfg.tasks.iter().filter(|task| group.matches(task)).collect();
+    let matched: Vec<_> = cfg
+        .tasks
+        .iter()
+        .filter(|task| group.matches(task))
+        .collect();
     if matched.is_empty() {
         rows.push_str("<tr><td colspan='4' class='px-4 py-8 text-center text-gray-500'>No tasks match this group.</td></tr>");
     } else {

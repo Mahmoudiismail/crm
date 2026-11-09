@@ -66,7 +66,10 @@ impl TaskGroup {
         self.filters.iter().any(|filter| match filter {
             TaskFilter::NameContains { value } => {
                 !value.trim().is_empty()
-                    && task.name.to_lowercase().contains(&value.trim().to_lowercase())
+                    && task
+                        .name
+                        .to_lowercase()
+                        .contains(&value.trim().to_lowercase())
             }
             TaskFilter::Enabled { value } => task.enabled == *value,
             TaskFilter::LastFailed => {
@@ -339,7 +342,6 @@ impl std::fmt::Debug for RunnerConfig {
     }
 }
 
-
 #[cfg(test)]
 mod task_group_tests {
     use super::*;
@@ -368,7 +370,9 @@ mod task_group_tests {
             name: "Group".to_string(),
             task_ids: vec!["manual".to_string()],
             filters: vec![
-                TaskFilter::NameContains { value: "crm".to_string() },
+                TaskFilter::NameContains {
+                    value: "crm".to_string(),
+                },
                 TaskFilter::LastFailed,
             ],
         };
@@ -385,12 +389,16 @@ mod task_group_tests {
             id: "g".to_string(),
             name: "Group".to_string(),
             task_ids: Vec::new(),
-            filters: vec![TaskFilter::NameContains { value: "  ".to_string() }],
+            filters: vec![TaskFilter::NameContains {
+                value: "  ".to_string(),
+            }],
         };
         assert!(!group.matches(&task("one", "Any name", true, "")));
 
         let group = TaskGroup {
-            filters: vec![TaskFilter::NameContains { value: "cRm".to_string() }],
+            filters: vec![TaskFilter::NameContains {
+                value: "cRm".to_string(),
+            }],
             ..group
         };
         assert!(group.matches(&task("two", "Daily CRM Report", true, "")));
