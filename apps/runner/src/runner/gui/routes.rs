@@ -22,6 +22,9 @@ pub async fn route_request(
     let is_mutation_route = route_path == "/create"
         || route_path.starts_with("/update/")
         || route_path.starts_with("/delete/")
+        || route_path == "/groups/create"
+        || route_path.starts_with("/groups/delete/")
+        || route_path.starts_with("/groups/run/")
         || route_path == "/run-all"
         || route_path.starts_with("/run/")
         || route_path.starts_with("/enable/")
@@ -44,6 +47,25 @@ pub async fn route_request(
 
     if request.method == "GET" && route_path == "/" {
         return handle_dashboard(handle, &query).await;
+    }
+    if request.method == "GET" && route_path == "/groups" {
+        return handle_task_groups_page(handle).await;
+    }
+    if request.method == "GET" && route_path.starts_with("/groups/preview/") {
+        let group_id = route_path.trim_start_matches("/groups/preview/");
+        return handle_task_group_preview(handle, group_id).await;
+    }
+    if request.method == "POST" && route_path == "/groups/create" {
+        let values = parse_query_string(&request.body);
+        return handle_task_group_create(handle, &values).await;
+    }
+    if request.method == "POST" && route_path.starts_with("/groups/delete/") {
+        let group_id = route_path.trim_start_matches("/groups/delete/");
+        return handle_task_group_delete(handle, group_id).await;
+    }
+    if request.method == "POST" && route_path.starts_with("/groups/run/") {
+        let group_id = route_path.trim_start_matches("/groups/run/");
+        return handle_task_group_run(handle, group_id).await;
     }
     if request.method == "GET" && route_path == "/status" {
         return handle_status_api(handle).await;

@@ -25,6 +25,8 @@ pub struct RunnerConfig {
     #[serde(default)]
     pub tasks: Vec<RunnerTask>,
     #[serde(default)]
+    pub task_groups: Vec<TaskGroup>,
+    #[serde(default)]
     pub working_hours_profiles: Vec<WorkingHoursProfile>,
     #[serde(default)]
     pub registered_apps: Vec<RegisteredApp>,
@@ -34,6 +36,48 @@ pub struct RunnerConfig {
     pub log_file_level: String,
     #[serde(default = "default_log_retention_days")]
     pub log_retention_days: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskGroup {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub task_ids: Vec<String>,
+    #[serde(default)]
+    pub filters: Vec<TaskFilter>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum TaskFilter {
+    NameContains { value: String },
+    Enabled { value: bool },
+    LastFailed,
+}
+
+impl TaskGroup {
+    /// Explicit task IDs and saved filters are combined with OR semantics.
+    pub fn matches(&self, task: &RunnerTask) -> bool {
+        if self.task_ids.iter().any(|id| id == &task.id) {
+            return true;
+        }
+
+        self.filters.iter().any(|filter| match filter {
+            TaskFilter::NameContains { value } => {
+                !value.trim().is_empty()
+                    && task
+                        .name
+                        .to_lowercase()
+                        .contains(&value.trim().to_lowercase())
+            }
+            TaskFilter::Enabled { value } => task.enabled == *value,
+            TaskFilter::LastFailed => {
+                let status = task.last_status.to_lowercase();
+                status.contains("fail") || status.contains("error")
+            }
+        })
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -267,6 +311,7 @@ impl Default for RunnerConfig {
             min_task_interval_seconds: default_min_task_interval(),
             registered_apps: Vec::new(),
             tasks: Vec::new(),
+            task_groups: Vec::new(),
             working_hours_profiles: Vec::new(),
             log_stdout_level: default_stdout_log_level(),
             log_file_level: default_file_log_level(),
@@ -287,12 +332,82 @@ impl std::fmt::Debug for RunnerConfig {
             .field("post_run_timeout_seconds", &self.post_run_timeout_seconds)
             .field("min_task_interval_seconds", &self.min_task_interval_seconds)
             .field("tasks", &self.tasks)
+            .field("task_groups", &self.task_groups)
             .field("working_hours_profiles", &self.working_hours_profiles)
             .field("registered_apps", &self.registered_apps)
             .field("log_stdout_level", &self.log_stdout_level)
             .field("log_file_level", &self.log_file_level)
             .field("log_retention_days", &self.log_retention_days)
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod task_group_tests {
+    use super::*;
+
+    fn task(id: &str, name: &str, enabled: bool, last_status: &str) -> RunnerTask {
+        RunnerTask {
+            id: id.to_string(),
+            name: name.to_string(),
+            enabled,
+            repetition: Repetition::Once,
+            frequency_seconds: 0,
+            next_run_at: String::new(),
+            schedules: Vec::new(),
+            steps: Vec::new(),
+            post_run_steps: Vec::new(),
+            last_run_at: String::new(),
+            last_status: last_status.to_string(),
+            timeout_seconds: 0,
+        }
+    }
+
+    #[test]
+    fn task_group_matches_explicit_ids_or_any_filter() {
+        let group = TaskGroup {
+            id: "g".to_string(),
+            name: "Group".to_string(),
+            task_ids: vec!["manual".to_string()],
+            filters: vec![
+                TaskFilter::NameContains {
+                    value: "crm".to_string(),
+                },
+                TaskFilter::LastFailed,
+            ],
+        };
+
+        assert!(group.matches(&task("manual", "Other", true, "SUCCESS")));
+        assert!(group.matches(&task("named", "CRM Daily", true, "SUCCESS")));
+        assert!(group.matches(&task("failed", "Other", false, "FAILED")));
+        assert!(!group.matches(&task("unmatched", "Other", false, "SUCCESS")));
+    }
+
+    #[test]
+    fn task_group_name_filter_is_case_insensitive_and_blank_filter_is_ignored() {
+        let group = TaskGroup {
+            id: "g".to_string(),
+            name: "Group".to_string(),
+            task_ids: Vec::new(),
+            filters: vec![TaskFilter::NameContains {
+                value: "  ".to_string(),
+            }],
+        };
+        assert!(!group.matches(&task("one", "Any name", true, "")));
+
+        let group = TaskGroup {
+            filters: vec![TaskFilter::NameContains {
+                value: "cRm".to_string(),
+            }],
+            ..group
+        };
+        assert!(group.matches(&task("two", "Daily CRM Report", true, "")));
+    }
+
+    #[test]
+    fn old_runner_config_without_task_groups_still_deserializes() {
+        let config: RunnerConfig = serde_json::from_str(r#"{"tasks":[]}"#).unwrap();
+        assert!(config.task_groups.is_empty());
     }
 }
 
