@@ -92,6 +92,142 @@ pub(crate) async fn handle_dashboard(
     ))
 }
 
+
+pub(crate) async fn handle_task_groups_page(
+    handle: &RunnerHandle,
+) -> Result<(u16, &'static str, String)> {
+    let cfg = load_runner_config(handle).await?;
+    Ok((200, "text/html; charset=utf-8", render_task_groups_page(&cfg)))
+}
+
+pub(crate) async fn handle_task_group_create(
+    handle: &RunnerHandle,
+    values: &HashMap<String, String>,
+) -> Result<(u16, &'static str, String)> {
+    let name = values.get("name").map(|value| value.trim()).unwrap_or("");
+    if name.is_empty() || name.len() > 100 {
+        return Ok((400, "text/html; charset=utf-8", render_error_page("Invalid group", "Group name is required and must be at most 100 characters.")));
+    }
+
+    let cfg = load_runner_config(handle).await?;
+    let mut task_ids = values.get("task_ids").map(String::as_str).unwrap_or("")
+        .split(|character| character == ',' || character == ';' || character == '\\n' || character == '\\r')
+        .map(str::trim)
+        .filter(|id| !id.is_empty())
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    task_ids.sort();
+    task_ids.dedup();
+
+    let unknown_ids = task_ids.iter()
+        .filter(|id| !cfg.tasks.iter().any(|task| &task.id == *id))
+        .cloned()
+        .collect::<Vec<_>>();
+    if !unknown_ids.is_empty() {
+        return Ok((400, "text/html; charset=utf-8", render_error_page("Unknown task IDs", &format!("These task IDs do not exist: {}", unknown_ids.join(", ")))));
+    }
+
+    let mut filters = Vec::new();
+    if let Some(value) = values.get("name_contains").map(|value| value.trim()).filter(|value| !value.is_empty()) {
+        filters.push(TaskFilter::NameContains { value: value.to_string() });
+    }
+    match values.get("enabled_filter").map(String::as_str).unwrap_or("any") {
+        "enabled" => filters.push(TaskFilter::Enabled { value: true }),
+        "disabled" => filters.push(TaskFilter::Enabled { value: false }),
+        _ => {}
+    }
+    if values.get("last_failed").is_some_and(|value| value == "on" || value == "true" || value == "1") {
+        filters.push(TaskFilter::LastFailed);
+    }
+
+    if task_ids.is_empty() && filters.is_empty() {
+        return Ok((400, "text/html; charset=utf-8", render_error_page("Empty group", "Select at least one task ID or one filter condition.")));
+    }
+
+    let group = TaskGroup {
+        id: format!("group_{}", Utc::now().timestamp_millis()),
+        name: name.to_string(),
+        task_ids,
+        filters,
+    };
+    let group_id = group.id.clone();
+    crate::runner::engine::dispatcher::helpers::modify_config(&handle.runner_config_path, move |cfg| {
+        if cfg.task_groups.iter().any(|saved| saved.id == group.id) {
+            anyhow::bail!("Task group '{}' already exists", group.id);
+        }
+        cfg.task_groups.push(group);
+        Ok(())
+    }).await?;
+
+    Ok((303, "text/html; charset=utf-8", format!("<meta http-equiv='refresh' content='0; url=/groups?toast=Group%20saved'><!-- {} -->", escape_html(&group_id))))
+}
+
+pub(crate) async fn handle_task_group_delete(
+    handle: &RunnerHandle,
+    group_id: &str,
+) -> Result<(u16, &'static str, String)> {
+    let id = group_id.to_string();
+    let deleted = crate::runner::engine::dispatcher::helpers::modify_config(&handle.runner_config_path, move |cfg| {
+        let previous_len = cfg.task_groups.len();
+        cfg.task_groups.retain(|group| group.id != id);
+        Ok(cfg.task_groups.len() != previous_len)
+    }).await?;
+    if deleted {
+        Ok((303, "text/html; charset=utf-8", "<meta http-equiv='refresh' content='0; url=/groups?toast=Group%20deleted'>".to_string()))
+    } else {
+        Ok((404, "text/html; charset=utf-8", render_error_page("Group not found", group_id)))
+    }
+}
+
+pub(crate) async fn handle_task_group_preview(
+    handle: &RunnerHandle,
+    group_id: &str,
+) -> Result<(u16, &'static str, String)> {
+    let cfg = load_runner_config(handle).await?;
+    if let Some(group) = cfg.task_groups.iter().find(|group| group.id == group_id) {
+        Ok((200, "text/html; charset=utf-8", render_task_group_preview(&cfg, group)))
+    } else {
+        Ok((404, "text/html; charset=utf-8", render_error_page("Group not found", group_id)))
+    }
+}
+
+pub(crate) async fn handle_task_group_run(
+    handle: &RunnerHandle,
+    group_id: &str,
+) -> Result<(u16, &'static str, String)> {
+    let cfg = load_runner_config(handle).await?;
+    let Some(group) = cfg.task_groups.iter().find(|group| group.id == group_id) else {
+        return Ok((404, "text/html; charset=utf-8", render_error_page("Group not found", group_id)));
+    };
+    let task_ids = cfg.tasks.iter()
+        .filter(|task| group.matches(task))
+        .map(|task| task.id.clone())
+        .collect::<Vec<_>>();
+    if task_ids.is_empty() {
+        return Ok((409, "text/html; charset=utf-8", render_error_page("No matching tasks", "This group currently matches no tasks.")));
+    }
+
+    let mut queued = 0usize;
+    let mut errors = Vec::new();
+    for task_id in task_ids {
+        match crate::runner::engine::dispatcher::task_commands::run_task_by_id_confirmed(
+            &handle.runner_config_path,
+            &task_id,
+            &handle.exec_tx,
+            true,
+        ).await {
+            Ok(()) => queued += 1,
+            Err(error) => errors.push(format!("{}: {}", task_id, error)),
+        }
+    }
+
+    if errors.is_empty() {
+        Ok((303, "text/html; charset=utf-8", format!("<meta http-equiv='refresh' content='0; url=/groups?toast={}'>", urlencoding::encode(&format!("Queued {} tasks", queued)))))
+    } else {
+        Ok((409, "text/html; charset=utf-8", render_error_page("Some tasks were not queued", &format!("Queued {} task(s). {}", queued, errors.join("; ")))))
+    }
+}
+
 pub(crate) async fn handle_status_api(
     handle: &RunnerHandle,
 ) -> Result<(u16, &'static str, String)> {
