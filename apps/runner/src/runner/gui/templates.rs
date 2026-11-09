@@ -33,9 +33,10 @@ pub(crate) fn render_dashboard(
         "Dashboard",
         "Schedule CRM work and shell command groups from one local control panel.",
         &format!(
-            "{} {} {}",
+            "{} {} {} {}",
             secondary_button("Apps", Some("/apps"), Some(&icon_cube("w-4 h-4 mr-2"))),
             run_all_now_button(),
+            secondary_button("Task Groups", Some("/groups"), None),
             primary_button(
                 "New Task",
                 Some("/new-task"),
