@@ -181,7 +181,10 @@ mod tests {
         assert!(script.contains("$PivotTable.TableRange1"));
         assert!(script.contains("$PivotRange.Copy()"));
         assert!(script.contains("$SnapshotSheet.Range(\"A1\").PasteSpecial(-4104)"));
-        assert!(script.contains("$extraColumns[$header]"));
+        assert!(script.contains("$extraColumns = [System.Collections.Generic.List[object]]::new()"));
+        assert!(script.contains("$extraColumns.Add([PSCustomObject]@{"));
+        assert!(script.contains("name = $header"));
+        assert!(script.contains("value = [string]$snapshotRange.Cells.Item($snapshotRowOffset + $r, $snapshotColumnOffset + $c).Text"));
         assert!(script.contains("$row.extra_columns = $extraColumns"));
     }
 
