@@ -205,7 +205,7 @@ pub fn generate_html_report(
                 <td style=\"border: 1px solid #8EA9DB; height:28px; padding:5px; text-align: center; vertical-align: middle;\">{}</td>
                 <td style=\"border: 1px solid #8EA9DB; height:28px; padding:5px; text-align: center; vertical-align: middle;\">{}</td>
                 <td style=\"border: 1px solid #8EA9DB; height:28px; padding:5px; text-align: center; vertical-align: middle;\">{}</td>
-                <td style=\"border: 1px solid #8EA9DB; height:28px; padding:5px; text-align: center; vertical-align: middle;\">{}</td>\",
+                <td style=\"border: 1px solid #8EA9DB; height:28px; padding:5px; text-align: center; vertical-align: middle;\">{}</td>",
             total_closed_str, total_open_str, total_perc_closed_str, total_perc_open_str
         ));
         for _ in &dynamic_columns {
