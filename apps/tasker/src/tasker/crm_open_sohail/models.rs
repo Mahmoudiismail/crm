@@ -1,5 +1,10 @@
 use serde::Deserialize;
-use std::collections::HashMap;
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct ExtractedExtraColumn {
+    pub name: String,
+    pub value: String,
+}
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct ExtractedPivotRow {
@@ -16,7 +21,7 @@ pub struct ExtractedPivotRow {
     #[serde(rename = "Grand Total")]
     pub grand_total: f64,
     #[serde(default)]
-    pub extra_columns: HashMap<String, String>,
+    pub extra_columns: Vec<ExtractedExtraColumn>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -42,7 +47,7 @@ pub struct EnrichedRow {
     pub perc_open: String,
     pub grand_total: f64,
     pub oul: String,
-    pub extra_columns: HashMap<String, String>,
+    pub extra_columns: Vec<ExtractedExtraColumn>,
 }
 
 #[derive(Debug)]

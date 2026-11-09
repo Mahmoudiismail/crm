@@ -176,7 +176,7 @@ try {
             $teamName = $rowRange.Cells.Item($r + $rowOffset, 1).Text
             if ($teamName -eq "Grand Total") { continue }
 
-            $extraColumns = [ordered]@{}
+            $extraColumns = [System.Collections.Generic.List[object]]::new()
             $row = [PSCustomObject]@{
                 team = $teamName
                 closed = 0
@@ -201,7 +201,10 @@ try {
                 } elseif ($header -match "Grand Total") {
                     $row."Grand Total" = if ($value -as [double]) { $value -as [double] } elseif ([double]::TryParse($value, [ref]$null)) { [double]$value } else { 0 }
                 } else {
-                    $extraColumns[$header] = [string]$snapshotRange.Cells.Item($snapshotRowOffset + $r, $snapshotColumnOffset + $c).Text
+                    $extraColumns.Add([PSCustomObject]@{
+                        name = $header
+                        value = [string]$snapshotRange.Cells.Item($snapshotRowOffset + $r, $snapshotColumnOffset + $c).Text
+                    })
                 }
             }
             $row.extra_columns = $extraColumns
