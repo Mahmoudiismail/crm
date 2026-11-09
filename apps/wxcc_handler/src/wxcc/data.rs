@@ -50,8 +50,12 @@ impl ApiClient {
 
     fn endpoint(&self, path: &str) -> Result<String> {
         let path = path.trim_start_matches('/');
-        if !path.starts_with("v2/") {
-            bail!("Only Webex Contact Center v2 API requests are allowed (got {path})");
+        let is_v2 = path.starts_with("v2/");
+        let is_skill_profile_get = path
+            .strip_prefix("skill-profile/")
+            .is_some_and(|id| !id.is_empty() && !id.contains('/'));
+        if !is_v2 && !is_skill_profile_get {
+            bail!("Only Webex Contact Center v2 APIs and Skill Profile Get-by-ID are allowed (got {path})");
         }
         Ok(format!(
             "{}/organization/{}/{}",
@@ -80,6 +84,9 @@ impl ApiClient {
     }
 
     async fn list(&self, path: &str) -> Result<Vec<Value>> {
+        if !path.trim_start_matches('/').starts_with("v2/") {
+            bail!("Only Webex Contact Center v2 list APIs are allowed (got {path})");
+        }
         let mut all = Vec::new();
         for page in 0..MAX_PAGES {
             let response = self
@@ -543,7 +550,7 @@ pub async fn collect_to_csv(
     for profile_id in profile_ids {
         match api
             .get(&format!(
-                "v2/skill-profile/{}",
+                "skill-profile/{}",
                 urlencoding::encode(&profile_id)
             ))
             .await
@@ -715,6 +722,39 @@ pub async fn collect_to_csv(
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn skill_profile_get_by_id_uses_unversioned_documented_endpoint() {
+        let api = ApiClient {
+            client: reqwest::Client::new(),
+            base_url: "https://api.wxcc-us1.cisco.com".into(),
+            org_id: "org-1".into(),
+            access_token: "token".into(),
+        };
+        assert_eq!(
+            api.endpoint("skill-profile/profile-1").unwrap(),
+            "https://api.wxcc-us1.cisco.com/organization/org-1/skill-profile/profile-1"
+        );
+        assert_eq!(
+            api.endpoint("v2/skill-profile").unwrap(),
+            "https://api.wxcc-us1.cisco.com/organization/org-1/v2/skill-profile"
+        );
+        assert!(api.endpoint("v1/skill-profile/profile-1").is_err());
+        assert!(api.endpoint("skill-profile").is_err());
+        assert!(api.endpoint("skill-profile/profile-1/extra").is_err());
+    }
+
+    #[test]
+    fn skill_profile_list_remains_v2_only() {
+        let api = ApiClient {
+            client: reqwest::Client::new(),
+            base_url: "https://api.wxcc-us1.cisco.com".into(),
+            org_id: "org-1".into(),
+            access_token: "token".into(),
+        };
+        assert!(api.endpoint("v2/skill-profile").is_ok());
+        assert!(api.endpoint("skill-profile/profile-1").is_ok());
+    }
 
     #[test]
     fn list_response_supports_array_and_envelope_shapes() {
