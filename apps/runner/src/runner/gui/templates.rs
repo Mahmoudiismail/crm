@@ -126,6 +126,106 @@ fn run_all_now_button() -> String {
     )
 }
 
+
+pub(crate) fn render_task_groups_page(cfg: &RunnerConfig) -> String {
+    let mut rows = String::new();
+    if cfg.task_groups.is_empty() {
+        rows.push_str("<tr><td colspan='4' class='px-6 py-8 text-center text-gray-500'>No saved task groups yet.</td></tr>");
+    } else {
+        for group in &cfg.task_groups {
+            let matched = cfg.tasks.iter().filter(|task| group.matches(task)).count();
+            let filters = group.filters.iter().map(|filter| match filter {
+                TaskFilter::NameContains { value } => format!("Name contains “{}”", escape_html(value)),
+                TaskFilter::Enabled { value: true } => "Enabled".to_string(),
+                TaskFilter::Enabled { value: false } => "Disabled".to_string(),
+                TaskFilter::LastFailed => "Last Failed".to_string(),
+            }).collect::<Vec<_>>().join(" OR ");
+            let explicit = if group.task_ids.is_empty() {
+                String::new()
+            } else {
+                format!("{} selected task ID(s)", group.task_ids.len())
+            };
+            let description = [explicit, filters].into_iter().filter(|part| !part.is_empty()).collect::<Vec<_>>().join(" OR ");
+            rows.push_str(&format!(
+                "<tr>
+                    <td class='px-4 py-3'><div class='font-medium text-gray-900'>{}</div><div class='text-xs text-gray-500'>{}</div></td>
+                    <td class='px-4 py-3 text-sm text-gray-700'>{}</td>
+                    <td class='px-4 py-3 text-sm font-semibold text-gray-900'>{}</td>
+                    <td class='px-4 py-3 whitespace-nowrap text-sm'>
+                        <a class='text-blue-600 hover:text-blue-800 mr-3' href='/groups/preview/{}'>Preview</a>
+                        <form class='inline' method='POST' action='/groups/run/{}'><button class='text-emerald-600 hover:text-emerald-800 mr-3' type='submit'>Run</button></form>
+                        <form class='inline' method='POST' action='/groups/delete/{}' onsubmit='return confirm("Delete this group?")'><button class='text-red-600 hover:text-red-800' type='submit'>Delete</button></form>
+                    </td>
+                </tr>",
+                escape_html(&group.name), escape_html(&group.id),
+                if description.is_empty() { "No conditions".to_string() } else { description },
+                matched,
+                escape_html(&group.id), escape_html(&group.id), escape_html(&group.id)
+            ));
+        }
+    }
+
+    let task_options = cfg.tasks.iter().map(|task| {
+        format!("<option value='{}'>{} ({})</option>", escape_html(&task.id), escape_html(&task.name), escape_html(&task.id))
+    }).collect::<Vec<_>>().join("");
+
+    let body = format!(
+        "<div class='space-y-8'>
+            <div class='flex items-center justify-between'>
+                <div><h1 class='text-xl font-semibold text-gray-900'>Task Groups & Filters</h1><p class='mt-1 text-sm text-gray-600'>Save reusable task selections. Explicit task IDs and filter conditions are combined with OR.</p></div>
+                <a href='/' class='text-sm text-gray-600 hover:text-gray-900'>Back to Dashboard</a>
+            </div>
+            <div class='bg-white shadow rounded-lg p-6'>
+                <h2 class='font-semibold text-gray-900 mb-4'>Create Task Group</h2>
+                <form method='POST' action='/groups/create' class='space-y-4'>
+                    <div><label class='block text-sm font-medium text-gray-700 mb-1'>Group name</label><input name='name' required maxlength='100' class='w-full border border-gray-300 rounded-md p-2' placeholder='e.g. Failed CRM reports'></div>
+                    <div><label class='block text-sm font-medium text-gray-700 mb-1'>Select specific tasks (optional)</label><select name='task_ids' multiple size='5' class='w-full border border-gray-300 rounded-md p-2'>{}</select><p class='text-xs text-gray-500 mt-1'>Use Ctrl/Command to select multiple tasks. These IDs are included in addition to matching filters.</p></div>
+                    <div class='grid grid-cols-1 md:grid-cols-3 gap-4'>
+                        <div><label class='block text-sm font-medium text-gray-700 mb-1'>Name contains</label><input name='name_contains' class='w-full border border-gray-300 rounded-md p-2' placeholder='Optional text'></div>
+                        <div><label class='block text-sm font-medium text-gray-700 mb-1'>Enabled state</label><select name='enabled_filter' class='w-full border border-gray-300 rounded-md p-2'><option value='any'>Any</option><option value='enabled'>Enabled</option><option value='disabled'>Disabled</option></select></div>
+                        <label class='flex items-center gap-2 text-sm text-gray-700 mt-6'><input type='checkbox' name='last_failed' value='on'> Last Failed</label>
+                    </div>
+                    <p class='text-xs text-gray-500'>All selected conditions use OR: a task is included when it matches any selected condition.</p>
+                    <button type='submit' class='inline-flex items-center px-4 py-2 rounded-md bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700'>Save Group</button>
+                </form>
+            </div>
+            <div class='bg-white shadow rounded-lg overflow-hidden'>
+                <div class='px-6 py-4 border-b'><h2 class='font-semibold text-gray-900'>Saved Groups</h2></div>
+                <div class='overflow-x-auto'><table class='min-w-full divide-y divide-gray-200'><thead class='bg-gray-50'><tr><th class='px-4 py-3 text-left text-xs uppercase text-gray-500'>Group</th><th class='px-4 py-3 text-left text-xs uppercase text-gray-500'>Matching rules</th><th class='px-4 py-3 text-left text-xs uppercase text-gray-500'>Preview count</th><th class='px-4 py-3 text-left text-xs uppercase text-gray-500'>Actions</th></tr></thead><tbody class='divide-y divide-gray-200'>{}</tbody></table></div>
+            </div>
+        </div>",
+        task_options, rows
+    );
+    layout("Task Groups", &body)
+}
+
+pub(crate) fn render_task_group_preview(cfg: &RunnerConfig, group: &TaskGroup) -> String {
+    let mut rows = String::new();
+    let matched: Vec<_> = cfg.tasks.iter().filter(|task| group.matches(task)).collect();
+    if matched.is_empty() {
+        rows.push_str("<tr><td colspan='4' class='px-4 py-8 text-center text-gray-500'>No tasks match this group.</td></tr>");
+    } else {
+        for task in &matched {
+            rows.push_str(&format!(
+                "<tr><td class='px-4 py-3 font-medium'>{}</td><td class='px-4 py-3 font-mono text-xs'>{}</td><td class='px-4 py-3'>{}</td><td class='px-4 py-3'>{}</td></tr>",
+                escape_html(&task.name), escape_html(&task.id),
+                if task.enabled { "Enabled" } else { "Disabled" },
+                escape_html(&task.last_status)
+            ));
+        }
+    }
+    let body = format!(
+        "<div class='space-y-6'>
+            <div class='flex items-center justify-between'><div><h1 class='text-xl font-semibold text-gray-900'>Preview: {}</h1><p class='text-sm text-gray-600 mt-1'>{} matching task(s). Conditions use OR.</p></div><a href='/groups' class='text-sm text-gray-600'>Back to Groups</a></div>
+            <div class='bg-white shadow rounded-lg overflow-hidden'><div class='overflow-x-auto'><table class='min-w-full divide-y divide-gray-200'><thead class='bg-gray-50'><tr><th class='px-4 py-3 text-left'>Task</th><th class='px-4 py-3 text-left'>ID</th><th class='px-4 py-3 text-left'>Enabled</th><th class='px-4 py-3 text-left'>Last Status</th></tr></thead><tbody class='divide-y divide-gray-200'>{}</tbody></table></div></div>
+            <div class='flex gap-3'><form method='POST' action='/groups/run/{}'><button type='submit' class='px-4 py-2 rounded-md bg-emerald-600 text-white text-sm font-medium' {}>Run Matching Tasks</button></form><a href='/groups' class='px-4 py-2 rounded-md border text-sm'>Cancel</a></div>
+        </div>",
+        escape_html(&group.name), matched.len(), rows, escape_html(&group.id),
+        if matched.is_empty() { "disabled" } else { "" }
+    );
+    layout("Task Group Preview", &body)
+}
+
 pub(crate) fn render_status_cards(status: &crate::runner::engine::RunnerStatus) -> String {
     format!(
         "{}{}{}{}",
