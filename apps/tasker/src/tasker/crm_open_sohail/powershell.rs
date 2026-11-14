@@ -172,9 +172,11 @@ mod tests {
             3
         );
         assert!(script.contains("$values = $dataBody.Value2"));
-        assert!(script.contains(
-            "$snapshotRange.Cells.Item($snapshotRowOffset + $r, $snapshotColumnOffset + $c).Text"
-        ));
+        assert!(script.contains("$dataBody.Cells.Item($r, $c).Text"));
+        assert!(
+            script.contains("$values = $dataBody.Value2"),
+            "Numeric PivotTable fields should be read in bulk while display-formatted fields use live cell text"
+        );
     }
 
     #[test]
@@ -186,7 +188,11 @@ mod tests {
         assert!(script.contains("$extraColumns = [System.Collections.Generic.List[object]]::new()"));
         assert!(script.contains("$extraColumns.Add([PSCustomObject]@{"));
         assert!(script.contains("name = $header"));
-        assert!(script.contains("value = [string]$snapshotRange.Cells.Item($snapshotRowOffset + $r, $snapshotColumnOffset + $c).Text"));
+        assert!(script.contains("value = [string]$dataBody.Cells.Item($r, $c).Text"));
+        assert!(
+            script.contains("$PivotRange.Copy()"),
+            "The complete PivotTable range must still be snapshotted"
+        );
         assert!(script.contains("$row.extra_columns = $extraColumns"));
     }
 

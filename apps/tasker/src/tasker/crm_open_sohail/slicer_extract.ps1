@@ -168,8 +168,9 @@ try {
         }
 
         $rowCount = $dataBody.Rows.Count
-        $snapshotRowOffset = $PivotTable.DataBodyRange.Row - $PivotRange.Row
-        $snapshotColumnOffset = $PivotTable.DataBodyRange.Column - $PivotRange.Column
+        # Read displayed values from the live PivotTable DataBodyRange. The copied
+        # snapshot remains available for a full-range Excel snapshot, but relative
+        # offsets into the pasted range can shift when PivotTable layouts change.
         $dataset = [System.Collections.Generic.List[object]]::new()
         $rowOffset = $rowRange.Rows.Count - $rowCount
         for ($r = 1; $r -le $rowCount; $r++) {
@@ -203,7 +204,7 @@ try {
                 } else {
                     $extraColumns.Add([PSCustomObject]@{
                         name = $header
-                        value = [string]$snapshotRange.Cells.Item($snapshotRowOffset + $r, $snapshotColumnOffset + $c).Text
+                        value = [string]$dataBody.Cells.Item($r, $c).Text
                     })
                 }
             }
