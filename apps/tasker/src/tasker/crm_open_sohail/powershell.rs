@@ -187,7 +187,10 @@ mod tests {
         assert!(script.contains("$extraColumns.Add([PSCustomObject]@{"));
         assert!(script.contains("name = $header"));
         assert!(script.contains("value = [string]$dataBody.Cells.Item($r, $c).Text"));
-        assert!(script.contains("$PivotRange.Copy()"), "The complete PivotTable range must still be snapshotted");
+        assert!(
+            script.contains("$PivotRange.Copy()"),
+            "The complete PivotTable range must still be snapshotted"
+        );
         assert!(script.contains("$row.extra_columns = $extraColumns"));
     }
 
