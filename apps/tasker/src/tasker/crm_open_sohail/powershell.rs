@@ -172,9 +172,11 @@ mod tests {
             3
         );
         assert!(script.contains("$values = $dataBody.Value2"));
-        assert!(script.contains(
-            "$snapshotRange.Cells.Item($snapshotRowOffset + $r, $snapshotColumnOffset + $c).Text"
-        ));
+        assert!(script.contains("$dataBody.Cells.Item($r, $c).Text"));
+        assert!(
+            script.contains("$values = $dataBody.Value2"),
+            "Numeric PivotTable fields should be read in bulk while display-formatted fields use live cell text"
+        );
     }
 
     #[test]
