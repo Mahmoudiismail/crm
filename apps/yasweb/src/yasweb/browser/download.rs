@@ -264,7 +264,7 @@ mod tests {
     fn validates_a_well_formed_csv_export() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("report.csv");
-        fs::write(&path, b"Id,Name\\n1,Example\\n").unwrap();
+        fs::write(&path, b"Id,Name\n1,Example\n").unwrap();
         assert!(validate_report_file(&path).is_ok());
     }
 }
