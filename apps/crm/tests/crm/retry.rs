@@ -79,6 +79,8 @@ async fn test_crm_signed_url_retry_and_fresh_url() {
         access_token: "dummy-token".to_string(),
         from_date: "2026-01-01".to_string(),
         to_date: "2026-01-31".to_string(),
+        // This test targets signed-URL retry behavior, not proactive date batching.
+        report_date_range_days: 0,
         download_csv: true,
         ..Default::default()
     };

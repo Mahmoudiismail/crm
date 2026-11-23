@@ -51,6 +51,9 @@ pub struct AppConfig {
     pub account_id: String,
     #[serde(default = "default_incomplete_reservation_limit")]
     pub incomplete_reservation_limit: u32,
+    /// Maximum number of days in each CRM report request; 0 lets the server decide.
+    #[serde(default = "default_report_date_range_days")]
+    pub report_date_range_days: u32,
     #[serde(default)]
     pub application_id: String,
     #[serde(default)]
@@ -112,6 +115,10 @@ fn default_incomplete_reservation_limit() -> u32 {
     10000
 }
 
+fn default_report_date_range_days() -> u32 {
+    30
+}
+
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
@@ -129,6 +136,7 @@ impl Default for AppConfig {
             download_csv: true,
             account_id: "233b5ff5-8aff-4445-815b-39d7916a1d46".into(),
             incomplete_reservation_limit: 10000,
+            report_date_range_days: 30,
             application_id: "83921976-97dd-4679-9b36-ee936ecf50d1".into(),
             app_timezone_plus_minutes: "180".into(),
             base_url: "https://crm.fakeeh.care/medi-crm/vault/v1/".into(),
@@ -356,6 +364,7 @@ impl std::fmt::Debug for AppConfig {
             .field("to_date", &self.to_date)
             .field("download_csv", &self.download_csv)
             .field("account_id", &self.account_id)
+            .field("report_date_range_days", &self.report_date_range_days)
             .field("application_id", &self.application_id)
             .field("app_timezone_plus_minutes", &self.app_timezone_plus_minutes)
             .field("base_url", &self.base_url)
@@ -431,6 +440,7 @@ mod tests {
         // Default values should be filled in
         assert_eq!(config.username, "");
         assert!(!config.no_verify_ssl);
+        assert_eq!(config.report_date_range_days, 30);
     }
 
     #[test]
