@@ -1,4 +1,5 @@
 use anyhow::{bail, Context, Result};
+use calamine::Reader;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -130,7 +131,8 @@ pub fn wait_for_download_with_timeout(
             if !incomplete && last_candidate.as_ref() == Some(&current) {
                 stable_polls = stable_polls.saturating_add(1);
                 if stable_polls >= 3 {
-                    info!("Report download completed: {:?}", current.0);
+                    validate_report_file(&current.0)?;
+                    info!("Report download completed and passed file validation: {:?}", current.0);
                     return Ok(());
                 }
             } else {
@@ -148,6 +150,57 @@ pub fn wait_for_download_with_timeout(
         "Timed out waiting for a new or updated report download in {:?}",
         dir
     )
+}
+
+/// Validates the downloaded spreadsheet container before treating the export as complete.
+/// This catches truncated/corrupt XLSX/XLS files; it does not prove that the
+/// server exported every matching record.
+fn validate_report_file(path: &Path) -> Result<()> {
+    match path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(str::to_ascii_lowercase)
+        .as_deref()
+    {
+        Some("xlsx" | "xls") => {
+            let mut workbook = calamine::open_workbook_auto(path)
+                .with_context(|| format!("Downloaded spreadsheet is not a readable workbook: {:?}", path))?;
+            let sheet_names = workbook.sheet_names().to_vec();
+            if sheet_names.is_empty() {
+                bail!("Downloaded spreadsheet contains no worksheets: {:?}", path);
+            }
+            let first_sheet = workbook
+                .worksheet_range_at(0)
+                .context("Downloaded spreadsheet has no readable first worksheet")?
+                .with_context(|| format!("Failed to read the first worksheet in {:?}", path))?;
+            let non_empty_rows = first_sheet
+                .rows()
+                .filter(|row| row.iter().any(|cell| !cell.to_string().trim().is_empty()))
+                .count();
+            info!(
+                "Validated spreadsheet structure: path={:?} sheets={} first_sheet='{}' non_empty_rows={}",
+                path,
+                sheet_names.len(),
+                sheet_names[0],
+                non_empty_rows
+            );
+            Ok(())
+        }
+        Some("csv") => {
+            let mut reader = csv::ReaderBuilder::new()
+                .has_headers(false)
+                .from_path(path)
+                .with_context(|| format!("Downloaded CSV is not readable: {:?}", path))?;
+            let mut rows = 0usize;
+            for record in reader.records() {
+                record.with_context(|| format!("Downloaded CSV contains an invalid record: {:?}", path))?;
+                rows += 1;
+            }
+            info!("Validated CSV structure: path={:?} rows={}", path, rows);
+            Ok(())
+        }
+        _ => bail!("Unsupported report file format: {:?}", path),
+    }
 }
 
 #[cfg(test)]
