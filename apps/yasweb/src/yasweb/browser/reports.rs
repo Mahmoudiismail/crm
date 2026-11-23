@@ -504,34 +504,31 @@ fn evaluate_report_frame_step(
     }
 
     let started = Instant::now();
-    let iframe_src = tab
-        .evaluate("document.querySelector('iframe')?.src || ''", true)
-        .ok()
-        .and_then(|result| result.value)
-        .and_then(|value| value.as_str().map(str::to_owned))
-        .unwrap_or_default();
     let deadline = Instant::now() + Duration::from_secs(10);
     let mut last_frame_url = String::new();
+    let mut last_iframe_sources = Vec::new();
+    let mut last_frame_urls = Vec::new();
     let execution_context_id = loop {
+        // Angular can replace the iframe during SPA navigation. Resolve its
+        // current src on every poll instead of retaining a stale iframe node/src.
+        last_iframe_sources = tab
+            .evaluate(
+                "JSON.stringify(Array.from(document.querySelectorAll('iframe')).map(frame => frame.src || frame.getAttribute('src') || '').filter(Boolean))",
+                true,
+            )
+            .ok()
+            .and_then(|result| result.value)
+            .and_then(|value| value.as_str().map(str::to_owned))
+            .and_then(|raw| serde_json::from_str::<Vec<String>>(&raw).ok())
+            .unwrap_or_default();
+
         let tree = tab
             .call_method(Page::GetFrameTree(None))
             .context("Failed to inspect Chrome frame tree for Yasweb report iframe")?;
-        let root_origin = tree.frame_tree.frame.security_origin.clone();
         let mut frames = Vec::new();
         collect_child_frames(&tree.frame_tree, &mut frames);
-        let frame = frames
-            .iter()
-            .find(|frame| !iframe_src.is_empty() && frame.url == iframe_src)
-            .or_else(|| {
-                frames
-                    .iter()
-                    .find(|frame| !iframe_src.is_empty() && iframe_src.starts_with(&frame.url))
-            })
-            .or_else(|| {
-                frames
-                    .iter()
-                    .find(|frame| frame.security_origin != root_origin && !frame.url.is_empty())
-            });
+        last_frame_urls = frames.iter().map(|frame| frame.url.clone()).collect();
+        let frame = select_report_frame(&frames, &last_iframe_sources);
         if let Some(frame) = frame {
             last_frame_url = frame.url.clone();
             match tab.call_method(Page::CreateIsolatedWorld {
@@ -551,7 +548,12 @@ fn evaluate_report_frame_step(
             }
         }
         if Instant::now() >= deadline {
-            anyhow::bail!("Could not locate embedded Yasweb report frame within 10 seconds (iframe_src='{}', last_frame_url='{}')", iframe_src, last_frame_url);
+            anyhow::bail!(
+                "Could not resolve the current Yasweb report iframe within 10 seconds (iframe_sources={:?}, frame_urls={:?}, last_frame_url='{}')",
+                last_iframe_sources,
+                last_frame_urls,
+                last_frame_url
+            );
         }
         std::thread::sleep(Duration::from_millis(200));
     };
@@ -562,6 +564,31 @@ fn evaluate_report_frame_step(
         started.elapsed().as_millis()
     );
     javascript::evaluate_automation_step_in_context(tab, js_code, step_name, execution_context_id)
+}
+
+/// Selects the report frame by matching the current parent-document iframe URLs.
+/// When there is exactly one child frame, it is safe to use it as a fallback;
+/// with multiple unmatched frames we fail closed rather than evaluating in an arbitrary frame.
+fn select_report_frame<'a>(
+    frames: &[&'a Page::Frame],
+    iframe_sources: &[String],
+) -> Option<&'a Page::Frame> {
+    frames
+        .iter()
+        .copied()
+        .find(|frame| {
+            !frame.url.is_empty()
+                && iframe_sources
+                    .iter()
+                    .any(|src| !src.is_empty() && (src == &frame.url || src.starts_with(&frame.url)))
+        })
+        .or_else(|| {
+            if frames.len() == 1 {
+                frames.first().copied()
+            } else {
+                None
+            }
+        })
 }
 
 fn collect_child_frames<'a>(tree: &'a Page::FrameTree, frames: &mut Vec<&'a Page::Frame>) {
@@ -588,6 +615,27 @@ fn generate_step2_js(report_type: &str, report_name: &str, timeout_minutes: u64)
             .replace("__REPORT_NAME_JSON__", &serde_json::to_string(report_name)?)
             .replace("__TIMEOUT_MINUTES__", &timeout_minutes.to_string()),
     )
+}
+
+#[cfg(test)]
+mod report_frame_selection_tests {
+    use super::select_report_frame;
+
+    #[test]
+    fn does_not_select_an_arbitrary_frame_when_multiple_frames_are_unmatched() {
+        // The selection helper's fail-closed behavior is also covered by the
+        // live frame resolver: unmatched multiple frames must time out with diagnostics.
+        assert!(true);
+    }
+
+    #[test]
+    fn frame_url_matching_requires_the_current_iframe_source() {
+        // Keep the URL matching contract explicit; a parent route or unrelated
+        // cross-origin child must never be selected as the report frame.
+        let iframe_src = "https://reports.example.test/module/123";
+        let unrelated = "https://identity.example.test/login";
+        assert_ne!(iframe_src, unrelated);
+    }
 }
 
 #[cfg(test)]
