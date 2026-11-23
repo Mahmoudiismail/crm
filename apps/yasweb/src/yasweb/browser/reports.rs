@@ -579,22 +579,20 @@ fn select_report_frame<'a>(
     frames: &[&'a Page::Frame],
     iframe_sources: &[String],
 ) -> Option<&'a Page::Frame> {
-    frames
+    let frame_urls = frames.iter().map(|frame| frame.url.clone()).collect::<Vec<_>>();
+    select_report_frame_index(&frame_urls, iframe_sources)
+        .and_then(|index| frames.get(index).copied())
+}
+
+fn select_report_frame_index(frame_urls: &[String], iframe_sources: &[String]) -> Option<usize> {
+    frame_urls
         .iter()
-        .copied()
-        .find(|frame| {
-            !frame.url.is_empty()
-                && iframe_sources
-                    .iter()
-                    .any(|src| frame_url_matches(src, &frame.url))
+        .position(|frame_url| {
+            iframe_sources
+                .iter()
+                .any(|src| frame_url_matches(src, frame_url))
         })
-        .or_else(|| {
-            if frames.len() == 1 {
-                frames.first().copied()
-            } else {
-                None
-            }
-        })
+        .or_else(|| (frame_urls.len() == 1).then_some(0))
 }
 
 fn collect_child_frames<'a>(tree: &'a Page::FrameTree, frames: &mut Vec<&'a Page::Frame>) {
@@ -625,18 +623,34 @@ fn generate_step2_js(report_type: &str, report_name: &str, timeout_minutes: u64)
 
 #[cfg(test)]
 mod report_frame_selection_tests {
-    use super::frame_url_matches;
+    use super::{frame_url_matches, select_report_frame_index};
 
     #[test]
-    fn matches_the_current_iframe_url_or_its_loaded_child_url() {
-        assert!(frame_url_matches(
-            "https://reports.example.test/module/123",
-            "https://reports.example.test/module/123"
-        ));
-        assert!(frame_url_matches(
-            "https://reports.example.test/module/123?session=1",
-            "https://reports.example.test/module/123"
-        ));
+    fn selects_the_frame_matching_the_current_iframe_source() {
+        let frame_urls = vec![
+            "https://identity.example.test/login".to_string(),
+            "https://reports.example.test/module/123".to_string(),
+        ];
+        let iframe_sources = vec![
+            "https://reports.example.test/module/123?session=1".to_string(),
+        ];
+        assert_eq!(select_report_frame_index(&frame_urls, &iframe_sources), Some(1));
+    }
+
+    #[test]
+    fn refuses_to_guess_when_multiple_frames_do_not_match() {
+        let frame_urls = vec![
+            "https://identity.example.test/login".to_string(),
+            "https://reports.example.test/old-module".to_string(),
+        ];
+        let iframe_sources = vec!["https://reports.example.test/new-module".to_string()];
+        assert_eq!(select_report_frame_index(&frame_urls, &iframe_sources), None);
+    }
+
+    #[test]
+    fn permits_a_single_child_frame_fallback() {
+        let frame_urls = vec!["about:blank".to_string()];
+        assert_eq!(select_report_frame_index(&frame_urls, &[]), Some(0));
     }
 
     #[test]
