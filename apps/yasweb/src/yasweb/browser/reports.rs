@@ -394,7 +394,8 @@ pub fn navigate_and_run_report(
 
                         // STEP 6: Wait for Loader and Click Export
                         tracing::debug!("Executing JavaScript to wait for export generation...");
-                        let step6_export_js = generate_step6_js(timeout_minutes, active_report_name)?;
+                        let step6_export_js =
+                            generate_step6_js(timeout_minutes, active_report_name)?;
 
                         info!("Waiting for generation & clicking Export...");
                         evaluate_report_frame_step(
