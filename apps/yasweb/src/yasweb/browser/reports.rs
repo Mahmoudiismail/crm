@@ -506,8 +506,8 @@ fn evaluate_report_frame_step(
     let started = Instant::now();
     let deadline = Instant::now() + Duration::from_secs(10);
     let mut last_frame_url = String::new();
-    let mut last_iframe_sources = Vec::new();
-    let mut last_frame_urls = Vec::new();
+    let mut last_iframe_sources: Vec<String>;
+    let mut last_frame_urls: Vec<String>;
     let execution_context_id = loop {
         // Angular can replace the iframe during SPA navigation. Resolve its
         // current src on every poll instead of retaining a stale iframe node/src.
