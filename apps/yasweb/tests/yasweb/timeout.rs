@@ -3,10 +3,10 @@ use yasweb_app::yasweb::browser::reports::generate_step6_js;
 #[test]
 fn test_generate_step6_js_normal_timeout() {
     let js = generate_step6_js(60, "Sample Report").unwrap();
-    assert!(js.contains("const timeoutMs = timeoutMinutes * 60 * 1000;"));
-    assert!(js.contains("const deadline = Date.now() + timeoutMs;"));
-    assert!(js.contains("const pollMs = 1000;"));
-    assert!(js.contains("function isExportEnabled(button)"));
+    assert!(js.contains("const deadline=Date.now()+timeoutMinutes*60000"));
+    assert!(js.contains("const deadline=Date.now()+timeoutMinutes*60000"));
+    assert!(js.contains("pollMs=1000"));
+    assert!(js.contains("function enabled(b)"));
     assert!(js.contains("function inspectReport()"));
     assert!(js.contains("const requiredStableSamples=3"));
     assert!(js.contains("stableSamples>=requiredStableSamples"));
@@ -15,26 +15,26 @@ fn test_generate_step6_js_normal_timeout() {
     assert!(js.contains("Report grid did not reach a stable, exportable state before timeout."));
     assert!(js.contains("Appointment List"));
     assert!(!js.contains("if (button && enabled && !loader)"));
-    assert!(!js.contains("const startDeadline = Date.now() + timeoutMs;"));
-    assert!(!js.contains("const finishDeadline = Date.now() + timeoutMs;"));
-    assert!(!js.contains("const exportDeadline = Date.now() + timeoutMs;"));
-    assert!(js.contains("})(60);"));
+    assert!(!js.contains("const startDeadline"));
+    assert!(!js.contains("const finishDeadline"));
+    assert!(!js.contains("const exportDeadline"));
+    assert!(js.contains("})(60, \\"Sample Report\\");"));
     assert!(!js.contains("for(let i=0; i<1200; i++)"));
 }
 
 #[test]
 fn test_generate_step6_js_large_timeout() {
     let js = generate_step6_js(6000, "Sample Report").unwrap();
-    assert!(js.contains("})(6000);"));
+    assert!(js.contains("})(6000, \\"Sample Report\\");"));
 }
 
 #[test]
 fn test_generate_step6_js_zero_timeout() {
     let js = generate_step6_js(0, "Sample Report").unwrap();
-    assert!(js.contains("})(0);"));
+    assert!(js.contains("})(0, \\"Sample Report\\");"));
     assert!(js
         .trim_start()
-        .starts_with("(async function(timeoutMinutes)"));
+        .starts_with("(async function(timeoutMinutes, reportName)"));
 }
 
 #[test]
