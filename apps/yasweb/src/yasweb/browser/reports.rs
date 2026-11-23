@@ -394,7 +394,7 @@ pub fn navigate_and_run_report(
 
                         // STEP 6: Wait for Loader and Click Export
                         tracing::debug!("Executing JavaScript to wait for export generation...");
-                        let step6_export_js = generate_step6_js(timeout_minutes)?;
+                        let step6_export_js = generate_step6_js(timeout_minutes, active_report_name)?;
 
                         info!("Waiting for generation & clicking Export...");
                         evaluate_report_frame_step(
@@ -629,10 +629,11 @@ mod report_type_js_tests {
     }
 }
 
-pub fn generate_step6_js(timeout_minutes: u64) -> Result<String> {
+pub fn generate_step6_js(timeout_minutes: u64, report_name: &str) -> Result<String> {
     Ok(
         load_managed_browser_script("wait_export.js", include_str!("scripts/wait_export.js"))?
-            .replace("__TIMEOUT_MINUTES__", &timeout_minutes.to_string()),
+            .replace("__TIMEOUT_MINUTES__", &timeout_minutes.to_string())
+            .replace("__REPORT_NAME_JSON__", &serde_json::to_string(report_name)?),
     )
 }
 

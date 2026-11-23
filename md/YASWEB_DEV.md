@@ -81,3 +81,19 @@ from the rendered filter control during a live run before editing the config.
 ## Report download recovery
 
 If report navigation or a later SPA readiness step returns an error after export has started, Yasweb performs a short bounded recovery wait. The run is treated as recovered only when the current run creates or changes a spreadsheet file and that file remains stable with no temporary download in progress. Existing unchanged reports never satisfy recovery; when no new completed file appears, the original navigation/export error is returned.
+
+
+## MIS report result readiness before export
+
+After Search, automation waits for the rendered DevExtreme report grid to
+contain rows or expose an explicit empty-results message. A transient zero-row
+grid is not a completed report. Grid state, busy indicators, loaders, and the
+enabled Export control must remain consistent for three consecutive polling
+samples before export; state is checked again immediately before the click.
+Timeout diagnostics include report name, visible row count, explicit-empty
+state, grid busy state, loader state, and Export availability.
+
+This DOM-readiness safeguard does not guarantee semantic completeness of
+server-side report data. Validate the exported workbook against the source
+report when investigating missing records. A live Yasweb run is required to
+confirm the deployed report's exact empty-state markup.
