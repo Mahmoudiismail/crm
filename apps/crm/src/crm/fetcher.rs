@@ -1423,6 +1423,46 @@ fn split_by_days(from: &str, to: &str, max_days: u32) -> Result<Vec<(String, Str
     Ok(ranges)
 }
 
+#[cfg(test)]
+mod report_range_limit_tests {
+    use super::*;
+
+    #[test]
+    fn splits_into_configured_inclusive_windows_without_gaps() {
+        assert_eq!(
+            split_by_days("2026-01-01", "2026-02-05", 30).unwrap(),
+            vec![
+                ("2026-01-01".to_string(), "2026-01-30".to_string()),
+                ("2026-01-31".to_string(), "2026-02-05".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn supports_custom_limits_and_leap_days() {
+        assert_eq!(
+            split_by_days("2024-02-27", "2024-03-02", 3).unwrap(),
+            vec![
+                ("2024-02-27".to_string(), "2024-02-29".to_string()),
+                ("2024-03-01".to_string(), "2024-03-02".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn zero_keeps_the_full_server_managed_range() {
+        assert_eq!(
+            split_by_days("2026-01-01", "2026-03-15", 0).unwrap(),
+            vec![("2026-01-01".to_string(), "2026-03-15".to_string())]
+        );
+    }
+
+    #[test]
+    fn rejects_reversed_date_ranges() {
+        assert!(split_by_days("2026-02-01", "2026-01-01", 30).is_err());
+    }
+}
+
 /// Split [from, to] into monthly slices.
 /// E.g. 2026-01-01 to 2026-03-15 → [(01-01, 01-31), (02-01, 02-28), (03-01, 03-15)]
 pub fn split_monthly(from: &str, to: &str) -> Result<Vec<(String, String)>> {
