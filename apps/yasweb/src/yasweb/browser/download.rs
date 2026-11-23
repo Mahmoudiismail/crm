@@ -251,4 +251,20 @@ mod tests {
         fs::write(&path, b"new report").unwrap();
         assert!(report_file_changed(&path, &snapshot));
     }
+
+    #[test]
+    fn rejects_a_corrupt_xlsx_even_when_the_file_is_stable() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("broken.xlsx");
+        fs::write(&path, b"not an XLSX workbook").unwrap();
+        assert!(validate_report_file(&path).is_err());
+    }
+
+    #[test]
+    fn validates_a_well_formed_csv_export() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("report.csv");
+        fs::write(&path, b"Id,Name\\n1,Example\\n").unwrap();
+        assert!(validate_report_file(&path).is_ok());
+    }
 }
