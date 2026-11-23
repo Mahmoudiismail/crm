@@ -732,14 +732,15 @@ mod step6_wait_tests {
     use super::generate_step6_js;
 
     #[test]
-    fn waits_for_export_button_to_become_enabled() {
-        let js = generate_step6_js(5).unwrap();
-        assert!(js.contains("Waiting for the Export button to become enabled"));
-        assert!(js.contains("'dx-state-disabled'"));
-        assert!(js.contains("getAttribute('aria-disabled') === 'true'"));
-        assert!(js.contains("button.disabled === true"));
-        assert!(js.contains("Export button did not become enabled before timeout."));
-        assert!(js.contains("})(5);"));
+    fn waits_for_stable_report_grid_before_export() {
+        let js = generate_step6_js(5, "Sample Report").unwrap();
+        assert!(js.contains("Waiting for report grid readiness and stable results"));
+        assert!(js.contains("requiredStableSamples=3"));
+        assert!(js.contains(".dx-datagrid-rowsview .dx-data-row"));
+        assert!(js.contains(".dx-datagrid-nodata"));
+        assert!(js.contains("Zero rows are accepted only with an explicit empty-results state."));
+        assert!(js.contains("Report grid did not reach a stable, exportable state before timeout."));
+        assert!(js.contains(r#"})(5, "Sample Report");"#));
     }
 }
 
