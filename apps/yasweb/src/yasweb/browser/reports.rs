@@ -579,7 +579,10 @@ fn select_report_frame<'a>(
     frames: &[&'a Page::Frame],
     iframe_sources: &[String],
 ) -> Option<&'a Page::Frame> {
-    let frame_urls = frames.iter().map(|frame| frame.url.clone()).collect::<Vec<_>>();
+    let frame_urls = frames
+        .iter()
+        .map(|frame| frame.url.clone())
+        .collect::<Vec<_>>();
     select_report_frame_index(&frame_urls, iframe_sources)
         .and_then(|index| frames.get(index).copied())
 }
@@ -631,10 +634,11 @@ mod report_frame_selection_tests {
             "https://identity.example.test/login".to_string(),
             "https://reports.example.test/module/123".to_string(),
         ];
-        let iframe_sources = vec![
-            "https://reports.example.test/module/123?session=1".to_string(),
-        ];
-        assert_eq!(select_report_frame_index(&frame_urls, &iframe_sources), Some(1));
+        let iframe_sources = vec!["https://reports.example.test/module/123?session=1".to_string()];
+        assert_eq!(
+            select_report_frame_index(&frame_urls, &iframe_sources),
+            Some(1)
+        );
     }
 
     #[test]
@@ -644,7 +648,10 @@ mod report_frame_selection_tests {
             "https://reports.example.test/old-module".to_string(),
         ];
         let iframe_sources = vec!["https://reports.example.test/new-module".to_string()];
-        assert_eq!(select_report_frame_index(&frame_urls, &iframe_sources), None);
+        assert_eq!(
+            select_report_frame_index(&frame_urls, &iframe_sources),
+            None
+        );
     }
 
     #[test]
@@ -655,7 +662,10 @@ mod report_frame_selection_tests {
 
     #[test]
     fn rejects_empty_or_unrelated_frame_urls() {
-        assert!(!frame_url_matches("", "https://reports.example.test/module/123"));
+        assert!(!frame_url_matches(
+            "",
+            "https://reports.example.test/module/123"
+        ));
         assert!(!frame_url_matches(
             "https://reports.example.test/module/123",
             "https://identity.example.test/login"

@@ -132,7 +132,10 @@ pub fn wait_for_download_with_timeout(
                 stable_polls = stable_polls.saturating_add(1);
                 if stable_polls >= 3 {
                     validate_report_file(&current.0)?;
-                    info!("Report download completed and passed file validation: {:?}", current.0);
+                    info!(
+                        "Report download completed and passed file validation: {:?}",
+                        current.0
+                    );
                     return Ok(());
                 }
             } else {
@@ -163,8 +166,12 @@ fn validate_report_file(path: &Path) -> Result<()> {
         .as_deref()
     {
         Some("xlsx" | "xls") => {
-            let mut workbook = calamine::open_workbook_auto(path)
-                .with_context(|| format!("Downloaded spreadsheet is not a readable workbook: {:?}", path))?;
+            let mut workbook = calamine::open_workbook_auto(path).with_context(|| {
+                format!(
+                    "Downloaded spreadsheet is not a readable workbook: {:?}",
+                    path
+                )
+            })?;
             let sheet_names = workbook.sheet_names().to_vec();
             if sheet_names.is_empty() {
                 bail!("Downloaded spreadsheet contains no worksheets: {:?}", path);
@@ -193,7 +200,9 @@ fn validate_report_file(path: &Path) -> Result<()> {
                 .with_context(|| format!("Downloaded CSV is not readable: {:?}", path))?;
             let mut rows = 0usize;
             for record in reader.records() {
-                record.with_context(|| format!("Downloaded CSV contains an invalid record: {:?}", path))?;
+                record.with_context(|| {
+                    format!("Downloaded CSV contains an invalid record: {:?}", path)
+                })?;
                 rows += 1;
             }
             info!("Validated CSV structure: path={:?} rows={}", path, rows);
