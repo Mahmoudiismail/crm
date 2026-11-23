@@ -310,6 +310,7 @@ pub async fn fetch_reports(
         from_date,
         download_csv,
         incomplete_reservation_limit,
+        report_date_range_days,
         recent_download_window_seconds,
         retention_days,
         initial_token,
@@ -331,6 +332,7 @@ pub async fn fetch_reports(
             cfg.from_date.clone(),
             cfg.download_csv,
             cfg.incomplete_reservation_limit,
+            cfg.report_date_range_days,
             cfg.recent_download_window_seconds,
             cfg.retention_days,
             t,
@@ -419,6 +421,7 @@ pub async fn fetch_reports(
                         endpoint,
                         &start_date,
                         &to_date_val,
+                        report_date_range_days,
                         &params,
                         download_csv,
                         Some(&download_dir),
@@ -535,6 +538,7 @@ pub async fn fetch_reports(
                         endpoint,
                         &from_date,
                         &to_date,
+                        report_date_range_days,
                         &params,
                         download_csv,
                         Some(&download_dir),
@@ -979,6 +983,7 @@ async fn fetch_with_signed_url_split(
     endpoint: &str,
     from_date: &str,
     to_date: &str,
+    max_range_days: u32,
     params: &FetchParams<'_>,
     download_csv: bool,
     download_dir: Option<&Path>,
@@ -986,9 +991,13 @@ async fn fetch_with_signed_url_split(
     download_tx: tokio::sync::mpsc::UnboundedSender<DownloadTask>,
     context_opt: Option<Arc<FetchContext>>,
 ) -> Result<Value> {
-    // Always try the complete requested range first. fetch_recursive splits it
-    // in half only when the API cannot generate a signed URL for that range.
-    let ranges = vec![(from_date.to_string(), to_date.to_string())];
+    // A positive configured limit creates fixed-size inclusive date windows.
+    // Zero preserves server-first behavior; recursive fallback still applies.
+    let ranges = if max_range_days == 0 {
+        vec![(from_date.to_string(), to_date.to_string())]
+    } else {
+        split_by_days(from_date, to_date, max_range_days)?
+    };
     let total_ranges = ranges.len();
 
     info!(
@@ -1385,6 +1394,34 @@ fn split_range_in_half(from: &str, to: &str) -> Result<Option<(DateRange, DateRa
 // ──────────────────────────────────────────────────────────────
 // Monthly date splitting
 // ──────────────────────────────────────────────────────────────
+
+/// Split an inclusive date range into consecutive windows of at most max_days.
+fn split_by_days(from: &str, to: &str, max_days: u32) -> Result<Vec<(String, String)>> {
+    let start = NaiveDate::parse_from_str(from, "%Y-%m-%d")
+        .with_context(|| format!("Invalid from_date: {}", from))?;
+    let end = NaiveDate::parse_from_str(to, "%Y-%m-%d")
+        .with_context(|| format!("Invalid to_date: {}", to))?;
+
+    if start > end {
+        anyhow::bail!("from_date ({}) is after to_date ({})", from, to);
+    }
+    if max_days == 0 {
+        return Ok(vec![(from.to_string(), to.to_string())]);
+    }
+
+    let mut ranges = Vec::new();
+    let mut cursor = start;
+    while cursor <= end {
+        let candidate_end = cursor + ChronoDuration::days(i64::from(max_days) - 1);
+        let batch_end = candidate_end.min(end);
+        ranges.push((
+            cursor.format("%Y-%m-%d").to_string(),
+            batch_end.format("%Y-%m-%d").to_string(),
+        ));
+        cursor = batch_end + ChronoDuration::days(1);
+    }
+    Ok(ranges)
+}
 
 /// Split [from, to] into monthly slices.
 /// E.g. 2026-01-01 to 2026-03-15 → [(01-01, 01-31), (02-01, 02-28), (03-01, 03-15)]
