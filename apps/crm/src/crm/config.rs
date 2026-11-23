@@ -440,6 +440,7 @@ mod tests {
         // Default values should be filled in
         assert_eq!(config.username, "");
         assert!(!config.no_verify_ssl);
+        assert_eq!(config.report_date_range_days, 30);
     }
 
     #[test]
