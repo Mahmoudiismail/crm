@@ -4,7 +4,6 @@ use yasweb_app::yasweb::browser::reports::generate_step6_js;
 fn test_generate_step6_js_normal_timeout() {
     let js = generate_step6_js(60, "Sample Report").unwrap();
     assert!(js.contains("const deadline=Date.now()+timeoutMinutes*60000"));
-    assert!(js.contains("const deadline=Date.now()+timeoutMinutes*60000"));
     assert!(js.contains("pollMs=1000"));
     assert!(js.contains("function enabled(b)"));
     assert!(js.contains("function inspectReport()"));
@@ -18,20 +17,20 @@ fn test_generate_step6_js_normal_timeout() {
     assert!(!js.contains("const startDeadline"));
     assert!(!js.contains("const finishDeadline"));
     assert!(!js.contains("const exportDeadline"));
-    assert!(js.contains("})(60, \\"Sample Report\\");"));
+    assert!(js.contains(r#"})(60, "Sample Report");"#));
     assert!(!js.contains("for(let i=0; i<1200; i++)"));
 }
 
 #[test]
 fn test_generate_step6_js_large_timeout() {
     let js = generate_step6_js(6000, "Sample Report").unwrap();
-    assert!(js.contains("})(6000, \\"Sample Report\\");"));
+    assert!(js.contains(r#"})(6000, "Sample Report");"#));
 }
 
 #[test]
 fn test_generate_step6_js_zero_timeout() {
     let js = generate_step6_js(0, "Sample Report").unwrap();
-    assert!(js.contains("})(0, \\"Sample Report\\");"));
+    assert!(js.contains(r#"})(0, "Sample Report");"#));
     assert!(js
         .trim_start()
         .starts_with("(async function(timeoutMinutes, reportName)"));
