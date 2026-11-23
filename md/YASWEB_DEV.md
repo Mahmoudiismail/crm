@@ -104,3 +104,8 @@ the current Chrome frame tree. It must not reuse a stale iframe reference or
 select an arbitrary cross-origin child when several frames exist. If multiple
 frames are present and none matches, the step fails with iframe-source and
 frame-URL diagnostics; a single child frame may be used as a bounded fallback.
+
+Completed spreadsheet downloads are also opened and structurally checked before
+Yasweb reports success: XLSX/XLS workbooks must expose a readable worksheet,
+and CSV exports must parse as records. This detects truncated or corrupt files;
+it does not establish that every server-side matching record was exported.
