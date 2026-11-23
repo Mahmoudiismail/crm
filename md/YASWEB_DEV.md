@@ -97,3 +97,10 @@ This DOM-readiness safeguard does not guarantee semantic completeness of
 server-side report data. Validate the exported workbook against the source
 report when investigating missing records. A live Yasweb run is required to
 confirm the deployed report's exact empty-state markup.
+
+Report-frame execution contexts are resolved again for every automation step.
+The resolver reads all current parent-page iframe sources and matches them to
+the current Chrome frame tree. It must not reuse a stale iframe reference or
+select an arbitrary cross-origin child when several frames exist. If multiple
+frames are present and none matches, the step fails with iframe-source and
+frame-URL diagnostics; a single child frame may be used as a bounded fallback.
