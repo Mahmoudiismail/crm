@@ -566,6 +566,12 @@ fn evaluate_report_frame_step(
     javascript::evaluate_automation_step_in_context(tab, js_code, step_name, execution_context_id)
 }
 
+fn frame_url_matches(iframe_src: &str, frame_url: &str) -> bool {
+    !iframe_src.is_empty()
+        && !frame_url.is_empty()
+        && (iframe_src == frame_url || iframe_src.starts_with(frame_url))
+}
+
 /// Selects the report frame by matching the current parent-document iframe URLs.
 /// When there is exactly one child frame, it is safe to use it as a fallback;
 /// with multiple unmatched frames we fail closed rather than evaluating in an arbitrary frame.
@@ -580,7 +586,7 @@ fn select_report_frame<'a>(
             !frame.url.is_empty()
                 && iframe_sources
                     .iter()
-                    .any(|src| !src.is_empty() && (src == &frame.url || src.starts_with(&frame.url)))
+                    .any(|src| frame_url_matches(src, &frame.url))
         })
         .or_else(|| {
             if frames.len() == 1 {
@@ -619,22 +625,27 @@ fn generate_step2_js(report_type: &str, report_name: &str, timeout_minutes: u64)
 
 #[cfg(test)]
 mod report_frame_selection_tests {
-    use super::select_report_frame;
+    use super::frame_url_matches;
 
     #[test]
-    fn does_not_select_an_arbitrary_frame_when_multiple_frames_are_unmatched() {
-        // The selection helper's fail-closed behavior is also covered by the
-        // live frame resolver: unmatched multiple frames must time out with diagnostics.
-        assert!(true);
+    fn matches_the_current_iframe_url_or_its_loaded_child_url() {
+        assert!(frame_url_matches(
+            "https://reports.example.test/module/123",
+            "https://reports.example.test/module/123"
+        ));
+        assert!(frame_url_matches(
+            "https://reports.example.test/module/123?session=1",
+            "https://reports.example.test/module/123"
+        ));
     }
 
     #[test]
-    fn frame_url_matching_requires_the_current_iframe_source() {
-        // Keep the URL matching contract explicit; a parent route or unrelated
-        // cross-origin child must never be selected as the report frame.
-        let iframe_src = "https://reports.example.test/module/123";
-        let unrelated = "https://identity.example.test/login";
-        assert_ne!(iframe_src, unrelated);
+    fn rejects_empty_or_unrelated_frame_urls() {
+        assert!(!frame_url_matches("", "https://reports.example.test/module/123"));
+        assert!(!frame_url_matches(
+            "https://reports.example.test/module/123",
+            "https://identity.example.test/login"
+        ));
     }
 }
 
