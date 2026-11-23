@@ -12,7 +12,7 @@ fn test_generate_step6_js_normal_timeout() {
     assert!(js.contains("gridHasResult"));
     assert!(js.contains("explicitEmpty"));
     assert!(js.contains("Report grid did not reach a stable, exportable state before timeout."));
-    assert!(js.contains("Appointment List"));
+    assert!(js.contains("Report: \"+reportName"));
     assert!(!js.contains("if (button && enabled && !loader)"));
     assert!(!js.contains("const startDeadline"));
     assert!(!js.contains("const finishDeadline"));
