@@ -29,7 +29,7 @@ impl AppLockManager {
     pub async fn get_semaphore_with_limit(&self, app_id: &str, permits: usize) -> Arc<Semaphore> {
         let mut mgr = self.inner.lock().await;
         mgr.entry(app_id.to_string())
-            .or_insert_with(|| Arc::new(Semaphore::new(permits.max(1).min(Semaphore::MAX_PERMITS))))
+            .or_insert_with(|| Arc::new(Semaphore::new(permits.clamp(1, Semaphore::MAX_PERMITS))))
             .clone()
     }
 }
