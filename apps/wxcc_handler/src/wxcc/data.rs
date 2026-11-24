@@ -205,17 +205,21 @@ fn array_at<'a>(value: &'a Value, keys: &[&str]) -> &'a [Value] {
 }
 
 fn ids_from(value: &Value, keys: &[&str]) -> Vec<String> {
-    array_at(value, keys)
-        .iter()
-        .filter_map(|item| {
+    let mut seen = HashSet::new();
+    let mut ids = Vec::new();
+    for key in keys {
+        for item in value.get(*key).and_then(Value::as_array).into_iter().flatten() {
             let id = if item.is_object() {
                 id_at(item)
             } else {
                 item.as_str().unwrap_or_default().to_string()
             };
-            (!id.is_empty()).then_some(id)
-        })
-        .collect()
+            if !id.is_empty() && seen.insert(id.clone()) {
+                ids.push(id);
+            }
+        }
+    }
+    ids
 }
 
 fn date_value(value: &Value, keys: &[&str]) -> String {
@@ -288,10 +292,15 @@ fn skill_set(value: &Value) -> String {
 }
 
 fn team_member_ids(detail: Option<&Value>, summary: &Value) -> Vec<String> {
-    let mut ids = detail
-        .map(|value| ids_from(value, &["userIds", "users", "members"]))
-        .unwrap_or_default();
-    ids.extend(ids_from(summary, &["userIds", "users", "members"]));
+    let mut seen = HashSet::new();
+    let mut ids = Vec::new();
+    for source in detail.into_iter().chain(std::iter::once(summary)) {
+        for id in ids_from(source, &["userIds", "users", "members"]) {
+            if seen.insert(id.clone()) {
+                ids.push(id);
+            }
+        }
+    }
     ids
 }
 
@@ -809,9 +818,7 @@ mod tests {
     fn team_membership_merges_detail_and_list_data_without_losing_members() {
         let detail = json!({"userIds": ["user-a", "user-b"]});
         let summary = json!({"userIds": ["user-b", "user-c"]});
-        let mut ids = team_member_ids(Some(&detail), &summary);
-        ids.sort();
-        ids.dedup();
+        let ids = team_member_ids(Some(&detail), &summary);
         assert_eq!(ids, vec!["user-a", "user-b", "user-c"]);
     }
 
