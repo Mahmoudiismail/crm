@@ -394,7 +394,8 @@ pub fn navigate_and_run_report(
 
                         // STEP 6: Wait for Loader and Click Export
                         tracing::debug!("Executing JavaScript to wait for export generation...");
-                        let step6_export_js = generate_step6_js(timeout_minutes)?;
+                        let step6_export_js =
+                            generate_step6_js(timeout_minutes, active_report_name)?;
 
                         info!("Waiting for generation & clicking Export...");
                         evaluate_report_frame_step(
@@ -503,34 +504,31 @@ fn evaluate_report_frame_step(
     }
 
     let started = Instant::now();
-    let iframe_src = tab
-        .evaluate("document.querySelector('iframe')?.src || ''", true)
-        .ok()
-        .and_then(|result| result.value)
-        .and_then(|value| value.as_str().map(str::to_owned))
-        .unwrap_or_default();
     let deadline = Instant::now() + Duration::from_secs(10);
     let mut last_frame_url = String::new();
+    let mut last_iframe_sources: Vec<String>;
+    let mut last_frame_urls: Vec<String>;
     let execution_context_id = loop {
+        // Angular can replace the iframe during SPA navigation. Resolve its
+        // current src on every poll instead of retaining a stale iframe node/src.
+        last_iframe_sources = tab
+            .evaluate(
+                "JSON.stringify(Array.from(document.querySelectorAll('iframe')).map(frame => frame.src || frame.getAttribute('src') || '').filter(Boolean))",
+                true,
+            )
+            .ok()
+            .and_then(|result| result.value)
+            .and_then(|value| value.as_str().map(str::to_owned))
+            .and_then(|raw| serde_json::from_str::<Vec<String>>(&raw).ok())
+            .unwrap_or_default();
+
         let tree = tab
             .call_method(Page::GetFrameTree(None))
             .context("Failed to inspect Chrome frame tree for Yasweb report iframe")?;
-        let root_origin = tree.frame_tree.frame.security_origin.clone();
         let mut frames = Vec::new();
         collect_child_frames(&tree.frame_tree, &mut frames);
-        let frame = frames
-            .iter()
-            .find(|frame| !iframe_src.is_empty() && frame.url == iframe_src)
-            .or_else(|| {
-                frames
-                    .iter()
-                    .find(|frame| !iframe_src.is_empty() && iframe_src.starts_with(&frame.url))
-            })
-            .or_else(|| {
-                frames
-                    .iter()
-                    .find(|frame| frame.security_origin != root_origin && !frame.url.is_empty())
-            });
+        last_frame_urls = frames.iter().map(|frame| frame.url.clone()).collect();
+        let frame = select_report_frame(&frames, &last_iframe_sources);
         if let Some(frame) = frame {
             last_frame_url = frame.url.clone();
             match tab.call_method(Page::CreateIsolatedWorld {
@@ -550,7 +548,12 @@ fn evaluate_report_frame_step(
             }
         }
         if Instant::now() >= deadline {
-            anyhow::bail!("Could not locate embedded Yasweb report frame within 10 seconds (iframe_src='{}', last_frame_url='{}')", iframe_src, last_frame_url);
+            anyhow::bail!(
+                "Could not resolve the current Yasweb report iframe within 10 seconds (iframe_sources={:?}, frame_urls={:?}, last_frame_url='{}')",
+                last_iframe_sources,
+                last_frame_urls,
+                last_frame_url
+            );
         }
         std::thread::sleep(Duration::from_millis(200));
     };
@@ -561,6 +564,38 @@ fn evaluate_report_frame_step(
         started.elapsed().as_millis()
     );
     javascript::evaluate_automation_step_in_context(tab, js_code, step_name, execution_context_id)
+}
+
+fn frame_url_matches(iframe_src: &str, frame_url: &str) -> bool {
+    !iframe_src.is_empty()
+        && !frame_url.is_empty()
+        && (iframe_src == frame_url || iframe_src.starts_with(frame_url))
+}
+
+/// Selects the report frame by matching the current parent-document iframe URLs.
+/// When there is exactly one child frame, it is safe to use it as a fallback;
+/// with multiple unmatched frames we fail closed rather than evaluating in an arbitrary frame.
+fn select_report_frame<'a>(
+    frames: &[&'a Page::Frame],
+    iframe_sources: &[String],
+) -> Option<&'a Page::Frame> {
+    let frame_urls = frames
+        .iter()
+        .map(|frame| frame.url.clone())
+        .collect::<Vec<_>>();
+    select_report_frame_index(&frame_urls, iframe_sources)
+        .and_then(|index| frames.get(index).copied())
+}
+
+fn select_report_frame_index(frame_urls: &[String], iframe_sources: &[String]) -> Option<usize> {
+    frame_urls
+        .iter()
+        .position(|frame_url| {
+            iframe_sources
+                .iter()
+                .any(|src| frame_url_matches(src, frame_url))
+        })
+        .or_else(|| (frame_urls.len() == 1).then_some(0))
 }
 
 fn collect_child_frames<'a>(tree: &'a Page::FrameTree, frames: &mut Vec<&'a Page::Frame>) {
@@ -587,6 +622,55 @@ fn generate_step2_js(report_type: &str, report_name: &str, timeout_minutes: u64)
             .replace("__REPORT_NAME_JSON__", &serde_json::to_string(report_name)?)
             .replace("__TIMEOUT_MINUTES__", &timeout_minutes.to_string()),
     )
+}
+
+#[cfg(test)]
+mod report_frame_selection_tests {
+    use super::{frame_url_matches, select_report_frame_index};
+
+    #[test]
+    fn selects_the_frame_matching_the_current_iframe_source() {
+        let frame_urls = vec![
+            "https://identity.example.test/login".to_string(),
+            "https://reports.example.test/module/123".to_string(),
+        ];
+        let iframe_sources = vec!["https://reports.example.test/module/123?session=1".to_string()];
+        assert_eq!(
+            select_report_frame_index(&frame_urls, &iframe_sources),
+            Some(1)
+        );
+    }
+
+    #[test]
+    fn refuses_to_guess_when_multiple_frames_do_not_match() {
+        let frame_urls = vec![
+            "https://identity.example.test/login".to_string(),
+            "https://reports.example.test/old-module".to_string(),
+        ];
+        let iframe_sources = vec!["https://reports.example.test/new-module".to_string()];
+        assert_eq!(
+            select_report_frame_index(&frame_urls, &iframe_sources),
+            None
+        );
+    }
+
+    #[test]
+    fn permits_a_single_child_frame_fallback() {
+        let frame_urls = vec!["about:blank".to_string()];
+        assert_eq!(select_report_frame_index(&frame_urls, &[]), Some(0));
+    }
+
+    #[test]
+    fn rejects_empty_or_unrelated_frame_urls() {
+        assert!(!frame_url_matches(
+            "",
+            "https://reports.example.test/module/123"
+        ));
+        assert!(!frame_url_matches(
+            "https://reports.example.test/module/123",
+            "https://identity.example.test/login"
+        ));
+    }
 }
 
 #[cfg(test)]
@@ -629,10 +713,11 @@ mod report_type_js_tests {
     }
 }
 
-pub fn generate_step6_js(timeout_minutes: u64) -> Result<String> {
+pub fn generate_step6_js(timeout_minutes: u64, report_name: &str) -> Result<String> {
     Ok(
         load_managed_browser_script("wait_export.js", include_str!("scripts/wait_export.js"))?
-            .replace("__TIMEOUT_MINUTES__", &timeout_minutes.to_string()),
+            .replace("__TIMEOUT_MINUTES__", &timeout_minutes.to_string())
+            .replace("__REPORT_NAME_JSON__", &serde_json::to_string(report_name)?),
     )
 }
 
@@ -730,14 +815,15 @@ mod step6_wait_tests {
     use super::generate_step6_js;
 
     #[test]
-    fn waits_for_export_button_to_become_enabled() {
-        let js = generate_step6_js(5).unwrap();
-        assert!(js.contains("Waiting for the Export button to become enabled"));
-        assert!(js.contains("'dx-state-disabled'"));
-        assert!(js.contains("getAttribute('aria-disabled') === 'true'"));
-        assert!(js.contains("button.disabled === true"));
-        assert!(js.contains("Export button did not become enabled before timeout."));
-        assert!(js.contains("})(5);"));
+    fn waits_for_stable_report_grid_before_export() {
+        let js = generate_step6_js(5, "Sample Report").unwrap();
+        assert!(js.contains("Waiting for report grid readiness and stable results"));
+        assert!(js.contains("requiredStableSamples=3"));
+        assert!(js.contains(".dx-datagrid-rowsview .dx-data-row"));
+        assert!(js.contains(".dx-datagrid-nodata"));
+        assert!(js.contains("Zero rows are accepted only with an explicit empty-results state."));
+        assert!(js.contains("Report grid did not reach a stable, exportable state before timeout."));
+        assert!(js.contains(r#"})(5, "Sample Report");"#));
     }
 }
 

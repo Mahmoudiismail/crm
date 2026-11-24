@@ -81,3 +81,31 @@ from the rendered filter control during a live run before editing the config.
 ## Report download recovery
 
 If report navigation or a later SPA readiness step returns an error after export has started, Yasweb performs a short bounded recovery wait. The run is treated as recovered only when the current run creates or changes a spreadsheet file and that file remains stable with no temporary download in progress. Existing unchanged reports never satisfy recovery; when no new completed file appears, the original navigation/export error is returned.
+
+
+## MIS report result readiness before export
+
+After Search, automation waits for the rendered DevExtreme report grid to
+contain rows or expose an explicit empty-results message. A transient zero-row
+grid is not a completed report. Grid state, busy indicators, loaders, and the
+enabled Export control must remain consistent for three consecutive polling
+samples before export; state is checked again immediately before the click.
+Timeout diagnostics include report name, visible row count, explicit-empty
+state, grid busy state, loader state, and Export availability.
+
+This DOM-readiness safeguard does not guarantee semantic completeness of
+server-side report data. Validate the exported workbook against the source
+report when investigating missing records. A live Yasweb run is required to
+confirm the deployed report's exact empty-state markup.
+
+Report-frame execution contexts are resolved again for every automation step.
+The resolver reads all current parent-page iframe sources and matches them to
+the current Chrome frame tree. It must not reuse a stale iframe reference or
+select an arbitrary cross-origin child when several frames exist. If multiple
+frames are present and none matches, the step fails with iframe-source and
+frame-URL diagnostics; a single child frame may be used as a bounded fallback.
+
+Completed spreadsheet downloads are also opened and structurally checked before
+Yasweb reports success: XLSX/XLS workbooks must expose a readable worksheet,
+and CSV exports must parse as records. This detects truncated or corrupt files;
+it does not establish that every server-side matching record was exported.
