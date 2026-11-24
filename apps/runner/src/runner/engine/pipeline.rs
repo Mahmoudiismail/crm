@@ -14,13 +14,21 @@ use crate::runner::engine::app_lock::AppLockManager;
 /// Read Yasweb's own configured concurrency and enforce it in Runner, where
 /// separate period processes share one limiter. A missing/legacy value keeps
 /// Yasweb's documented default of six; zero retains Yasweb's unlimited meaning.
-fn yasweb_concurrency_limit(app: &RegisteredApp) -> Option<usize> {
+fn yasweb_concurrency_limit(
+    app: &RegisteredApp,
+    spec: &crate::runner::config::ExternalAppSpec,
+) -> Option<usize> {
     let identity = format!("{} {}", app.id, app.name).to_ascii_lowercase();
     if !identity.contains("yasweb") {
         return None;
     }
 
-    let configured = std::fs::read_to_string(&app.config_path)
+    let config_path = spec
+        .args
+        .get("--config")
+        .filter(|path| !path.trim().is_empty())
+        .unwrap_or(&app.config_path);
+    let configured = std::fs::read_to_string(config_path)
         .ok()
         .and_then(|contents| serde_json::from_str::<serde_json::Value>(&contents).ok())
         .and_then(|value| value.get("concurrency").and_then(serde_json::Value::as_u64))
@@ -46,7 +54,7 @@ async fn run_external_app_with_shared_limit(
     app_lock_manager: &AppLockManager,
 ) -> Result<()> {
     let _permit = if app.allow_concurrent_tasks {
-        if let Some(limit) = yasweb_concurrency_limit(app) {
+        if let Some(limit) = yasweb_concurrency_limit(app, spec) {
             let semaphore = app_lock_manager
                 .get_semaphore_with_limit(&app.id, limit)
                 .await;
@@ -513,10 +521,24 @@ mod tests {
         };
 
         std::fs::write(&config_path, r#"{"concurrency":3}"#).unwrap();
-        assert_eq!(yasweb_concurrency_limit(&app(&config_path)), Some(3));
+        assert_eq!(
+            yasweb_concurrency_limit(&app(&config_path), &crate::runner::config::ExternalAppSpec {
+                app_id: "yasweb".to_string(),
+                args: std::collections::HashMap::new(),
+                ..Default::default()
+            }),
+            Some(3)
+        );
 
         std::fs::write(&config_path, r#"{"concurrency":0}"#).unwrap();
-        assert_eq!(yasweb_concurrency_limit(&app(&config_path)), None);
+        assert_eq!(
+            yasweb_concurrency_limit(&app(&config_path), &crate::runner::config::ExternalAppSpec {
+                app_id: "yasweb".to_string(),
+                args: std::collections::HashMap::new(),
+                ..Default::default()
+            }),
+            None
+        );
     }
 
     #[tokio::test]
