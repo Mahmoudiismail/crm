@@ -161,8 +161,8 @@ pub fn navigate_and_run_report(
                             "YASWEB STAGE END: wait_for_mis_reports status=SUCCESS elapsed_ms={}",
                             mis_wait_started.elapsed().as_millis()
                         );
-                        info!("MIS Reports button successfully verified.");
-                        println!("MIS Reports button successfully verified.");
+                        info!("Embedded report iframe and required report inputs successfully verified.");
+                        println!("Embedded report iframe and required report inputs successfully verified.");
                         debug::save_html_state(
                             tab,
                             active_report_name,
