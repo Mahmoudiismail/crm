@@ -1,5 +1,7 @@
 [advisories]
 ignore = [
+    # Chrono is widely used across the workspace; this is an unmaintained-crate notice, not a vulnerability, and no safe upgrade is currently available. Track migration separately.
+    "RUSTSEC-2026-0543",
     "RUSTSEC-2026-0192",
     "RUSTSEC-2024-0370",
 ]
