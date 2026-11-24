@@ -54,6 +54,7 @@ async fn run_external_app_with_shared_limit(
     app_lock_manager: &AppLockManager,
     status: &Arc<Mutex<RunnerStatus>>,
     task_id: &str,
+    concurrency_state: &Arc<Mutex<(usize, usize)>>,
 ) -> Result<()> {
     let _permit = if app.allow_concurrent_tasks {
         if let Some(limit) = yasweb_concurrency_limit(app, spec) {
@@ -62,16 +63,20 @@ async fn run_external_app_with_shared_limit(
                 .await;
 
             {
-                let mut st = status.lock().await;
-                st.waiting_for_app.insert(task_id.to_string(), app.id.clone());
-                if st.running_task_ids.iter().any(|id| id == task_id) {
-                    st.running_task_ids.retain(|id| id != task_id);
-                    st.running_tasks_count = st.running_tasks_count.saturating_sub(1);
+                let mut counts = concurrency_state.lock().await;
+                counts.1 += 1;
+                if counts.0 == 0 {
+                    let mut st = status.lock().await;
+                    st.waiting_for_app.insert(task_id.to_string(), app.id.clone());
+                    if st.running_task_ids.iter().any(|id| id == task_id) {
+                        st.running_task_ids.retain(|id| id != task_id);
+                        st.running_tasks_count = st.running_tasks_count.saturating_sub(1);
+                    }
+                    if !st.queued_task_ids.iter().any(|id| id == task_id) {
+                        st.queued_task_ids.push(task_id.to_string());
+                    }
+                    st.queued_tasks_count = st.queued_task_ids.len();
                 }
-                if !st.queued_task_ids.iter().any(|id| id == task_id) {
-                    st.queued_task_ids.push(task_id.to_string());
-                }
-                st.queued_tasks_count = st.queued_task_ids.len();
             }
             logger.log(&format!("Waiting for Yasweb concurrency slot ({limit} max)...")).await;
 
@@ -79,13 +84,25 @@ async fn run_external_app_with_shared_limit(
                 format!("Yasweb concurrency limiter for '{}' was closed", app.name)
             });
             {
-                let mut st = status.lock().await;
-                st.waiting_for_app.remove(task_id);
-                st.queued_task_ids.retain(|id| id != task_id);
-                st.queued_tasks_count = st.queued_task_ids.len();
-                if permit.is_ok() && !st.running_task_ids.iter().any(|id| id == task_id) {
-                    st.running_task_ids.push(task_id.to_string());
-                    st.running_tasks_count += 1;
+                let mut counts = concurrency_state.lock().await;
+                counts.1 = counts.1.saturating_sub(1);
+                if permit.is_ok() {
+                    counts.0 += 1;
+                    if counts.0 == 1 {
+                        let mut st = status.lock().await;
+                        st.waiting_for_app.remove(task_id);
+                        st.queued_task_ids.retain(|id| id != task_id);
+                        st.queued_tasks_count = st.queued_task_ids.len();
+                        if !st.running_task_ids.iter().any(|id| id == task_id) {
+                            st.running_task_ids.push(task_id.to_string());
+                            st.running_tasks_count += 1;
+                        }
+                    }
+                } else if counts.0 == 0 && counts.1 == 0 {
+                    let mut st = status.lock().await;
+                    st.waiting_for_app.remove(task_id);
+                    st.queued_task_ids.retain(|id| id != task_id);
+                    st.queued_tasks_count = st.queued_task_ids.len();
                 }
             }
             Some(permit?)
@@ -97,7 +114,22 @@ async fn run_external_app_with_shared_limit(
         None
     };
 
-    run_external_app(logger, app, spec, period, timeout_seconds).await
+    let result = run_external_app(logger, app, spec, period, timeout_seconds).await;
+    if _permit.is_some() {
+        let mut counts = concurrency_state.lock().await;
+        counts.0 = counts.0.saturating_sub(1);
+        if counts.0 == 0 && counts.1 > 0 {
+            let mut st = status.lock().await;
+            st.waiting_for_app.insert(task_id.to_string(), app.id.clone());
+            st.running_task_ids.retain(|id| id != task_id);
+            st.running_tasks_count = st.running_tasks_count.saturating_sub(1);
+            if !st.queued_task_ids.iter().any(|id| id == task_id) {
+                st.queued_task_ids.push(task_id.to_string());
+            }
+            st.queued_tasks_count = st.queued_task_ids.len();
+        }
+    }
+    result
 }
 
 async fn execute_action(
@@ -109,6 +141,7 @@ async fn execute_action(
     app_lock_manager: &AppLockManager,
     status: &Arc<Mutex<RunnerStatus>>,
     task_id: &str,
+    concurrency_state: &Arc<Mutex<(usize, usize)>>,
 ) -> Result<()> {
     match action {
         ActionSpec::ShellCommand(spec) => {
@@ -139,6 +172,7 @@ async fn execute_action(
                         app_lock_manager,
                         status,
                         task_id,
+                        concurrency_state,
                     )
                     .await;
                 }
@@ -191,6 +225,7 @@ async fn execute_action(
                                 &app_lock_manager,
                                 &status,
                                 &task_id,
+                                &concurrency_state,
                             )
                             .await
                         }));
@@ -226,6 +261,7 @@ async fn execute_action(
                             app_lock_manager,
                             status,
                             task_id,
+                            concurrency_state,
                         )
                         .await?;
                     }
@@ -322,6 +358,7 @@ async fn execute_step(
         acquired_permits.push(permit);
     }
 
+    let concurrency_state = Arc::new(Mutex::new((0usize, 0usize)));
     let result = match step.mode {
         ExecutionMode::Sequential => {
             let mut step_result = Ok(());
@@ -335,6 +372,7 @@ async fn execute_step(
                     app_lock_manager,
                     status,
                     task_id,
+                    &concurrency_state,
                 )
                 .await
                 {
@@ -353,6 +391,7 @@ async fn execute_step(
                 let app_lock_manager = app_lock_manager.clone();
                 let status = status.clone();
                 let task_id = task_id.to_string();
+                let concurrency_state = concurrency_state.clone();
 
                 tasks.spawn(async move {
                     let result = execute_action(
@@ -364,6 +403,7 @@ async fn execute_step(
                         &app_lock_manager,
                         &status,
                         &task_id,
+                        &concurrency_state,
                     )
                     .await;
                     (action, result)
