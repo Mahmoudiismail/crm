@@ -520,25 +520,21 @@ mod tests {
             allow_concurrent_tasks: true,
         };
 
+        let spec = crate::runner::config::ExternalAppSpec {
+            app_id: "yasweb".to_string(),
+            args: std::collections::HashMap::new(),
+            period_mode: crate::runner::config::PeriodMode::Custom,
+            start_date: None,
+            end_date: None,
+            start_date_arg: None,
+            end_date_arg: None,
+        };
+
         std::fs::write(&config_path, r#"{"concurrency":3}"#).unwrap();
-        assert_eq!(
-            yasweb_concurrency_limit(&app(&config_path), &crate::runner::config::ExternalAppSpec {
-                app_id: "yasweb".to_string(),
-                args: std::collections::HashMap::new(),
-                ..Default::default()
-            }),
-            Some(3)
-        );
+        assert_eq!(yasweb_concurrency_limit(&app(&config_path), &spec), Some(3));
 
         std::fs::write(&config_path, r#"{"concurrency":0}"#).unwrap();
-        assert_eq!(
-            yasweb_concurrency_limit(&app(&config_path), &crate::runner::config::ExternalAppSpec {
-                app_id: "yasweb".to_string(),
-                args: std::collections::HashMap::new(),
-                ..Default::default()
-            }),
-            None
-        );
+        assert_eq!(yasweb_concurrency_limit(&app(&config_path), &spec), None);
     }
 
     #[tokio::test]
