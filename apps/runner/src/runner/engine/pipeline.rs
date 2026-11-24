@@ -17,28 +17,46 @@ use crate::runner::engine::app_lock::AppLockManager;
 fn yasweb_concurrency_limit(
     app: &RegisteredApp,
     spec: &crate::runner::config::ExternalAppSpec,
-) -> Option<usize> {
+) -> Result<Option<usize>> {
     let identity = format!("{} {} {}", app.id, app.name, app.executable_path).to_ascii_lowercase();
     if !identity.contains("yasweb") {
-        return None;
+        return Ok(None);
     }
 
-    let config_path = spec
+    let read_limit = |path: &str| -> usize {
+        std::fs::read_to_string(path)
+            .ok()
+            .and_then(|contents| serde_json::from_str::<serde_json::Value>(&contents).ok())
+            .and_then(|value| value.get("concurrency").and_then(serde_json::Value::as_u64))
+            .and_then(|value| usize::try_from(value).ok())
+            .unwrap_or(6)
+    };
+
+    // One registered Yasweb app must have one app-wide limit. Per-task --config
+    // overrides are allowed only when they preserve that same limit; otherwise
+    // whichever task starts first could silently determine the global cap.
+    let registered_limit = read_limit(&app.config_path);
+    let invocation_config = spec
         .args
         .get("--config")
         .filter(|path| !path.trim().is_empty())
         .unwrap_or(&app.config_path);
-    let configured = std::fs::read_to_string(config_path)
-        .ok()
-        .and_then(|contents| serde_json::from_str::<serde_json::Value>(&contents).ok())
-        .and_then(|value| value.get("concurrency").and_then(serde_json::Value::as_u64))
-        .and_then(|value| usize::try_from(value).ok())
-        .unwrap_or(6);
+    let invocation_limit = read_limit(invocation_config);
+    if invocation_limit != registered_limit {
+        anyhow::bail!(
+            "Yasweb concurrency mismatch for app '{}': registered config '{}' sets {}, but invocation config '{}' sets {}. All tasks for one registered Yasweb app must use the same concurrency limit.",
+            app.name,
+            app.config_path,
+            registered_limit,
+            invocation_config,
+            invocation_limit
+        );
+    }
 
-    if configured == 0 {
-        None
+    if registered_limit == 0 {
+        Ok(None)
     } else {
-        Some(configured)
+        Ok(Some(registered_limit))
     }
 }
 
@@ -57,7 +75,7 @@ async fn run_external_app_with_shared_limit(
     concurrency_state: &Arc<Mutex<(usize, usize)>>,
 ) -> Result<()> {
     let _permit = if app.allow_concurrent_tasks {
-        if let Some(limit) = yasweb_concurrency_limit(app, spec) {
+        if let Some(limit) = yasweb_concurrency_limit(app, spec)? {
             let semaphore = app_lock_manager
                 .get_semaphore_with_limit(&app.id, limit)
                 .await;
