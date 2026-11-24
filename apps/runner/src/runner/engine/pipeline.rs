@@ -226,6 +226,9 @@ async fn execute_action(
                         let app = app.clone();
                         let spec_owned = spec.clone();
                         let app_lock_manager = app_lock_manager.clone();
+                        let status = status.clone();
+                        let task_id = task_id.to_string();
+                        let concurrency_state = concurrency_state.clone();
 
                         handles.push(tokio::spawn(async move {
                             if total_periods > 1 {
@@ -648,10 +651,10 @@ mod tests {
         };
 
         std::fs::write(&config_path, r#"{"concurrency":3}"#).unwrap();
-        assert_eq!(yasweb_concurrency_limit(&app(&config_path), &spec), Some(3));
+        assert_eq!(yasweb_concurrency_limit(&app(&config_path), &spec).unwrap(), Some(3));
 
         std::fs::write(&config_path, r#"{"concurrency":0}"#).unwrap();
-        assert_eq!(yasweb_concurrency_limit(&app(&config_path), &spec), None);
+        assert_eq!(yasweb_concurrency_limit(&app(&config_path), &spec).unwrap(), None);
     }
 
     #[tokio::test]
