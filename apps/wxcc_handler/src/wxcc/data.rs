@@ -208,7 +208,12 @@ fn ids_from(value: &Value, keys: &[&str]) -> Vec<String> {
     let mut seen = HashSet::new();
     let mut ids = Vec::new();
     for key in keys {
-        for item in value.get(*key).and_then(Value::as_array).into_iter().flatten() {
+        for item in value
+            .get(*key)
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+        {
             let id = if item.is_object() {
                 id_at(item)
             } else {
