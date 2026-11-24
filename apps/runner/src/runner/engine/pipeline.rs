@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::runner::config::{ActionSpec, ExecutionMode, RunnerTask, TaskStep};
+use crate::runner::config::{ActionSpec, ExecutionMode, RegisteredApp, RunnerTask, TaskStep};
 use crate::runner::engine::application::run_external_app;
 use crate::runner::engine::logging::TaskLogger;
 use crate::runner::engine::shell::run_shell_command;
@@ -11,12 +11,65 @@ use crate::runner::engine::state::{ExecutionPolicy, RunnerStatus};
 
 use crate::runner::engine::app_lock::AppLockManager;
 
+/// Read Yasweb's own configured concurrency and enforce it in Runner, where
+/// separate period processes share one limiter. A missing/legacy value keeps
+/// Yasweb's documented default of six; zero retains Yasweb's unlimited meaning.
+fn yasweb_concurrency_limit(app: &RegisteredApp) -> Option<usize> {
+    let identity = format!("{} {}", app.id, app.name).to_ascii_lowercase();
+    if !identity.contains("yasweb") {
+        return None;
+    }
+
+    let configured = std::fs::read_to_string(&app.config_path)
+        .ok()
+        .and_then(|contents| serde_json::from_str::<serde_json::Value>(&contents).ok())
+        .and_then(|value| value.get("concurrency").and_then(serde_json::Value::as_u64))
+        .and_then(|value| usize::try_from(value).ok())
+        .unwrap_or(6);
+
+    Some(if configured == 0 { usize::MAX } else { configured })
+}
+
+/// Acquire a Runner-owned permit for every Yasweb process, not once per CLI
+/// invocation. This makes the configured cap effective across tasks and
+/// concurrently scheduled date periods.
+async fn run_external_app_with_shared_limit(
+    logger: &TaskLogger,
+    app: &RegisteredApp,
+    spec: &crate::runner::config::ExternalAppSpec,
+    period: Option<&crate::runner::config::ExecutionPeriod>,
+    timeout_seconds: u64,
+    app_lock_manager: &AppLockManager,
+) -> Result<()> {
+    let _permit = if app.allow_concurrent_tasks {
+        if let Some(limit) = yasweb_concurrency_limit(app) {
+            let semaphore = app_lock_manager
+                .get_semaphore_with_limit(&app.id, limit)
+                .await;
+            Some(
+                semaphore
+                    .acquire_owned()
+                    .await
+                    .with_context(|| format!("Yasweb concurrency limiter for '{}' was closed", app.name))?,
+            )
+        } else {
+            None
+        }
+    } else {
+        // Non-concurrent apps are already protected by execute_step's exclusive lock.
+        None
+    };
+
+    run_external_app(logger, app, spec, period, timeout_seconds).await
+}
+
 async fn execute_action(
     action: &ActionSpec,
     logger: &TaskLogger,
     policy: &ExecutionPolicy,
     timeout_seconds: u64,
     execution_at: DateTime<Utc>,
+    app_lock_manager: &AppLockManager,
 ) -> Result<()> {
     match action {
         ActionSpec::ShellCommand(spec) => {
@@ -38,7 +91,10 @@ async fn execute_action(
                 if !crate::runner::engine::application::supports_periodization(logger, app, spec)
                     .await
                 {
-                    return run_external_app(logger, app, spec, None, timeout_seconds).await;
+                    return run_external_app_with_shared_limit(
+                        logger, app, spec, None, timeout_seconds, app_lock_manager,
+                    )
+                    .await;
                 }
 
                 let periods = crate::runner::config::resolve_app_periods_at(spec, execution_at)?;
@@ -65,6 +121,7 @@ async fn execute_action(
                         let logger = logger.clone();
                         let app = app.clone();
                         let spec_owned = spec.clone();
+                        let app_lock_manager = app_lock_manager.clone();
 
                         handles.push(tokio::spawn(async move {
                             if total_periods > 1 {
@@ -79,12 +136,13 @@ async fn execute_action(
                                     ))
                                     .await;
                             }
-                            run_external_app(
+                            run_external_app_with_shared_limit(
                                 &logger,
                                 &app,
                                 &spec_owned,
                                 Some(&period),
                                 timeout_seconds,
+                                &app_lock_manager,
                             )
                             .await
                         }));
@@ -111,7 +169,10 @@ async fn execute_action(
                                 ))
                                 .await;
                         }
-                        run_external_app(logger, app, spec, Some(period), timeout_seconds).await?;
+                        run_external_app_with_shared_limit(
+                            logger, app, spec, Some(period), timeout_seconds, app_lock_manager,
+                        )
+                        .await?;
                     }
                     Ok(())
                 }
@@ -211,7 +272,10 @@ async fn execute_step(
             let mut step_result = Ok(());
             for action in &step.actions {
                 if let Err(e) =
-                    execute_action(action, logger, policy, timeout_seconds, execution_at).await
+                    execute_action(
+                        action, logger, policy, timeout_seconds, execution_at, app_lock_manager,
+                    )
+                    .await
                 {
                     step_result = Err(e);
                     break;
@@ -225,11 +289,18 @@ async fn execute_step(
                 let action = action.clone();
                 let logger = logger.clone();
                 let policy = policy.clone();
+                let app_lock_manager = app_lock_manager.clone();
 
                 tasks.spawn(async move {
-                    let result =
-                        execute_action(&action, &logger, &policy, timeout_seconds, execution_at)
-                            .await;
+                    let result = execute_action(
+                        &action,
+                        &logger,
+                        &policy,
+                        timeout_seconds,
+                        execution_at,
+                        &app_lock_manager,
+                    )
+                    .await;
                     (action, result)
                 });
             }
