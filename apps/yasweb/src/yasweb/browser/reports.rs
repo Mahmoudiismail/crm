@@ -152,71 +152,11 @@ pub fn navigate_and_run_report(
                         info!("MIS module click returned; checking the SPA transition to MIS Reports.");
 
                         let mis_wait_started = Instant::now();
-                        info!("YASWEB STAGE START: wait_for_mis_reports timeout_seconds=30");
-                        let wait_js = generate_mis_reports_wait_js(30)?;
-                        if let Err(first_error) =
-                            evaluate_report_frame_step(tab, &wait_js, "Wait for MIS Reports")
-                        {
-                            error!(
-                                "YASWEB STAGE RETRY: wait_for_mis_reports initial attempt failed elapsed_ms={} error={:#}",
-                                mis_wait_started.elapsed().as_millis(),
-                                first_error
-                            );
-
-                            // A failed transition can leave the SPA on the previous report route.
-                            // Retry the MIS navigation once only when the MIS route was not reached.
-                            match retry_mis_navigation(tab) {
-                                Ok(true) => {
-                                    info!("MIS route was not reached; retried the MIS module click once.");
-                                    if let Err(retry_error) = evaluate_report_frame_step(
-                                        tab,
-                                        &wait_js,
-                                        "Wait for MIS Reports (retry)",
-                                    ) {
-                                        error!(
-                                            "YASWEB STAGE FAILED: wait_for_mis_reports after retry elapsed_ms={} error={:#}",
-                                            mis_wait_started.elapsed().as_millis(),
-                                            retry_error
-                                        );
-                                        debug::save_failure_diagnostics(
-                                            tab,
-                                            "wait_for_mis_reports_retry",
-                                        );
-                                        return Err(retry_error).context("Yasweb stage failed: wait for MIS Reports after navigation retry");
-                                    }
-                                }
-                                Ok(false) => {
-                                    // The route was reached, so this was likely a slow embedded UI.
-                                    // Retry the readiness wait without clicking navigation again.
-                                    info!("MIS route already reached; retrying readiness wait once without another navigation click.");
-                                    if let Err(retry_error) = evaluate_report_frame_step(
-                                        tab,
-                                        &wait_js,
-                                        "Wait for MIS Reports (readiness retry)",
-                                    ) {
-                                        error!(
-                                            "YASWEB STAGE FAILED: wait_for_mis_reports after readiness retry elapsed_ms={} error={:#}",
-                                            mis_wait_started.elapsed().as_millis(),
-                                            retry_error
-                                        );
-                                        debug::save_failure_diagnostics(
-                                            tab,
-                                            "wait_for_mis_reports_readiness_retry",
-                                        );
-                                        return Err(retry_error).context("Yasweb stage failed: wait for MIS Reports after readiness retry");
-                                    }
-                                }
-                                Err(recovery_error) => {
-                                    error!(
-                                        "Failed to recover MIS navigation after initial readiness failure: {:#}",
-                                        recovery_error
-                                    );
-                                    debug::save_failure_diagnostics(tab, "mis_navigation_recovery");
-                                    return Err(first_error)
-                                        .context("Yasweb stage failed: wait for MIS Reports; navigation recovery also failed");
-                                }
-                            }
-                        }
+                        info!(
+                            "YASWEB STAGE START: wait_for_mis_reports iframe_readiness_interval_seconds=10 timeout_minutes={}",
+                            timeout_minutes
+                        );
+                        wait_for_report_iframe_ready(tab, timeout_minutes)?;
                         info!(
                             "YASWEB STAGE END: wait_for_mis_reports status=SUCCESS elapsed_ms={}",
                             mis_wait_started.elapsed().as_millis()
@@ -489,6 +429,95 @@ fn wait_for_mis_reports_route(tab: &Arc<Tab>, timeout: Duration) -> Result<()> {
 
 fn is_mis_reports_route(url: &str) -> bool {
     url.contains("/home/mis-report/module/")
+}
+
+/// Waits until the embedded report iframe is non-blank and exposes the controls
+/// required to start report selection. A failed readiness check triggers a full
+/// tab refresh every 10 seconds; after refresh, the MIS route is restored before
+/// the next readiness check. The overall wait is bounded by Yasweb's configured timeout.
+fn wait_for_report_iframe_ready(tab: &Arc<Tab>, timeout_minutes: u64) -> Result<()> {
+    const REFRESH_INTERVAL: Duration = Duration::from_secs(10);
+    let timeout = Duration::from_secs(timeout_minutes.saturating_mul(60));
+    let deadline = Instant::now() + timeout;
+    let readiness_js = generate_mis_reports_wait_js(1)?;
+    let mut attempt = 0_u64;
+
+    loop {
+        let now = Instant::now();
+        if now >= deadline {
+            anyhow::bail!(
+                "Yasweb report iframe did not become ready within {} minute(s); iframe remained blank or required report inputs were missing",
+                timeout_minutes
+            );
+        }
+
+        attempt += 1;
+        let attempt_started = Instant::now();
+        match evaluate_report_frame_step(tab, &readiness_js, "Iframe readiness check") {
+            Ok(_) => {
+                info!(
+                    "YASWEB iframe readiness confirmed: attempt={} elapsed_ms={}",
+                    attempt,
+                    attempt_started.elapsed().as_millis()
+                );
+                return Ok(());
+            }
+            Err(error) => {
+                warn!(
+                    "YASWEB iframe is not ready: attempt={} elapsed_ms={} error={:#}",
+                    attempt,
+                    attempt_started.elapsed().as_millis(),
+                    error
+                );
+            }
+        }
+
+        // Keep retries on a predictable 10-second cadence, including when a
+        // blank frame is detected quickly rather than consuming the full check window.
+        let elapsed = attempt_started.elapsed();
+        let until_refresh = REFRESH_INTERVAL.saturating_sub(elapsed);
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if !until_refresh.is_zero() && !remaining.is_zero() {
+            std::thread::sleep(until_refresh.min(remaining));
+        }
+        if Instant::now() >= deadline {
+            continue;
+        }
+
+        let current_url = tab.get_url();
+        if current_url.is_empty() || current_url == "about:blank" {
+            anyhow::bail!(
+                "Cannot refresh Yasweb while waiting for iframe readiness: browser tab URL is '{}'",
+                current_url
+            );
+        }
+
+        warn!(
+            "YASWEB iframe readiness retry: refreshing browser tab after {} seconds (attempt={})",
+            REFRESH_INTERVAL.as_secs(),
+            attempt
+        );
+        tab.navigate_to(&current_url)
+            .context("Failed to refresh Yasweb browser tab while waiting for report iframe")?;
+        let _ = tab.wait_until_navigated();
+
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            continue;
+        }
+        let route_wait = remaining.min(Duration::from_secs(30));
+        if wait_for_mis_reports_route(tab, route_wait).is_err() {
+            warn!("MIS route was not restored by browser refresh; retrying MIS navigation.");
+            retry_mis_navigation(tab)
+                .context("Failed to restore MIS navigation after browser refresh")?;
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                continue;
+            }
+            wait_for_mis_reports_route(tab, remaining.min(Duration::from_secs(30)))
+                .context("MIS route did not return after browser refresh and navigation retry")?;
+        }
+    }
 }
 
 /// Runs a report automation step in the embedded report frame's own CDP execution context.
