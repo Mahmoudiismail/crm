@@ -27,7 +27,11 @@ fn yasweb_concurrency_limit(app: &RegisteredApp) -> Option<usize> {
         .and_then(|value| usize::try_from(value).ok())
         .unwrap_or(6);
 
-    Some(if configured == 0 { usize::MAX } else { configured })
+    if configured == 0 {
+        None
+    } else {
+        Some(configured)
+    }
 }
 
 /// Acquire a Runner-owned permit for every Yasweb process, not once per CLI
