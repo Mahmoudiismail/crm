@@ -26,18 +26,10 @@ impl AppLockManager {
 
     /// Returns one shared semaphore per registered app. The first caller establishes
     /// the app-wide limit; all task and period executions reuse the same semaphore.
-    pub async fn get_semaphore_with_limit(
-        &self,
-        app_id: &str,
-        permits: usize,
-    ) -> Arc<Semaphore> {
+    pub async fn get_semaphore_with_limit(&self, app_id: &str, permits: usize) -> Arc<Semaphore> {
         let mut mgr = self.inner.lock().await;
         mgr.entry(app_id.to_string())
-            .or_insert_with(|| {
-                Arc::new(Semaphore::new(
-                    permits.max(1).min(Semaphore::MAX_PERMITS),
-                ))
-            })
+            .or_insert_with(|| Arc::new(Semaphore::new(permits.max(1).min(Semaphore::MAX_PERMITS))))
             .clone()
     }
 }

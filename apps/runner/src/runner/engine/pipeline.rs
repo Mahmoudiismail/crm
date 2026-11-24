@@ -58,12 +58,9 @@ async fn run_external_app_with_shared_limit(
             let semaphore = app_lock_manager
                 .get_semaphore_with_limit(&app.id, limit)
                 .await;
-            Some(
-                semaphore
-                    .acquire_owned()
-                    .await
-                    .with_context(|| format!("Yasweb concurrency limiter for '{}' was closed", app.name))?,
-            )
+            Some(semaphore.acquire_owned().await.with_context(|| {
+                format!("Yasweb concurrency limiter for '{}' was closed", app.name)
+            })?)
         } else {
             None
         }
@@ -104,7 +101,12 @@ async fn execute_action(
                     .await
                 {
                     return run_external_app_with_shared_limit(
-                        logger, app, spec, None, timeout_seconds, app_lock_manager,
+                        logger,
+                        app,
+                        spec,
+                        None,
+                        timeout_seconds,
+                        app_lock_manager,
                     )
                     .await;
                 }
@@ -182,7 +184,12 @@ async fn execute_action(
                                 .await;
                         }
                         run_external_app_with_shared_limit(
-                            logger, app, spec, Some(period), timeout_seconds, app_lock_manager,
+                            logger,
+                            app,
+                            spec,
+                            Some(period),
+                            timeout_seconds,
+                            app_lock_manager,
                         )
                         .await?;
                     }
@@ -283,11 +290,15 @@ async fn execute_step(
         ExecutionMode::Sequential => {
             let mut step_result = Ok(());
             for action in &step.actions {
-                if let Err(e) =
-                    execute_action(
-                        action, logger, policy, timeout_seconds, execution_at, app_lock_manager,
-                    )
-                    .await
+                if let Err(e) = execute_action(
+                    action,
+                    logger,
+                    policy,
+                    timeout_seconds,
+                    execution_at,
+                    app_lock_manager,
+                )
+                .await
                 {
                     step_result = Err(e);
                     break;
