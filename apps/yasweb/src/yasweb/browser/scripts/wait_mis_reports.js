@@ -40,8 +40,9 @@
                 const state = inspect();
                 const serialized = JSON.stringify(state);
                 if (serialized !== lastState) { logs.push("Report-frame readiness state: " + serialized); lastState = serialized; }
-                if (state.reportUiReady) return JSON.stringify({ status: "SUCCESS", logs });
-                await sleep(250);
+                consecutiveReadySamples = state.reportUiReady ? consecutiveReadySamples + 1 : 0;
+                if (consecutiveReadySamples >= requiredStableSamples) return JSON.stringify({ status: "SUCCESS", logs });
+                await sleep(500);
             }
             return JSON.stringify({ status: "ERROR", msg: "Report frame did not expose visible Standard Report, Report Manager, and Search controls before timeout",
                 logs: logs.concat(["Report-frame readiness timeout diagnostics: " + JSON.stringify(inspect())]) });
