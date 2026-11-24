@@ -499,6 +499,26 @@ mod tests {
     use std::sync::atomic::{AtomicU32, Ordering};
     use tokio::sync::Barrier;
 
+    #[test]
+    fn yasweb_concurrency_uses_registered_config_and_preserves_zero_as_unlimited() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_path = dir.path().join("yasweb_config.json");
+        let app = |config_path: &std::path::Path| RegisteredApp {
+            id: "yasweb".to_string(),
+            name: "Yasweb Automation Engine".to_string(),
+            executable_path: "yasweb.exe".to_string(),
+            config_path: config_path.to_string_lossy().into_owned(),
+            plugin_api_version: Some(1),
+            allow_concurrent_tasks: true,
+        };
+
+        std::fs::write(&config_path, r#"{"concurrency":3}"#).unwrap();
+        assert_eq!(yasweb_concurrency_limit(&app(&config_path)), Some(3));
+
+        std::fs::write(&config_path, r#"{"concurrency":0}"#).unwrap();
+        assert_eq!(yasweb_concurrency_limit(&app(&config_path)), None);
+    }
+
     #[tokio::test]
     async fn test_sequential_step_continues_on_error() {
         let policy = ExecutionPolicy {
