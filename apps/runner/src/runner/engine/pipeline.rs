@@ -85,7 +85,8 @@ async fn run_external_app_with_shared_limit(
                 counts.1 += 1;
                 if counts.0 == 0 {
                     let mut st = status.lock().await;
-                    st.waiting_for_app.insert(task_id.to_string(), app.id.clone());
+                    st.waiting_for_app
+                        .insert(task_id.to_string(), app.id.clone());
                     if st.running_task_ids.iter().any(|id| id == task_id) {
                         st.running_task_ids.retain(|id| id != task_id);
                         st.running_tasks_count = st.running_tasks_count.saturating_sub(1);
@@ -96,7 +97,11 @@ async fn run_external_app_with_shared_limit(
                     st.queued_tasks_count = st.queued_task_ids.len();
                 }
             }
-            logger.log(&format!("Waiting for Yasweb concurrency slot ({limit} max)...")).await;
+            logger
+                .log(&format!(
+                    "Waiting for Yasweb concurrency slot ({limit} max)..."
+                ))
+                .await;
 
             let permit = semaphore.acquire_owned().await.with_context(|| {
                 format!("Yasweb concurrency limiter for '{}' was closed", app.name)
@@ -138,7 +143,8 @@ async fn run_external_app_with_shared_limit(
         counts.0 = counts.0.saturating_sub(1);
         if counts.0 == 0 && counts.1 > 0 {
             let mut st = status.lock().await;
-            st.waiting_for_app.insert(task_id.to_string(), app.id.clone());
+            st.waiting_for_app
+                .insert(task_id.to_string(), app.id.clone());
             st.running_task_ids.retain(|id| id != task_id);
             st.running_tasks_count = st.running_tasks_count.saturating_sub(1);
             if !st.queued_task_ids.iter().any(|id| id == task_id) {
