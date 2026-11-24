@@ -811,12 +811,11 @@ mod tests {
     fn team_membership_falls_back_to_list_data_when_detail_is_missing() {
         let summary = json!({
             "userIds": ["user-a"],
-            "users": [{"id": "user-b"}]
+            "users": [{"id": "user-b"}, {"id": "user-a"}],
+            "members": ["user-c", "user-b"]
         });
         let ids = team_member_ids(None, &summary);
-        assert_eq!(ids.len(), 2);
-        assert!(ids.contains(&"user-a".to_string()));
-        assert!(ids.contains(&"user-b".to_string()));
+        assert_eq!(ids, vec!["user-a", "user-b", "user-c"]);
     }
 
     #[test]
