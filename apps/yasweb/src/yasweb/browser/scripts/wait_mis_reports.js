@@ -32,10 +32,10 @@
                 }));
                 return { frameUrl: location.href, documentReadyState: document.readyState, reportTypes,
                     searchVisible: isVisible(searchInput), visibleLoaders,
-                    reportUiReady: reportTypes.every(item => item.visible) && isVisible(searchInput) && visibleLoaders.length === 0 };
+                    reportUiReady: document.readyState === "complete" && reportTypes.every(item => item.visible) && isVisible(searchInput) && visibleLoaders.length === 0 };
             }
             logs.push("Waiting inside the report-frame execution context for visible report-type controls and Search...");
-            let lastState = "";
+            let lastState = "";\n            let consecutiveReadySamples = 0;\n            const requiredStableSamples = 2;
             while (Date.now() <= deadline) {
                 const state = inspect();
                 const serialized = JSON.stringify(state);
