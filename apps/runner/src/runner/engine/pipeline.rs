@@ -52,15 +52,43 @@ async fn run_external_app_with_shared_limit(
     period: Option<&crate::runner::config::ExecutionPeriod>,
     timeout_seconds: u64,
     app_lock_manager: &AppLockManager,
+    status: &Arc<Mutex<RunnerStatus>>,
+    task_id: &str,
 ) -> Result<()> {
     let _permit = if app.allow_concurrent_tasks {
         if let Some(limit) = yasweb_concurrency_limit(app, spec) {
             let semaphore = app_lock_manager
                 .get_semaphore_with_limit(&app.id, limit)
                 .await;
-            Some(semaphore.acquire_owned().await.with_context(|| {
+
+            {
+                let mut st = status.lock().await;
+                st.waiting_for_app.insert(task_id.to_string(), app.id.clone());
+                if st.running_task_ids.iter().any(|id| id == task_id) {
+                    st.running_task_ids.retain(|id| id != task_id);
+                    st.running_tasks_count = st.running_tasks_count.saturating_sub(1);
+                }
+                if !st.queued_task_ids.iter().any(|id| id == task_id) {
+                    st.queued_task_ids.push(task_id.to_string());
+                }
+                st.queued_tasks_count = st.queued_task_ids.len();
+            }
+            logger.log(&format!("Waiting for Yasweb concurrency slot ({limit} max)...")).await;
+
+            let permit = semaphore.acquire_owned().await.with_context(|| {
                 format!("Yasweb concurrency limiter for '{}' was closed", app.name)
-            })?)
+            });
+            {
+                let mut st = status.lock().await;
+                st.waiting_for_app.remove(task_id);
+                st.queued_task_ids.retain(|id| id != task_id);
+                st.queued_tasks_count = st.queued_task_ids.len();
+                if permit.is_ok() && !st.running_task_ids.iter().any(|id| id == task_id) {
+                    st.running_task_ids.push(task_id.to_string());
+                    st.running_tasks_count += 1;
+                }
+            }
+            Some(permit?)
         } else {
             None
         }
@@ -79,6 +107,8 @@ async fn execute_action(
     timeout_seconds: u64,
     execution_at: DateTime<Utc>,
     app_lock_manager: &AppLockManager,
+    status: &Arc<Mutex<RunnerStatus>>,
+    task_id: &str,
 ) -> Result<()> {
     match action {
         ActionSpec::ShellCommand(spec) => {
@@ -107,6 +137,8 @@ async fn execute_action(
                         None,
                         timeout_seconds,
                         app_lock_manager,
+                        status,
+                        task_id,
                     )
                     .await;
                 }
@@ -157,6 +189,8 @@ async fn execute_action(
                                 Some(&period),
                                 timeout_seconds,
                                 &app_lock_manager,
+                                &status,
+                                &task_id,
                             )
                             .await
                         }));
@@ -190,6 +224,8 @@ async fn execute_action(
                             Some(period),
                             timeout_seconds,
                             app_lock_manager,
+                            status,
+                            task_id,
                         )
                         .await?;
                     }
@@ -297,6 +333,8 @@ async fn execute_step(
                     timeout_seconds,
                     execution_at,
                     app_lock_manager,
+                    status,
+                    task_id,
                 )
                 .await
                 {
@@ -313,6 +351,8 @@ async fn execute_step(
                 let logger = logger.clone();
                 let policy = policy.clone();
                 let app_lock_manager = app_lock_manager.clone();
+                let status = status.clone();
+                let task_id = task_id.to_string();
 
                 tasks.spawn(async move {
                     let result = execute_action(
@@ -322,6 +362,8 @@ async fn execute_step(
                         timeout_seconds,
                         execution_at,
                         &app_lock_manager,
+                        &status,
+                        &task_id,
                     )
                     .await;
                     (action, result)
