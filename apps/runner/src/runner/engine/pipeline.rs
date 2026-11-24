@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::runner::config::{ActionSpec, ExecutionMode, RunnerTask, TaskStep};
+use crate::runner::config::{ActionSpec, ExecutionMode, RegisteredApp, RunnerTask, TaskStep};
 use crate::runner::engine::application::run_external_app;
 use crate::runner::engine::logging::TaskLogger;
 use crate::runner::engine::shell::run_shell_command;
@@ -11,12 +11,163 @@ use crate::runner::engine::state::{ExecutionPolicy, RunnerStatus};
 
 use crate::runner::engine::app_lock::AppLockManager;
 
+/// Read Yasweb's own configured concurrency and enforce it in Runner, where
+/// separate period processes share one limiter. A missing/legacy value keeps
+/// Yasweb's documented default of six; zero retains Yasweb's unlimited meaning.
+fn yasweb_concurrency_limit(
+    app: &RegisteredApp,
+    spec: &crate::runner::config::ExternalAppSpec,
+) -> Result<Option<usize>> {
+    let identity = format!("{} {} {}", app.id, app.name, app.executable_path).to_ascii_lowercase();
+    if !identity.contains("yasweb") {
+        return Ok(None);
+    }
+
+    let read_limit = |path: &str| -> usize {
+        std::fs::read_to_string(path)
+            .ok()
+            .and_then(|contents| serde_json::from_str::<serde_json::Value>(&contents).ok())
+            .and_then(|value| value.get("concurrency").and_then(serde_json::Value::as_u64))
+            .and_then(|value| usize::try_from(value).ok())
+            .unwrap_or(6)
+    };
+
+    // One registered Yasweb app must have one app-wide limit. Per-task --config
+    // overrides are allowed only when they preserve that same limit; otherwise
+    // whichever task starts first could silently determine the global cap.
+    let registered_limit = read_limit(&app.config_path);
+    let invocation_config = spec
+        .args
+        .get("--config")
+        .filter(|path| !path.trim().is_empty())
+        .unwrap_or(&app.config_path);
+    let invocation_limit = read_limit(invocation_config);
+    if invocation_limit != registered_limit {
+        anyhow::bail!(
+            "Yasweb concurrency mismatch for app '{}': registered config '{}' sets {}, but invocation config '{}' sets {}. All tasks for one registered Yasweb app must use the same concurrency limit.",
+            app.name,
+            app.config_path,
+            registered_limit,
+            invocation_config,
+            invocation_limit
+        );
+    }
+
+    if registered_limit == 0 {
+        Ok(None)
+    } else {
+        Ok(Some(registered_limit))
+    }
+}
+
+/// Acquire a Runner-owned permit for every Yasweb process, not once per CLI
+/// invocation. This makes the configured cap effective across tasks and
+/// concurrently scheduled date periods.
+#[allow(clippy::too_many_arguments)]
+async fn run_external_app_with_shared_limit(
+    logger: &TaskLogger,
+    app: &RegisteredApp,
+    spec: &crate::runner::config::ExternalAppSpec,
+    period: Option<&crate::runner::config::ExecutionPeriod>,
+    timeout_seconds: u64,
+    app_lock_manager: &AppLockManager,
+    status: &Arc<Mutex<RunnerStatus>>,
+    task_id: &str,
+    concurrency_state: &Arc<Mutex<(usize, usize)>>,
+) -> Result<()> {
+    let _permit = if app.allow_concurrent_tasks {
+        if let Some(limit) = yasweb_concurrency_limit(app, spec)? {
+            let semaphore = app_lock_manager
+                .get_semaphore_with_limit(&app.id, limit)
+                .await;
+
+            {
+                let mut counts = concurrency_state.lock().await;
+                counts.1 += 1;
+                if counts.0 == 0 {
+                    let mut st = status.lock().await;
+                    st.waiting_for_app
+                        .insert(task_id.to_string(), app.id.clone());
+                    if st.running_task_ids.iter().any(|id| id == task_id) {
+                        st.running_task_ids.retain(|id| id != task_id);
+                        st.running_tasks_count = st.running_tasks_count.saturating_sub(1);
+                    }
+                    if !st.queued_task_ids.iter().any(|id| id == task_id) {
+                        st.queued_task_ids.push(task_id.to_string());
+                    }
+                    st.queued_tasks_count = st.queued_task_ids.len();
+                }
+            }
+            logger
+                .log(&format!(
+                    "Waiting for Yasweb concurrency slot ({limit} max)..."
+                ))
+                .await;
+
+            let permit = semaphore.acquire_owned().await.with_context(|| {
+                format!("Yasweb concurrency limiter for '{}' was closed", app.name)
+            });
+            {
+                let mut counts = concurrency_state.lock().await;
+                counts.1 = counts.1.saturating_sub(1);
+                if permit.is_ok() {
+                    counts.0 += 1;
+                    if counts.0 == 1 {
+                        let mut st = status.lock().await;
+                        st.waiting_for_app.remove(task_id);
+                        st.queued_task_ids.retain(|id| id != task_id);
+                        st.queued_tasks_count = st.queued_task_ids.len();
+                        if !st.running_task_ids.iter().any(|id| id == task_id) {
+                            st.running_task_ids.push(task_id.to_string());
+                            st.running_tasks_count += 1;
+                        }
+                    }
+                } else if counts.0 == 0 && counts.1 == 0 {
+                    let mut st = status.lock().await;
+                    st.waiting_for_app.remove(task_id);
+                    st.queued_task_ids.retain(|id| id != task_id);
+                    st.queued_tasks_count = st.queued_task_ids.len();
+                }
+            }
+            Some(permit?)
+        } else {
+            None
+        }
+    } else {
+        // Non-concurrent apps are already protected by execute_step's exclusive lock.
+        None
+    };
+
+    let result = run_external_app(logger, app, spec, period, timeout_seconds).await;
+    if _permit.is_some() {
+        let mut counts = concurrency_state.lock().await;
+        counts.0 = counts.0.saturating_sub(1);
+        if counts.0 == 0 && counts.1 > 0 {
+            let mut st = status.lock().await;
+            st.waiting_for_app
+                .insert(task_id.to_string(), app.id.clone());
+            st.running_task_ids.retain(|id| id != task_id);
+            st.running_tasks_count = st.running_tasks_count.saturating_sub(1);
+            if !st.queued_task_ids.iter().any(|id| id == task_id) {
+                st.queued_task_ids.push(task_id.to_string());
+            }
+            st.queued_tasks_count = st.queued_task_ids.len();
+        }
+    }
+    result
+}
+
+#[allow(clippy::too_many_arguments)]
 async fn execute_action(
     action: &ActionSpec,
     logger: &TaskLogger,
     policy: &ExecutionPolicy,
     timeout_seconds: u64,
     execution_at: DateTime<Utc>,
+    app_lock_manager: &AppLockManager,
+    status: &Arc<Mutex<RunnerStatus>>,
+    task_id: &str,
+    concurrency_state: &Arc<Mutex<(usize, usize)>>,
 ) -> Result<()> {
     match action {
         ActionSpec::ShellCommand(spec) => {
@@ -38,7 +189,18 @@ async fn execute_action(
                 if !crate::runner::engine::application::supports_periodization(logger, app, spec)
                     .await
                 {
-                    return run_external_app(logger, app, spec, None, timeout_seconds).await;
+                    return run_external_app_with_shared_limit(
+                        logger,
+                        app,
+                        spec,
+                        None,
+                        timeout_seconds,
+                        app_lock_manager,
+                        status,
+                        task_id,
+                        concurrency_state,
+                    )
+                    .await;
                 }
 
                 let periods = crate::runner::config::resolve_app_periods_at(spec, execution_at)?;
@@ -65,6 +227,10 @@ async fn execute_action(
                         let logger = logger.clone();
                         let app = app.clone();
                         let spec_owned = spec.clone();
+                        let app_lock_manager = app_lock_manager.clone();
+                        let status = status.clone();
+                        let task_id = task_id.to_string();
+                        let concurrency_state = concurrency_state.clone();
 
                         handles.push(tokio::spawn(async move {
                             if total_periods > 1 {
@@ -79,12 +245,16 @@ async fn execute_action(
                                     ))
                                     .await;
                             }
-                            run_external_app(
+                            run_external_app_with_shared_limit(
                                 &logger,
                                 &app,
                                 &spec_owned,
                                 Some(&period),
                                 timeout_seconds,
+                                &app_lock_manager,
+                                &status,
+                                &task_id,
+                                &concurrency_state,
                             )
                             .await
                         }));
@@ -111,7 +281,18 @@ async fn execute_action(
                                 ))
                                 .await;
                         }
-                        run_external_app(logger, app, spec, Some(period), timeout_seconds).await?;
+                        run_external_app_with_shared_limit(
+                            logger,
+                            app,
+                            spec,
+                            Some(period),
+                            timeout_seconds,
+                            app_lock_manager,
+                            status,
+                            task_id,
+                            concurrency_state,
+                        )
+                        .await?;
                     }
                     Ok(())
                 }
@@ -206,12 +387,23 @@ async fn execute_step(
         acquired_permits.push(permit);
     }
 
+    let concurrency_state = Arc::new(Mutex::new((0usize, 0usize)));
     let result = match step.mode {
         ExecutionMode::Sequential => {
             let mut step_result = Ok(());
             for action in &step.actions {
-                if let Err(e) =
-                    execute_action(action, logger, policy, timeout_seconds, execution_at).await
+                if let Err(e) = execute_action(
+                    action,
+                    logger,
+                    policy,
+                    timeout_seconds,
+                    execution_at,
+                    app_lock_manager,
+                    status,
+                    task_id,
+                    &concurrency_state,
+                )
+                .await
                 {
                     step_result = Err(e);
                     break;
@@ -225,11 +417,24 @@ async fn execute_step(
                 let action = action.clone();
                 let logger = logger.clone();
                 let policy = policy.clone();
+                let app_lock_manager = app_lock_manager.clone();
+                let status = status.clone();
+                let task_id = task_id.to_string();
+                let concurrency_state = concurrency_state.clone();
 
                 tasks.spawn(async move {
-                    let result =
-                        execute_action(&action, &logger, &policy, timeout_seconds, execution_at)
-                            .await;
+                    let result = execute_action(
+                        &action,
+                        &logger,
+                        &policy,
+                        timeout_seconds,
+                        execution_at,
+                        &app_lock_manager,
+                        &status,
+                        &task_id,
+                        &concurrency_state,
+                    )
+                    .await;
                     (action, result)
                 });
             }
@@ -423,6 +628,42 @@ mod tests {
     use crate::runner::config::ShellCommandSpec;
     use std::sync::atomic::{AtomicU32, Ordering};
     use tokio::sync::Barrier;
+
+    #[test]
+    fn yasweb_concurrency_uses_registered_config_and_preserves_zero_as_unlimited() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_path = dir.path().join("yasweb_config.json");
+        let app = |config_path: &std::path::Path| RegisteredApp {
+            id: "yasweb".to_string(),
+            name: "Yasweb Automation Engine".to_string(),
+            executable_path: "yasweb.exe".to_string(),
+            config_path: config_path.to_string_lossy().into_owned(),
+            plugin_api_version: Some(1),
+            allow_concurrent_tasks: true,
+        };
+
+        let spec = crate::runner::config::ExternalAppSpec {
+            app_id: "yasweb".to_string(),
+            args: std::collections::HashMap::new(),
+            period_mode: crate::runner::config::PeriodMode::Custom,
+            start_date: None,
+            end_date: None,
+            start_date_arg: None,
+            end_date_arg: None,
+        };
+
+        std::fs::write(&config_path, r#"{"concurrency":3}"#).unwrap();
+        assert_eq!(
+            yasweb_concurrency_limit(&app(&config_path), &spec).unwrap(),
+            Some(3)
+        );
+
+        std::fs::write(&config_path, r#"{"concurrency":0}"#).unwrap();
+        assert_eq!(
+            yasweb_concurrency_limit(&app(&config_path), &spec).unwrap(),
+            None
+        );
+    }
 
     #[tokio::test]
     async fn test_sequential_step_continues_on_error() {

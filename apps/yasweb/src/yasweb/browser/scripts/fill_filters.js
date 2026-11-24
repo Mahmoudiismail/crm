@@ -143,14 +143,9 @@
                                                                     logs.push((filterFilled ? "Cleared text input for " : "Failed to clear text input for ") + key);
                                                                     break;
                                                                 }
-                                                                let v = value;
-                                                                if (key.toLowerCase().includes('date') && v.includes('-')) {
-                                                                    const parts = v.split(' ')[0].split('-');
-                                                                    if (parts.length === 3) {
-                                                                        v = parts[0].padStart(2, '0') + "-" + parts[1].padStart(2, '0') + "-" + parts[2] + (v.includes(' ') ? ' ' + v.split(' ').slice(1).join(' ') : '');
-                                                                    }
-                                                                }
-                                                                await simulateTyping(input, v);
+                                                                // Rust chrono already formatted this date using the report's configured format.
+                                                                // Preserve it for the page's date-time control to parse and validate.
+                                                                await simulateTyping(input, String(value));
                                                                 logs.push("Typed into INPUT for " + key);
                                                                 filterFilled = true;
                                                                 break;
@@ -203,6 +198,35 @@
                                             }
                                             const fieldsAfterFill = traceEnabled ? visibleFieldSnapshot() : [];
                                             if (traceEnabled) logs.push("Visible fields after Fill Filters: " + JSON.stringify(fieldsAfterFill));
+
+                                            // Do not continue to Search while any visible mandatory control
+                                            // remains empty or is rejected by the page's Angular/date-time validator.
+                                            const invalidRequiredFields = Array.from(doc.querySelectorAll(
+                                                'input[required], input[aria-required="true"], textarea[required], textarea[aria-required="true"], select[required], select[aria-required="true"]'
+                                            )).filter(control => control.getClientRects().length > 0 && (
+                                                control.getAttribute('aria-invalid') === 'true' ||
+                                                String(control.value ?? '').trim() === ''
+                                            )).map(control => {
+                                                const field = control.closest('mat-form-field');
+                                                const label = field?.querySelector('mat-label');
+                                                return (label?.innerText || label?.textContent || control.getAttribute('placeholder') || control.name || control.id || 'Unnamed mandatory field').trim();
+                                            });
+                                            if (invalidRequiredFields.length > 0) {
+                                                const uniqueInvalidFields = [...new Set(invalidRequiredFields)];
+                                                logs.push("Mandatory fields are empty or invalid: " + uniqueInvalidFields.join(", "));
+                                                return JSON.stringify({
+                                                    status: "ERROR",
+                                                    msg: "Mandatory fields are empty or invalid: " + uniqueInvalidFields.join(", "),
+                                                    failed_filters: failedFilters,
+                                                    invalid_required_fields: uniqueInvalidFields,
+                                                    discovered_filters: discoveredFilters,
+                                                    discovered_filter_options: discoveredFilterOptions,
+                                                    visible_fields_before: fieldsBeforeFill,
+                                                    visible_fields_after: fieldsAfterFill,
+                                                    logs
+                                                });
+                                            }
+
                                             if (failedFilters.length > 0) {
                                                 return JSON.stringify({ status: "ERROR", msg: "One or more requested filters could not be applied: " + failedFilters.join(", "), failed_filters: failedFilters, discovered_filters: discoveredFilters, discovered_filter_options: discoveredFilterOptions, visible_fields_before: fieldsBeforeFill, visible_fields_after: fieldsAfterFill, logs });
                                             }

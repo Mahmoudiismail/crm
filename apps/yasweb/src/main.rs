@@ -40,6 +40,43 @@ pub struct YaswebCliOptions {
     manifest: bool,
 }
 
+fn validate_report_date_range(
+    report_name: &str,
+    report_conf: Option<&ReportConfig>,
+    start_date: Option<&str>,
+    end_date: Option<&str>,
+) -> Result<()> {
+    let Some(report_conf) = report_conf else {
+        return Ok(());
+    };
+    if report_conf.start_date_key.is_none() && report_conf.end_date_key.is_none() {
+        return Ok(());
+    }
+    if report_conf.start_date_key.is_some() {
+        let value = start_date.map(str::trim).filter(|value| !value.is_empty())
+            .ok_or_else(|| anyhow::anyhow!("Report '{}' requires --start-date because its configured From Date field is mandatory.", report_name))?;
+        if crm_tool::utils::parse_flexible_date(value).is_none() {
+            anyhow::bail!(
+                "Invalid --start-date '{}' for report '{}'. Provide a valid date.",
+                value,
+                report_name
+            );
+        }
+    }
+    if report_conf.end_date_key.is_some() {
+        let value = end_date.map(str::trim).filter(|value| !value.is_empty())
+            .ok_or_else(|| anyhow::anyhow!("Report '{}' requires --end-date because its configured To Date field is mandatory.", report_name))?;
+        if crm_tool::utils::parse_flexible_date(value).is_none() {
+            anyhow::bail!(
+                "Invalid --end-date '{}' for report '{}'. Provide a valid date.",
+                value,
+                report_name
+            );
+        }
+    }
+    Ok(())
+}
+
 fn get_manifest(config_path: Option<PathBuf>) -> AppManifest {
     let mut report_names = Vec::new();
     let mut filter_dependencies: std::collections::HashMap<String, Vec<String>> =
@@ -829,6 +866,12 @@ async fn main() -> Result<()> {
 
                     let mut run_filters = active_filters.clone();
                     let report_conf_opt = config.reports.get(&active_report_name);
+                    validate_report_date_range(
+                        &active_report_name,
+                        report_conf_opt,
+                        start_date_str.as_deref(),
+                        end_date_str.as_deref(),
+                    )?;
 
                     // Map the global --start-date and --end-date values into the respective internal report filters
                     // Map the requested dates into the report's configured filter formats.
@@ -1402,6 +1445,64 @@ mod tests_yasweb_finalization {
         assert_eq!(std::fs::read_to_string(&config_path).unwrap(), invalid);
     }
     use std::io::Write;
+
+    #[test]
+    fn reports_with_date_keys_require_both_configured_dates() {
+        let report = ReportConfig {
+            report_type: "Report Manager".to_string(),
+            filters: HashMap::new(),
+            filter_options: HashMap::new(),
+            start_date_key: Some(yasweb_app::yasweb::config::DateKeyConfig {
+                key: "From Date".to_string(),
+                format: "%d-%b-%Y".to_string(),
+            }),
+            end_date_key: Some(yasweb_app::yasweb::config::DateKeyConfig {
+                key: "To Date".to_string(),
+                format: "%d-%b-%Y".to_string(),
+            }),
+            download_path: None,
+        };
+        assert!(validate_report_date_range("Appointments", Some(&report), None, None).is_err());
+        assert!(validate_report_date_range(
+            "Appointments",
+            Some(&report),
+            Some("2026-11-01"),
+            None
+        )
+        .is_err());
+        assert!(validate_report_date_range(
+            "Appointments",
+            Some(&report),
+            Some("2026-11-01"),
+            Some("2026-11-30")
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn reports_with_date_keys_reject_unparseable_dates() {
+        let report = ReportConfig {
+            report_type: "Report Manager".to_string(),
+            filters: HashMap::new(),
+            filter_options: HashMap::new(),
+            start_date_key: Some(yasweb_app::yasweb::config::DateKeyConfig {
+                key: "From Date".to_string(),
+                format: "%d-%b-%Y".to_string(),
+            }),
+            end_date_key: Some(yasweb_app::yasweb::config::DateKeyConfig {
+                key: "To Date".to_string(),
+                format: "%d-%b-%Y".to_string(),
+            }),
+            download_path: None,
+        };
+        assert!(validate_report_date_range(
+            "Appointments",
+            Some(&report),
+            Some("not-a-date"),
+            Some("2026-11-30")
+        )
+        .is_err());
+    }
 
     #[test]
     fn finalize_download_keeps_sanitized_filename_inside_output_directory() {
