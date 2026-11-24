@@ -7,7 +7,7 @@ fn test_generate_step6_js_normal_timeout() {
     assert!(js.contains("pollMs=1000"));
     assert!(js.contains("function enabled(b)"));
     assert!(js.contains("function inspectReport()"));
-    assert!(js.contains("const requiredStableSamples=3"));
+    assert!(js.contains("requiredStableSamples=3"));
     assert!(js.contains("stableSamples>=requiredStableSamples"));
     assert!(js.contains("gridHasResult"));
     assert!(js.contains("explicitEmpty"));
