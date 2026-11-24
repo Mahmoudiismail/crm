@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use headless_chrome::protocol::cdp::Page;
+use headless_chrome::protocol::cdp::{types::Event, Page};
 use headless_chrome::Tab;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -431,59 +431,73 @@ fn is_mis_reports_route(url: &str) -> bool {
     url.contains("/home/mis-report/module/")
 }
 
-/// Waits until the embedded report iframe is non-blank and exposes the controls
-/// required to start report selection. A failed readiness check triggers a full
-/// tab refresh every 10 seconds; after refresh, the MIS route is restored before
-/// the next readiness check. The overall wait is bounded by Yasweb's configured timeout.
+/// Waits for the embedded report UI before attempting recovery.
+///
+/// The first readiness window is deliberately allowed to complete without refreshing:
+/// Yasweb can render the parent page before its Angular iframe has finished loading.
+/// Only after that grace period expires do we refresh once. A beforeunload dialog raised
+/// by that refresh is accepted through Chrome DevTools Protocol, without accepting
+/// unrelated alert/confirm/prompt dialogs.
 fn wait_for_report_iframe_ready(tab: &Arc<Tab>, timeout_minutes: u64) -> Result<()> {
-    const REFRESH_INTERVAL: Duration = Duration::from_secs(10);
     let timeout = Duration::from_secs(timeout_minutes.saturating_mul(60));
-    let deadline = Instant::now() + timeout;
-    let readiness_js = generate_mis_reports_wait_js(1)?;
-    let mut attempt = 0_u64;
+    if timeout.is_zero() {
+        anyhow::bail!("Yasweb iframe readiness timeout_minutes must be greater than zero");
+    }
+    let deadline = Instant::now()
+        .checked_add(timeout)
+        .ok_or_else(|| anyhow::anyhow!("Yasweb iframe readiness timeout is too large"))?;
+    let first_wait = (timeout / 2).min(Duration::from_secs(30)).max(Duration::from_secs(1));
+    let initial_js = generate_mis_reports_wait_js(first_wait.as_secs())?;
 
-    loop {
-        let now = Instant::now();
-        if now >= deadline {
-            anyhow::bail!(
-                "Yasweb report iframe did not become ready within {} minute(s); iframe remained blank or required report inputs were missing",
-                timeout_minutes
-            );
+    info!(
+        "Waiting up to {} seconds for the initial Yasweb iframe load before considering a refresh",
+        first_wait.as_secs()
+    );
+    match evaluate_report_frame_step(tab, &initial_js, "Initial iframe readiness check") {
+        Ok(_) => {
+            info!("YASWEB iframe became ready without refreshing the page.");
+            return Ok(());
         }
+        Err(error) => warn!(
+            "YASWEB iframe did not become ready during the initial grace period; a single recovery refresh will be attempted: {:#}",
+            error
+        ),
+    }
 
-        attempt += 1;
-        let attempt_started = Instant::now();
-        match evaluate_report_frame_step(tab, &readiness_js, "Iframe readiness check") {
-            Ok(_) => {
-                info!(
-                    "YASWEB iframe readiness confirmed: attempt={} elapsed_ms={}",
-                    attempt,
-                    attempt_started.elapsed().as_millis()
-                );
-                return Ok(());
+    let remaining = deadline.saturating_duration_since(Instant::now());
+    if remaining.is_zero() {
+        anyhow::bail!(
+            "Yasweb report iframe did not become ready within {} minute(s); no time remained for recovery",
+            timeout_minutes
+        );
+    }
+
+    // Enable Page events before navigation so Chrome's beforeunload dialog is
+    // handled as soon as it opens. Accept only beforeunload; leave other dialogs
+    // untouched so application alerts are not silently swallowed.
+    tab.call_method(Page::Enable {})
+        .context("Failed to enable Chrome Page events for Yasweb refresh recovery")?;
+    let dialog_tab = Arc::clone(tab);
+    let dialog_listener = Arc::new(move |event: &Event| {
+        if let Event::PageJavascriptDialogOpening(opening) = event {
+            if opening.params.Type == Page::DialogType::Beforeunload {
+                match dialog_tab.get_dialog().accept(None) {
+                    Ok(()) => info!(
+                        "Automatically accepted Yasweb beforeunload dialog before refreshing the report page."
+                    ),
+                    Err(error) => warn!(
+                        "Failed to accept Yasweb beforeunload dialog automatically: {:#}",
+                        error
+                    ),
+                }
             }
-            Err(error) => {
-                warn!(
-                    "YASWEB iframe is not ready: attempt={} elapsed_ms={} error={:#}",
-                    attempt,
-                    attempt_started.elapsed().as_millis(),
-                    error
-                );
-            }
         }
+    });
+    let listener_handle = tab
+        .add_event_listener(dialog_listener)
+        .context("Failed to register Yasweb beforeunload dialog handler")?;
 
-        // Keep retries on a predictable 10-second cadence, including when a
-        // blank frame is detected quickly rather than consuming the full check window.
-        let elapsed = attempt_started.elapsed();
-        let until_refresh = REFRESH_INTERVAL.saturating_sub(elapsed);
-        let remaining = deadline.saturating_duration_since(Instant::now());
-        if !until_refresh.is_zero() && !remaining.is_zero() {
-            std::thread::sleep(until_refresh.min(remaining));
-        }
-        if Instant::now() >= deadline {
-            continue;
-        }
-
+    let recovery_result = (|| -> Result<()> {
         let current_url = tab.get_url();
         if current_url.is_empty() || current_url == "about:blank" {
             anyhow::bail!(
@@ -492,32 +506,42 @@ fn wait_for_report_iframe_ready(tab: &Arc<Tab>, timeout_minutes: u64) -> Result<
             );
         }
 
-        warn!(
-            "YASWEB iframe readiness retry: refreshing browser tab after {} seconds (attempt={})",
-            REFRESH_INTERVAL.as_secs(),
-            attempt
-        );
+        warn!("YASWEB iframe is still not ready after the initial wait; refreshing the tab once.");
         tab.navigate_to(&current_url)
             .context("Failed to refresh Yasweb browser tab while waiting for report iframe")?;
-        let _ = tab.wait_until_navigated();
+        tab.wait_until_navigated()
+            .context("Yasweb browser tab did not finish navigation after refresh")?;
 
         let remaining = deadline.saturating_duration_since(Instant::now());
         if remaining.is_zero() {
-            continue;
+            anyhow::bail!("Yasweb readiness timeout expired while refreshing the report page");
         }
-        let route_wait = remaining.min(Duration::from_secs(30));
-        if wait_for_mis_reports_route(tab, route_wait).is_err() {
-            warn!("MIS route was not restored by browser refresh; retrying MIS navigation.");
+        if wait_for_mis_reports_route(tab, remaining.min(Duration::from_secs(30))).is_err() {
+            warn!("MIS SPA route was not restored by browser refresh; retrying MIS navigation.");
             retry_mis_navigation(tab)
                 .context("Failed to restore MIS navigation after browser refresh")?;
             let remaining = deadline.saturating_duration_since(Instant::now());
             if remaining.is_zero() {
-                continue;
+                anyhow::bail!("Yasweb readiness timeout expired while restoring the MIS route");
             }
             wait_for_mis_reports_route(tab, remaining.min(Duration::from_secs(30)))
                 .context("MIS route did not return after browser refresh and navigation retry")?;
         }
+
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            anyhow::bail!("Yasweb readiness timeout expired before the post-refresh iframe check");
+        }
+        let readiness_js = generate_mis_reports_wait_js(remaining.as_secs().max(1))?;
+        evaluate_report_frame_step(tab, &readiness_js, "Post-refresh iframe readiness check")
+            .context("Yasweb report iframe remained unavailable after the recovery refresh")?;
+        Ok(())
+    })();
+
+    if let Err(error) = tab.remove_event_listener(&listener_handle) {
+        warn!("Failed to remove temporary Yasweb beforeunload dialog handler: {:#}", error);
     }
+    recovery_result
 }
 
 /// Runs a report automation step in the embedded report frame's own CDP execution context.
