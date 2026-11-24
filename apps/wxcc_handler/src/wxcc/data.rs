@@ -65,7 +65,7 @@ impl ApiClient {
         ))
     }
 
-    async fn get(&self, path: &str) -> Result<Value> {
+    async fn get_optional(&self, path: &str) -> Result<Option<Value>> {
         let response = self
             .client
             .get(self.endpoint(path)?)
@@ -73,14 +73,24 @@ impl ApiClient {
             .header(reqwest::header::ACCEPT, "application/json")
             .send()
             .await
-            .with_context(|| format!("Request failed for Webex API resource {path}"))?
+            .with_context(|| format!("Request failed for Webex API resource {path}"))?;
+        if response.status().as_u16() == 404 {
+            return Ok(None);
+        }
+        let response = response
             .error_for_status()
             .with_context(|| format!("Webex API rejected request for {path}"))?;
         let value: Value = response
             .json()
             .await
             .with_context(|| format!("Webex API returned invalid JSON for {path}"))?;
-        Ok(response_resource(value))
+        Ok(Some(response_resource(value)))
+    }
+
+    async fn get(&self, path: &str) -> Result<Value> {
+        self.get_optional(path)
+            .await?
+            .with_context(|| format!("Webex API resource {path} was not found (HTTP 404)"))
     }
 
     async fn list(&self, path: &str) -> Result<Vec<Value>> {
@@ -275,6 +285,14 @@ fn skill_set(value: &Value) -> String {
         }
     }
     entries.join("; ")
+}
+
+fn team_member_ids(detail: Option<&Value>, summary: &Value) -> Vec<String> {
+    let mut ids = detail
+        .map(|value| ids_from(value, &["userIds", "users", "members"]))
+        .unwrap_or_default();
+    ids.extend(ids_from(summary, &["userIds", "users", "members"]));
+    ids
 }
 
 fn queue_team_ids(queue: &Value) -> Vec<String> {
@@ -601,11 +619,15 @@ pub async fn collect_to_csv(
             continue;
         }
         let detail = api
-            .get(&format!("v2/team/{}", urlencoding::encode(&id)))
+            .get_optional(&format!("v2/team/{}", urlencoding::encode(&id)))
             .await
-            .with_context(|| format!("Failed to retrieve complete details for team {id}"))?;
-        let mut ids = ids_from(&detail, &["userIds", "users", "members"]);
-        ids.extend(ids_from(team, &["userIds", "users", "members"]));
+            .with_context(|| format!("Failed to retrieve team details for {id}"))?;
+        if detail.is_none() {
+            tracing::warn!(
+                "Team {id} returned HTTP 404 for its detail endpoint; using membership data from the Team list response"
+            );
+        }
+        let ids = team_member_ids(detail.as_ref(), team);
         let mapped = ids
             .into_iter()
             .map(|member_id| {
@@ -769,6 +791,28 @@ mod tests {
         );
         assert_eq!(response_resource(json!({"data":{"id":"1"}}))["id"], "1");
         assert!(response_items(json!({"error":"bad"})).is_none());
+    }
+
+    #[test]
+    fn team_membership_falls_back_to_list_data_when_detail_is_missing() {
+        let summary = json!({
+            "userIds": ["user-a"],
+            "users": [{"id": "user-b"}]
+        });
+        let ids = team_member_ids(None, &summary);
+        assert_eq!(ids.len(), 2);
+        assert!(ids.contains(&"user-a".to_string()));
+        assert!(ids.contains(&"user-b".to_string()));
+    }
+
+    #[test]
+    fn team_membership_merges_detail_and_list_data_without_losing_members() {
+        let detail = json!({"userIds": ["user-a", "user-b"]});
+        let summary = json!({"userIds": ["user-b", "user-c"]});
+        let mut ids = team_member_ids(Some(&detail), &summary);
+        ids.sort();
+        ids.dedup();
+        assert_eq!(ids, vec!["user-a", "user-b", "user-c"]);
     }
 
     #[test]
