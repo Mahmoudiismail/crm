@@ -143,14 +143,9 @@
                                                                     logs.push((filterFilled ? "Cleared text input for " : "Failed to clear text input for ") + key);
                                                                     break;
                                                                 }
-                                                                let v = value;
-                                                                if (key.toLowerCase().includes('date') && v.includes('-')) {
-                                                                    const parts = v.split(' ')[0].split('-');
-                                                                    if (parts.length === 3) {
-                                                                        v = parts[0].padStart(2, '0') + "-" + parts[1].padStart(2, '0') + "-" + parts[2] + (v.includes(' ') ? ' ' + v.split(' ').slice(1).join(' ') : '');
-                                                                    }
-                                                                }
-                                                                await simulateTyping(input, v);
+                                                                // Rust chrono already formatted this date using the report's configured format.
+                                                                // Preserve it for the page's date-time control to parse and validate.
+                                                                await simulateTyping(input, String(value));
                                                                 logs.push("Typed into INPUT for " + key);
                                                                 filterFilled = true;
                                                                 break;
