@@ -433,11 +433,7 @@ fn is_mis_reports_route(url: &str) -> bool {
 
 /// Polls the report iframe until it becomes ready or the supplied deadline expires.
 /// Short individual checks allow a late iframe attachment to be detected without refreshing.
-fn wait_for_report_iframe_until(
-    tab: &Arc<Tab>,
-    deadline: Instant,
-    stage: &str,
-) -> Result<()> {
+fn wait_for_report_iframe_until(tab: &Arc<Tab>, deadline: Instant, stage: &str) -> Result<()> {
     let readiness_js = generate_mis_reports_wait_js(1)?;
     let mut attempt = 0_u64;
     while Instant::now() < deadline {
@@ -462,7 +458,10 @@ fn wait_for_report_iframe_until(
             std::thread::sleep(Duration::from_millis(500).min(remaining));
         }
     }
-    anyhow::bail!("Yasweb report iframe did not become ready during '{}'", stage)
+    anyhow::bail!(
+        "Yasweb report iframe did not become ready during '{}'",
+        stage
+    )
 }
 
 /// Waits for the embedded report UI before attempting recovery.
@@ -480,7 +479,9 @@ fn wait_for_report_iframe_ready(tab: &Arc<Tab>, timeout_minutes: u64) -> Result<
     let deadline = Instant::now()
         .checked_add(timeout)
         .ok_or_else(|| anyhow::anyhow!("Yasweb iframe readiness timeout is too large"))?;
-    let first_wait = (timeout / 2).min(Duration::from_secs(30)).max(Duration::from_secs(1));
+    let first_wait = (timeout / 2)
+        .min(Duration::from_secs(30))
+        .max(Duration::from_secs(1));
     let initial_deadline = Instant::now()
         .checked_add(first_wait)
         .unwrap_or(deadline)
@@ -565,7 +566,10 @@ fn wait_for_report_iframe_ready(tab: &Arc<Tab>, timeout_minutes: u64) -> Result<
     })();
 
     if let Err(error) = tab.remove_event_listener(&listener_handle) {
-        warn!("Failed to remove temporary Yasweb beforeunload dialog handler: {:#}", error);
+        warn!(
+            "Failed to remove temporary Yasweb beforeunload dialog handler: {:#}",
+            error
+        );
     }
     recovery_result
 }
@@ -583,7 +587,11 @@ fn evaluate_report_frame_step(
     }
 
     let started = Instant::now();
-    let context_wait = if step_name.to_lowercase().contains("readiness") { Duration::from_secs(2) } else { Duration::from_secs(10) };
+    let context_wait = if step_name.to_lowercase().contains("readiness") {
+        Duration::from_secs(2)
+    } else {
+        Duration::from_secs(10)
+    };
     let deadline = Instant::now() + context_wait;
     let mut last_frame_url = String::new();
     let mut last_iframe_sources: Vec<String>;
