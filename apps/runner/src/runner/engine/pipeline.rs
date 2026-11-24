@@ -18,7 +18,7 @@ fn yasweb_concurrency_limit(
     app: &RegisteredApp,
     spec: &crate::runner::config::ExternalAppSpec,
 ) -> Option<usize> {
-    let identity = format!("{} {}", app.id, app.name).to_ascii_lowercase();
+    let identity = format!("{} {} {}", app.id, app.name, app.executable_path).to_ascii_lowercase();
     if !identity.contains("yasweb") {
         return None;
     }
