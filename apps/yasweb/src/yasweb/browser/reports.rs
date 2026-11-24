@@ -431,9 +431,43 @@ fn is_mis_reports_route(url: &str) -> bool {
     url.contains("/home/mis-report/module/")
 }
 
+/// Polls the report iframe until it becomes ready or the supplied deadline expires.
+/// Short individual checks allow a late iframe attachment to be detected without refreshing.
+fn wait_for_report_iframe_until(
+    tab: &Arc<Tab>,
+    deadline: Instant,
+    stage: &str,
+) -> Result<()> {
+    let readiness_js = generate_mis_reports_wait_js(1)?;
+    let mut attempt = 0_u64;
+    while Instant::now() < deadline {
+        attempt += 1;
+        match evaluate_report_frame_step(tab, &readiness_js, stage) {
+            Ok(_) => {
+                info!(
+                    "YASWEB iframe readiness confirmed: stage='{}' attempt={}",
+                    stage, attempt
+                );
+                return Ok(());
+            }
+            Err(error) => {
+                warn!(
+                    "YASWEB iframe is not ready yet: stage='{}' attempt={} error={:#}",
+                    stage, attempt, error
+                );
+            }
+        }
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if !remaining.is_zero() {
+            std::thread::sleep(Duration::from_millis(500).min(remaining));
+        }
+    }
+    anyhow::bail!("Yasweb report iframe did not become ready during '{}'", stage)
+}
+
 /// Waits for the embedded report UI before attempting recovery.
 ///
-/// The first readiness window is deliberately allowed to complete without refreshing:
+/// The initial readiness window is allowed to complete without refreshing:
 /// Yasweb can render the parent page before its Angular iframe has finished loading.
 /// Only after that grace period expires do we refresh once. A beforeunload dialog raised
 /// by that refresh is accepted through Chrome DevTools Protocol, without accepting
@@ -447,21 +481,18 @@ fn wait_for_report_iframe_ready(tab: &Arc<Tab>, timeout_minutes: u64) -> Result<
         .checked_add(timeout)
         .ok_or_else(|| anyhow::anyhow!("Yasweb iframe readiness timeout is too large"))?;
     let first_wait = (timeout / 2).min(Duration::from_secs(30)).max(Duration::from_secs(1));
-    let initial_js = generate_mis_reports_wait_js(first_wait.as_secs())?;
+    let initial_deadline = Instant::now()
+        .checked_add(first_wait)
+        .unwrap_or(deadline)
+        .min(deadline);
 
     info!(
         "Waiting up to {} seconds for the initial Yasweb iframe load before considering a refresh",
         first_wait.as_secs()
     );
-    match evaluate_report_frame_step(tab, &initial_js, "Initial iframe readiness check") {
-        Ok(_) => {
-            info!("YASWEB iframe became ready without refreshing the page.");
-            return Ok(());
-        }
-        Err(error) => warn!(
-            "YASWEB iframe did not become ready during the initial grace period; a single recovery refresh will be attempted: {:#}",
-            error
-        ),
+    if wait_for_report_iframe_until(tab, initial_deadline, "Initial iframe readiness").is_ok() {
+        info!("YASWEB iframe became ready without refreshing the page.");
+        return Ok(());
     }
 
     let remaining = deadline.saturating_duration_since(Instant::now());
@@ -528,12 +559,7 @@ fn wait_for_report_iframe_ready(tab: &Arc<Tab>, timeout_minutes: u64) -> Result<
                 .context("MIS route did not return after browser refresh and navigation retry")?;
         }
 
-        let remaining = deadline.saturating_duration_since(Instant::now());
-        if remaining.is_zero() {
-            anyhow::bail!("Yasweb readiness timeout expired before the post-refresh iframe check");
-        }
-        let readiness_js = generate_mis_reports_wait_js(remaining.as_secs().max(1))?;
-        evaluate_report_frame_step(tab, &readiness_js, "Post-refresh iframe readiness check")
+        wait_for_report_iframe_until(tab, deadline, "Post-refresh iframe readiness")
             .context("Yasweb report iframe remained unavailable after the recovery refresh")?;
         Ok(())
     })();
@@ -557,7 +583,8 @@ fn evaluate_report_frame_step(
     }
 
     let started = Instant::now();
-    let deadline = Instant::now() + Duration::from_secs(10);
+    let context_wait = if step_name.to_lowercase().contains("readiness") { Duration::from_secs(2) } else { Duration::from_secs(10) };
+    let deadline = Instant::now() + context_wait;
     let mut last_frame_url = String::new();
     let mut last_iframe_sources: Vec<String>;
     let mut last_frame_urls: Vec<String>;
