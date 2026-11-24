@@ -33,7 +33,11 @@ impl AppLockManager {
     ) -> Arc<Semaphore> {
         let mut mgr = self.inner.lock().await;
         mgr.entry(app_id.to_string())
-            .or_insert_with(|| Arc::new(Semaphore::new(permits.max(1))))
+            .or_insert_with(|| {
+                Arc::new(Semaphore::new(
+                    permits.max(1).min(Semaphore::MAX_PERMITS),
+                ))
+            })
             .clone()
     }
 }
@@ -46,7 +50,8 @@ mod tests {
     async fn app_semaphore_limit_is_shared_across_independent_callers() {
         let manager = AppLockManager::new();
         let first = manager.get_semaphore_with_limit("yasweb", 2).await;
-        let second = manager.get_semaphore_with_limit("yasweb", 2).await;
+        // A later task cannot silently create a second limiter or raise the app's cap.
+        let second = manager.get_semaphore_with_limit("yasweb", 5).await;
         assert!(std::sync::Arc::ptr_eq(&first, &second));
 
         let permit_a = first.clone().try_acquire_owned().unwrap();
