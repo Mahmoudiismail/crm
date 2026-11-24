@@ -63,6 +63,7 @@ fn yasweb_concurrency_limit(
 /// Acquire a Runner-owned permit for every Yasweb process, not once per CLI
 /// invocation. This makes the configured cap effective across tasks and
 /// concurrently scheduled date periods.
+#[allow(clippy::too_many_arguments)]
 async fn run_external_app_with_shared_limit(
     logger: &TaskLogger,
     app: &RegisteredApp,
@@ -156,6 +157,7 @@ async fn run_external_app_with_shared_limit(
     result
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn execute_action(
     action: &ActionSpec,
     logger: &TaskLogger,
