@@ -651,10 +651,16 @@ mod tests {
         };
 
         std::fs::write(&config_path, r#"{"concurrency":3}"#).unwrap();
-        assert_eq!(yasweb_concurrency_limit(&app(&config_path), &spec).unwrap(), Some(3));
+        assert_eq!(
+            yasweb_concurrency_limit(&app(&config_path), &spec).unwrap(),
+            Some(3)
+        );
 
         std::fs::write(&config_path, r#"{"concurrency":0}"#).unwrap();
-        assert_eq!(yasweb_concurrency_limit(&app(&config_path), &spec).unwrap(), None);
+        assert_eq!(
+            yasweb_concurrency_limit(&app(&config_path), &spec).unwrap(),
+            None
+        );
     }
 
     #[tokio::test]
