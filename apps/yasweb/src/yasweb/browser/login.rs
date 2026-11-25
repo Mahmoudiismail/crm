@@ -40,15 +40,9 @@ fn username_matches(displayed: &str, configured: &str) -> bool {
     }
 }
 
-/// Focuses an input and inserts text through Chrome's native input pipeline.
-///
-/// Using CDP Input.insertText emits the real input event consumed by Angular
-/// ControlValueAccessor directives. The final DOM value is verified before the
-/// login flow proceeds; values are never included in logs or errors.
-fn set_input_via_cdp(tab: &Arc<Tab>, selector: &str, value: &str) -> Result<()> {
+fn build_login_input_focus_script(selector: &str) -> Result<String> {
     let selector_json = serde_json::to_string(selector)?;
-    let expected_json = serde_json::to_string(value)?;
-    let focus_script = format!(
+    Ok(format!(
         r#"(() => {{
             const input = document.querySelector({selector_json});
             if (!input) return JSON.stringify({{status: "ERROR", reason: "not_found"}});
@@ -60,7 +54,30 @@ fn set_input_via_cdp(tab: &Arc<Tab>, selector: &str, value: &str) -> Result<()> 
             input.dispatchEvent(new Event("input", {{ bubbles: true }}));
             return JSON.stringify({{status: document.activeElement === input ? "SUCCESS" : "ERROR", reason: "focus_failed"}});
         }})()"#
-    );
+    ))
+}
+
+fn build_login_input_verify_script(selector: &str, value: &str) -> Result<String> {
+    let selector_json = serde_json::to_string(selector)?;
+    let expected_json = serde_json::to_string(value)?;
+    Ok(format!(
+        r#"(() => {{
+            const input = document.querySelector({selector_json});
+            if (!input) return JSON.stringify({{status: "ERROR", reason: "input_disappeared"}});
+            input.dispatchEvent(new Event("change", {{ bubbles: true }}));
+            input.blur();
+            return JSON.stringify({{status: input.value === {expected_json} ? "SUCCESS" : "ERROR", matches: input.value === {expected_json}, length: input.value.length}});
+        }})()"#
+    ))
+}
+
+/// Focuses an input and inserts text through Chrome's native input pipeline.
+///
+/// Using CDP Input.insertText emits the real input event consumed by Angular
+/// ControlValueAccessor directives. The final DOM value is verified before the
+/// login flow proceeds; values are never included in logs or errors.
+fn set_input_via_cdp(tab: &Arc<Tab>, selector: &str, value: &str) -> Result<()> {
+    let focus_script = build_login_input_focus_script(selector)?;
     let focus_result = tab
         .evaluate(&focus_script, true)
         .context("Failed to focus login input")?
@@ -79,15 +96,7 @@ fn set_input_via_cdp(tab: &Arc<Tab>, selector: &str, value: &str) -> Result<()> 
         text: value.to_string(),
     });
 
-    let verify_script = format!(
-        r#"(() => {{
-            const input = document.querySelector({selector_json});
-            if (!input) return JSON.stringify({{status: "ERROR", reason: "input_disappeared"}});
-            input.dispatchEvent(new Event("change", {{ bubbles: true }}));
-            input.blur();
-            return JSON.stringify({{status: input.value === {expected_json} ? "SUCCESS" : "ERROR", matches: input.value === {expected_json}, length: input.value.length}});
-        }})()"#
-    );
+    let verify_script = build_login_input_verify_script(selector, value)?;
     let verify_result = tab
         .evaluate(&verify_script, true)
         .context("Failed to verify login input after native text entry")?
@@ -278,6 +287,35 @@ pub fn execute_login(
 
             Err(anyhow::anyhow!("Failed to find elements to login"))
         }
+    }
+}
+
+#[cfg(test)]
+mod native_input_tests {
+    use super::{build_login_input_focus_script, build_login_input_verify_script};
+
+    #[test]
+    fn focus_script_uses_native_input_and_rejects_unavailable_controls() {
+        let script = build_login_input_focus_script("input[formcontrolname='username']").unwrap();
+        assert!(script.contains("input.focus()"));
+        assert!(script.contains("input.dispatchEvent(new Event(\"input\""));
+        assert!(script.contains("input.disabled || input.readOnly"));
+        assert!(script.contains("document.activeElement === input"));
+    }
+
+    #[test]
+    fn verification_script_compares_the_actual_input_value_without_exposing_it() {
+        let script = build_login_input_verify_script("#username", "secret-value").unwrap();
+        assert!(script.contains("\"secret-value\""));
+        assert!(script.contains("input.value ==="));
+        assert!(script.contains("matches:"));
+        assert!(!script.contains("return JSON.stringify({status: \"SUCCESS\", value: input.value"));
+    }
+
+    #[test]
+    fn login_selectors_are_json_escaped_before_script_injection() {
+        let script = build_login_input_focus_script("input[x=\"; alert(1); //").unwrap();
+        assert!(script.contains(r#"\"; alert(1); //"#));
     }
 }
 
