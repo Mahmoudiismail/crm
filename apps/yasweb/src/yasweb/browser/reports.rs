@@ -508,9 +508,9 @@ fn wait_for_report_iframe_ready(tab: &Arc<Tab>, timeout_minutes: u64) -> Result<
     // handled as soon as it opens. Accept only beforeunload; leave other dialogs
     // untouched so application alerts are not silently swallowed.
     tab.call_method(Page::Enable {
-            enable_file_chooser_opened_event: None,
-        })
-        .context("Failed to enable Chrome Page events for Yasweb refresh recovery")?;
+        enable_file_chooser_opened_event: None,
+    })
+    .context("Failed to enable Chrome Page events for Yasweb refresh recovery")?;
     let dialog_tab = Arc::clone(tab);
     let dialog_listener = Arc::new(move |event: &Event| {
         if let Event::PageJavascriptDialogOpening(opening) = event {
