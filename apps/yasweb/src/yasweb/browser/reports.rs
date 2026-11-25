@@ -147,18 +147,33 @@ pub fn navigate_and_run_report(
                         debug::save_failure_diagnostics(tab, "click_mis_module");
                         return Err(e).context("Yasweb stage failed: click MIS module");
                     } else {
-                        info!("Clicked MIS successfully. Waiting for MIS Reports button...");
-                        tracing::debug!("Waiting for MIS Reports button...");
-                        info!("MIS module click returned; checking the SPA transition to MIS Reports.");
+                        info!("Clicked MIS successfully. Waiting for the MIS SPA route...");
+                        let route_wait_started = Instant::now();
+                        if let Err(route_error) =
+                            wait_for_mis_reports_route(tab, Duration::from_secs(30))
+                        {
+                            warn!(
+                                "MIS SPA route was not reached after the initial navigation click; attempting one bounded navigation recovery: {:#}",
+                                route_error
+                            );
+                            retry_mis_navigation(tab)
+                                .context("Failed to recover the MIS navigation click")?;
+                            wait_for_mis_reports_route(tab, Duration::from_secs(30))
+                                .context("MIS SPA route did not become active after one navigation recovery")?;
+                        }
+                        info!(
+                            "YASWEB STAGE END: mis_spa_route status=SUCCESS elapsed_ms={}",
+                            route_wait_started.elapsed().as_millis()
+                        );
 
                         let mis_wait_started = Instant::now();
                         info!(
-                            "YASWEB STAGE START: wait_for_mis_reports iframe_readiness_interval_seconds=10 timeout_minutes={}",
+                            "YASWEB STAGE START: report_iframe_readiness timeout_minutes={}",
                             timeout_minutes
                         );
                         wait_for_report_iframe_ready(tab, timeout_minutes)?;
                         info!(
-                            "YASWEB STAGE END: wait_for_mis_reports status=SUCCESS elapsed_ms={}",
+                            "YASWEB STAGE END: report_iframe_readiness status=SUCCESS elapsed_ms={}",
                             mis_wait_started.elapsed().as_millis()
                         );
                         info!("Embedded report iframe and required report inputs successfully verified.");
