@@ -664,9 +664,7 @@ async fn main() -> Result<()> {
         parse_log_level(&config.log_stdout_level)?,
         parse_log_level(&config.log_file_level)?,
     )?;
-    yasweb_app::yasweb::browser::debug::set_html_diagnostics_enabled(
-        config.save_html_diagnostics,
-    );
+    yasweb_app::yasweb::browser::debug::set_html_diagnostics_enabled(config.save_html_diagnostics);
     info!(
         "YASWEB authenticated HTML diagnostics persistence: {}",
         config.save_html_diagnostics

@@ -115,7 +115,10 @@ pub struct YaswebConfig {
     #[serde(default)]
     pub keep_open: bool,
     /// Persist authenticated page and iframe HTML; enabled by default.
-    #[serde(default = "default_save_html_diagnostics", skip_serializing_if = "is_false")]
+    #[serde(
+        default = "default_save_html_diagnostics",
+        skip_serializing_if = "is_false"
+    )]
     pub save_html_diagnostics: bool,
     #[serde(default = "default_timeout_minutes")]
     pub timeout_minutes: u64,
@@ -238,9 +241,10 @@ mod tests {
         )
         .unwrap();
         assert!(!config.save_html_diagnostics);
-        assert!(
-            serde_json::to_value(config).unwrap().get("save_html_diagnostics").is_none()
-        );
+        assert!(serde_json::to_value(config)
+            .unwrap()
+            .get("save_html_diagnostics")
+            .is_none());
     }
 
     #[test]
