@@ -140,7 +140,7 @@ fn persist_frame_resources(
         ) {
             Ok(value) => value,
             Err(error) => {
-                warn!("Invalid CDP frame id for '{}': {}", frame_url, error);
+                warn!("Invalid CDP frame id for '{}': {}", redact_url_for_log(&frame_url), error);
                 continue;
             }
         };
