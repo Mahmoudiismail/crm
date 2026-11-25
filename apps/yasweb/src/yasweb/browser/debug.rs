@@ -403,8 +403,17 @@ fn sanitize_filename(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        collect_frame_resources, redact_url_for_log, sanitize_filename, write_diagnostic_file,
+        collect_frame_resources, is_new_snapshot, redact_url_for_log, sanitize_filename, write_diagnostic_file,
     };
+
+    #[test]
+    fn identical_snapshots_are_deduplicated_per_report_and_document() {
+        assert!(is_new_snapshot("Report A", "frame-1", b"<html>same</html>"));
+        assert!(!is_new_snapshot("Report A", "frame-1", b"<html>same</html>"));
+        assert!(is_new_snapshot("Report A", "frame-2", b"<html>same</html>"));
+        assert!(is_new_snapshot("Report B", "frame-1", b"<html>same</html>"));
+        assert!(is_new_snapshot("Report A", "frame-1", b"<html>changed</html>"));
+    }
 
     #[test]
     fn frame_tree_collection_includes_nested_cross_origin_frames() {
