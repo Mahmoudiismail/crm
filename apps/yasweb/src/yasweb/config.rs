@@ -114,8 +114,8 @@ pub struct YaswebConfig {
     pub headless: bool,
     #[serde(default)]
     pub keep_open: bool,
-    /// Persist authenticated page and iframe HTML only for explicitly enabled diagnostics.
-    #[serde(default, skip_serializing_if = "is_false")]
+    /// Persist authenticated page and iframe HTML; enabled by default.
+    #[serde(default = "default_save_html_diagnostics", skip_serializing_if = "is_false")]
     pub save_html_diagnostics: bool,
     #[serde(default = "default_timeout_minutes")]
     pub timeout_minutes: u64,
@@ -134,6 +134,10 @@ pub struct YaswebConfig {
 
 fn is_false(value: &bool) -> bool {
     !value
+}
+
+fn default_save_html_diagnostics() -> bool {
+    true
 }
 
 fn default_timeout_minutes() -> u64 {
@@ -160,7 +164,7 @@ impl Default for YaswebConfig {
             password: None,
             headless: false,
             keep_open: false,
-            save_html_diagnostics: false,
+            save_html_diagnostics: true,
             timeout_minutes: 60,
             concurrency: 6,
             reports: HashMap::new(),
@@ -213,23 +217,10 @@ mod tests {
     }
 
     #[test]
-    fn html_diagnostics_are_disabled_by_default_and_for_legacy_configs() {
-        assert!(!YaswebConfig::default().save_html_diagnostics);
+    fn html_diagnostics_are_enabled_by_default_and_for_legacy_configs() {
+        assert!(YaswebConfig::default().save_html_diagnostics);
         let config: YaswebConfig = serde_json::from_str(
             r#"{"url":"https://example.test/","username":"test","reports":{}}"#,
-        )
-        .unwrap();
-        assert!(!config.save_html_diagnostics);
-        assert!(serde_json::to_value(config)
-            .unwrap()
-            .get("save_html_diagnostics")
-            .is_none());
-    }
-
-    #[test]
-    fn html_diagnostics_require_explicit_configuration_opt_in() {
-        let config: YaswebConfig = serde_json::from_str(
-            r#"{"url":"https://example.test/","username":"test","save_html_diagnostics":true,"reports":{}}"#,
         )
         .unwrap();
         assert!(config.save_html_diagnostics);
@@ -237,6 +228,18 @@ mod tests {
             serde_json::to_value(config).unwrap()["save_html_diagnostics"]
                 .as_bool()
                 .unwrap()
+        );
+    }
+
+    #[test]
+    fn html_diagnostics_can_be_disabled_explicitly() {
+        let config: YaswebConfig = serde_json::from_str(
+            r#"{"url":"https://example.test/","username":"test","save_html_diagnostics":false,"reports":{}}"#,
+        )
+        .unwrap();
+        assert!(!config.save_html_diagnostics);
+        assert!(
+            serde_json::to_value(config).unwrap().get("save_html_diagnostics").is_none()
         );
     }
 
