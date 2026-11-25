@@ -521,8 +521,9 @@ fn refresh_report_iframe(tab: &Arc<Tab>) -> Result<()> {
         .and_then(|value| value.as_str().map(str::to_owned))
         .and_then(|raw| serde_json::from_str::<Vec<String>>(&raw).ok())
         .unwrap_or_default();
-    let frame = select_report_frame(&frames, &iframe_sources)
-        .ok_or_else(|| anyhow::anyhow!("Could not identify the current report iframe for targeted refresh"))?;
+    let frame = select_report_frame(&frames, &iframe_sources).ok_or_else(|| {
+        anyhow::anyhow!("Could not identify the current report iframe for targeted refresh")
+    })?;
     if frame.url.is_empty() || frame.url == "about:blank" {
         anyhow::bail!("Report iframe has no refreshable URL");
     }
@@ -541,8 +542,13 @@ fn refresh_report_iframe(tab: &Arc<Tab>) -> Result<()> {
         if let Event::PageJavascriptDialogOpening(opening) = event {
             if opening.params.Type == Page::DialogType::Beforeunload {
                 match dialog_tab.get_dialog().accept(None) {
-                    Ok(()) => info!("Automatically accepted beforeunload dialog raised by report iframe refresh."),
-                    Err(error) => warn!("Could not automatically accept iframe beforeunload dialog: {:#}", error),
+                    Ok(()) => info!(
+                        "Automatically accepted beforeunload dialog raised by report iframe refresh."
+                    ),
+                    Err(error) => warn!(
+                        "Could not automatically accept iframe beforeunload dialog: {:#}",
+                        error
+                    ),
                 }
             }
         }
@@ -586,7 +592,9 @@ fn wait_for_report_iframe_ready(tab: &Arc<Tab>, timeout_minutes: u64) -> Result<
         "Waiting up to {} seconds for initial Yasweb report iframe readiness",
         initial_wait.as_secs()
     );
-    if wait_for_report_iframe_until(tab, initial_deadline, "Initial report iframe readiness").is_ok() {
+    if wait_for_report_iframe_until(tab, initial_deadline, "Initial report iframe readiness")
+        .is_ok()
+    {
         info!("Yasweb report iframe became ready without recovery refresh.");
         return Ok(());
     }
@@ -605,8 +613,17 @@ fn wait_for_report_iframe_ready(tab: &Arc<Tab>, timeout_minutes: u64) -> Result<
     }
 
     let remaining = deadline.saturating_duration_since(Instant::now());
-    wait_for_report_iframe_until(tab, Instant::now() + remaining, "Post-refresh report iframe readiness")
-        .with_context(|| format!("Report iframe remained unavailable after targeted refresh; parent route='{}'", redact_url_for_log(&tab.get_url())))
+    wait_for_report_iframe_until(
+        tab,
+        Instant::now() + remaining,
+        "Post-refresh report iframe readiness",
+    )
+    .with_context(|| {
+        format!(
+            "Report iframe remained unavailable after targeted refresh; parent route='{}'",
+            redact_url_for_log(&tab.get_url())
+        )
+    })
 }
 
 fn build_owl_datetime_prepare_script(id: &str) -> Result<String> {
