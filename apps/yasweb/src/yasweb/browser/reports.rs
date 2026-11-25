@@ -1026,8 +1026,9 @@ mod step4_filter_regression_tests {
     fn owl_datetime_fields_are_queued_for_native_cdp_input() {
         assert!(STEP4_SCRIPT.contains("querySelector('owl-date-time')"));
         assert!(STEP4_SCRIPT.contains(
-            "pendingDateInputs.push({ label: filterName, id: input.id, value: String(value) })"
+            "pendingDateInputs.push({ label: labelText || key, id: input.id, value: String(value) })"
         ));
+        assert!(!STEP4_SCRIPT.contains("pendingDateInputs.push({ label: filterName"));
         assert!(STEP4_SCRIPT.contains("Queued OwlDateTime input for native CDP text entry"));
         assert!(STEP4_SCRIPT.contains("pending_date_inputs: pendingDateInputs"));
     }
@@ -1142,6 +1143,27 @@ mod owl_datetime_input_tests {
             build_owl_datetime_verify_script("x", "value", "label\"; alert(1); //").unwrap();
         assert!(prepare.contains(r#"\"; alert(1); //"#));
         assert!(verify.contains(r#"\"; alert(1); //"#));
+    }
+}
+
+#[cfg(test)]
+mod iframe_recovery_tests {
+    use super::{frame_url_matches, select_report_frame_index};
+
+    #[test]
+    fn targeted_refresh_resolves_the_current_report_iframe_not_the_parent_or_identity_frame() {
+        let frame_urls = vec![
+            "https://yasweb.fakeeh.care:8030/home/mis".to_string(),
+            "https://yasweb.fakeeh.care:8065/auto-login".to_string(),
+        ];
+        let iframe_sources =
+            vec!["https://yasweb.fakeeh.care:8065/auto-login".to_string()];
+        let selected = select_report_frame_index(&frame_urls, &iframe_sources);
+        assert_eq!(selected, Some(1));
+        assert!(frame_url_matches(
+            &iframe_sources[0],
+            &frame_urls[selected.unwrap()]
+        ));
     }
 }
 
