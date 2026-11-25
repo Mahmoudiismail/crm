@@ -8,8 +8,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-static DIAGNOSTIC_FILE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 use tracing::{debug, info, warn};
+
+static DIAGNOSTIC_FILE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 /// Persists page HTML only when the existing TRACE log level is enabled.
 /// Saved pages can contain session data and customer information.
@@ -283,7 +284,7 @@ fn write_diagnostic_file(
 
 /// Removes query strings and fragments from URLs before they enter diagnostic logs.
 fn redact_url_for_log(url: &str) -> String {
-    url.split(['?', '#']).next().unwrap_or(url).to_string()
+    url.split(|character| matches!(character, '?' | '#')).next().unwrap_or(url).to_string()
 }
 
 fn collect_frame_resources(value: &serde_json::Value, frames: &mut Vec<(usize, String, String)>) {
