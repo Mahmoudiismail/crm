@@ -880,6 +880,20 @@ mod step4_filter_regression_tests {
     }
 
     #[test]
+    fn owl_datetime_fields_are_queued_for_native_cdp_input() {
+        assert!(STEP4_SCRIPT.contains("querySelector('owl-date-time')"));
+        assert!(STEP4_SCRIPT.contains("pendingDateInputs.push({ label: filterName, id: input.id, value: String(value) })"));
+        assert!(STEP4_SCRIPT.contains("Queued OwlDateTime input for native CDP text entry"));
+        assert!(STEP4_SCRIPT.contains("pending_date_inputs: pendingDateInputs"));
+    }
+
+    #[test]
+    fn pending_owl_datetime_fields_are_validated_after_native_entry() {
+        assert!(STEP4_SCRIPT.contains("new Set(pendingDateInputs.map(field => field.id))"));
+        assert!(STEP4_SCRIPT.contains("!pendingDateIds.has(control.id)"));
+    }
+
+    #[test]
     fn omitted_filter_keys_remain_untouched() {
         assert!(STEP4_SCRIPT.contains("Object.entries(filters)"));
     }
