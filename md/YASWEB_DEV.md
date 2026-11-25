@@ -17,9 +17,9 @@ the `YASWEB RUN`, `YASWEB STAGE`, and `AUTOMATION STEP` entries. Each stage
 records its start/end, result, elapsed milliseconds, and the error chain when it
 fails.
 
-For production privacy, authenticated page HTML and iframe DOM snapshots are persisted locally only when TRACE logging is enabled. Each browser-step snapshot attempts to capture the top-level document and the current document frames through CDP. Frame-capture failures are logged with the frame URL and reason. TRACE artifacts can contain credentials, session data, and customer information; keep TRACE disabled during routine production runs and sanitize artifacts before sharing them.
+For production privacy, authenticated page HTML and iframe DOM snapshots are persisted locally only when TRACE logging is enabled. Each browser-step snapshot attempts to capture the top-level document and the current document frames through CDP. Snapshot files are written through unique temporary paths and atomically renamed; frame URLs in logs have query strings and fragments redacted. Frame-capture failures are logged with the redacted frame URL and reason. TRACE artifacts can contain credentials, session data, and customer information; keep TRACE disabled during routine production runs and sanitize artifacts before sharing them.
 
-During `Step 4 (Fill Filters)`, TRACE logs include the visible filter-field inventory before and after filling (label, control type, current value, placeholder, accessible label, form-control name, and element ID). The inventory is included even when one or more requested filters fail. An explicitly supplied empty filter value clears only a matching `input[type="text"]`; other control types are left unchanged. A filter omitted from the request remains unspecified.
+During `Step 4 (Fill Filters)`, TRACE logs include the visible filter-field inventory before and after filling (label, control type, current value, placeholder, accessible label, form-control name, and element ID). The inventory is included even when one or more requested filters fail. An explicitly supplied empty filter value clears only a matching `input[type="text"]`; other control types, including required OwlDateTime controls, are left unchanged. OwlDateTime values are inserted through Chrome CDP native text input and must be accepted by the Angular control before Search can run. A filter omitted from the request remains unspecified.
 
 For Standard Reports, date formats are enforced as `DD-MMM-YYYY 00:00` for the start boundary and `DD-MMM-YYYY 23:59` for the end boundary (for example, `08-Nov-2026 00:00` and `08-Nov-2026 23:59`). Report Manager date formatting and behavior remain unchanged.
 
@@ -34,7 +34,7 @@ than being treated as a successful run with an empty filter list.
 
 ## Concurrent report tabs
 
-Each report execution uses its own Chrome tab. Tab creation is serialized and retried up to three times when Chrome fails to deliver the target-created event. This prevents concurrent report jobs from navigating or modifying the same first tab. A live Yasweb run is still required to confirm behavior against the deployed Angular application.
+Each report execution uses its own Chrome process and a unique user-data profile directory; the configured shared semaphore caps simultaneous browser operations (default 6, zero means unlimited). Profile names include report, date, process ID, and a per-invocation run ID. Tab creation is serialized and retried up to three times when Chrome fails to deliver the target-created event. This prevents concurrent report jobs from navigating or modifying the same first tab. Regression tests cover distinct profile paths and semaphore limits. A live Yasweb run is still required to confirm behavior against the deployed Angular application.
 
 ## Filesystem safety and async responsiveness
 
@@ -52,9 +52,10 @@ frame tree. Do not re-click MIS while this route wait is still active. Only
 after the route is reached should the automation discover the current iframe,
 create a fresh CDP execution context, and run the report-frame readiness check.
 If the route does not appear within the bounded wait, return a diagnostic error
-including the last observed URL; the existing one-time navigation recovery may
-then run. See `md/yasweb-spa-race-condition.md` for the failure history and
-regression coverage.
+including the last observed URL. Once the route is reached, iframe readiness waits
+for the configured deadline without refreshing the parent tab; this avoids
+restarting a healthy but slow iframe and prevents unnecessary beforeunload prompts.
+See `md/yasweb-spa-race-condition.md` for the failure history and regression coverage.
 
 
 ## Runner filter argument compatibility
