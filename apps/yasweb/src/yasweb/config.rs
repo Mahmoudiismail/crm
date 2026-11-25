@@ -233,9 +233,10 @@ mod tests {
         )
         .unwrap();
         assert!(config.save_html_diagnostics);
-        assert_eq!(
-            serde_json::to_value(config).unwrap()["save_html_diagnostics"],
-            true
+        assert!(
+            serde_json::to_value(config).unwrap()["save_html_diagnostics"]
+                .as_bool()
+                .unwrap()
         );
     }
 
