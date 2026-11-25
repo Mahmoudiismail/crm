@@ -505,6 +505,55 @@ fn wait_for_report_iframe_ready(tab: &Arc<Tab>, timeout_minutes: u64) -> Result<
         .with_context(|| format!("MIS route remained '{}'", tab.get_url()))
 }
 
+fn build_owl_datetime_prepare_script(id: &str) -> Result<String> {
+    let id_json = serde_json::to_string(id)?;
+    Ok(format!(
+        r#"(() => {{
+            const input = document.getElementById({id_json});
+            if (!input) return JSON.stringify({{status: "ERROR", msg: "OwlDateTime input disappeared before native typing"}});
+            if (input.disabled || input.readOnly || input.getClientRects().length === 0) {{
+                return JSON.stringify({{status: "ERROR", msg: "OwlDateTime input is not interactable"}});
+            }}
+            input.focus();
+            input.value = "";
+            input.dispatchEvent(new Event("input", {{ bubbles: true }}));
+            return JSON.stringify({{status: document.activeElement === input ? "SUCCESS" : "ERROR", msg: "OwlDateTime input focus"}});
+        }})()"#
+    ))
+}
+
+fn build_owl_datetime_verify_script(id: &str, value: &str, label: &str) -> Result<String> {
+    let id_json = serde_json::to_string(id)?;
+    let expected_json = serde_json::to_string(value)?;
+    let label_json = serde_json::to_string(label)?;
+    Ok(format!(
+        r#"(async () => {{
+            const input = document.getElementById({id_json});
+            if (!input) return JSON.stringify({{status: "ERROR", msg: "OwlDateTime input disappeared after native typing"}});
+            input.dispatchEvent(new Event("change", {{ bubbles: true }}));
+            input.blur();
+            await new Promise(resolve => setTimeout(resolve, 100));
+            const field = input.closest("mat-form-field");
+            const invalid = input.getAttribute("aria-invalid") === "true" ||
+                input.classList.contains("ng-invalid") ||
+                !!field?.classList.contains("ng-invalid");
+            const matches = input.value === {expected_json};
+            const status = matches && !invalid ? "SUCCESS" : "ERROR";
+            return JSON.stringify({{
+                status,
+                msg: status === "SUCCESS" ? "OwlDateTime value accepted by Angular" :
+                    "OwlDateTime value was not accepted by Angular",
+                label: {label_json},
+                matches,
+                invalid,
+                ariaInvalid: input.getAttribute("aria-invalid"),
+                inputClasses: input.className,
+                fieldClasses: field?.className || ""
+            }});
+        }})()"#
+    ))
+}
+
 /// Fills OwlDateTime inputs through Chrome's native input pipeline so the
 /// picker directive receives one complete input event and can update Angular's
 /// ControlValueAccessor/model validity.
@@ -516,21 +565,7 @@ fn apply_owl_datetime_inputs(tab: &Arc<Tab>, fields: &[serde_json::Value]) -> Re
             .ok_or_else(|| anyhow::anyhow!("OwlDateTime field '{}' has no DOM id", label))?;
         let value = field.get("value").and_then(serde_json::Value::as_str)
             .ok_or_else(|| anyhow::anyhow!("OwlDateTime field '{}' has no text value", label))?;
-        let id_json = serde_json::to_string(id)?;
-
-        let prepare_js = format!(
-            r#"(() => {{
-                const input = document.getElementById({id_json});
-                if (!input) return JSON.stringify({{status: "ERROR", msg: "OwlDateTime input disappeared before native typing"}});
-                if (input.disabled || input.readOnly || input.getClientRects().length === 0) {{
-                    return JSON.stringify({{status: "ERROR", msg: "OwlDateTime input is not interactable"}});
-                }}
-                input.focus();
-                input.value = "";
-                input.dispatchEvent(new Event("input", {{ bubbles: true }}));
-                return JSON.stringify({{status: document.activeElement === input ? "SUCCESS" : "ERROR", msg: "OwlDateTime input focus"}});
-            }})()"#
-        );
+        let prepare_js = build_owl_datetime_prepare_script(id)?;
         evaluate_report_frame_step(tab, &prepare_js, "Step 4 (Prepare OwlDateTime)")?;
 
         tab.call_method(Input::InsertText {
@@ -538,37 +573,7 @@ fn apply_owl_datetime_inputs(tab: &Arc<Tab>, fields: &[serde_json::Value]) -> Re
         })
         .with_context(|| format!("CDP native text insertion failed for OwlDateTime field '{}'", label))?;
 
-        let expected_json = serde_json::to_string(value)?;
-        let label_json = serde_json::to_string(label)?;
-        let verify_js = format!(
-            r#"(async () => {{
-                const input = document.getElementById({id_json});
-                if (!input) return JSON.stringify({{status: "ERROR", msg: "OwlDateTime input disappeared after native typing"}});
-                input.dispatchEvent(new Event("change", {{ bubbles: true }}));
-                input.blur();
-                await new Promise(resolve => setTimeout(resolve, 100));
-                const field = input.closest("mat-form-field");
-                const invalid = input.getAttribute("aria-invalid") === "true" ||
-                    input.classList.contains("ng-invalid") ||
-                    !!field?.classList.contains("ng-invalid");
-                const matches = input.value === {expected_json};
-                const status = matches && !invalid ? "SUCCESS" : "ERROR";
-                return JSON.stringify({{
-                    status,
-                    msg: status === "SUCCESS" ? "OwlDateTime value accepted by Angular" :
-                        "OwlDateTime value was not accepted by Angular",
-                    label: {label_json},
-                    matches,
-                    invalid,
-                    ariaInvalid: input.getAttribute("aria-invalid"),
-                    inputClasses: input.className,
-                    fieldClasses: field?.className || ""
-                }});
-            }})()"#,
-            id_json = id_json,
-            expected_json = expected_json,
-            label_json = label_json
-        );
+        let verify_js = build_owl_datetime_verify_script(id, value, label)?;
         evaluate_report_frame_step(tab, &verify_js, "Step 4 (Verify OwlDateTime)")?;
         info!("OwlDateTime field '{}' accepted its configured value.", label);
     }
@@ -943,3 +948,37 @@ mod mis_reports_wait_tests {
         assert!(js.contains("status: \"ERROR\""));
     }
 }
+
+#[cfg(test)]
+mod owl_datetime_input_tests {
+    use super::{build_owl_datetime_prepare_script, build_owl_datetime_verify_script};
+
+    #[test]
+    fn prepare_script_focuses_and_clears_the_picker_input_with_an_input_event() {
+        let script = build_owl_datetime_prepare_script("mat-input-2").unwrap();
+        assert!(script.contains("document.getElementById(\"mat-input-2\")"));
+        assert!(script.contains("input.focus()"));
+        assert!(script.contains("input.dispatchEvent(new Event(\"input\""));
+        assert!(script.contains("document.activeElement === input"));
+    }
+
+    #[test]
+    fn verify_script_checks_value_and_angular_validity() {
+        let script = build_owl_datetime_verify_script("mat-input-3", "25-Nov-2026 23:59", "To Date").unwrap();
+        assert!(script.contains("\"25-Nov-2026 23:59\""));
+        assert!(script.contains("\"To Date\""));
+        assert!(script.contains("input.getAttribute(\"aria-invalid\") === \"true\""));
+        assert!(script.contains("input.classList.contains(\"ng-invalid\")"));
+        assert!(script.contains("field?.classList.contains(\"ng-invalid\")"));
+        assert!(script.contains("matches && !invalid"));
+    }
+
+    #[test]
+    fn generated_scripts_escape_untrusted_dom_ids_and_labels() {
+        let prepare = build_owl_datetime_prepare_script("x\"; alert(1); //").unwrap();
+        let verify = build_owl_datetime_verify_script("x", "value", "label\"; alert(1); //").unwrap();
+        assert!(prepare.contains(r#"\"; alert(1); //"#));
+        assert!(verify.contains(r#"\"; alert(1); //"#));
+    }
+}
+
