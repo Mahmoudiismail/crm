@@ -148,7 +148,7 @@
                                                                     if (!input.id) {
                                                                         logs.push("OwlDateTime input has no stable DOM id: " + key);
                                                                     } else {
-                                                                        pendingDateInputs.push({ label: filterName, id: input.id, value: String(value) });
+                                                                        pendingDateInputs.push({ label: labelText || key, id: input.id, value: String(value) });
                                                                         logs.push("Queued OwlDateTime input for native CDP text entry: " + key);
                                                                         filterFilled = true;
                                                                     }
