@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use headless_chrome::protocol::cdp::Input;
 use headless_chrome::Tab;
 use std::sync::Arc;
