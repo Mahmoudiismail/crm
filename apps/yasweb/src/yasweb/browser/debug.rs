@@ -318,7 +318,7 @@ fn write_diagnostic_file(
 
 /// Removes query strings and fragments from URLs before they enter diagnostic logs.
 fn redact_url_for_log(url: &str) -> String {
-    url.split(|character| matches!(character, '?' | '#'))
+    url.split(['?', '#'])
         .next()
         .unwrap_or(url)
         .to_string()
