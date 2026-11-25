@@ -91,9 +91,10 @@ fn persist_html(tab: &Arc<Tab>, report_name: &str, step_num: Option<u32>, step_n
         }
     };
 
-    if !force && !is_new_snapshot(report_name, "main-document", html.as_bytes()) {
-        debug!("Skipping duplicate HTML snapshot: report='{}' step='{}'", report_name, step_name);
-        return;
+    let save_main_document =
+        force || is_new_snapshot(report_name, "main-document", html.as_bytes());
+    if !save_main_document {
+        debug!("Skipping duplicate main-document HTML snapshot: report='{}' step='{}'", report_name, step_name);
     }
 
     let debug_dir = exe_dir.join("debug_html");
@@ -125,12 +126,14 @@ fn persist_html(tab: &Arc<Tab>, report_name: &str, step_num: Option<u32>, step_n
         std::process::id(),
         timestamp
     );
-    match write_diagnostic_file(&debug_dir, &filename, html.as_bytes()) {
-        Ok(path) => info!("Saved browser HTML snapshot: {:?}", path),
-        Err(error) => warn!(
-            "Failed to save browser HTML snapshot '{}': {:#}",
-            filename, error
-        ),
+    if save_main_document {
+        match write_diagnostic_file(&debug_dir, &filename, html.as_bytes()) {
+            Ok(path) => info!("Saved browser HTML snapshot: {:?}", path),
+            Err(error) => warn!(
+                "Failed to save browser HTML snapshot '{}': {:#}",
+                filename, error
+            ),
+        }
     }
 
     persist_frame_resources(tab, &debug_dir, report_name, &step, timestamp, force);
