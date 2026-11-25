@@ -554,7 +554,7 @@ fn refresh_report_iframe(tab: &Arc<Tab>) -> Result<()> {
     let navigation = tab.call_method(Page::Navigate {
         url: frame.url.clone(),
         referrer: None,
-        transition_type: None,
+        transition_Type: None,
         frame_id: Some(frame.id.clone()),
         referrer_policy: None,
     });
