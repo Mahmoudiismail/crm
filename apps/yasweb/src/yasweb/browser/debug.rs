@@ -4,20 +4,30 @@ use headless_chrome::{
     Tab,
 };
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use tracing::{debug, info, warn};
 
 static DIAGNOSTIC_FILE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+static HTML_DIAGNOSTICS_ENABLED: AtomicBool = AtomicBool::new(false);
 
-/// Persists page HTML only when the existing TRACE log level is enabled.
+/// Enables or disables persistence of authenticated page and iframe HTML.
+pub fn set_html_diagnostics_enabled(enabled: bool) {
+    HTML_DIAGNOSTICS_ENABLED.store(enabled, Ordering::Relaxed);
+}
+
+fn html_diagnostics_enabled() -> bool {
+    HTML_DIAGNOSTICS_ENABLED.load(Ordering::Relaxed)
+}
+
+/// Persists page HTML only when the explicit save_html_diagnostics config option is enabled.
 /// Saved pages can contain session data and customer information.
 pub fn save_html_state(tab: &Arc<Tab>, active_report_name: &str, step_num: u32, step_name: &str) {
-    if !tracing::enabled!(tracing::Level::TRACE) {
+    if !html_diagnostics_enabled() {
         debug!(
-            "Skipping HTML snapshot for '{}' because TRACE logging is disabled",
+            "Skipping HTML snapshot for '{}' because save_html_diagnostics is false",
             step_name
         );
         return;
@@ -26,11 +36,11 @@ pub fn save_html_state(tab: &Arc<Tab>, active_report_name: &str, step_num: u32, 
     persist_html(tab, active_report_name, Some(step_num), step_name);
 }
 
-/// Saves the current page after a browser-stage failure when TRACE is enabled.
+/// Saves the current page after a browser-stage failure when diagnostics are explicitly enabled.
 pub fn save_failure_diagnostics(tab: &Arc<Tab>, step_name: &str) {
-    if !tracing::enabled!(tracing::Level::TRACE) {
+    if !html_diagnostics_enabled() {
         debug!(
-            "Skipping browser page diagnostics for '{}' because TRACE logging is disabled",
+            "Skipping browser page diagnostics for '{}' because save_html_diagnostics is false",
             step_name
         );
         return;
