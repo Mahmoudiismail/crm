@@ -74,7 +74,10 @@ fn persist_html(tab: &Arc<Tab>, report_name: &str, step_num: Option<u32>, step_n
     let timestamp = match SystemTime::now().duration_since(UNIX_EPOCH) {
         Ok(duration) => duration.as_millis(),
         Err(error) => {
-            warn!("System clock is before UNIX_EPOCH; skipping HTML snapshot '{}': {}", step_name, error);
+            warn!(
+                "System clock is before UNIX_EPOCH; skipping HTML snapshot '{}': {}",
+                step_name, error
+            );
             return;
         }
     };
@@ -90,7 +93,10 @@ fn persist_html(tab: &Arc<Tab>, report_name: &str, step_num: Option<u32>, step_n
     );
     match write_diagnostic_file(&debug_dir, &filename, html.as_bytes()) {
         Ok(path) => info!("Saved browser HTML snapshot: {:?}", path),
-        Err(error) => warn!("Failed to save browser HTML snapshot '{}': {:#}", filename, error),
+        Err(error) => warn!(
+            "Failed to save browser HTML snapshot '{}': {:#}",
+            filename, error
+        ),
     }
 
     persist_frame_resources(tab, &debug_dir, report_name, &step, timestamp);
@@ -141,7 +147,11 @@ fn persist_frame_resources(
         ) {
             Ok(value) => value,
             Err(error) => {
-                warn!("Invalid CDP frame id for '{}': {}", redact_url_for_log(&frame_url), error);
+                warn!(
+                    "Invalid CDP frame id for '{}': {}",
+                    redact_url_for_log(&frame_url),
+                    error
+                );
                 continue;
             }
         };
@@ -177,11 +187,14 @@ fn persist_frame_resources(
                 match write_diagnostic_file(debug_dir, &filename, &bytes) {
                     Ok(path) => info!(
                         "Saved browser frame HTML: frame_id={} url={} path={:?}",
-                        frame_id, redact_url_for_log(&frame_url), path
+                        frame_id,
+                        redact_url_for_log(&frame_url),
+                        path
                     ),
                     Err(error) => warn!(
                         "Failed to save browser frame HTML for {}: {:#}",
-                        redact_url_for_log(&frame_url), error
+                        redact_url_for_log(&frame_url),
+                        error
                     ),
                 }
             }
@@ -263,14 +276,25 @@ fn write_diagnostic_file(
 ) -> anyhow::Result<PathBuf> {
     let sequence = DIAGNOSTIC_FILE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
     let requested = std::path::Path::new(filename);
-    let stem = requested.file_stem().and_then(|value| value.to_str()).unwrap_or("snapshot");
-    let extension = requested.extension().and_then(|value| value.to_str()).unwrap_or("html");
+    let stem = requested
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("snapshot");
+    let extension = requested
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("html");
     let unique_name = format!("{stem}_{sequence}.{extension}");
     let final_path = directory.join(&unique_name);
     let temporary_path = directory.join(format!(".{stem}_{sequence}.{extension}.tmp"));
 
-    std::fs::write(&temporary_path, contents)
-        .map_err(|error| anyhow::anyhow!("failed to write temporary diagnostic file {:?}: {}", temporary_path, error))?;
+    std::fs::write(&temporary_path, contents).map_err(|error| {
+        anyhow::anyhow!(
+            "failed to write temporary diagnostic file {:?}: {}",
+            temporary_path,
+            error
+        )
+    })?;
     if let Err(error) = std::fs::rename(&temporary_path, &final_path) {
         let _ = std::fs::remove_file(&temporary_path);
         return Err(anyhow::anyhow!(
@@ -284,7 +308,10 @@ fn write_diagnostic_file(
 
 /// Removes query strings and fragments from URLs before they enter diagnostic logs.
 fn redact_url_for_log(url: &str) -> String {
-    url.split(|character| matches!(character, '?' | '#')).next().unwrap_or(url).to_string()
+    url.split(|character| matches!(character, '?' | '#'))
+        .next()
+        .unwrap_or(url)
+        .to_string()
 }
 
 fn collect_frame_resources(value: &serde_json::Value, frames: &mut Vec<(usize, String, String)>) {
@@ -331,7 +358,9 @@ fn sanitize_filename(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{collect_frame_resources, redact_url_for_log, sanitize_filename, write_diagnostic_file};
+    use super::{
+        collect_frame_resources, redact_url_for_log, sanitize_filename, write_diagnostic_file,
+    };
 
     #[test]
     fn frame_tree_collection_includes_nested_cross_origin_frames() {
@@ -367,7 +396,9 @@ mod tests {
         assert_eq!(std::fs::read(first).expect("read first"), b"first");
         assert_eq!(std::fs::read(second).expect("read second"), b"second");
         assert_eq!(
-            std::fs::read_dir(directory.path()).expect("read directory").count(),
+            std::fs::read_dir(directory.path())
+                .expect("read directory")
+                .count(),
             2
         );
     }

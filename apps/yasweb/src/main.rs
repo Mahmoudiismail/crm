@@ -363,15 +363,13 @@ fn report_profile_dir(
     report_index: usize,
     run_id: &str,
 ) -> PathBuf {
-    executable_dir
-        .join("yasweb_chrome_data")
-        .join(format!(
-            "session_{}_{}_{}_{}",
-            sanitize_filename_component(report_name),
-            sanitize_filename_component(date_suffix),
-            report_index,
-            run_id
-        ))
+    executable_dir.join("yasweb_chrome_data").join(format!(
+        "session_{}_{}_{}_{}",
+        sanitize_filename_component(report_name),
+        sanitize_filename_component(date_suffix),
+        report_index,
+        run_id
+    ))
 }
 
 fn create_operation_limit(concurrency: usize) -> Option<Arc<tokio::sync::Semaphore>> {
@@ -1155,7 +1153,10 @@ mod tests_yasweb_finalization {
 
     #[test]
     fn run_ids_are_unique_even_when_the_clock_resolution_is_coarse() {
-        assert_ne!(create_yasweb_run_id().unwrap(), create_yasweb_run_id().unwrap());
+        assert_ne!(
+            create_yasweb_run_id().unwrap(),
+            create_yasweb_run_id().unwrap()
+        );
     }
 
     #[test]
@@ -1174,7 +1175,13 @@ mod tests_yasweb_finalization {
         let limit = create_operation_limit(6).expect("positive concurrency creates a semaphore");
         let mut permits = Vec::new();
         for _ in 0..6 {
-            permits.push(limit.clone().acquire_owned().await.expect("permit available"));
+            permits.push(
+                limit
+                    .clone()
+                    .acquire_owned()
+                    .await
+                    .expect("permit available"),
+            );
         }
 
         assert!(limit.clone().try_acquire_owned().is_err());

@@ -91,10 +91,17 @@ fn set_input_via_cdp(tab: &Arc<Tab>, selector: &str, value: &str) -> Result<()> 
             .and_then(|value| value.as_str().map(str::to_owned))
             .ok_or_else(|| anyhow::anyhow!("Login input focus returned no result"))?;
         let focus_status: serde_json::Value = serde_json::from_str(&focus_result)?;
-        if focus_status.get("status").and_then(serde_json::Value::as_str) != Some("SUCCESS") {
+        if focus_status
+            .get("status")
+            .and_then(serde_json::Value::as_str)
+            != Some("SUCCESS")
+        {
             last_error = Some(format!(
                 "input unavailable (reason={})",
-                focus_status.get("reason").and_then(serde_json::Value::as_str).unwrap_or("unknown")
+                focus_status
+                    .get("reason")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("unknown")
             ));
             if attempt == 1 {
                 std::thread::sleep(Duration::from_millis(150));
@@ -131,8 +138,14 @@ fn set_input_via_cdp(tab: &Arc<Tab>, selector: &str, value: &str) -> Result<()> 
             .unwrap_or_default();
         last_error = Some(format!(
             "value verification failed (matches={}, length={}){}",
-            verified.get("matches").and_then(serde_json::Value::as_bool).unwrap_or(false),
-            verified.get("length").and_then(serde_json::Value::as_u64).unwrap_or(0),
+            verified
+                .get("matches")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false),
+            verified
+                .get("length")
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(0),
             cdp_error
         ));
         if attempt == 1 {

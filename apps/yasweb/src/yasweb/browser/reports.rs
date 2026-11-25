@@ -158,8 +158,9 @@ pub fn navigate_and_run_report(
                             );
                             retry_mis_navigation(tab)
                                 .context("Failed to recover the MIS navigation click")?;
-                            wait_for_mis_reports_route(tab, Duration::from_secs(30))
-                                .context("MIS SPA route did not become active after one navigation recovery")?;
+                            wait_for_mis_reports_route(tab, Duration::from_secs(30)).context(
+                                "MIS SPA route did not become active after one navigation recovery",
+                            )?;
                         }
                         info!(
                             "YASWEB STAGE END: mis_spa_route status=SUCCESS elapsed_ms={}",
@@ -449,7 +450,10 @@ fn wait_for_mis_reports_route(tab: &Arc<Tab>, timeout: Duration) -> Result<()> {
 }
 
 fn redact_url_for_log(url: &str) -> String {
-    url.split(|character| matches!(character, '?' | '#')).next().unwrap_or(url).to_string()
+    url.split(|character| matches!(character, '?' | '#'))
+        .next()
+        .unwrap_or(url)
+        .to_string()
 }
 
 fn is_mis_reports_route(url: &str) -> bool {
@@ -520,8 +524,12 @@ fn wait_for_report_iframe_ready(tab: &Arc<Tab>, timeout_minutes: u64) -> Result<
         "Waiting up to {} minute(s) for Yasweb report iframe readiness without refreshing the page",
         timeout_minutes
     );
-    wait_for_report_iframe_until(tab, deadline, "Report iframe readiness")
-        .with_context(|| format!("MIS route remained '{}'", redact_url_for_log(&tab.get_url())))
+    wait_for_report_iframe_until(tab, deadline, "Report iframe readiness").with_context(|| {
+        format!(
+            "MIS route remained '{}'",
+            redact_url_for_log(&tab.get_url())
+        )
+    })
 }
 
 fn build_owl_datetime_prepare_script(id: &str) -> Result<String> {
@@ -579,11 +587,18 @@ fn build_owl_datetime_verify_script(id: &str, value: &str, label: &str) -> Resul
 /// ControlValueAccessor/model validity.
 fn apply_owl_datetime_inputs(tab: &Arc<Tab>, fields: &[serde_json::Value]) -> Result<()> {
     for field in fields {
-        let label = field.get("label").and_then(serde_json::Value::as_str).unwrap_or("date");
-        let id = field.get("id").and_then(serde_json::Value::as_str)
+        let label = field
+            .get("label")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("date");
+        let id = field
+            .get("id")
+            .and_then(serde_json::Value::as_str)
             .filter(|value| !value.is_empty())
             .ok_or_else(|| anyhow::anyhow!("OwlDateTime field '{}' has no DOM id", label))?;
-        let value = field.get("value").and_then(serde_json::Value::as_str)
+        let value = field
+            .get("value")
+            .and_then(serde_json::Value::as_str)
             .ok_or_else(|| anyhow::anyhow!("OwlDateTime field '{}' has no text value", label))?;
         let prepare_js = build_owl_datetime_prepare_script(id)?;
         evaluate_report_frame_step(tab, &prepare_js, "Step 4 (Prepare OwlDateTime)")?;
@@ -623,7 +638,10 @@ fn apply_owl_datetime_inputs(tab: &Arc<Tab>, fields: &[serde_json::Value]) -> Re
                 error
             );
         }
-        info!("OwlDateTime field '{}' accepted its configured value.", label);
+        info!(
+            "OwlDateTime field '{}' accepted its configured value.",
+            label
+        );
     }
     Ok(())
 }
@@ -930,7 +948,9 @@ mod step4_filter_regression_tests {
     #[test]
     fn owl_datetime_fields_are_queued_for_native_cdp_input() {
         assert!(STEP4_SCRIPT.contains("querySelector('owl-date-time')"));
-        assert!(STEP4_SCRIPT.contains("pendingDateInputs.push({ label: filterName, id: input.id, value: String(value) })"));
+        assert!(STEP4_SCRIPT.contains(
+            "pendingDateInputs.push({ label: filterName, id: input.id, value: String(value) })"
+        ));
         assert!(STEP4_SCRIPT.contains("Queued OwlDateTime input for native CDP text entry"));
         assert!(STEP4_SCRIPT.contains("pending_date_inputs: pendingDateInputs"));
     }
@@ -1026,7 +1046,9 @@ mod owl_datetime_input_tests {
 
     #[test]
     fn verify_script_checks_value_and_angular_validity() {
-        let script = build_owl_datetime_verify_script("mat-input-3", "25-Nov-2026 23:59", "To Date").unwrap();
+        let script =
+            build_owl_datetime_verify_script("mat-input-3", "25-Nov-2026 23:59", "To Date")
+                .unwrap();
         assert!(script.contains("\"25-Nov-2026 23:59\""));
         assert!(script.contains("\"To Date\""));
         assert!(script.contains("input.getAttribute(\"aria-invalid\") === \"true\""));
@@ -1039,12 +1061,12 @@ mod owl_datetime_input_tests {
     #[test]
     fn generated_scripts_escape_untrusted_dom_ids_and_labels() {
         let prepare = build_owl_datetime_prepare_script("x\"; alert(1); //").unwrap();
-        let verify = build_owl_datetime_verify_script("x", "value", "label\"; alert(1); //").unwrap();
+        let verify =
+            build_owl_datetime_verify_script("x", "value", "label\"; alert(1); //").unwrap();
         assert!(prepare.contains(r#"\"; alert(1); //"#));
         assert!(verify.contains(r#"\"; alert(1); //"#));
     }
 }
-
 
 #[cfg(test)]
 mod url_redaction_tests {
@@ -1062,4 +1084,3 @@ mod url_redaction_tests {
         );
     }
 }
-
