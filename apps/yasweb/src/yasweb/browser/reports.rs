@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use headless_chrome::protocol::cdp::{types::Event, Page};
+use headless_chrome::protocol::cdp::{Input, Page};
 use headless_chrome::Tab;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -277,6 +277,12 @@ pub fn navigate_and_run_report(
                             &step4_fill_js,
                             "Step 4 (Fill Filters)",
                         )?;
+                        let pending_date_inputs = step4_res
+                            .get("pending_date_inputs")
+                            .and_then(serde_json::Value::as_array)
+                            .cloned()
+                            .unwrap_or_default();
+                        apply_owl_datetime_inputs(tab, &pending_date_inputs)?;
                         if let Some(arr) = step4_res
                             .get("discovered_filters")
                             .and_then(|v| v.as_array())
@@ -431,11 +437,11 @@ fn is_mis_reports_route(url: &str) -> bool {
     url.contains("/home/mis-report/module/")
 }
 
-/// Polls the report iframe until it becomes ready or the supplied deadline expires.
-/// Short individual checks allow a late iframe attachment to be detected without refreshing.
+/// Polls report-frame readiness without treating expected loading states as terminal errors.
 fn wait_for_report_iframe_until(tab: &Arc<Tab>, deadline: Instant, stage: &str) -> Result<()> {
     let readiness_js = generate_mis_reports_wait_js(1)?;
     let mut attempt = 0_u64;
+    let mut last_error = None;
     while Instant::now() < deadline {
         attempt += 1;
         match evaluate_report_frame_step(tab, &readiness_js, stage) {
@@ -447,10 +453,13 @@ fn wait_for_report_iframe_until(tab: &Arc<Tab>, deadline: Instant, stage: &str) 
                 return Ok(());
             }
             Err(error) => {
-                warn!(
-                    "YASWEB iframe is not ready yet: stage='{}' attempt={} error={:#}",
-                    stage, attempt, error
+                tracing::debug!(
+                    "YASWEB iframe readiness is still pending: stage='{}' attempt={} error={:#}",
+                    stage,
+                    attempt,
+                    error
                 );
+                last_error = Some(error);
             }
         }
         let remaining = deadline.saturating_duration_since(Instant::now());
@@ -458,19 +467,28 @@ fn wait_for_report_iframe_until(tab: &Arc<Tab>, deadline: Instant, stage: &str) 
             std::thread::sleep(Duration::from_millis(500).min(remaining));
         }
     }
+    let last_url = tab.get_url();
+    warn!(
+        "YASWEB iframe readiness deadline reached: stage='{}' attempts={} last_url='{}' last_error={}",
+        stage,
+        attempt,
+        last_url,
+        last_error.as_ref().map(ToString::to_string).unwrap_or_else(|| "no probe completed".to_string())
+    );
     anyhow::bail!(
-        "Yasweb report iframe did not become ready during '{}'",
-        stage
+        "Yasweb report iframe did not become ready during '{}' after {} probe(s); last_url='{}'",
+        stage,
+        attempt,
+        last_url
     )
 }
 
-/// Waits for the embedded report UI before attempting recovery.
+/// Waits for the embedded report UI for the full configured deadline.
 ///
-/// The initial readiness window is allowed to complete without refreshing:
-/// Yasweb can render the parent page before its Angular iframe has finished loading.
-/// Only after that grace period expires do we refresh once. A beforeunload dialog raised
-/// by that refresh is accepted through Chrome DevTools Protocol, without accepting
-/// unrelated alert/confirm/prompt dialogs.
+/// A refresh is deliberately not used as a readiness strategy: the parent SPA
+/// can be loaded while the cross-origin iframe is still rendering. Refreshing
+/// discards that in-flight state, can raise a beforeunload prompt, and can make
+/// a healthy but slow iframe restart its authentication/navigation sequence.
 fn wait_for_report_iframe_ready(tab: &Arc<Tab>, timeout_minutes: u64) -> Result<()> {
     let timeout = Duration::from_secs(timeout_minutes.saturating_mul(60));
     if timeout.is_zero() {
@@ -479,101 +497,78 @@ fn wait_for_report_iframe_ready(tab: &Arc<Tab>, timeout_minutes: u64) -> Result<
     let deadline = Instant::now()
         .checked_add(timeout)
         .ok_or_else(|| anyhow::anyhow!("Yasweb iframe readiness timeout is too large"))?;
-    let first_wait = (timeout / 2)
-        .min(Duration::from_secs(30))
-        .max(Duration::from_secs(1));
-    let initial_deadline = Instant::now()
-        .checked_add(first_wait)
-        .unwrap_or(deadline)
-        .min(deadline);
-
     info!(
-        "Waiting up to {} seconds for the initial Yasweb iframe load before considering a refresh",
-        first_wait.as_secs()
+        "Waiting up to {} minute(s) for Yasweb report iframe readiness without refreshing the page",
+        timeout_minutes
     );
-    if wait_for_report_iframe_until(tab, initial_deadline, "Initial iframe readiness").is_ok() {
-        info!("YASWEB iframe became ready without refreshing the page.");
-        return Ok(());
-    }
+    wait_for_report_iframe_until(tab, deadline, "Report iframe readiness")
+        .with_context(|| format!("MIS route remained '{}'", tab.get_url()))
+}
 
-    let remaining = deadline.saturating_duration_since(Instant::now());
-    if remaining.is_zero() {
-        anyhow::bail!(
-            "Yasweb report iframe did not become ready within {} minute(s); no time remained for recovery",
-            timeout_minutes
+/// Fills OwlDateTime inputs through Chrome's native input pipeline so the
+/// picker directive receives one complete input event and can update Angular's
+/// ControlValueAccessor/model validity.
+fn apply_owl_datetime_inputs(tab: &Arc<Tab>, fields: &[serde_json::Value]) -> Result<()> {
+    for field in fields {
+        let label = field.get("label").and_then(serde_json::Value::as_str).unwrap_or("date");
+        let id = field.get("id").and_then(serde_json::Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| anyhow::anyhow!("OwlDateTime field '{}' has no DOM id", label))?;
+        let value = field.get("value").and_then(serde_json::Value::as_str)
+            .ok_or_else(|| anyhow::anyhow!("OwlDateTime field '{}' has no text value", label))?;
+        let id_json = serde_json::to_string(id)?;
+
+        let prepare_js = format!(
+            r#"(() => {{
+                const input = document.getElementById({id_json});
+                if (!input) return JSON.stringify({{status: "ERROR", msg: "OwlDateTime input disappeared before native typing"}});
+                if (input.disabled || input.readOnly || input.getClientRects().length === 0) {{
+                    return JSON.stringify({{status: "ERROR", msg: "OwlDateTime input is not interactable"}});
+                }}
+                input.focus();
+                input.value = "";
+                input.dispatchEvent(new Event("input", {{ bubbles: true }}));
+                return JSON.stringify({{status: document.activeElement === input ? "SUCCESS" : "ERROR", msg: "OwlDateTime input focus"}});
+            }})()"#
         );
+        evaluate_report_frame_step(tab, &prepare_js, "Step 4 (Prepare OwlDateTime)")?;
+
+        tab.call_method(Input::InsertText {
+            text: value.to_string(),
+        })
+        .with_context(|| format!("CDP native text insertion failed for OwlDateTime field '{}'", label))?;
+
+        let expected_json = serde_json::to_string(value)?;
+        let verify_js = format!(
+            r#"(async () => {{
+                const input = document.getElementById({id_json});
+                if (!input) return JSON.stringify({{status: "ERROR", msg: "OwlDateTime input disappeared after native typing"}});
+                input.dispatchEvent(new Event("change", {{ bubbles: true }}));
+                input.blur();
+                await new Promise(resolve => setTimeout(resolve, 100));
+                const field = input.closest("mat-form-field");
+                const invalid = input.getAttribute("aria-invalid") === "true" ||
+                    input.classList.contains("ng-invalid") ||
+                    !!field?.classList.contains("ng-invalid");
+                const matches = input.value === {expected_json};
+                const status = matches && !invalid ? "SUCCESS" : "ERROR";
+                return JSON.stringify({{
+                    status,
+                    msg: status === "SUCCESS" ? "OwlDateTime value accepted by Angular" :
+                        "OwlDateTime value was not accepted by Angular",
+                    label: {label_json},
+                    matches,
+                    invalid,
+                    ariaInvalid: input.getAttribute("aria-invalid"),
+                    inputClasses: input.className,
+                    fieldClasses: field?.className || ""
+                }});
+            }})()"#
+        ).replace("{label_json}", &serde_json::to_string(label)?);
+        evaluate_report_frame_step(tab, &verify_js, "Step 4 (Verify OwlDateTime)")?;
+        info!("OwlDateTime field '{}' accepted its configured value.", label);
     }
-
-    // Enable Page events before navigation so Chrome's beforeunload dialog is
-    // handled as soon as it opens. Accept only beforeunload; leave other dialogs
-    // untouched so application alerts are not silently swallowed.
-    tab.call_method(Page::Enable {
-        enable_file_chooser_opened_event: None,
-    })
-    .context("Failed to enable Chrome Page events for Yasweb refresh recovery")?;
-    let dialog_tab = Arc::clone(tab);
-    let dialog_listener = Arc::new(move |event: &Event| {
-        if let Event::PageJavascriptDialogOpening(opening) = event {
-            if opening.params.Type == Page::DialogType::Beforeunload {
-                match dialog_tab.get_dialog().accept(None) {
-                    Ok(()) => info!(
-                        "Automatically accepted Yasweb beforeunload dialog before refreshing the report page."
-                    ),
-                    Err(error) => warn!(
-                        "Failed to accept Yasweb beforeunload dialog automatically: {:#}",
-                        error
-                    ),
-                }
-            }
-        }
-    });
-    let listener_handle = tab
-        .add_event_listener(dialog_listener)
-        .context("Failed to register Yasweb beforeunload dialog handler")?;
-
-    let recovery_result = (|| -> Result<()> {
-        let current_url = tab.get_url();
-        if current_url.is_empty() || current_url == "about:blank" {
-            anyhow::bail!(
-                "Cannot refresh Yasweb while waiting for iframe readiness: browser tab URL is '{}'",
-                current_url
-            );
-        }
-
-        warn!("YASWEB iframe is still not ready after the initial wait; refreshing the tab once.");
-        tab.navigate_to(&current_url)
-            .context("Failed to refresh Yasweb browser tab while waiting for report iframe")?;
-        tab.wait_until_navigated()
-            .context("Yasweb browser tab did not finish navigation after refresh")?;
-
-        let remaining = deadline.saturating_duration_since(Instant::now());
-        if remaining.is_zero() {
-            anyhow::bail!("Yasweb readiness timeout expired while refreshing the report page");
-        }
-        if wait_for_mis_reports_route(tab, remaining.min(Duration::from_secs(30))).is_err() {
-            warn!("MIS SPA route was not restored by browser refresh; retrying MIS navigation.");
-            retry_mis_navigation(tab)
-                .context("Failed to restore MIS navigation after browser refresh")?;
-            let remaining = deadline.saturating_duration_since(Instant::now());
-            if remaining.is_zero() {
-                anyhow::bail!("Yasweb readiness timeout expired while restoring the MIS route");
-            }
-            wait_for_mis_reports_route(tab, remaining.min(Duration::from_secs(30)))
-                .context("MIS route did not return after browser refresh and navigation retry")?;
-        }
-
-        wait_for_report_iframe_until(tab, deadline, "Post-refresh iframe readiness")
-            .context("Yasweb report iframe remained unavailable after the recovery refresh")?;
-        Ok(())
-    })();
-
-    if let Err(error) = tab.remove_event_listener(&listener_handle) {
-        warn!(
-            "Failed to remove temporary Yasweb beforeunload dialog handler: {:#}",
-            error
-        );
-    }
-    recovery_result
+    Ok(())
 }
 
 /// Runs a report automation step in the embedded report frame's own CDP execution context.
