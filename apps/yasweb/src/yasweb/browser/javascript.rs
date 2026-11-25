@@ -239,7 +239,14 @@ fn parse_automation_result(raw: &str, step_name: &str) -> Result<serde_json::Val
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_automation_result, prepare_automation_script};
+    use super::{is_transient_readiness_step, parse_automation_result, prepare_automation_script};
+
+    #[test]
+    fn iframe_readiness_probes_are_classified_as_transient() {
+        assert!(is_transient_readiness_step("Initial iframe readiness"));
+        assert!(is_transient_readiness_step("Report iframe readiness"));
+        assert!(!is_transient_readiness_step("Step 4 (Fill Filters)"));
+    }
 
     #[test]
     fn return_await_scripts_are_wrapped_as_awaitable_expressions() {
