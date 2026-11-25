@@ -78,51 +78,72 @@ fn build_login_input_verify_script(selector: &str, value: &str) -> Result<String
 /// login flow proceeds; values are never included in logs or errors.
 fn set_input_via_cdp(tab: &Arc<Tab>, selector: &str, value: &str) -> Result<()> {
     let focus_script = build_login_input_focus_script(selector)?;
-    let focus_result = tab
-        .evaluate(&focus_script, true)
-        .context("Failed to focus login input")?
-        .value
-        .and_then(|value| value.as_str().map(str::to_owned))
-        .ok_or_else(|| anyhow::anyhow!("Login input focus returned no result"))?;
-    let focus_status: serde_json::Value = serde_json::from_str(&focus_result)?;
-    if focus_status.get("status").and_then(serde_json::Value::as_str) != Some("SUCCESS") {
-        anyhow::bail!(
-            "Login input is not available for native text entry (reason={})",
-            focus_status.get("reason").and_then(serde_json::Value::as_str).unwrap_or("unknown")
-        );
-    }
-
-    let insert_result = tab.call_method(Input::InsertText {
-        text: value.to_string(),
-    });
-
     let verify_script = build_login_input_verify_script(selector, value)?;
-    let verify_result = tab
-        .evaluate(&verify_script, true)
-        .context("Failed to verify login input after native text entry")?
-        .value
-        .and_then(|value| value.as_str().map(str::to_owned))
-        .ok_or_else(|| anyhow::anyhow!("Login input verification returned no result"))?;
-    let verified: serde_json::Value = serde_json::from_str(&verify_result)?;
-    if verified.get("status").and_then(serde_json::Value::as_str) != Some("SUCCESS") {
+    let mut last_error = None;
+
+    // A single bounded retry covers transient CDP delivery failures without
+    // risking an unbounded login wait or typing into a stale element.
+    for attempt in 1..=2 {
+        let focus_result = tab
+            .evaluate(&focus_script, true)
+            .context("Failed to focus login input")?
+            .value
+            .and_then(|value| value.as_str().map(str::to_owned))
+            .ok_or_else(|| anyhow::anyhow!("Login input focus returned no result"))?;
+        let focus_status: serde_json::Value = serde_json::from_str(&focus_result)?;
+        if focus_status.get("status").and_then(serde_json::Value::as_str) != Some("SUCCESS") {
+            last_error = Some(format!(
+                "input unavailable (reason={})",
+                focus_status.get("reason").and_then(serde_json::Value::as_str).unwrap_or("unknown")
+            ));
+            if attempt == 1 {
+                std::thread::sleep(Duration::from_millis(150));
+                continue;
+            }
+            break;
+        }
+
+        let insert_result = tab.call_method(Input::InsertText {
+            text: value.to_string(),
+        });
+        let verified = tab
+            .evaluate(&verify_script, true)
+            .context("Failed to verify login input after native text entry")?
+            .value
+            .and_then(|value| value.as_str().map(str::to_owned))
+            .ok_or_else(|| anyhow::anyhow!("Login input verification returned no result"))?;
+        let verified: serde_json::Value = serde_json::from_str(&verified)?;
+
+        if verified.get("status").and_then(serde_json::Value::as_str) == Some("SUCCESS") {
+            if let Err(error) = insert_result {
+                tracing::warn!(
+                    "CDP reported an input completion error, but the login field value was verified on attempt {}: {:#}",
+                    attempt,
+                    error
+                );
+            }
+            return Ok(());
+        }
+
         let cdp_error = insert_result
             .err()
             .map(|error| format!("; CDP input error: {error:#}"))
             .unwrap_or_default();
-        anyhow::bail!(
-            "Native text entry did not populate login input (matches={}, length={}){}",
+        last_error = Some(format!(
+            "value verification failed (matches={}, length={}){}",
             verified.get("matches").and_then(serde_json::Value::as_bool).unwrap_or(false),
             verified.get("length").and_then(serde_json::Value::as_u64).unwrap_or(0),
             cdp_error
-        );
+        ));
+        if attempt == 1 {
+            std::thread::sleep(Duration::from_millis(150));
+        }
     }
-    if let Err(error) = insert_result {
-        tracing::warn!(
-            "CDP reported an input completion error, but the login field value was verified: {:#}",
-            error
-        );
-    }
-    Ok(())
+
+    anyhow::bail!(
+        "Native text entry did not populate login input after 2 bounded attempts: {}",
+        last_error.unwrap_or_else(|| "unknown input failure".to_string())
+    )
 }
 
 /// Automates the login flow and waits for the dashboard to appear.
