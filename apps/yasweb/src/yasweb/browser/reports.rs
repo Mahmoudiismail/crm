@@ -450,10 +450,7 @@ fn wait_for_mis_reports_route(tab: &Arc<Tab>, timeout: Duration) -> Result<()> {
 }
 
 fn redact_url_for_log(url: &str) -> String {
-    url.split(['?', '#'])
-        .next()
-        .unwrap_or(url)
-        .to_string()
+    url.split(['?', '#']).next().unwrap_or(url).to_string()
 }
 
 fn is_mis_reports_route(url: &str) -> bool {

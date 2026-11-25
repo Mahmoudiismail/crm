@@ -318,10 +318,7 @@ fn write_diagnostic_file(
 
 /// Removes query strings and fragments from URLs before they enter diagnostic logs.
 fn redact_url_for_log(url: &str) -> String {
-    url.split(['?', '#'])
-        .next()
-        .unwrap_or(url)
-        .to_string()
+    url.split(['?', '#']).next().unwrap_or(url).to_string()
 }
 
 fn collect_frame_resources(value: &serde_json::Value, frames: &mut Vec<(usize, String, String)>) {
