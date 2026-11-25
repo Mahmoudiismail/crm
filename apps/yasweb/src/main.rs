@@ -4,6 +4,7 @@ use crm_tool::manifest::{AppArg, AppManifest, ArgType};
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use clap::Parser;
@@ -14,6 +15,8 @@ use tokio::fs;
 use tracing::{error, info};
 use yasweb_app::yasweb::browser::run_browser_tab;
 use yasweb_app::yasweb::config::{DiscoveredReportFilters, ReportConfig, YaswebConfig};
+
+static YASWEB_RUN_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Parser)]
 #[command(name = "yasweb", about = "YAS Web Scraper", version)]
@@ -349,7 +352,8 @@ fn create_yasweb_run_id() -> Result<String> {
         .duration_since(std::time::UNIX_EPOCH)
         .context("System clock is before UNIX_EPOCH while creating a Yasweb run id")?
         .as_nanos();
-    Ok(format!("{}_{}", std::process::id(), timestamp))
+    let sequence = YASWEB_RUN_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    Ok(format!("{}_{}_{}", std::process::id(), timestamp, sequence))
 }
 
 fn report_profile_dir(
@@ -1148,6 +1152,11 @@ async fn main() -> Result<()> {
 mod tests_yasweb_finalization {
     use super::*;
     use std::fs::File;
+
+    #[test]
+    fn run_ids_are_unique_even_when_the_clock_resolution_is_coarse() {
+        assert_ne!(create_yasweb_run_id().unwrap(), create_yasweb_run_id().unwrap());
+    }
 
     #[test]
     fn concurrent_report_invocations_receive_distinct_chrome_profiles() {
