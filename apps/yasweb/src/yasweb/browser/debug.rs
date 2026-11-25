@@ -6,9 +6,9 @@ use headless_chrome::{
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
-use std::sync::{Mutex, OnceLock};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use tracing::{debug, info, warn};
@@ -427,10 +427,18 @@ mod tests {
     #[test]
     fn identical_snapshots_are_deduplicated_per_report_and_document() {
         assert!(is_new_snapshot("Report A", "frame-1", b"<html>same</html>"));
-        assert!(!is_new_snapshot("Report A", "frame-1", b"<html>same</html>"));
+        assert!(!is_new_snapshot(
+            "Report A",
+            "frame-1",
+            b"<html>same</html>"
+        ));
         assert!(is_new_snapshot("Report A", "frame-2", b"<html>same</html>"));
         assert!(is_new_snapshot("Report B", "frame-1", b"<html>same</html>"));
-        assert!(is_new_snapshot("Report A", "frame-1", b"<html>changed</html>"));
+        assert!(is_new_snapshot(
+            "Report A",
+            "frame-1",
+            b"<html>changed</html>"
+        ));
     }
 
     #[test]

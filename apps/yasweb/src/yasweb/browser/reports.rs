@@ -1173,8 +1173,7 @@ mod iframe_recovery_tests {
             "https://yasweb.fakeeh.care:8030/home/mis".to_string(),
             "https://yasweb.fakeeh.care:8065/auto-login".to_string(),
         ];
-        let iframe_sources =
-            vec!["https://yasweb.fakeeh.care:8065/auto-login".to_string()];
+        let iframe_sources = vec!["https://yasweb.fakeeh.care:8065/auto-login".to_string()];
         let selected = select_report_frame_index(&frame_urls, &iframe_sources);
         assert_eq!(selected, Some(1));
         assert!(frame_url_matches(
