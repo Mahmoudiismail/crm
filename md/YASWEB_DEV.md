@@ -53,8 +53,10 @@ must wait up to 30 seconds for `/home/mis-report/module/` before inspecting the
 frame tree. Do not re-click MIS while this route wait is still active. Only
 after the route is reached should the automation discover the current iframe,
 create a fresh CDP execution context, and run the report-frame readiness check.
-If the route does not appear within the bounded wait, return a diagnostic error
-including the last observed URL. Once the route is reached, iframe readiness waits
+If the route does not appear within the initial bounded wait, attempt the
+existing MIS navigation recovery once, then return a diagnostic error with the
+last observed URL if the route is still absent. Once the route is reached,
+iframe readiness waits
 for the configured deadline without refreshing the parent tab; this avoids
 restarting a healthy but slow iframe and prevents unnecessary beforeunload prompts.
 See `md/yasweb-spa-race-condition.md` for the failure history and regression coverage.
