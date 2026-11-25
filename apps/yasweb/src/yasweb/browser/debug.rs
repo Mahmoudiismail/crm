@@ -188,7 +188,7 @@ fn persist_frame_resources(
             Err(error) => {
                 warn!(
                     "Could not capture frame resource HTML; trying live frame DOM: frame_id={} url={} error={:#}",
-                    frame_id, frame_url, error
+                    frame_id, redact_url_for_log(&frame_url), error
                 );
                 let capture = (|| -> anyhow::Result<String> {
                     let world = tab.call_method(Page::CreateIsolatedWorld {
