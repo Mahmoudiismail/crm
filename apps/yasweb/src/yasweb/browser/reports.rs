@@ -417,7 +417,7 @@ fn wait_for_mis_reports_route(tab: &Arc<Tab>, timeout: Duration) -> Result<()> {
         if is_mis_reports_route(&current_url) {
             info!(
                 "YASWEB MIS SPA route reached: url='{}' elapsed_ms={}",
-                current_url,
+                redact_url_for_log(&current_url),
                 started.elapsed().as_millis()
             );
             return Ok(());
@@ -997,6 +997,24 @@ mod owl_datetime_input_tests {
         let verify = build_owl_datetime_verify_script("x", "value", "label\"; alert(1); //").unwrap();
         assert!(prepare.contains(r#"\"; alert(1); //"#));
         assert!(verify.contains(r#"\"; alert(1); //"#));
+    }
+}
+
+
+#[cfg(test)]
+mod url_redaction_tests {
+    use super::redact_url_for_log;
+
+    #[test]
+    fn readiness_diagnostics_remove_query_strings_and_fragments() {
+        assert_eq!(
+            redact_url_for_log("https://reports.example/auto-login?session=secret#frame"),
+            "https://reports.example/auto-login"
+        );
+        assert_eq!(
+            redact_url_for_log("https://reports.example/home"),
+            "https://reports.example/home"
+        );
     }
 }
 
