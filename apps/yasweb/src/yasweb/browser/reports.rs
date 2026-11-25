@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use headless_chrome::protocol::cdp::{Input, Page};
+use headless_chrome::protocol::cdp::{types::Event, Input, Page};
 use headless_chrome::Tab;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -503,12 +503,69 @@ fn wait_for_report_iframe_until(tab: &Arc<Tab>, deadline: Instant, stage: &str) 
     )
 }
 
-/// Waits for the embedded report UI for the full configured deadline.
-///
-/// A refresh is deliberately not used as a readiness strategy: the parent SPA
-/// can be loaded while the cross-origin iframe is still rendering. Refreshing
-/// discards that in-flight state, can raise a beforeunload prompt, and can make
-/// a healthy but slow iframe restart its authentication/navigation sequence.
+/// Refreshes only the current cross-origin report iframe, leaving the CRM/MIS
+/// parent SPA and its authenticated session untouched.
+fn refresh_report_iframe(tab: &Arc<Tab>) -> Result<()> {
+    let tree = tab
+        .call_method(Page::GetFrameTree(None))
+        .context("Failed to inspect Chrome frame tree before report iframe refresh")?;
+    let mut frames = Vec::new();
+    collect_child_frames(&tree.frame_tree, &mut frames);
+    let iframe_sources = tab
+        .evaluate(
+            "JSON.stringify(Array.from(document.querySelectorAll('iframe')).map(frame => frame.src || frame.getAttribute('src') || '').filter(Boolean))",
+            true,
+        )
+        .ok()
+        .and_then(|result| result.value)
+        .and_then(|value| value.as_str().map(str::to_owned))
+        .and_then(|raw| serde_json::from_str::<Vec<String>>(&raw).ok())
+        .unwrap_or_default();
+    let frame = select_report_frame(&frames, &iframe_sources)
+        .ok_or_else(|| anyhow::anyhow!("Could not identify the current report iframe for targeted refresh"))?;
+    if frame.url.is_empty() || frame.url == "about:blank" {
+        anyhow::bail!("Report iframe has no refreshable URL");
+    }
+
+    info!(
+        "Refreshing only Yasweb report iframe after readiness timeout: frame_url='{}'",
+        redact_url_for_log(&frame.url)
+    );
+
+    tab.call_method(Page::Enable {
+        enable_file_chooser_opened_event: None,
+    })
+    .context("Failed to enable Chrome Page events for iframe recovery")?;
+    let dialog_tab = Arc::clone(tab);
+    let dialog_listener = Arc::new(move |event: &Event| {
+        if let Event::PageJavascriptDialogOpening(opening) = event {
+            if opening.params.Type == Page::DialogType::Beforeunload {
+                match dialog_tab.get_dialog().accept(None) {
+                    Ok(()) => info!("Automatically accepted beforeunload dialog raised by report iframe refresh."),
+                    Err(error) => warn!("Could not automatically accept iframe beforeunload dialog: {:#}", error),
+                }
+            }
+        }
+    });
+    let listener_handle = tab
+        .add_event_listener(dialog_listener)
+        .context("Failed to register iframe beforeunload handler")?;
+
+    let navigation = tab.call_method(Page::Navigate {
+        url: frame.url.clone(),
+        referrer: None,
+        transition_type: None,
+        frame_id: Some(frame.id.clone()),
+        referrer_policy: None,
+    });
+    let remove_listener = tab.remove_event_listener(&listener_handle);
+    navigation.context("Chrome failed to navigate the report iframe during targeted refresh")?;
+    remove_listener.context("Failed to remove temporary iframe beforeunload handler")?;
+    Ok(())
+}
+
+/// Waits for iframe readiness, then performs one targeted iframe refresh if the
+/// initial grace period expires. The parent CRM/MIS page is never reloaded.
 fn wait_for_report_iframe_ready(tab: &Arc<Tab>, timeout_minutes: u64) -> Result<()> {
     let timeout = Duration::from_secs(timeout_minutes.saturating_mul(60));
     if timeout.is_zero() {
@@ -517,16 +574,39 @@ fn wait_for_report_iframe_ready(tab: &Arc<Tab>, timeout_minutes: u64) -> Result<
     let deadline = Instant::now()
         .checked_add(timeout)
         .ok_or_else(|| anyhow::anyhow!("Yasweb iframe readiness timeout is too large"))?;
+    let initial_wait = (timeout / 2)
+        .min(Duration::from_secs(30))
+        .max(Duration::from_secs(1));
+    let initial_deadline = Instant::now()
+        .checked_add(initial_wait)
+        .unwrap_or(deadline)
+        .min(deadline);
+
     info!(
-        "Waiting up to {} minute(s) for Yasweb report iframe readiness without refreshing the page",
-        timeout_minutes
+        "Waiting up to {} seconds for initial Yasweb report iframe readiness",
+        initial_wait.as_secs()
     );
-    wait_for_report_iframe_until(tab, deadline, "Report iframe readiness").with_context(|| {
-        format!(
-            "MIS route remained '{}'",
-            redact_url_for_log(&tab.get_url())
-        )
-    })
+    if wait_for_report_iframe_until(tab, initial_deadline, "Initial report iframe readiness").is_ok() {
+        info!("Yasweb report iframe became ready without recovery refresh.");
+        return Ok(());
+    }
+
+    if Instant::now() >= deadline {
+        anyhow::bail!("Yasweb report iframe did not become ready before the configured timeout");
+    }
+
+    warn!(
+        "Yasweb report iframe did not become ready within the initial {} second grace period; refreshing the iframe only",
+        initial_wait.as_secs()
+    );
+    if let Err(error) = refresh_report_iframe(tab) {
+        debug::save_failure_diagnostics(tab, "report_iframe_targeted_refresh");
+        return Err(error).context("Automatic report iframe refresh failed");
+    }
+
+    let remaining = deadline.saturating_duration_since(Instant::now());
+    wait_for_report_iframe_until(tab, Instant::now() + remaining, "Post-refresh report iframe readiness")
+        .with_context(|| format!("Report iframe remained unavailable after targeted refresh; parent route='{}'", redact_url_for_log(&tab.get_url())))
 }
 
 fn build_owl_datetime_prepare_script(id: &str) -> Result<String> {
