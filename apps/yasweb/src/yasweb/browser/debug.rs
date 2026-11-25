@@ -68,7 +68,13 @@ pub fn save_failure_diagnostics(tab: &Arc<Tab>, step_name: &str) {
     persist_html(tab, "failure", None, step_name, true);
 }
 
-fn persist_html(tab: &Arc<Tab>, report_name: &str, step_num: Option<u32>, step_name: &str, force: bool) {
+fn persist_html(
+    tab: &Arc<Tab>,
+    report_name: &str,
+    step_num: Option<u32>,
+    step_name: &str,
+    force: bool,
+) {
     let html = match tab.get_content() {
         Ok(html) => html,
         Err(error) => {
@@ -94,7 +100,10 @@ fn persist_html(tab: &Arc<Tab>, report_name: &str, step_num: Option<u32>, step_n
     let save_main_document =
         force || is_new_snapshot(report_name, "main-document", html.as_bytes());
     if !save_main_document {
-        debug!("Skipping duplicate main-document HTML snapshot: report='{}' step='{}'", report_name, step_name);
+        debug!(
+            "Skipping duplicate main-document HTML snapshot: report='{}' step='{}'",
+            report_name, step_name
+        );
     }
 
     let debug_dir = exe_dir.join("debug_html");
@@ -215,7 +224,11 @@ fn persist_frame_resources(
                 };
 
                 if !force && !is_new_snapshot(report_name, &frame_url, &bytes) {
-                    debug!("Skipping duplicate frame HTML snapshot: report='{}' frame_url='{}'", report_name, redact_url_for_log(&frame_url));
+                    debug!(
+                        "Skipping duplicate frame HTML snapshot: report='{}' frame_url='{}'",
+                        report_name,
+                        redact_url_for_log(&frame_url)
+                    );
                     continue;
                 }
 
@@ -282,7 +295,11 @@ fn persist_frame_resources(
                 match capture {
                     Ok(html) => {
                         if !force && !is_new_snapshot(report_name, &frame_url, html.as_bytes()) {
-                            debug!("Skipping duplicate live frame DOM snapshot: report='{}' frame_url='{}'", report_name, redact_url_for_log(&frame_url));
+                            debug!(
+                                "Skipping duplicate live frame DOM snapshot: report='{}' frame_url='{}'",
+                                report_name,
+                                redact_url_for_log(&frame_url)
+                            );
                             continue;
                         }
                         let filename = format!(
@@ -403,7 +420,8 @@ fn sanitize_filename(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        collect_frame_resources, is_new_snapshot, redact_url_for_log, sanitize_filename, write_diagnostic_file,
+        collect_frame_resources, is_new_snapshot, redact_url_for_log, sanitize_filename,
+        write_diagnostic_file,
     };
 
     #[test]
