@@ -140,7 +140,7 @@
                                                             if (input.tagName === 'INPUT') {
                                                                 const owlDateTimePicker = input.closest('mat-form-field')?.querySelector('owl-date-time');
                                                                 if (owlDateTimePicker && clearRequested) {
-                                                                    logs.push("Ignoring explicit empty value for required OwlDateTime control: " + key);
+                                                                    logs.push("Leaving OwlDateTime control unchanged for an explicitly empty value: " + key);
                                                                     filterFilled = true;
                                                                     break;
                                                                 }
