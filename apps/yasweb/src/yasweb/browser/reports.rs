@@ -542,10 +542,11 @@ fn build_owl_datetime_verify_script(id: &str, value: &str, label: &str) -> Resul
                 input.classList.contains("ng-invalid") ||
                 !!field?.classList.contains("ng-invalid");
             const matches = input.value === {expected_json};
-            const status = matches && !invalid ? "SUCCESS" : "ERROR";
+            const accepted = matches && !invalid;
             return JSON.stringify({{
-                status,
-                msg: status === "SUCCESS" ? "OwlDateTime value accepted by Angular" :
+                status: "SUCCESS",
+                accepted,
+                msg: accepted ? "OwlDateTime value accepted by Angular" :
                     "OwlDateTime value was not accepted by Angular",
                 label: {label_json},
                 matches,
@@ -572,13 +573,41 @@ fn apply_owl_datetime_inputs(tab: &Arc<Tab>, fields: &[serde_json::Value]) -> Re
         let prepare_js = build_owl_datetime_prepare_script(id)?;
         evaluate_report_frame_step(tab, &prepare_js, "Step 4 (Prepare OwlDateTime)")?;
 
-        tab.call_method(Input::InsertText {
+        let insert_result = tab.call_method(Input::InsertText {
             text: value.to_string(),
-        })
-        .with_context(|| format!("CDP native text insertion failed for OwlDateTime field '{}'", label))?;
+        });
 
         let verify_js = build_owl_datetime_verify_script(id, value, label)?;
-        evaluate_report_frame_step(tab, &verify_js, "Step 4 (Verify OwlDateTime)")?;
+        let verification =
+            evaluate_report_frame_step(tab, &verify_js, "Step 4 (Verify OwlDateTime)")?;
+        let accepted = verification
+            .get("accepted")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
+        if !accepted {
+            debug::save_failure_diagnostics(tab, "OwlDateTime validation");
+            let cdp_error = insert_result
+                .err()
+                .map(|error| format!("; CDP input error: {error:#}"))
+                .unwrap_or_default();
+            anyhow::bail!(
+                "OwlDateTime field '{}' was rejected by Angular (matches={}, invalid={}, aria-invalid={}, input-classes='{}', form-field-classes='{}'){}",
+                label,
+                verification.get("matches").and_then(serde_json::Value::as_bool).unwrap_or(false),
+                verification.get("invalid").and_then(serde_json::Value::as_bool).unwrap_or(true),
+                verification.get("ariaInvalid").and_then(serde_json::Value::as_str).unwrap_or("unknown"),
+                verification.get("inputClasses").and_then(serde_json::Value::as_str).unwrap_or("unknown"),
+                verification.get("fieldClasses").and_then(serde_json::Value::as_str).unwrap_or("unknown"),
+                cdp_error
+            );
+        }
+        if let Err(error) = insert_result {
+            tracing::warn!(
+                "CDP reported an input completion error, but OwlDateTime field '{}' was verified: {:#}",
+                label,
+                error
+            );
+        }
         info!("OwlDateTime field '{}' accepted its configured value.", label);
     }
     Ok(())
@@ -988,7 +1017,8 @@ mod owl_datetime_input_tests {
         assert!(script.contains("input.getAttribute(\"aria-invalid\") === \"true\""));
         assert!(script.contains("input.classList.contains(\"ng-invalid\")"));
         assert!(script.contains("field?.classList.contains(\"ng-invalid\")"));
-        assert!(script.contains("matches && !invalid"));
+        assert!(script.contains("const accepted = matches && !invalid"));
+        assert!(script.contains("accepted,"));
     }
 
     #[test]
