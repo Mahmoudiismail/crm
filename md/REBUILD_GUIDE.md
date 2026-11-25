@@ -92,6 +92,9 @@ pub struct YaswebConfig {
     pub username: String,
     pub password: Option<String>,
     pub headless: bool,
+    pub keep_open: bool,
+    pub save_html_diagnostics: bool, // Explicit opt-in; defaults to false.
+    pub concurrency: usize,
     pub reports: HashMap<String, ReportConfig>,
 }
 
