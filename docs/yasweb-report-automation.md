@@ -44,7 +44,7 @@ Relevant implementation: `evaluate_report_frame_step` and `collect_child_frames`
 | 1 | `login` | Login page loaded | Username/password entry, login submit, dashboard account ID verified | Stop; do not navigate to reports |
 | 2 | `menu_button_click` / MIS menu | Dashboard authenticated | Navigation menu opens and MIS module is visible | Retry menu opening up to 3 attempts, then fail |
 | 3 | `click_mis_module` | MIS menu open | MIS module clicked | Fail |
-| 4 | `Wait for MIS Reports` | Parent route is `/home/mis-report/module/` | Report frame context contains visible type controls and Search; no visible loader | If route is absent, retry navigation once; if route exists, retry readiness without clicking navigation again |
+| 4 | `Wait for MIS Reports` | Parent route is `/home/mis-report/module/` | Report frame context contains visible type controls and Search; no visible loader | Wait through the configured readiness deadline without refreshing the parent tab; if the SPA route itself is absent, use the separate bounded MIS-navigation recovery |
 | 5 | `Step 1 (Report Type)` | Report frame ready | Requested report type control is found and clicked | Fail if not found |
 | 6 | `Step 2 (Select Report)` | Type selected | Report list appears and requested report entry is clicked | Fail on list/report timeout |
 | 7 | `Step 3 (Binding)` | Report selected | Expected report name appears in a bound `mat-select` or a bold/semibold header | Fail on binding timeout |
@@ -70,7 +70,7 @@ Selectors below are from the current implementation. Angular/DevExtreme markup c
 | `.alert-danger.fade.show` | Visible login failure alert; its text is included in the error |
 | `span.usr-id` | Logged-in account ID used to verify the configured username |
 
-Numeric portal IDs may be zero-padded. `username_matches` trims whitespace and compares numeric IDs after removing leading zeroes; non-numeric usernames compare case-insensitively. An account mismatch is a hard failure.
+Username and password values are focused/cleared through the DOM, inserted with CDP `Input.insertText`, then checked against the actual input value before submit. This emits the complete input event through Chrome instead of relying on `Element::type_into`'s event waiter. Values are never written to logs. Numeric portal IDs may be zero-padded. `username_matches` trims whitespace and compares numeric IDs after removing leading zeroes; non-numeric usernames compare case-insensitively. An account mismatch is a hard failure.
 
 ### 4.2 Parent navigation — `reports.rs`
 
@@ -128,7 +128,7 @@ The current search logic prefers an exact normalized text match, then permits a 
 | `.cdk-overlay-container` | Angular Material overlay fallback for options |
 | `.cdk-overlay-backdrop` | Clicked to close a dropdown when the requested option is missing |
 
-Filter keys are matched to `mat-label` text after lowercasing and replacing underscores with spaces. Empty filter values are skipped. Text inputs are filled by dispatching `input`, `change`, and `blur` events. For keys containing `date`, the current code pads the first date segment to two characters and preserves the segment order; do not assume it converts date formats without checking the caller's input and portal expectations.
+Filter keys are matched to `mat-label` text after lowercasing and replacing underscores with spaces. Empty filter values are skipped for non-text controls. Ordinary text and Angular Material datepicker inputs are filled by dispatching `input`, `change`, and `blur` events. Inputs associated with an `owl-date-time` component are queued by Step 4 and filled separately through CDP `Input.insertText` so OwlDateTime receives one complete input event; the Rust host then checks the input and containing Angular form field for `ng-invalid`/`aria-invalid` before allowing Search. For keys containing `date`, the configured date format remains the source of truth.
 
 A requested filter that cannot be located or whose dropdown option is missing must fail Step 4. Do not allow the pipeline to click Search with an incomplete filter set.
 
@@ -183,9 +183,9 @@ Network logs are emitted by `client::enable_network_logging`; request URLs are s
 ## 6. HTML snapshots and sensitive data
 
 - `debug::save_html_state` and `debug::save_failure_diagnostics` persist HTML only when TRACE logging is enabled.
-- Files are saved under `debug_html/` next to the executable. Filenames include step number/name and timestamp; unsafe filename characters are sanitized.
+- Files are saved under `debug_html/` next to the executable. Filenames include step number/name, timestamp, process ID, and an atomic per-process sequence; unsafe filename characters are sanitized. Each file is written to a unique temporary file and atomically renamed into place.
 - Each step snapshot captures the top-level tab and attempts to save every current document frame through CDP, including cross-origin report frames. A frame resource may no longer be available; such failures are logged with the frame URL and CDP error.
-- Step 4 logs the visible filter-field inventory before and after filling, including on failure. Explicit empty filter values clear only matching `input[type="text"]` controls; other control types are left unchanged, and omitted filter keys remain untouched.
+- Step 4 logs the visible filter-field inventory before and after filling, including on failure. Explicit empty filter values clear only matching `input[type="text"]` controls; required OwlDateTime fields are not cleared by empty filter values, other non-text controls are left unchanged, and omitted filter keys remain untouched.
 - Standard Report date boundaries are enforced as `%d-%b-%Y 00:00` and `%d-%b-%Y 23:59`, overriding older per-report formats. Report Manager formatting and behavior are unchanged.
 - Authenticated HTML and field values can contain user/session/customer data. Keep TRACE disabled during routine production runs; sanitize snapshots before sharing them.
 - On a frame-specific failure, inspect the per-step frame snapshot result and structured frame-readiness logs. The live DOM fallback uses an isolated CDP execution context and remains behind the TRACE-only privacy gate.
