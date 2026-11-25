@@ -15,7 +15,7 @@ Resolve the confirmed Yasweb runtime failures in date-filter validation, login i
 5. Parallel browser isolation: trace browser/profile/tab ownership and shared state; preserve configured concurrency (default 6); ensure each report owns its Chrome profile/session and avoid holding browser tab locks across conflicting operations; add behavioral tests without lowering concurrency.
 
 ### P2 — Diagnostics
-6. HTML/JS diagnostics: keep capture TRACE-gated and best-effort; publish unique files atomically, redact URL query strings/fragments in logs, preserve original browser errors if diagnostic writes fail, and test path uniqueness.
+6. HTML/JS diagnostics: keep authenticated HTML capture explicitly opt-in (default off) and best-effort; publish unique files atomically, redact URL query strings/fragments in logs, preserve original browser errors if diagnostic writes fail, and test path uniqueness.
 
 ## Required repository workflow
 - Keep all changes on this dedicated branch and target main with one PR.
