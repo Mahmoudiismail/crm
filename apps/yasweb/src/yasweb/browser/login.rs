@@ -1,4 +1,5 @@
 use anyhow::Result;
+use headless_chrome::protocol::cdp::Input;
 use headless_chrome::Tab;
 use std::sync::Arc;
 use std::time::Duration;
@@ -37,6 +38,82 @@ fn username_matches(displayed: &str, configured: &str) -> bool {
     } else {
         displayed.eq_ignore_ascii_case(configured)
     }
+}
+
+/// Focuses an input and inserts text through Chrome's native input pipeline.
+///
+/// Using CDP Input.insertText emits the real input event consumed by Angular
+/// ControlValueAccessor directives. The final DOM value is verified before the
+/// login flow proceeds; values are never included in logs or errors.
+fn set_input_via_cdp(tab: &Arc<Tab>, selector: &str, value: &str) -> Result<()> {
+    let selector_json = serde_json::to_string(selector)?;
+    let expected_json = serde_json::to_string(value)?;
+    let focus_script = format!(
+        r#"(() => {{
+            const input = document.querySelector({selector_json});
+            if (!input) return JSON.stringify({{status: "ERROR", reason: "not_found"}});
+            if (input.disabled || input.readOnly || input.getClientRects().length === 0) {{
+                return JSON.stringify({{status: "ERROR", reason: "not_interactable"}});
+            }}
+            input.focus();
+            input.value = "";
+            input.dispatchEvent(new Event("input", {{ bubbles: true }}));
+            return JSON.stringify({{status: document.activeElement === input ? "SUCCESS" : "ERROR", reason: "focus_failed"}});
+        }})()"#
+    );
+    let focus_result = tab
+        .evaluate(&focus_script, true)
+        .context("Failed to focus login input")?
+        .value
+        .and_then(|value| value.as_str().map(str::to_owned))
+        .ok_or_else(|| anyhow::anyhow!("Login input focus returned no result"))?;
+    let focus_status: serde_json::Value = serde_json::from_str(&focus_result)?;
+    if focus_status.get("status").and_then(serde_json::Value::as_str) != Some("SUCCESS") {
+        anyhow::bail!(
+            "Login input is not available for native text entry (reason={})",
+            focus_status.get("reason").and_then(serde_json::Value::as_str).unwrap_or("unknown")
+        );
+    }
+
+    let insert_result = tab.call_method(Input::InsertText {
+        text: value.to_string(),
+    });
+
+    let verify_script = format!(
+        r#"(() => {{
+            const input = document.querySelector({selector_json});
+            if (!input) return JSON.stringify({{status: "ERROR", reason: "input_disappeared"}});
+            input.dispatchEvent(new Event("change", {{ bubbles: true }}));
+            input.blur();
+            return JSON.stringify({{status: input.value === {expected_json} ? "SUCCESS" : "ERROR", matches: input.value === {expected_json}, length: input.value.length}});
+        }})()"#
+    );
+    let verify_result = tab
+        .evaluate(&verify_script, true)
+        .context("Failed to verify login input after native text entry")?
+        .value
+        .and_then(|value| value.as_str().map(str::to_owned))
+        .ok_or_else(|| anyhow::anyhow!("Login input verification returned no result"))?;
+    let verified: serde_json::Value = serde_json::from_str(&verify_result)?;
+    if verified.get("status").and_then(serde_json::Value::as_str) != Some("SUCCESS") {
+        let cdp_error = insert_result
+            .err()
+            .map(|error| format!("; CDP input error: {error:#}"))
+            .unwrap_or_default();
+        anyhow::bail!(
+            "Native text entry did not populate login input (matches={}, length={}){}",
+            verified.get("matches").and_then(serde_json::Value::as_bool).unwrap_or(false),
+            verified.get("length").and_then(serde_json::Value::as_u64).unwrap_or(0),
+            cdp_error
+        );
+    }
+    if let Err(error) = insert_result {
+        tracing::warn!(
+            "CDP reported an input completion error, but the login field value was verified: {:#}",
+            error
+        );
+    }
+    Ok(())
 }
 
 /// Automates the login flow and waits for the dashboard to appear.
@@ -113,27 +190,21 @@ pub fn execute_login(
     }
 
     match tab.wait_for_element(username_selector) {
-        Ok(user_input) => {
-            info!("Typing username...");
-            if let Err(e) = user_input.type_into(&config.username) {
-                error!("Failed to type username: {:?}", e);
-
-                return Err(anyhow::anyhow!("Failed to type username"));
-            }
-            info!("Successfully typed username.");
+        Ok(_user_input) => {
+            info!("Entering username through native Chrome input events...");
+            set_input_via_cdp(tab, username_selector, &config.username)
+                .context("Failed to enter and verify username")?;
+            info!("Successfully entered and verified username.");
 
             if let Some(password) = &config.password {
                 info!("Waiting for password input...");
                 let password_selector = "input[formcontrolname='password'], #passFocus";
                 match tab.wait_for_element(password_selector) {
-                    Ok(pass_input) => {
-                        info!("Typing password...");
-                        if let Err(e) = pass_input.type_into(password) {
-                            error!("Failed to type password: {:?}", e);
-
-                            return Err(anyhow::anyhow!("Failed to type password"));
-                        }
-                        info!("Successfully typed password.");
+                    Ok(_pass_input) => {
+                        info!("Entering password through native Chrome input events...");
+                        set_input_via_cdp(tab, password_selector, password)
+                            .context("Failed to enter and verify password")?;
+                        info!("Successfully entered and verified password.");
                     }
                     Err(e) => {
                         error!("Failed to find password input: {:?}", e);
