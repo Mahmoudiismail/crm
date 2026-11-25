@@ -182,13 +182,13 @@ Network logs are emitted by `client::enable_network_logging`; request URLs are s
 
 ## 6. HTML snapshots and sensitive data
 
-- `debug::save_html_state` and `debug::save_failure_diagnostics` persist HTML only when TRACE logging is enabled.
+- `debug::save_html_state` and `debug::save_failure_diagnostics` persist HTML only when `save_html_diagnostics: true` is explicitly set in `yasweb_config.json`. The default is `false`; the file log level being TRACE does not enable HTML persistence.
 - Files are saved under `debug_html/` next to the executable. Filenames include step number/name, timestamp, process ID, and an atomic per-process sequence; unsafe filename characters are sanitized. Each file is written to a unique temporary file and atomically renamed into place.
 - Each step snapshot captures the top-level tab and attempts to save every current document frame through CDP, including cross-origin report frames. A frame resource may no longer be available; such failures are logged with the frame URL path (query strings and fragments are redacted) and CDP error.
 - Step 4 logs the visible filter-field inventory before and after filling, including on failure. Explicit empty filter values clear only matching `input[type="text"]` controls; required OwlDateTime fields are not cleared by empty filter values, other non-text controls are left unchanged, and omitted filter keys remain untouched.
 - Standard Report date boundaries are enforced as `%d-%b-%Y 00:00` and `%d-%b-%Y 23:59`, overriding older per-report formats. Report Manager formatting and behavior are unchanged.
-- Authenticated HTML and field values can contain user/session/customer data. Keep TRACE disabled during routine production runs; sanitize snapshots before sharing them.
-- On a frame-specific failure, inspect the per-step frame snapshot result and structured frame-readiness logs. The live DOM fallback uses an isolated CDP execution context and remains behind the TRACE-only privacy gate.
+- Authenticated HTML and field values can contain user/session/customer data. Keep `save_html_diagnostics` false during routine production runs; enable it only for a controlled investigation and sanitize snapshots before sharing them.
+- On a frame-specific failure, inspect the per-step frame snapshot result and structured frame-readiness logs. The live DOM fallback uses an isolated CDP execution context and remains behind the explicit configuration privacy gate.
 
 ## 7. Change checklist
 
