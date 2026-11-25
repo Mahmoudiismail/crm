@@ -539,6 +539,7 @@ fn apply_owl_datetime_inputs(tab: &Arc<Tab>, fields: &[serde_json::Value]) -> Re
         .with_context(|| format!("CDP native text insertion failed for OwlDateTime field '{}'", label))?;
 
         let expected_json = serde_json::to_string(value)?;
+        let label_json = serde_json::to_string(label)?;
         let verify_js = format!(
             r#"(async () => {{
                 const input = document.getElementById({id_json});
@@ -563,8 +564,11 @@ fn apply_owl_datetime_inputs(tab: &Arc<Tab>, fields: &[serde_json::Value]) -> Re
                     inputClasses: input.className,
                     fieldClasses: field?.className || ""
                 }});
-            }})()"#
-        ).replace("{label_json}", &serde_json::to_string(label)?);
+            }})()"#,
+            id_json = id_json,
+            expected_json = expected_json,
+            label_json = label_json
+        );
         evaluate_report_frame_step(tab, &verify_js, "Step 4 (Verify OwlDateTime)")?;
         info!("OwlDateTime field '{}' accepted its configured value.", label);
     }
