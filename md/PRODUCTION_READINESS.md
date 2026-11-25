@@ -5,7 +5,7 @@
 - Yasweb no longer starts Chromium with flags that disable certificate checks, web security, or site isolation, and no longer disables Chromium's sandbox.
 - Network response logs retain status, URL path, and MIME type but no longer emit response header values.
 - Routine login logs no longer include raw authenticated page HTML.
-- HTML snapshots and failure diagnostics are disabled and are not enabled through an environment-variable override. This avoids persisting authenticated page content that may contain sensitive business or personal data.
+- Yasweb HTML snapshots and failure diagnostics are enabled by default (`save_html_diagnostics: true`); set the option to `false` to disable them. The setting is independent of TRACE log verbosity; authenticated page content may contain sensitive business or personal data, so disable it during routine production runs when snapshots are not required.
 - CRM JSON secret persistence defaults to opt-out (`remember_secrets: false`) for newly generated or otherwise missing settings. Existing `crm_config.json` files that explicitly contain `remember_secrets: true` retain that compatibility setting. Set it to `false` and restart CRM to remove passwords and tokens from JSON; token cache remains protected separately with Windows DPAPI, while passwords are never cached.
 - The manual release workflow now records build history under `md/plans/v1-release-build-history.csv`, matching the consolidated documentation structure.
 

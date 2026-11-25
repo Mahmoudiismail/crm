@@ -4,16 +4,30 @@ use headless_chrome::{
     Tab,
 };
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
+
 use tracing::{debug, info, warn};
 
-/// Persists page HTML only when the existing TRACE log level is enabled.
+static DIAGNOSTIC_FILE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+static HTML_DIAGNOSTICS_ENABLED: AtomicBool = AtomicBool::new(false);
+
+/// Enables or disables persistence of authenticated page and iframe HTML.
+pub fn set_html_diagnostics_enabled(enabled: bool) {
+    HTML_DIAGNOSTICS_ENABLED.store(enabled, Ordering::Relaxed);
+}
+
+fn html_diagnostics_enabled() -> bool {
+    HTML_DIAGNOSTICS_ENABLED.load(Ordering::Relaxed)
+}
+
+/// Persists page HTML only when the explicit save_html_diagnostics config option is enabled.
 /// Saved pages can contain session data and customer information.
 pub fn save_html_state(tab: &Arc<Tab>, active_report_name: &str, step_num: u32, step_name: &str) {
-    if !tracing::enabled!(tracing::Level::TRACE) {
+    if !html_diagnostics_enabled() {
         debug!(
-            "Skipping HTML snapshot for '{}' because TRACE logging is disabled",
+            "Skipping HTML snapshot for '{}' because save_html_diagnostics is false",
             step_name
         );
         return;
@@ -22,11 +36,11 @@ pub fn save_html_state(tab: &Arc<Tab>, active_report_name: &str, step_num: u32, 
     persist_html(tab, active_report_name, Some(step_num), step_name);
 }
 
-/// Saves the current page after a browser-stage failure when TRACE is enabled.
+/// Saves the current page after a browser-stage failure when diagnostics are explicitly enabled.
 pub fn save_failure_diagnostics(tab: &Arc<Tab>, step_name: &str) {
-    if !tracing::enabled!(tracing::Level::TRACE) {
+    if !html_diagnostics_enabled() {
         debug!(
-            "Skipping browser page diagnostics for '{}' because TRACE logging is disabled",
+            "Skipping browser page diagnostics for '{}' because save_html_diagnostics is false",
             step_name
         );
         return;
@@ -67,10 +81,16 @@ fn persist_html(tab: &Arc<Tab>, report_name: &str, step_num: Option<u32>, step_n
         return;
     }
 
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis();
+    let timestamp = match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(duration) => duration.as_millis(),
+        Err(error) => {
+            warn!(
+                "System clock is before UNIX_EPOCH; skipping HTML snapshot '{}': {}",
+                step_name, error
+            );
+            return;
+        }
+    };
     let step = step_num
         .map(|number| format!("{number:02}_{}", sanitize_filename(step_name)))
         .unwrap_or_else(|| sanitize_filename(step_name));
@@ -81,11 +101,12 @@ fn persist_html(tab: &Arc<Tab>, report_name: &str, step_num: Option<u32>, step_n
         std::process::id(),
         timestamp
     );
-    let path: PathBuf = debug_dir.join(filename);
-
-    match std::fs::write(&path, html) {
-        Ok(()) => info!("Saved browser HTML snapshot: {:?}", path),
-        Err(error) => warn!("Failed to save browser HTML snapshot {:?}: {}", path, error),
+    match write_diagnostic_file(&debug_dir, &filename, html.as_bytes()) {
+        Ok(path) => info!("Saved browser HTML snapshot: {:?}", path),
+        Err(error) => warn!(
+            "Failed to save browser HTML snapshot '{}': {:#}",
+            filename, error
+        ),
     }
 
     persist_frame_resources(tab, &debug_dir, report_name, &step, timestamp);
@@ -136,7 +157,11 @@ fn persist_frame_resources(
         ) {
             Ok(value) => value,
             Err(error) => {
-                warn!("Invalid CDP frame id for '{}': {}", frame_url, error);
+                warn!(
+                    "Invalid CDP frame id for '{}': {}",
+                    redact_url_for_log(&frame_url),
+                    error
+                );
                 continue;
             }
         };
@@ -169,22 +194,24 @@ fn persist_frame_resources(
                     std::process::id(),
                     timestamp
                 );
-                let path = debug_dir.join(filename);
-                match std::fs::write(&path, bytes) {
-                    Ok(()) => info!(
+                match write_diagnostic_file(debug_dir, &filename, &bytes) {
+                    Ok(path) => info!(
                         "Saved browser frame HTML: frame_id={} url={} path={:?}",
-                        frame_id, frame_url, path
+                        frame_id,
+                        redact_url_for_log(&frame_url),
+                        path
                     ),
                     Err(error) => warn!(
-                        "Failed to save browser frame HTML for {}: {}",
-                        frame_url, error
+                        "Failed to save browser frame HTML for {}: {:#}",
+                        redact_url_for_log(&frame_url),
+                        error
                     ),
                 }
             }
             Err(error) => {
                 warn!(
                     "Could not capture frame resource HTML; trying live frame DOM: frame_id={} url={} error={:#}",
-                    frame_id, frame_url, error
+                    frame_id, redact_url_for_log(&frame_url), error
                 );
                 let capture = (|| -> anyhow::Result<String> {
                     let world = tab.call_method(Page::CreateIsolatedWorld {
@@ -229,26 +256,69 @@ fn persist_frame_resources(
                             std::process::id(),
                             timestamp
                         );
-                        let path = debug_dir.join(filename);
-                        match std::fs::write(&path, html) {
-                            Ok(()) => info!(
+                        match write_diagnostic_file(debug_dir, &filename, html.as_bytes()) {
+                            Ok(path) => info!(
                                 "Saved live browser frame DOM: frame_id={} url={} path={:?}",
-                                frame_id, frame_url, path
+                                frame_id, redact_url_for_log(&frame_url), path
                             ),
                             Err(write_error) => warn!(
-                                "Failed to save live frame DOM for {}: {}",
-                                frame_url, write_error
+                                "Failed to save live frame DOM for {}: {:#}",
+                                redact_url_for_log(&frame_url), write_error
                             ),
                         }
                     }
                     Err(capture_error) => warn!(
                         "Could not capture frame HTML through live DOM fallback: frame_id={} url={} error={:#}",
-                        frame_id, frame_url, capture_error
+                        frame_id, redact_url_for_log(&frame_url), capture_error
                     ),
                 }
             }
         }
     }
+}
+
+/// Writes a diagnostic snapshot to a unique temporary file and atomically renames it.
+/// The final and temporary files share a directory so rename remains atomic.
+fn write_diagnostic_file(
+    directory: &std::path::Path,
+    filename: &str,
+    contents: &[u8],
+) -> anyhow::Result<PathBuf> {
+    let sequence = DIAGNOSTIC_FILE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    let requested = std::path::Path::new(filename);
+    let stem = requested
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("snapshot");
+    let extension = requested
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("html");
+    let unique_name = format!("{stem}_{sequence}.{extension}");
+    let final_path = directory.join(&unique_name);
+    let temporary_path = directory.join(format!(".{stem}_{sequence}.{extension}.tmp"));
+
+    std::fs::write(&temporary_path, contents).map_err(|error| {
+        anyhow::anyhow!(
+            "failed to write temporary diagnostic file {:?}: {}",
+            temporary_path,
+            error
+        )
+    })?;
+    if let Err(error) = std::fs::rename(&temporary_path, &final_path) {
+        let _ = std::fs::remove_file(&temporary_path);
+        return Err(anyhow::anyhow!(
+            "failed to atomically publish diagnostic file {:?}: {}",
+            final_path,
+            error
+        ));
+    }
+    Ok(final_path)
+}
+
+/// Removes query strings and fragments from URLs before they enter diagnostic logs.
+fn redact_url_for_log(url: &str) -> String {
+    url.split(['?', '#']).next().unwrap_or(url).to_string()
 }
 
 fn collect_frame_resources(value: &serde_json::Value, frames: &mut Vec<(usize, String, String)>) {
@@ -295,7 +365,9 @@ fn sanitize_filename(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{collect_frame_resources, sanitize_filename};
+    use super::{
+        collect_frame_resources, redact_url_for_log, sanitize_filename, write_diagnostic_file,
+    };
 
     #[test]
     fn frame_tree_collection_includes_nested_cross_origin_frames() {
@@ -317,6 +389,37 @@ mod tests {
         assert_eq!(frames[0].1, "root");
         assert_eq!(frames[1].1, "report");
         assert_eq!(frames[2].1, "nested");
+    }
+
+    #[test]
+    fn diagnostic_snapshots_are_published_atomically_with_unique_names() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let first = write_diagnostic_file(directory.path(), "report_step_1.html", b"first")
+            .expect("first diagnostic should be written");
+        let second = write_diagnostic_file(directory.path(), "report_step_1.html", b"second")
+            .expect("second diagnostic should be written");
+
+        assert_ne!(first, second);
+        assert_eq!(std::fs::read(first).expect("read first"), b"first");
+        assert_eq!(std::fs::read(second).expect("read second"), b"second");
+        assert_eq!(
+            std::fs::read_dir(directory.path())
+                .expect("read directory")
+                .count(),
+            2
+        );
+    }
+
+    #[test]
+    fn diagnostic_url_logs_drop_query_strings_and_fragments() {
+        assert_eq!(
+            redact_url_for_log("https://reports.example/report?session=secret#tab"),
+            "https://reports.example/report"
+        );
+        assert_eq!(
+            redact_url_for_log("https://reports.example/report"),
+            "https://reports.example/report"
+        );
     }
 
     #[test]

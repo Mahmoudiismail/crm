@@ -42,6 +42,7 @@
                                             const discoveredFilters = [];
                                             const discoveredFilterOptions = {};
                                             const failedFilters = [];
+                                            const pendingDateInputs = [];
                                             const normalize = value => (value || '').replace(/\s+/g, ' ').trim().toLowerCase();
 
                                             function visibleFieldSnapshot() {
@@ -137,6 +138,22 @@
                                                                 break;
                                                             }
                                                             if (input.tagName === 'INPUT') {
+                                                                const owlDateTimePicker = input.closest('mat-form-field')?.querySelector('owl-date-time');
+                                                                if (owlDateTimePicker && clearRequested) {
+                                                                    logs.push("Leaving OwlDateTime control unchanged for an explicitly empty value: " + key);
+                                                                    filterFilled = true;
+                                                                    break;
+                                                                }
+                                                                if (owlDateTimePicker) {
+                                                                    if (!input.id) {
+                                                                        logs.push("OwlDateTime input has no stable DOM id: " + key);
+                                                                    } else {
+                                                                        pendingDateInputs.push({ label: filterName, id: input.id, value: String(value) });
+                                                                        logs.push("Queued OwlDateTime input for native CDP text entry: " + key);
+                                                                        filterFilled = true;
+                                                                    }
+                                                                    break;
+                                                                }
                                                                 if (clearRequested) {
                                                                     await simulateTyping(input, '');
                                                                     filterFilled = input.value === '';
@@ -199,11 +216,14 @@
                                             const fieldsAfterFill = traceEnabled ? visibleFieldSnapshot() : [];
                                             if (traceEnabled) logs.push("Visible fields after Fill Filters: " + JSON.stringify(fieldsAfterFill));
 
-                                            // Do not continue to Search while any visible mandatory control
+                                            // OwlDateTime controls are filled through CDP's native input pipeline
+                                            // by the Rust host immediately after this script returns.
+                                            const pendingDateIds = new Set(pendingDateInputs.map(field => field.id));
+                                            // Do not continue to Search while any other visible mandatory control
                                             // remains empty or is rejected by the page's Angular/date-time validator.
                                             const invalidRequiredFields = Array.from(doc.querySelectorAll(
                                                 'input[required], input[aria-required="true"], textarea[required], textarea[aria-required="true"], select[required], select[aria-required="true"]'
-                                            )).filter(control => control.getClientRects().length > 0 && (
+                                            )).filter(control => control.getClientRects().length > 0 && !pendingDateIds.has(control.id) && (
                                                 control.getAttribute('aria-invalid') === 'true' ||
                                                 String(control.value ?? '').trim() === ''
                                             )).map(control => {
@@ -223,13 +243,14 @@
                                                     discovered_filter_options: discoveredFilterOptions,
                                                     visible_fields_before: fieldsBeforeFill,
                                                     visible_fields_after: fieldsAfterFill,
+                                                    pending_date_inputs: pendingDateInputs,
                                                     logs
                                                 });
                                             }
 
                                             if (failedFilters.length > 0) {
-                                                return JSON.stringify({ status: "ERROR", msg: "One or more requested filters could not be applied: " + failedFilters.join(", "), failed_filters: failedFilters, discovered_filters: discoveredFilters, discovered_filter_options: discoveredFilterOptions, visible_fields_before: fieldsBeforeFill, visible_fields_after: fieldsAfterFill, logs });
+                                                return JSON.stringify({ status: "ERROR", msg: "One or more requested filters could not be applied: " + failedFilters.join(", "), failed_filters: failedFilters, discovered_filters: discoveredFilters, discovered_filter_options: discoveredFilterOptions, visible_fields_before: fieldsBeforeFill, visible_fields_after: fieldsAfterFill, pending_date_inputs: pendingDateInputs, logs });
                                             }
-                                            return JSON.stringify({ status: "SUCCESS", discovered_filters: discoveredFilters, discovered_filter_options: discoveredFilterOptions, visible_fields_before: fieldsBeforeFill, visible_fields_after: fieldsAfterFill, logs });
+                                            return JSON.stringify({ status: "SUCCESS", discovered_filters: discoveredFilters, discovered_filter_options: discoveredFilterOptions, visible_fields_before: fieldsBeforeFill, visible_fields_after: fieldsAfterFill, pending_date_inputs: pendingDateInputs, logs });
                                         })(__FILTERS_JSON__, __TIMEOUT_MINUTES__, __TRACE_ENABLED__);
                                         

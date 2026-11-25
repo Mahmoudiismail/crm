@@ -4,6 +4,7 @@ use crm_tool::manifest::{AppArg, AppManifest, ArgType};
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use clap::Parser;
@@ -14,6 +15,8 @@ use tokio::fs;
 use tracing::{error, info};
 use yasweb_app::yasweb::browser::run_browser_tab;
 use yasweb_app::yasweb::config::{DiscoveredReportFilters, ReportConfig, YaswebConfig};
+
+static YASWEB_RUN_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Parser)]
 #[command(name = "yasweb", about = "YAS Web Scraper", version)]
@@ -344,6 +347,35 @@ fn sanitize_filename_component(value: &str) -> String {
     }
 }
 
+fn create_yasweb_run_id() -> Result<String> {
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .context("System clock is before UNIX_EPOCH while creating a Yasweb run id")?
+        .as_nanos();
+    let sequence = YASWEB_RUN_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    Ok(format!("{}_{}_{}", std::process::id(), timestamp, sequence))
+}
+
+fn report_profile_dir(
+    executable_dir: &Path,
+    report_name: &str,
+    date_suffix: &str,
+    report_index: usize,
+    run_id: &str,
+) -> PathBuf {
+    executable_dir.join("yasweb_chrome_data").join(format!(
+        "session_{}_{}_{}_{}",
+        sanitize_filename_component(report_name),
+        sanitize_filename_component(date_suffix),
+        report_index,
+        run_id
+    ))
+}
+
+fn create_operation_limit(concurrency: usize) -> Option<Arc<tokio::sync::Semaphore>> {
+    (concurrency > 0).then(|| Arc::new(tokio::sync::Semaphore::new(concurrency)))
+}
+
 fn config_lock_path(config_path: &Path) -> PathBuf {
     let mut lock_path = config_path.as_os_str().to_os_string();
     lock_path.push(".lock");
@@ -632,6 +664,11 @@ async fn main() -> Result<()> {
         parse_log_level(&config.log_stdout_level)?,
         parse_log_level(&config.log_file_level)?,
     )?;
+    yasweb_app::yasweb::browser::debug::set_html_diagnostics_enabled(config.save_html_diagnostics);
+    info!(
+        "YASWEB authenticated HTML diagnostics persistence: {}",
+        config.save_html_diagnostics
+    );
 
     let config_updated = config.finalize_runtime_fields();
 
@@ -792,8 +829,7 @@ async fn main() -> Result<()> {
     let mut report_futures = Vec::new();
     // Inter-process file locks serialize config read-modify-write cycles.
     // A zero limit means unlimited operations; positive values share one semaphore across reports.
-    let operation_limit =
-        (config.concurrency > 0).then(|| Arc::new(tokio::sync::Semaphore::new(config.concurrency)));
+    let operation_limit = create_operation_limit(config.concurrency);
     if config.concurrency == 0 {
         info!("YASWEB operation concurrency limit: unlimited");
     } else {
@@ -817,14 +853,7 @@ async fn main() -> Result<()> {
         report_futures.push(async move {
             let active_report_name = active_report_name_clone_for_future;
             // Every process/report invocation gets its own Chrome profile and download folder.
-            let run_id = format!(
-                "{}_{}",
-                std::process::id(),
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_nanos()
-            );
+            let run_id = create_yasweb_run_id()?;
             info!("YASWEB RUN INSTANCE: report='{}' run_id={}", active_report_name, run_id);
             let mut active_report_type = active_report_type;
             let mut active_filters = active_filters;
@@ -973,15 +1002,15 @@ async fn main() -> Result<()> {
                         tracing::info!("YASWEB TASK START: index={} report='{}' date_suffix='{}'", i, active_report_name_task, date_suffix);
                         tracing::info!("Starting browser tab automation for task {}...", i);
 
-                        let mut user_data_dir = crm_tool::utils::executable_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-                        user_data_dir.push("yasweb_chrome_data");
-                        user_data_dir.push(format!(
-                            "session_{}_{}_{}_{}",
-                            sanitize_filename_component(&active_report_name_for_dir),
-                            sanitize_filename_component(&date_suffix),
+                        let executable_dir = crm_tool::utils::executable_dir()
+                            .context("Failed to resolve executable directory for isolated Chrome profile")?;
+                        let user_data_dir = report_profile_dir(
+                            &executable_dir,
+                            &active_report_name_for_dir,
+                            &date_suffix,
                             i,
-                            run_id_for_browser
-                        ));
+                            &run_id_for_browser,
+                        );
 
                         let args = vec![
                             std::ffi::OsStr::new("--start-maximized"),
@@ -1126,6 +1155,49 @@ async fn main() -> Result<()> {
 mod tests_yasweb_finalization {
     use super::*;
     use std::fs::File;
+
+    #[test]
+    fn run_ids_are_unique_even_when_the_clock_resolution_is_coarse() {
+        assert_ne!(
+            create_yasweb_run_id().unwrap(),
+            create_yasweb_run_id().unwrap()
+        );
+    }
+
+    #[test]
+    fn concurrent_report_invocations_receive_distinct_chrome_profiles() {
+        let root = Path::new("test-runtime");
+        let first = report_profile_dir(root, "Appointment List", "25-11-2026", 0, "pid_1");
+        let second = report_profile_dir(root, "Appointment List", "25-11-2026", 0, "pid_2");
+
+        assert_ne!(first, second);
+        assert!(first.starts_with(root.join("yasweb_chrome_data")));
+        assert!(second.starts_with(root.join("yasweb_chrome_data")));
+    }
+
+    #[tokio::test]
+    async fn configured_concurrency_semaphore_caps_active_browser_operations() {
+        let limit = create_operation_limit(6).expect("positive concurrency creates a semaphore");
+        let mut permits = Vec::new();
+        for _ in 0..6 {
+            permits.push(
+                limit
+                    .clone()
+                    .acquire_owned()
+                    .await
+                    .expect("permit available"),
+            );
+        }
+
+        assert!(limit.clone().try_acquire_owned().is_err());
+        drop(permits.pop());
+        assert!(limit.clone().try_acquire_owned().is_ok());
+    }
+
+    #[test]
+    fn zero_concurrency_keeps_the_existing_unlimited_mode() {
+        assert!(create_operation_limit(0).is_none());
+    }
 
     #[test]
     fn cli_help_and_version_are_successful_exit_requests() {

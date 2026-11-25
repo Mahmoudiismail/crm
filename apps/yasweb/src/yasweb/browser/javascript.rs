@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use headless_chrome::Tab;
 use std::sync::Arc;
 use std::time::Instant;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 fn prepare_automation_script(js_code: &str) -> String {
     // Runtime.evaluate expects an expression, not a top-level return statement.
@@ -62,13 +62,22 @@ pub fn evaluate_automation_step_in_context(
 
     if let Some(exception) = response.exception_details {
         let message = exception.text;
-        error!(
-            "AUTOMATION STEP END: {} status=FRAME_EVALUATION_ERROR elapsed_ms={} error={}",
-            step_name,
-            started.elapsed().as_millis(),
-            message
-        );
-        crate::yasweb::browser::debug::save_failure_diagnostics(tab, step_name);
+        if is_transient_readiness_step(step_name) {
+            debug!(
+                "AUTOMATION readiness probe is still pending: stage='{}' elapsed_ms={} error={}",
+                step_name,
+                started.elapsed().as_millis(),
+                message
+            );
+        } else {
+            error!(
+                "AUTOMATION STEP END: {} status=FRAME_EVALUATION_ERROR elapsed_ms={} error={}",
+                step_name,
+                started.elapsed().as_millis(),
+                message
+            );
+            crate::yasweb::browser::debug::save_failure_diagnostics(tab, step_name);
+        }
         anyhow::bail!(
             "Automation {} report-frame JavaScript exception: {}",
             step_name,
@@ -96,8 +105,17 @@ pub fn evaluate_automation_step_in_context(
             Ok(result)
         }
         Err(error) => {
-            error!("AUTOMATION STEP END: {} status=ERROR context=report-frame elapsed_ms={} error={:#}", step_name, started.elapsed().as_millis(), error);
-            crate::yasweb::browser::debug::save_failure_diagnostics(tab, step_name);
+            if is_transient_readiness_step(step_name) {
+                debug!(
+                    "AUTOMATION readiness probe is still pending: stage='{}' elapsed_ms={} error={:#}",
+                    step_name,
+                    started.elapsed().as_millis(),
+                    error
+                );
+            } else {
+                error!("AUTOMATION STEP END: {} status=ERROR context=report-frame elapsed_ms={} error={:#}", step_name, started.elapsed().as_millis(), error);
+                crate::yasweb::browser::debug::save_failure_diagnostics(tab, step_name);
+            }
             Err(error)
         }
     }
@@ -173,6 +191,10 @@ pub fn evaluate_automation_step(
     }
 }
 
+fn is_transient_readiness_step(step_name: &str) -> bool {
+    step_name.to_ascii_lowercase().contains("readiness")
+}
+
 fn parse_automation_result(raw: &str, step_name: &str) -> Result<serde_json::Value> {
     let parsed: serde_json::Value = serde_json::from_str(raw)
         .with_context(|| format!("Automation {} returned invalid JSON", step_name))?;
@@ -192,7 +214,11 @@ fn parse_automation_result(raw: &str, step_name: &str) -> Result<serde_json::Val
                 .get("msg")
                 .and_then(serde_json::Value::as_str)
                 .unwrap_or("Unknown error");
-            error!("{} Failed: {} | Logs: {}", step_name, msg, logs);
+            if is_transient_readiness_step(step_name) {
+                debug!("{} readiness pending: {} | Logs: {}", step_name, msg, logs);
+            } else {
+                error!("{} Failed: {} | Logs: {}", step_name, msg, logs);
+            }
             Err(anyhow::anyhow!(
                 "Automation {} failed: {} | JavaScript logs: {}",
                 step_name,
@@ -213,7 +239,14 @@ fn parse_automation_result(raw: &str, step_name: &str) -> Result<serde_json::Val
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_automation_result, prepare_automation_script};
+    use super::{is_transient_readiness_step, parse_automation_result, prepare_automation_script};
+
+    #[test]
+    fn iframe_readiness_probes_are_classified_as_transient() {
+        assert!(is_transient_readiness_step("Initial iframe readiness"));
+        assert!(is_transient_readiness_step("Report iframe readiness"));
+        assert!(!is_transient_readiness_step("Step 4 (Fill Filters)"));
+    }
 
     #[test]
     fn return_await_scripts_are_wrapped_as_awaitable_expressions() {
