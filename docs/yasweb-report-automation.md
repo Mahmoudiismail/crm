@@ -54,7 +54,7 @@ Relevant implementation: `evaluate_report_frame_step` and `collect_child_frames`
 | 11 | `Step 7 (XLSX)` | Export menu opened | XLSX option found and clicked | Fail if XLSX option is not found |
 | 12 | `wait_for_download` | Export requested; download directory configured | A new/changed spreadsheet file is stable for 3 polls | Fail on timeout; an old report must not satisfy the wait |
 
-The outer timeout comes from `config.timeout_minutes`. MIS UI readiness currently uses 30 seconds and the CDP frame-context discovery retries for up to 10 seconds. Avoid adding a retry that repeats a click unless the observed state proves the click did not take effect.
+The outer timeout comes from `config.timeout_minutes`. The parent MIS SPA route wait uses 30 seconds; after the route is reached, report-frame readiness uses the remaining configured timeout and does not refresh the tab. CDP frame-context discovery retries for up to 10 seconds per probe. Avoid adding a retry that repeats a click unless the observed state proves the click did not take effect.
 
 ## 4. Selector inventory
 
@@ -184,7 +184,7 @@ Network logs are emitted by `client::enable_network_logging`; request URLs are s
 
 - `debug::save_html_state` and `debug::save_failure_diagnostics` persist HTML only when TRACE logging is enabled.
 - Files are saved under `debug_html/` next to the executable. Filenames include step number/name, timestamp, process ID, and an atomic per-process sequence; unsafe filename characters are sanitized. Each file is written to a unique temporary file and atomically renamed into place.
-- Each step snapshot captures the top-level tab and attempts to save every current document frame through CDP, including cross-origin report frames. A frame resource may no longer be available; such failures are logged with the frame URL and CDP error.
+- Each step snapshot captures the top-level tab and attempts to save every current document frame through CDP, including cross-origin report frames. A frame resource may no longer be available; such failures are logged with the frame URL path (query strings and fragments are redacted) and CDP error.
 - Step 4 logs the visible filter-field inventory before and after filling, including on failure. Explicit empty filter values clear only matching `input[type="text"]` controls; required OwlDateTime fields are not cleared by empty filter values, other non-text controls are left unchanged, and omitted filter keys remain untouched.
 - Standard Report date boundaries are enforced as `%d-%b-%Y 00:00` and `%d-%b-%Y 23:59`, overriding older per-report formats. Report Manager formatting and behavior are unchanged.
 - Authenticated HTML and field values can contain user/session/customer data. Keep TRACE disabled during routine production runs; sanitize snapshots before sharing them.
