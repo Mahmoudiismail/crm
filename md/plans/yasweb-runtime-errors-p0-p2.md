@@ -11,11 +11,11 @@ Resolve the confirmed Yasweb runtime failures in date-filter validation, login i
 
 ### P1 — Runtime stability
 3. Iframe readiness: distinguish transient polling from terminal failure; use a bounded deadline and structured diagnostics; avoid error-level logs for expected polling; emit a warning/error only at recovery/final deadline.
-4. Refresh/navigation lifecycle: audit every refresh/navigation call; remove refreshes triggered merely by a short initial wait; wait for SPA/iframe readiness; if recovery refresh remains necessary, make it one-shot and verify post-refresh state.
+4. Refresh/navigation lifecycle: remove the iframe-readiness recovery refresh entirely; wait through the remaining configured timeout without discarding the SPA/iframe load. Keep route recovery separate and only before the MIS SPA route is reached.
 5. Parallel browser isolation: trace browser/profile/tab ownership and shared state; preserve configured concurrency (default 6); ensure each report owns its Chrome profile/session and avoid holding browser tab locks across conflicting operations; add behavioral tests without lowering concurrency.
 
 ### P2 — Diagnostics
-6. HTML/JS diagnostics: make capture best-effort and atomic, use unique per-run/per-report paths, preserve original browser errors if diagnostic writes fail, and add tests for path uniqueness/error propagation.
+6. HTML/JS diagnostics: keep capture TRACE-gated and best-effort; publish unique files atomically, redact URL query strings/fragments in logs, preserve original browser errors if diagnostic writes fail, and test path uniqueness.
 
 ## Required repository workflow
 - Keep all changes on this dedicated branch and target main with one PR.
