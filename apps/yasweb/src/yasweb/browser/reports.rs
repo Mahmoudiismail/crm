@@ -429,8 +429,12 @@ fn wait_for_mis_reports_route(tab: &Arc<Tab>, timeout: Duration) -> Result<()> {
     anyhow::bail!(
         "Timed out waiting {}ms for MIS SPA route; last_url='{}'",
         timeout.as_millis(),
-        last_url
+        redact_url_for_log(&last_url)
     )
+}
+
+fn redact_url_for_log(url: &str) -> String {
+    url.split(['?', '#']).next().unwrap_or(url).to_string()
 }
 
 fn is_mis_reports_route(url: &str) -> bool {
@@ -454,10 +458,9 @@ fn wait_for_report_iframe_until(tab: &Arc<Tab>, deadline: Instant, stage: &str) 
             }
             Err(error) => {
                 tracing::debug!(
-                    "YASWEB iframe readiness is still pending: stage='{}' attempt={} error={:#}",
+                    "YASWEB iframe readiness is still pending: stage='{}' attempt={}",
                     stage,
-                    attempt,
-                    error
+                    attempt
                 );
                 last_error = Some(error);
             }
@@ -467,13 +470,14 @@ fn wait_for_report_iframe_until(tab: &Arc<Tab>, deadline: Instant, stage: &str) 
             std::thread::sleep(Duration::from_millis(500).min(remaining));
         }
     }
-    let last_url = tab.get_url();
+    let last_url = redact_url_for_log(&tab.get_url());
+    debug::save_failure_diagnostics(tab, stage);
     warn!(
-        "YASWEB iframe readiness deadline reached: stage='{}' attempts={} last_url='{}' last_error={}",
+        "YASWEB iframe readiness deadline reached: stage='{}' attempts={} last_url='{}' probe_error_observed={}",
         stage,
         attempt,
         last_url,
-        last_error.as_ref().map(ToString::to_string).unwrap_or_else(|| "no probe completed".to_string())
+        last_error.is_some()
     );
     anyhow::bail!(
         "Yasweb report iframe did not become ready during '{}' after {} probe(s); last_url='{}'",
@@ -502,7 +506,7 @@ fn wait_for_report_iframe_ready(tab: &Arc<Tab>, timeout_minutes: u64) -> Result<
         timeout_minutes
     );
     wait_for_report_iframe_until(tab, deadline, "Report iframe readiness")
-        .with_context(|| format!("MIS route remained '{}'", tab.get_url()))
+        .with_context(|| format!("MIS route remained '{}'", redact_url_for_log(&tab.get_url())))
 }
 
 fn build_owl_datetime_prepare_script(id: &str) -> Result<String> {
@@ -644,9 +648,9 @@ fn evaluate_report_frame_step(
         if Instant::now() >= deadline {
             anyhow::bail!(
                 "Could not resolve the current Yasweb report iframe within 10 seconds (iframe_sources={:?}, frame_urls={:?}, last_frame_url='{}')",
-                last_iframe_sources,
-                last_frame_urls,
-                last_frame_url
+                last_iframe_sources.iter().map(|url| redact_url_for_log(url)).collect::<Vec<_>>(),
+                last_frame_urls.iter().map(|url| redact_url_for_log(url)).collect::<Vec<_>>(),
+                redact_url_for_log(&last_frame_url)
             );
         }
         std::thread::sleep(Duration::from_millis(200));
