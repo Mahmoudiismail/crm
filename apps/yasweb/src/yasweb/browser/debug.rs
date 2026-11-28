@@ -3,15 +3,34 @@ use headless_chrome::{
     protocol::cdp::{Page, Runtime},
     Tab,
 };
+use std::collections::HashSet;
+use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use tracing::{debug, info, warn};
 
 static DIAGNOSTIC_FILE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 static HTML_DIAGNOSTICS_ENABLED: AtomicBool = AtomicBool::new(false);
+static SAVED_SNAPSHOT_FINGERPRINTS: OnceLock<Mutex<HashSet<u64>>> = OnceLock::new();
+
+/// Returns true only once for identical HTML belonging to the same report/document.
+/// Failure snapshots bypass this check so the final broken state is always retained.
+fn is_new_snapshot(report: &str, document: &str, html: &[u8]) -> bool {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    report.hash(&mut hasher);
+    document.hash(&mut hasher);
+    html.hash(&mut hasher);
+    let fingerprint = hasher.finish();
+    let fingerprints = SAVED_SNAPSHOT_FINGERPRINTS.get_or_init(|| Mutex::new(HashSet::new()));
+    fingerprints
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .insert(fingerprint)
+}
 
 /// Enables or disables persistence of authenticated page and iframe HTML.
 pub fn set_html_diagnostics_enabled(enabled: bool) {
@@ -33,7 +52,7 @@ pub fn save_html_state(tab: &Arc<Tab>, active_report_name: &str, step_num: u32, 
         return;
     }
 
-    persist_html(tab, active_report_name, Some(step_num), step_name);
+    persist_html(tab, active_report_name, Some(step_num), step_name, false);
 }
 
 /// Saves the current page after a browser-stage failure when diagnostics are explicitly enabled.
@@ -46,10 +65,16 @@ pub fn save_failure_diagnostics(tab: &Arc<Tab>, step_name: &str) {
         return;
     }
 
-    persist_html(tab, "failure", None, step_name);
+    persist_html(tab, "failure", None, step_name, true);
 }
 
-fn persist_html(tab: &Arc<Tab>, report_name: &str, step_num: Option<u32>, step_name: &str) {
+fn persist_html(
+    tab: &Arc<Tab>,
+    report_name: &str,
+    step_num: Option<u32>,
+    step_name: &str,
+    force: bool,
+) {
     let html = match tab.get_content() {
         Ok(html) => html,
         Err(error) => {
@@ -71,6 +96,15 @@ fn persist_html(tab: &Arc<Tab>, report_name: &str, step_num: Option<u32>, step_n
             return;
         }
     };
+
+    let save_main_document =
+        force || is_new_snapshot(report_name, "main-document", html.as_bytes());
+    if !save_main_document {
+        debug!(
+            "Skipping duplicate main-document HTML snapshot: report='{}' step='{}'",
+            report_name, step_name
+        );
+    }
 
     let debug_dir = exe_dir.join("debug_html");
     if let Err(error) = std::fs::create_dir_all(&debug_dir) {
@@ -101,15 +135,17 @@ fn persist_html(tab: &Arc<Tab>, report_name: &str, step_num: Option<u32>, step_n
         std::process::id(),
         timestamp
     );
-    match write_diagnostic_file(&debug_dir, &filename, html.as_bytes()) {
-        Ok(path) => info!("Saved browser HTML snapshot: {:?}", path),
-        Err(error) => warn!(
-            "Failed to save browser HTML snapshot '{}': {:#}",
-            filename, error
-        ),
+    if save_main_document {
+        match write_diagnostic_file(&debug_dir, &filename, html.as_bytes()) {
+            Ok(path) => info!("Saved browser HTML snapshot: {:?}", path),
+            Err(error) => warn!(
+                "Failed to save browser HTML snapshot '{}': {:#}",
+                filename, error
+            ),
+        }
     }
 
-    persist_frame_resources(tab, &debug_dir, report_name, &step, timestamp);
+    persist_frame_resources(tab, &debug_dir, report_name, &step, timestamp, force);
 }
 
 /// Captures each document frame through CDP. Unlike `Tab::get_content`, this can
@@ -120,6 +156,7 @@ fn persist_frame_resources(
     report_name: &str,
     step: &str,
     timestamp: u128,
+    force: bool,
 ) {
     let tree = match tab.call_method(Page::GetResourceTree(None)) {
         Ok(tree) => tree,
@@ -186,6 +223,15 @@ fn persist_frame_resources(
                     resource.content.into_bytes()
                 };
 
+                if !force && !is_new_snapshot(report_name, &frame_url, &bytes) {
+                    debug!(
+                        "Skipping duplicate frame HTML snapshot: report='{}' frame_url='{}'",
+                        report_name,
+                        redact_url_for_log(&frame_url)
+                    );
+                    continue;
+                }
+
                 let filename = format!(
                     "{}_{}_frame{}_{}_{}.html",
                     sanitize_filename(report_name),
@@ -248,6 +294,14 @@ fn persist_frame_resources(
                 })();
                 match capture {
                     Ok(html) => {
+                        if !force && !is_new_snapshot(report_name, &frame_url, html.as_bytes()) {
+                            debug!(
+                                "Skipping duplicate live frame DOM snapshot: report='{}' frame_url='{}'",
+                                report_name,
+                                redact_url_for_log(&frame_url)
+                            );
+                            continue;
+                        }
                         let filename = format!(
                             "{}_{}_frame{}_{}_{}.html",
                             sanitize_filename(report_name),
@@ -366,8 +420,26 @@ fn sanitize_filename(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        collect_frame_resources, redact_url_for_log, sanitize_filename, write_diagnostic_file,
+        collect_frame_resources, is_new_snapshot, redact_url_for_log, sanitize_filename,
+        write_diagnostic_file,
     };
+
+    #[test]
+    fn identical_snapshots_are_deduplicated_per_report_and_document() {
+        assert!(is_new_snapshot("Report A", "frame-1", b"<html>same</html>"));
+        assert!(!is_new_snapshot(
+            "Report A",
+            "frame-1",
+            b"<html>same</html>"
+        ));
+        assert!(is_new_snapshot("Report A", "frame-2", b"<html>same</html>"));
+        assert!(is_new_snapshot("Report B", "frame-1", b"<html>same</html>"));
+        assert!(is_new_snapshot(
+            "Report A",
+            "frame-1",
+            b"<html>changed</html>"
+        ));
+    }
 
     #[test]
     fn frame_tree_collection_includes_nested_cross_origin_frames() {

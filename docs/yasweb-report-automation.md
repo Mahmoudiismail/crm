@@ -180,6 +180,14 @@ Search logs for the first `YASWEB STAGE FAILED` or `AUTOMATION STEP END: ... sta
 
 Network logs are emitted by `client::enable_network_logging`; request URLs are stripped of query strings and fragments. When diagnosing the portal, correlate the first failed stage with request/response timing instead of increasing timeouts without evidence.
 
+## 5.1 Report iframe recovery
+
+- The CRM/MIS parent page is not refreshed when the report UI is delayed.
+- Yasweb first waits for the report iframe to expose the required report-type controls and Search without a visible loader. If the initial readiness grace period expires, it refreshes only the currently selected report iframe using its CDP frame ID.
+- Only a `beforeunload` dialog raised by this targeted iframe refresh is accepted automatically; unrelated JavaScript dialogs are not accepted.
+- After the iframe refresh, Yasweb verifies the report UI again within the original configured readiness deadline. The parent SPA route and authenticated parent session remain intact.
+- Step 4 queues OwlDateTime labels using the active filter label/key; it must not reference the discovery-loop-local `filterName` variable.
+
 ## 6. HTML snapshots and sensitive data
 
 - `debug::save_html_state` and `debug::save_failure_diagnostics` persist HTML by default. Set `save_html_diagnostics: false` in `yasweb_config.json` to disable persistence; the file log level being TRACE does not control this option.
